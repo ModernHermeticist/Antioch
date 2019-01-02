@@ -6,9 +6,20 @@ public class Player : MonoBehaviour
 {
 
 	public float speed = 1.5f;
+    public float jump = 50.0f;
+    public Transform pointer;
+
+    public bool canAttack = false;
+    public float damage = 1.0f;
+
+    private bool isJumping = false;
+    private bool canJump = true;
+    private Vector3 direction = new Vector3(0, 0, 0);
+    public GameObject target = null;
 
 
-	void Start () 
+
+    void Start () 
 	{
 		
 	}
@@ -16,34 +27,69 @@ public class Player : MonoBehaviour
 	// Update is called once per frame
 	void Update () 
 	{
-		Vector3 velocity = new Vector3(0,0,0);
+        if (isJumping == true)
+        {
+            StartCoroutine(jumpDelayTimer());
+            isJumping = false;
+        }
+        Vector3 velocity = new Vector3(0,0,0);
+       
+        if(Input.GetMouseButton(0) && canAttack && target.tag == "Enemy")
+        {
+            enemyScript.gameObject.
+        }
+        if (Input.GetKey(KeyCode.Space))
+        {
+            if (canJump == true)
+            {
+                isJumping = true;
+                canJump = false;
+            }
+        }
 
-		if (Input.GetKey("w")) 
-		{
-			velocity.y += speed * Time.deltaTime;
-		}
+        if (Input.GetKey("w"))
+        {
+            velocity.y += speed * Time.deltaTime;
+            direction.y = 1;
+        }
 
-		if (Input.GetKey("s"))
+        if (Input.GetKey("s"))
 		{
 			velocity.y -= speed * Time.deltaTime;
+            direction.y = -1;
 		}
 
 		if (Input.GetKey("d"))
 		{
 			velocity.x += speed * Time.deltaTime;
+            direction.x = 1;
 		}
 
 		if (Input.GetKey("a"))
 		{
 			velocity.x -= speed * Time.deltaTime;
+            direction.x = -1;
 		}
 
 		if (velocity.magnitude > 0)
 		{
-			velocity = velocity.normalized * speed;
+            if (isJumping)
+            {
+                velocity = velocity.normalized * speed * jump;
+            }
+            else
+            {
+                velocity = velocity.normalized * speed;
+            }
 		}
+
+        if (direction.magnitude > 0)
+        {
+            direction = direction.normalized;
+        }
 		transform.position += velocity * Time.deltaTime;
-	}
+
+    }
 
 	void OnCollisionEnter2D(Collision2D col)
 	{
@@ -54,4 +100,11 @@ public class Player : MonoBehaviour
 	{
 		Debug.Log("OnCollisionExit2D");
 	}
+
+    public IEnumerator jumpDelayTimer()
+    {
+        yield return new WaitForSeconds(3); // Wait for 3 seconds
+        canJump = true;
+    }
+
 }
