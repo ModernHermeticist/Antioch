@@ -100,8 +100,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   speed: 1
-  hitPoints: -126
-  maxDamage: 10
+  hitPoints: 10
+  maxDamage: 20
   smoothTime: 3
 --- !u!212 &212876825279046988
 SpriteRenderer:

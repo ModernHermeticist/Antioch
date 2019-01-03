@@ -34,7 +34,7 @@ public class Player : MonoBehaviour
         }
         Vector3 velocity = new Vector3(0,0,0);
        
-        if(Input.GetMouseButton(0) && canAttack)
+        if(Input.GetMouseButtonDown(0) && canAttack)
         {
             target.GetComponent<Enemy>().hitPoints -= damage;
             if (target.GetComponent<Enemy>().hitPoints <= 0)

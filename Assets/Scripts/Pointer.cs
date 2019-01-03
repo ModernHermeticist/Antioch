@@ -25,8 +25,6 @@ public class Pointer : MonoBehaviour
         playerPos = player.transform.position;
         mousePos = Input.mousePosition; // get mouse position
         mousePos = Camera.main.ScreenToWorldPoint(mousePos);
-        //mousePos.x = Mathf.Clamp(mousePos.x, -1, 1);
-        //mousePos.y = Mathf.Clamp(mousePos.y, -1, 1);
 
         angle = Mathf.Atan2(mousePos.y - playerPos.y, mousePos.x - playerPos.x) * 180 / Mathf.PI;
         rotationVector.z = angle;
@@ -34,7 +32,6 @@ public class Pointer : MonoBehaviour
 
         pointerOffset.x = Mathf.Cos(angle) * 0.16f;
         pointerOffset.y = Mathf.Sin(angle) * 0.16f;
-        //pointerOffset = pointerOffset.normalized * 0.16f;
 
         transform.position = player.transform.position;
         transform.position += pointerOffset;

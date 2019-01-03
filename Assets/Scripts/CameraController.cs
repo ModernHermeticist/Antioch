@@ -17,6 +17,10 @@ public class CameraController : MonoBehaviour
 	// Update is called once per frame
 	void Update ()
     {
+        if (player == null)
+        {
+            player = GameObject.Find("Player");
+        }
         transform.position = player.transform.position;
         transform.position += cameraOffset;
 	}
