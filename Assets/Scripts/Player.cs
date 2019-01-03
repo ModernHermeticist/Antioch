@@ -7,7 +7,6 @@ public class Player : MonoBehaviour
 
 	public float speed = 1.5f;
     public float jump = 50.0f;
-    public Transform pointer;
 
     public bool canAttack = false;
     public float damage = 1.0f;
@@ -15,13 +14,14 @@ public class Player : MonoBehaviour
     private bool isJumping = false;
     private bool canJump = true;
     private Vector3 direction = new Vector3(0, 0, 0);
-    public GameObject target = null;
+
+    public GameObject target;
 
 
 
     void Start () 
 	{
-		
+        name = "Player";
 	}
 	
 	// Update is called once per frame
@@ -34,9 +34,13 @@ public class Player : MonoBehaviour
         }
         Vector3 velocity = new Vector3(0,0,0);
        
-        if(Input.GetMouseButton(0) && canAttack && target.tag == "Enemy")
+        if(Input.GetMouseButton(0) && canAttack)
         {
-            enemyScript.gameObject.
+            target.GetComponent<Enemy>().hitPoints -= damage;
+            if (target.GetComponent<Enemy>().hitPoints <= 0)
+            {
+                Destroy(target);
+            }
         }
         if (Input.GetKey(KeyCode.Space))
         {

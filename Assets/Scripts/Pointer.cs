@@ -5,31 +5,28 @@ using UnityEngine;
 public class Pointer : MonoBehaviour
 {
     private GameObject player;
-    public new Camera camera;
 
     private Vector3 pointerOffset = new Vector3(0, 0, 0);
     private Vector3 mousePos;
-    private Vector3 playerPos;
+    private Vector3 playerPos = new Vector3(0,0,0);
     private Vector3 rotationVector;
-    private float mousePosY, mousePosX;
     private float angle;
 
 	// Use this for initialization
 	void Start ()
     {
-        player = GameObject.Find("Player");
-        playerPos = player.transform.position;
+        player = transform.parent.gameObject;
         rotationVector = player.transform.rotation.eulerAngles;
 	}
 	
 	// Update is called once per frame
 	void Update ()
     {
+        playerPos = player.transform.position;
         mousePos = Input.mousePosition; // get mouse position
-        mousePos = camera.ScreenToWorldPoint(mousePos);
-        mousePos.x = Mathf.Clamp(mousePos.x, -1, 1);
-        mousePos.y = Mathf.Clamp(mousePos.y, -1, 1);
-
+        mousePos = Camera.main.ScreenToWorldPoint(mousePos);
+        //mousePos.x = Mathf.Clamp(mousePos.x, -1, 1);
+        //mousePos.y = Mathf.Clamp(mousePos.y, -1, 1);
 
         angle = Mathf.Atan2(mousePos.y - playerPos.y, mousePos.x - playerPos.x) * 180 / Mathf.PI;
         rotationVector.z = angle;
@@ -44,15 +41,21 @@ public class Pointer : MonoBehaviour
         transform.rotation = Quaternion.Euler(rotationVector);
 	}
 
-    private void OnCollisionEnter2D(Collision2D collision)
+    private void OnTriggerEnter2D(Collider2D collision)
     {
-        player.c
-        playerScript.target = collision.gameObject;
+        if (collision.gameObject.tag == "Enemy")
+        {
+            player.GetComponent<Player>().target = collision.gameObject;
+            player.GetComponent<Player>().canAttack = true;
+        }
     }
 
-    private void OnCollisionExit2D(Collision2D collision)
+    private void OnTriggerExit2D(Collider2D collision)
     {
-        playerScript.canAttack = false;
-        playerScript.target = null;
+        if (player.GetComponent<Player>().canAttack == true)
+        {
+            player.GetComponent<Player>().target = null;
+            player.GetComponent<Player>().canAttack = false;
+        }
     }
 }
