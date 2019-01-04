@@ -4,43 +4,54 @@ using UnityEngine;
 
 public class Player : MonoBehaviour 
 {
+    [SerializeField]
+    private Stat health;
 
-	public float speed = 1.5f;
-    public float jump = 50.0f;
 
-    public bool canAttack = false;
-    public float damage = 1.0f;
+
+	private float speed = 1.5f;
+    private float jump = 50.0f;
+
+    private bool canAttack = false;
+    private float damage = 1.0f;
 
     private bool isJumping = false;
     private bool canJump = true;
     private Vector3 direction = new Vector3(0, 0, 0);
 
-    public GameObject target;
+    private GameObject target;
 
 
 
-    void Start () 
+    void Awake () 
 	{
         name = "Player";
+        health.Initialize();
 	}
-	
-	// Update is called once per frame
-	void Update () 
+
+    // Update is called once per frame
+    void Update () 
 	{
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            health.CurrentVal -= 10;
+        }
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            health.CurrentVal += 10;
+        }
+
+
         if (isJumping == true)
         {
-            StartCoroutine(jumpDelayTimer());
+            StartCoroutine(JumpDelayTimer());
             isJumping = false;
         }
         Vector3 velocity = new Vector3(0,0,0);
        
         if(Input.GetMouseButtonDown(0) && canAttack)
         {
-            target.GetComponent<Enemy>().hitPoints -= damage;
-            if (target.GetComponent<Enemy>().hitPoints <= 0)
-            {
-                Destroy(target);
-            }
+            target.GetComponent<Enemy>().TakeDamage(damage);
         }
         if (Input.GetKey(KeyCode.Space))
         {
@@ -97,18 +108,35 @@ public class Player : MonoBehaviour
 
 	void OnCollisionEnter2D(Collision2D col)
 	{
-		Debug.Log("OnCollisionEnter2D");
+		//Debug.Log("OnCollisionEnter2D");
 	}
 
 	void OnCollisionExit2D(Collision2D col)
 	{
-		Debug.Log("OnCollisionExit2D");
+		//Debug.Log("OnCollisionExit2D");
 	}
 
-    public IEnumerator jumpDelayTimer()
+    public IEnumerator JumpDelayTimer()
     {
         yield return new WaitForSeconds(3); // Wait for 3 seconds
         canJump = true;
+    }
+
+    public void SetCanAttack()
+    {
+        if (canAttack == false)
+        {
+            canAttack = true;
+        }
+        else if (canAttack == true)
+        {
+            canAttack = false;
+        }
+    }
+
+    public void SetTarget(GameObject target)
+    {
+        this.target = target;
     }
 
 }

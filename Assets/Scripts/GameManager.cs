@@ -6,11 +6,15 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager instance = null;
 
+    public GameObject gui;
+
     public Grid grid;
 
-    public Player player;
+    public Player playerScript;
 
-    public Enemy enemy;
+    public Enemy enemyScript;
+
+    private GameObject enemyObject;
 
 
 	// Use this for initialization
@@ -28,16 +32,37 @@ public class GameManager : MonoBehaviour
 
         DontDestroyOnLoad(gameObject);
 
+        //Instantiate(gui);
+
         Instantiate(grid);
 
-        Instantiate(player);
+        //Instantiate(playerScript);
 
-        Instantiate(enemy);
-	}
+        Instantiate(enemyScript);
+
+    }
 	
 	// Update is called once per frame
 	void Update ()
     {
-		
+		if (!enemyObject.GetComponent<Renderer>().enabled)
+        {
+            enemyObject.transform.position = ChooseSpawnNode();
+            enemyObject.GetComponent<Renderer>().enabled = true;
+            enemyObject.GetComponent<Enemy>().enabled = true;
+        }
 	}
+
+    private Vector3 ChooseSpawnNode()
+    {
+        int n = Random.Range(0, 3);
+        string nodeName = "SpawnPoint" + n;
+        GameObject spawnNode = GameObject.Find(nodeName);
+        return spawnNode.transform.position;
+    }
+
+    public void SetEnemyObject(GameObject objectToSetAs)
+    {
+        enemyObject = objectToSetAs;
+    }
 }

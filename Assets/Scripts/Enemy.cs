@@ -4,14 +4,11 @@ using UnityEngine;
 
 public class Enemy : MonoBehaviour
 {
-    public float speed = 0.5f;
-    public float hitPoints = 10.0f;
-    public float maxDamage = 10;
+    private float speed = 0.25f;
+    private float maxDamage = 20;
+    private float maxHitPoints = 10;
+    private float hitPoints = 10.0f;
 
-    public float smoothTime = 3.0f;
-
-
-    private Vector3 smoothVelocity = Vector3.zero;
     private Vector3 playerPos;
 
     private GameObject player;
@@ -20,15 +17,28 @@ public class Enemy : MonoBehaviour
 	// Use this for initialization
 	void Start ()
     {
+        name = "Orc";
         player = GameObject.Find("Player");
         playerTransform = player.transform;
+        GameManager.instance.SetEnemyObject(gameObject);
     }
 	
 	// Update is called once per frame
 	void Update ()
     {
-        float distance = Vector3.Distance(transform.position, playerTransform.position);
+        float step = speed * Time.deltaTime;
+        if (hitPoints <= 0)
+        {
+            enabled = false;
+            GetComponent<Renderer>().enabled = false;
+            hitPoints = maxHitPoints;
+        }
 
-        transform.position = Vector3.SmoothDamp(transform.position, playerTransform.position, ref smoothVelocity, smoothTime);
+        transform.position = Vector3.MoveTowards(transform.position, playerTransform.position, step);
 	}
+
+    public void TakeDamage(float damage)
+    {
+        hitPoints -= damage;
+    }
 }

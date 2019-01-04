@@ -99,10 +99,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7ba8fc47284f39447b375b0904a6b034, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  speed: 1
-  hitPoints: 10
+  speed: 0.25
   maxDamage: 20
-  smoothTime: 3
+  maxHitPoints: 10
 --- !u!212 &212876825279046988
 SpriteRenderer:
   m_ObjectHideFlags: 1

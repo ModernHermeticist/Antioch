@@ -42,17 +42,14 @@ public class Pointer : MonoBehaviour
     {
         if (collision.gameObject.tag == "Enemy")
         {
-            player.GetComponent<Player>().target = collision.gameObject;
-            player.GetComponent<Player>().canAttack = true;
+            player.GetComponent<Player>().SetTarget(collision.gameObject);
+            player.GetComponent<Player>().SetCanAttack();
         }
     }
 
     private void OnTriggerExit2D(Collider2D collision)
     {
-        if (player.GetComponent<Player>().canAttack == true)
-        {
-            player.GetComponent<Player>().target = null;
-            player.GetComponent<Player>().canAttack = false;
-        }
+        player.GetComponent<Player>().SetTarget(null);
+        player.GetComponent<Player>().SetCanAttack();
     }
 }
