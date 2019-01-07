@@ -5,11 +5,16 @@ using UnityEngine.UI;
 
 public class BarScript : MonoBehaviour
 {
-    [SerializeField]
     private float fillAmount;
+
+	[SerializeField]
+	private float lerpSpeed;
 
     [SerializeField]
     private Image content;
+
+	[SerializeField]
+	private Text valueText;
 
     public float MaxValue { get; set; }
 
@@ -17,22 +22,18 @@ public class BarScript : MonoBehaviour
     {
         set
         {
-            Debug.Log("value: " + value);
-            Debug.Log("fillAmount before mapping: " + fillAmount);
-            if (fillAmount != content.fillAmount)
-            {
-                fillAmount = Map(value, 0, MaxValue, 0, 1);
-            }
-            Debug.Log("fillAmount after mapping: " + fillAmount);
+			string[] tmp = valueText.text.Split(':');
+			valueText.text = tmp[0] + ": " + value + "/" + MaxValue;
+            fillAmount = Map(value, 0, MaxValue, 0, 1);
         }
     }
 
 	void Start ()
     {
-		
+        content.fillAmount = 0.5f;
 	}
 	
-
+	
 	void Update ()
     {
         HandleBar();
@@ -40,7 +41,8 @@ public class BarScript : MonoBehaviour
 
     private void HandleBar()
     {
-        content.fillAmount = fillAmount;
+        if (fillAmount != content.fillAmount)
+            content.fillAmount = Mathf.Lerp(content.fillAmount, fillAmount, lerpSpeed * Time.deltaTime);
     }
 
     private float Map(float value, float inMin, float inMax, float outMin = 0, float outMax = 1)

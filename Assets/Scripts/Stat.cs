@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using UnityEngine;
 
 [Serializable]
@@ -21,7 +20,7 @@ public class Stat
 
         set
         {
-            currentVal = value;
+            currentVal = Mathf.Clamp(value, 0, MaxVal);
             bar.Value = currentVal;
         }
     }
@@ -40,9 +39,11 @@ public class Stat
         }
     }
 
-    public void Initialize()
+    public void Initialize(float cur, float max)
     {
         Debug.Log("Init health!");
+        maxVal = max;
+        currentVal = cur;
         MaxVal = maxVal;
         CurrentVal = currentVal;
     }

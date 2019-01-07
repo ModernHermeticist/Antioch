@@ -6,7 +6,8 @@ public class Player : MonoBehaviour
 {
     [SerializeField]
     private Stat health;
-
+	[SerializeField]
+	private Stat stamina;
 
 
 	private float speed = 1.5f;
@@ -26,7 +27,8 @@ public class Player : MonoBehaviour
     void Awake () 
 	{
         name = "Player";
-        health.Initialize();
+        health.Initialize(100, 100);
+		stamina.Initialize(40, 40);
 	}
 
     // Update is called once per frame
@@ -40,6 +42,14 @@ public class Player : MonoBehaviour
         {
             health.CurrentVal += 10;
         }
+		if(Input.GetKeyDown(KeyCode.F))
+		{
+			stamina.CurrentVal -= 5;
+		}
+		if(Input.GetKeyDown(KeyCode.G))
+		{
+			stamina.CurrentVal += 5;
+		}
 
 
         if (isJumping == true)
