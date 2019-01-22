@@ -5,9 +5,9 @@ using UnityEngine;
 public class PlayerPlatformerController : PhysicsObject 
 {
 	[SerializeField]
-	private float jumpTakeOffSpeed = 3.0f;
+	private float jumpTakeOffSpeed = 4.5f;
 	[SerializeField]
-	private float maxSpeed = 3.5f;
+	private float maxSpeed = 5.0f;
 	
 	private SpriteRenderer spriteRenderer;
 	private Animator animator;
@@ -31,7 +31,7 @@ public class PlayerPlatformerController : PhysicsObject
 		else if (Input.GetButtonUp("Jump"))
 		{
 			if (velocity.y > 0)
-				velocity.y = velocity.y * 0.25f;
+				velocity.y = velocity.y * 0.50f;
 		}
 
 
