@@ -41,7 +41,6 @@ public class Stat
 
     public void Initialize(float cur, float max)
     {
-        Debug.Log("Init health!");
         maxVal = max;
         currentVal = cur;
         MaxVal = maxVal;
