@@ -2,38 +2,50 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class InalaController : PhysicsObject 
+public class InalaController : MonoBehaviour 
 {
 	private GameObject player;
+	private Rigidbody2D rb2d;
+	private Vector3 headingInalaToPlayer;
+	private float distanceInalaToPlayer;
+	private Vector3 directionInalaToPlayer;
 
-	private float speed = 3.0f;
-	private float offset = 5.0f;
+	private float speed = 100.0f;
+	private float offset = 2.0f;
+	private float maxSpeed = 3.0f;
 	
 	void Awake () 
 	{
 		player = GameObject.Find("Player");
 		rb2d = GetComponent<Rigidbody2D>();
-		contactFilter.useTriggers = false;
-		contactFilter.SetLayerMask(Physics2D.GetLayerCollisionMask(gameObject.layer));
-		contactFilter.useLayerMask = true;
-		gravityModifier = 0.0f;
 	}
 	
 	
-	protected override void ComputeVelocity()
+	void Update()
 	{
-		Vector2 move = Vector2.zero;
-
-		if (player.transform.position.x - offset > gameObject.transform.position.x)
+        headingInalaToPlayer = player.transform.position - gameObject.transform.position;
+		distanceInalaToPlayer = headingInalaToPlayer.magnitude;
+		directionInalaToPlayer = headingInalaToPlayer / distanceInalaToPlayer;
+		
+		if (rb2d.velocity.x <= maxSpeed && distanceInalaToPlayer > offset && directionInalaToPlayer.x > 0)
 		{
-			move.x = 1;
-		}
-		else if (player.transform.position.x + offset > gameObject.transform.position.x)
-		{
-			move.x = -1;
+			rb2d.AddForce(Vector2.right * speed * Time.deltaTime);
 		}
 
-		targetVelocity = move * speed;
+		else if (rb2d.velocity.x <= maxSpeed && distanceInalaToPlayer > offset && directionInalaToPlayer.x < 0)
+		{
+            rb2d.AddForce(Vector2.left * speed * Time.deltaTime);
+		}
+
+		else if (rb2d.velocity.x >= maxSpeed)
+		{
+			//rb2d.velocity.x = maxSpeed;
+		}
+
+		else
+		{
+			rb2d.velocity = Vector2.zero;
+		}
 	}
 
 
