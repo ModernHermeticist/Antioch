@@ -8,21 +8,25 @@ public class PlayerGuiController : MonoBehaviour
     private Stat health;
 	[SerializeField]
 	private Stat stamina;
+	[SerializeField]
+	private EssenceValue essenceValue;
 
-	private PlayerStatController playerStatController;
+	private PlayerStatController pSC;
 
 	// Player Stats
 	private float curHp;
 	private float maxHp;
 	private float curStam;
 	private float maxStam;
+	private int curEssence;
 
 	void Awake () 
 	{
-		playerStatController = GetComponent<PlayerStatController>();
+		pSC = GetComponent<PlayerStatController>();
 		Initialize();
 		health.Initialize(curHp, maxHp);
 		stamina.Initialize(curStam, maxStam);
+		essenceValue.Initialize(curEssence);
 	}
 	
 
@@ -31,27 +35,42 @@ public class PlayerGuiController : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.Q))
         {
             health.CurrentVal -= 10;
+			pSC.HpValue -= 10;
         }
         if (Input.GetKeyDown(KeyCode.E))
         {
             health.CurrentVal += 10;
+			pSC.HpValue += 10;
         }
 		if(Input.GetKeyDown(KeyCode.F))
 		{
 			stamina.CurrentVal -= 5;
+			pSC.StamValue -= 5;
 		}
 		if(Input.GetKeyDown(KeyCode.G))
 		{
 			stamina.CurrentVal += 5;
+			pSC.StamValue += 5;
 		}
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            pSC.EssenceValue += 5;
+            essenceValue.CurrentVal += 5;
+        }
+        if (Input.GetKeyDown(KeyCode.Y))
+        {
+            pSC.EssenceValue -= 5;
+            essenceValue.CurrentVal -= 5;
+        }
 	}
 
 	void Initialize()
 	{
-		curHp = playerStatController.getCurHp();
-		maxHp = playerStatController.getMaxHp();
-		curStam = playerStatController.getCurStam();
-		maxStam = playerStatController.getMaxStam();
+		curHp = pSC.HpValue;
+		maxHp = pSC.MaxHpValue;
+		curStam = pSC.StamValue;
+		maxStam = pSC.MaxStamValue;
+		curEssence = pSC.EssenceValue;
 	}
 }
 

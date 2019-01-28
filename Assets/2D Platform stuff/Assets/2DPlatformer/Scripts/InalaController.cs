@@ -10,7 +10,7 @@ public class InalaController : MonoBehaviour
 	private float distanceInalaToPlayer;
 	private Vector3 directionInalaToPlayer;
 
-	private float speed = 100.0f;
+	private float speed = 75.0f;
 	private float offset = 2.0f;
 	private float maxSpeed = 3.0f;
 	

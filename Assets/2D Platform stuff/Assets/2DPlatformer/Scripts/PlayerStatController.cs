@@ -13,35 +13,82 @@ public class PlayerStatController : MonoBehaviour
 	private float curStam = 45.0f;
 	[SerializeField]
 	private float maxStam = 45.0f;
-	// Use this for initialization
+	[SerializeField]
+	private int curEssence = 10;
+
+
+	public float HpValue
+	{
+		get
+		{
+			return curHp;
+		}
+
+		set
+		{
+			curHp = value;
+		}
+	}
+
+	public float MaxHpValue
+	{
+		get
+		{
+			return maxHp;
+		}
+
+		set
+		{
+			maxHp = value;
+		}
+	}
+
+	public float StamValue
+	{
+		get
+		{
+			return curStam;
+		}
+
+		set
+		{
+			curStam = value;
+		}
+	}
+
+	public float MaxStamValue
+	{
+		get
+		{
+			return maxStam;
+		}
+		
+		set
+		{
+			maxStam = value;
+		}
+	}
+
+	public int EssenceValue
+	{
+		get
+		{
+			return curEssence;
+		}
+
+		set
+		{
+			curEssence = value;
+		}
+	}
 	void Start () 
 	{
 		
 	}
 	
-	// Update is called once per frame
 	void Update () 
 	{
 		
 	}
 
-	public float getCurHp()
-	{
-		return curHp;
-	}
-
-	public float getMaxHp()
-	{
-		return maxHp;
-	}
-
-	public float getCurStam()
-	{
-		return curStam;
-	}
-
-	public float getMaxStam()
-	{
-		return maxStam;
-	}
 }

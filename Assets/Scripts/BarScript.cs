@@ -30,7 +30,7 @@ public class BarScript : MonoBehaviour
 
 	void Start ()
     {
-        content.fillAmount = 0.5f;
+    
 	}
 	
 	
