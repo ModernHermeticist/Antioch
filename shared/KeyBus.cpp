@@ -4,19 +4,7 @@
 #include <chrono>
 #include <cstdint>
 
-#if defined (_WIN32)
- #ifndef WIN32_LEAN_AND_MEAN
-  #define WIN32_LEAN_AND_MEAN
- #endif
- #ifndef NOMINMAX
-  #define NOMINMAX
- #endif
- #include <windows.h>
-#else
- #include <fcntl.h>
- #include <sys/mman.h>
- #include <unistd.h>
-#endif
+#include "SharedMemory.h"
 
 namespace suite::KeyBus
 {
@@ -40,26 +28,7 @@ namespace suite::KeyBus
 
         Shared* mapShared() noexcept
         {
-           #if defined (_WIN32)
-            auto handle = CreateFileMappingW (INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
-                                              (DWORD) sizeof (Shared), L"Local\\AntiochSuiteKeyBus_v1");
-            if (handle == nullptr)
-                return nullptr;
-            auto* mem = MapViewOfFile (handle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof (Shared));
-            return static_cast<Shared*> (mem); // mapping intentionally kept for the process lifetime
-           #else
-            const int fd = shm_open ("/antioch_suite_keybus_v1", O_CREAT | O_RDWR, 0600);
-            if (fd < 0)
-                return nullptr;
-            if (ftruncate (fd, (off_t) sizeof (Shared)) != 0)
-            {
-                close (fd);
-                return nullptr;
-            }
-            auto* mem = mmap (nullptr, sizeof (Shared), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-            close (fd);
-            return mem == MAP_FAILED ? nullptr : static_cast<Shared*> (mem);
-           #endif
+            return static_cast<Shared*> (openSharedBlock ("antioch_suite_keybus_v1", sizeof (Shared)));
         }
 
         Shared& shared() noexcept

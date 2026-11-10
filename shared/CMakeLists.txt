@@ -2,6 +2,8 @@
 # (an INTERFACE library), so each plugin binary stays self-contained.
 add_library(suite_shared INTERFACE)
 target_sources(suite_shared INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/SharedMemory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/KeyBus.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SectionBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuiteUI.cpp)
 target_include_directories(suite_shared INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
