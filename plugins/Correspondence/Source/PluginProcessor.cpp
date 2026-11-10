@@ -180,10 +180,13 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
         if (! suite::SectionBus::read (map))
             return {};
         const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp
-                        : kind.endsWith ("Lead") ? chords::SongPart::Lead : chords::SongPart::Chords;
+                        : kind.endsWith ("Lead") ? chords::SongPart::Lead : kind.endsWith ("Harmony") ? chords::SongPart::Harmony
+                        : chords::SongPart::Chords;
         auto patterns = Params::readSongPatterns (apvts);
         patterns.melody = melodySettings();
         notes = chords::songClip (s, map, patterns, part);
+        if (notes.empty() && part == chords::SongPart::Harmony)
+            return {};   // the harmony line only exists when there's a later drop
     }
     else
     {
@@ -215,7 +218,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead" })
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
 
     suite::SectionMap map;
@@ -225,8 +228,10 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         patterns.melody = melodySettings();
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
         for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
-                                          { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead } })
-            parts.push_back ({ name, chords::songClip (s, map, patterns, part) });
+                                          { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead },
+                                          { "Harmony", chords::SongPart::Harmony } })
+            if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part != chords::SongPart::Harmony)
+                parts.push_back ({ name, std::move (notes) });
 
         std::vector<std::pair<double, juce::String>> markers;
         std::array<int, (size_t) suite::SectionType::count> seen {};

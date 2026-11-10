@@ -25,6 +25,7 @@ namespace Params
     inline const juce::String melodySeed   { "mel_seed" };
     inline const juce::String melodyOctave { "mel_octave" };
     inline const juce::String songLift     { "song_lift" };
+    inline const juce::String songVary     { "song_vary" };   // later drops: embellished lead + harmony line
 
     inline juce::String slotDegree (int slot)  { return "slot" + juce::String (slot + 1) + "_deg"; }
     inline juce::String slotQuality (int slot) { return "slot" + juce::String (slot + 1) + "_qual"; }

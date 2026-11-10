@@ -543,7 +543,60 @@ namespace chords
     //==============================================================================
     // Full-song clips: one pattern per section type, following the Ouroboros map.
 
-    enum class SongPart { Chords, Bass, Arp, Lead };
+    /** Later drops: the same melody, embellished. A scale passing note fills each leap of a
+        third or more across a dotted 8th or longer, and the last phrase's first strong-beat note
+        jumps up an octave for a climax. */
+    inline std::vector<Note> embellish (const std::vector<Note>& mel, const Settings& s)
+    {
+        using namespace detail;
+        std::vector<Note> out;
+        if (mel.empty()) return out;
+        double totalQ = 0.0;
+        for (const auto& n : mel) totalQ = std::max (totalQ, n.start + n.length);
+
+        for (size_t i = 0; i < mel.size(); ++i)
+        {
+            out.push_back (mel[i]);
+            if (i + 1 >= mel.size()) break;
+            const auto& n = mel[i];
+            const auto& next = mel[i + 1];
+            const auto gap = next.start - n.start;
+            const auto leap = next.pitch - n.pitch;
+            if (gap >= 0.75 - 1.0e-9 && std::abs (leap) >= 3 && std::abs (leap) <= 9)
+            {
+                const auto half = n.start + std::round (gap * 0.5 / 0.25) * 0.25;   // on the 16th grid
+                out.back().length = std::min (out.back().length, half - n.start - 0.02);
+                out.push_back ({ scaleStepFrom (next.pitch, leap > 0 ? -1 : 1, s.root, s.scale), half,
+                                 std::max (0.1, next.start - half - 0.02), 88 });
+            }
+        }
+
+        // Climax: the first on-the-beat note of the last phrase (after its first bar), an octave up.
+        const auto phraseStart = std::max (0.0, totalQ - 8.0) + 4.0;
+        for (auto& n : out)
+            if (n.start >= phraseStart - 1.0e-9 && std::abs (std::fmod (n.start, 1.0)) < 1.0e-9)
+            {
+                n.pitch += 12;
+                n.velocity = std::min (127, n.velocity + 10);
+                break;
+            }
+        return out;
+    }
+
+    /** A harmony line: each melody note a diatonic third below (in key), a little softer. */
+    inline std::vector<Note> harmony (const std::vector<Note>& mel, const Settings& s)
+    {
+        std::vector<Note> out;
+        for (auto n : mel)
+        {
+            n.pitch = detail::scaleStepFrom (n.pitch, -2, s.root, s.scale);
+            n.velocity = std::max (1, n.velocity - 15);
+            out.push_back (n);
+        }
+        return out;
+    }
+
+    enum class SongPart { Chords, Bass, Arp, Lead, Harmony };
 
     /** Pattern choice per section type. 0 = none, otherwise (pattern enum value + 1). */
     struct SongPatterns
@@ -554,6 +607,7 @@ namespace chords
         std::array<int, (int) suite::SectionType::count> lead   { 0, 0, 2, 0, 1, 0 };   // 1 = melody, 2 = teaser
         MelodySettings melody;
         bool liftLaterDrops = true;   // the lead goes up an octave in the 2nd, 3rd... drop
+        bool varyLaterDrops = true;   // ... and is embellished, with a harmony line (SongPart::Harmony)
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -580,17 +634,27 @@ namespace chords
             if (choice <= 0)
                 continue;
 
+            int earlierSame = 0;
+            for (int k = 0; k < i; ++k) if (map.sections[(size_t) k].type == map.sections[(size_t) i].type) ++earlierSame;
+            const auto laterDrop = map.sections[(size_t) i].type == suite::SectionType::Drop && earlierSame > 0;
+            const auto varied = laterDrop && patterns.varyLaterDrops && choice == 1;
+            if (part == SongPart::Harmony && ! varied)
+                continue;   // the harmony line only plays in later drops
+
             auto s = base;
             std::vector<Note> cycle;
             if (part == SongPart::Chords)    { s.chordPattern = (ChordPattern) (choice - 1); cycle = chordClip (s); }
             else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }
             else if (part == SongPart::Arp)  { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
-            else                             { cycle = melody (s, patterns.melody); if (choice == 2) cycle = teaser (cycle); }
+            else
+            {
+                cycle = melody (s, patterns.melody);
+                if (choice == 2) cycle = teaser (cycle);
+                if (varied) cycle = embellish (cycle, s);
+                if (part == SongPart::Harmony) cycle = harmony (cycle, s);
+            }
 
-            int earlierSame = 0;
-            for (int k = 0; k < i; ++k) if (map.sections[(size_t) k].type == map.sections[(size_t) i].type) ++earlierSame;
-            const auto lift = part == SongPart::Lead && patterns.liftLaterDrops && map.sections[(size_t) i].type == suite::SectionType::Drop
-                              && earlierSame > 0 ? 12 : 0;
+            const auto lift = (part == SongPart::Lead || part == SongPart::Harmony) && patterns.liftLaterDrops && laterDrop ? 12 : 0;
             const auto keyChange = map.keyShiftOf (i);   // final-drop key change: everything from the last drop on moves up
 
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;

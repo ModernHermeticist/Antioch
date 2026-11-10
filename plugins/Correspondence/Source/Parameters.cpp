@@ -70,6 +70,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterInt> (id (melodySeed), "Melody Seed", 1, 999, 7));
         layout.add (std::make_unique<AudioParameterInt> (id (melodyOctave), "Melody Octave", 4, 6, 5));
         layout.add (std::make_unique<AudioParameterBool> (id (songLift), "Lead Up an Octave in Later Drops", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songVary), "Vary the Lead and Add Harmony in Later Drops", true));
 
         layout.add (std::make_unique<AudioParameterFloat> (id (preview), "Preview Volume", NormalisableRange<float> (0.0f, 1.0f), 0.5f,
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
@@ -115,6 +116,7 @@ namespace Params
         }
         p.melody = readMelody (state);
         p.liftLaterDrops = state.getRawParameterValue (songLift)->load() > 0.5f;
+        p.varyLaterDrops = state.getRawParameterValue (songVary)->load() > 0.5f;
         return p;
     }
 

@@ -271,6 +271,43 @@ int main (int argc, char** argv)
         check (map.keyShiftOf (0) == 0 && map.keyShiftOf (1) == 0 && map.keyShiftOf (2) == 1, "only the last drop (and after) is shifted");
     }
 
+    section ("Melodia: later drops vary, with a harmony line");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;   // Drop 1-4, Breakdown 5-8, Drop 9-12
+        map.totalBars = 12; map.count = 3;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 5, suite::SectionType::Breakdown };
+        map.sections[2] = { 9, suite::SectionType::Drop };
+        chords::SongPatterns patterns;
+        const auto lead = chords::songClip (s, map, patterns, chords::SongPart::Lead);
+        std::vector<chords::Note> first, second;
+        for (const auto& n : lead) { if (n.start < 16.0) first.push_back (n); else if (n.start >= 32.0) second.push_back (n); }
+        check (second.size() > first.size(), "the second drop's lead has extra passing notes (" + juce::String ((int) first.size()) + " -> "
+                   + juce::String ((int) second.size()) + ")");
+        const auto& steps = suite::music::scales()[0].steps;
+        bool inKey = true;
+        for (const auto& n : second) inKey = inKey && std::find (steps.begin(), steps.end(), ((n.pitch - 9) % 12 + 12) % 12) != steps.end();
+        check (inKey, "every added note is in the key");
+        int maxFirst = 0, maxSecond = 0;
+        for (auto& n : first) maxFirst = std::max (maxFirst, n.pitch);
+        for (auto& n : second) maxSecond = std::max (maxSecond, n.pitch);
+        check (maxSecond >= maxFirst + 12 + 7, "a climax note leaps above the (octave-lifted) line (" + juce::String (maxFirst) + " -> " + juce::String (maxSecond) + ")");
+
+        const auto harm = chords::songClip (s, map, patterns, chords::SongPart::Harmony);
+        bool onlyLater = ! harm.empty(), thirds = true;
+        for (const auto& n : harm) onlyLater = onlyLater && n.start >= 32.0;
+        for (size_t i = 0; i < harm.size() && i < second.size(); ++i)
+        {
+            const auto d = second[i].pitch - harm[i].pitch;
+            thirds = thirds && (d == 3 || d == 4);
+        }
+        check (onlyLater && harm.size() == second.size() && thirds, "the harmony is a diatonic third under the lead, only in the later drop");
+
+        patterns.varyLaterDrops = false;
+        check (chords::songClip (s, map, patterns, chords::SongPart::Harmony).empty(), "switching variation off removes the harmony");
+    }
+
     section ("Export all");
     {
         auto p = make();
@@ -285,7 +322,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 9, "a song folder with 8 clips and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 10, "a song folder with 9 clips (incl. the drop-2 harmony) and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -293,8 +330,8 @@ int main (int argc, char** argv)
         juce::MidiFile midi;
         juce::FileInputStream in (all);
         const auto read = all.existsAsFile() && midi.readFrom (in);
-        check (read && midi.getNumTracks() == 5, "all parts: a section track plus Chords, Bass, Arp and Lead (" + juce::String (midi.getNumTracks()) + " tracks)");
-        if (read && midi.getNumTracks() == 5)
+        check (read && midi.getNumTracks() == 6, "all parts: a section track plus Chords, Bass, Arp, Lead and Harmony (" + juce::String (midi.getNumTracks()) + " tracks)");
+        if (read && midi.getNumTracks() == 6)
         {
             juce::StringArray markers;
             for (auto* e : *midi.getTrack (0))
@@ -302,7 +339,7 @@ int main (int argc, char** argv)
                     markers.add (e->message.getTextFromTextMetaEvent() + "@" + juce::String (e->message.getTimeStamp() / 960.0, 0));
             check (markers.joinIntoString (" ") == "Groove@0 Drop@16 Breakdown@32 Drop 2@48", "sections as markers: " + markers.joinIntoString (" "));
             int notes = 0;
-            for (int t = 1; t < 5; ++t)
+            for (int t = 1; t < 6; ++t)
                 for (auto* e : *midi.getTrack (t)) notes += e->message.isNoteOn();
             check (notes > 50, "with the notes of every part (" + juce::String (notes) + ")");
         }
