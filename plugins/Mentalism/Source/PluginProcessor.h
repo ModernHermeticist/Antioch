@@ -88,6 +88,13 @@ public:
     /** Loudness gathered per section of the current Ouroboros map (any thread). */
     std::vector<coach::SectionStat> sectionStats() const;
 
+    /** New song (Ouroboros): the loudness target for the style. */
+    bool applySession (const suite::SessionStyle& style, int, int) override
+    {
+        setParameterPlain (apvts, Params::loudnessTarget, (float) style.loudnessTarget);
+        return true;
+    }
+
     /** Samples at full scale since the last Reset (for the pre-export checklist). */
     std::atomic<int> clippedSamples { 0 };
 

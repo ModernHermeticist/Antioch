@@ -12,6 +12,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Registry.h"
 #include "MorphBus.h"
+#include "Session.h"
 #include <array>
 
 namespace suite
@@ -212,6 +213,37 @@ namespace suite
         }
 
         //==============================================================================
+        // Session presets (Ouroboros' "New song"): each plugin applies its part.
+
+        /** Override to apply a session style (message thread). Return true if anything changed. */
+        virtual bool applySession (const SessionStyle&, int /*root*/, int /*scale*/) { return false; }
+
+        /** Handles new session messages (the timer calls it; tests call it directly). */
+        void pollSession()
+        {
+            const auto latest = SessionBus::latest();
+            for (auto seq = lastSessionSeen + 1; seq <= latest && seq != 0; ++seq)
+            {
+                SessionRequest r;
+                if (SessionBus::read (seq, r) && juce::isPositiveAndBelow (r.style, (int) sessionStyles().size())
+                    && applySession (sessionStyles()[(size_t) r.style], r.root, r.scale))
+                    SessionBus::acknowledge (seq);
+            }
+            lastSessionSeen = latest;
+        }
+
+        /** Helper for overrides: set a parameter by its plain value, as if the user moved it. */
+        void setParameterPlain (juce::AudioProcessorValueTreeState& state, const juce::String& id, float plainValue)
+        {
+            if (auto* p = state.getParameter (id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (plainValue));
+                p->endChangeGesture();
+            }
+        }
+
+        //==============================================================================
         // Snapshot morph (Ouroboros' "Final drop snapshot"): glide every parameter from the
         // user's own values towards the snapshot as the morph amount rises, and put them back
         // when it returns to 0. Choices and switches change at the drop (amount 1).
@@ -279,6 +311,7 @@ namespace suite
             void timerCallback() override
             {
                 owner.pollSnapshots();
+                owner.pollSession();
                 if (++ticks % 5 == 1) owner.announce();
             }
             int ticks = 0;
@@ -293,6 +326,7 @@ namespace suite
         std::vector<float> morphBase;   // the user's values while a morph is under way
         bool morphing = false;
         uint32_t lastSeen = SnapshotBus::latest();   // commands sent before this plugin loaded don't apply
+        uint32_t lastSessionSeen = SessionBus::latest();
         Poller poller { *this };
         Morpher morpher { *this };
     };

@@ -40,6 +40,15 @@ public:
 
     /** Loads a preset into the parameters (message thread). */
     void applyPreset (int index);
+    /** New song (Ouroboros): the key, a progression for the style, and the key broadcast on. */
+    bool applySession (const suite::SessionStyle& style, int root, int scale) override
+    {
+        applyPreset (style.progression);
+        setParameterPlain (apvts, Params::rootNote, (float) juce::jlimit (0, 11, root));
+        setParameterPlain (apvts, Params::scale, (float) scale);   // the chosen key wins over the preset's scale
+        setParameterPlain (apvts, Params::broadcast, 1.0f);
+        return true;
+    }
 
     /** Learns a melody motif from the first two bars of a MIDI file (message thread). Returns the note count. */
     /** Export all: a song folder inside `parent` with every clip, plus "<song> - all parts.mid"

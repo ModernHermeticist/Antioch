@@ -323,6 +323,15 @@ int main (int argc, char** argv)
         }
     }
 
+    section ("New song (session preset)");
+    {
+        auto p = make();
+        suite::SessionBus::send ({ 1, 9, 0 });   // Uplifting radio edit: streaming target
+        p->pollSession();
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == suite::sessionStyles()[1].loudnessTarget,
+               "sets the style's loudness target (streaming for a radio edit)");
+    }
+
     section ("Fix history");
     {
         suite::FixBus::reset();

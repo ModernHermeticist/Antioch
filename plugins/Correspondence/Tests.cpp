@@ -288,6 +288,21 @@ int main (int argc, char** argv)
         check (chords::songClip (s, map, patterns, chords::SongPart::Bass).front().pitch % 12 == 9, "'Same as the drop' keeps Am first");
     }
 
+    section ("New song (session preset)");
+    {
+        auto p = make();
+        suite::SessionBus::send ({ 2, 7, 1 });   // Tech trance in G major
+        p->pollSession();
+        check ((int) p->apvts.getRawParameterValue (Params::rootNote)->load() == 7 && (int) p->apvts.getRawParameterValue (Params::scale)->load() == 1,
+               "sets the key (G major)");
+        const auto s = Params::readSettings (p->apvts);
+        const auto& driving = chords::presets()[(size_t) suite::sessionStyles()[2].progression];
+        check (s.count == driving.count && s.slots[0].degree == driving.slots[0].degree, "and the style's progression (" + juce::String (driving.name) + ")");
+        auto q = make();
+        q->pollSession();
+        check ((int) q->apvts.getRawParameterValue (Params::rootNote)->load() == 9, "a plugin loaded afterwards doesn't replay it");
+    }
+
     section ("Final-drop key change");
     {
         auto s = aMinor();

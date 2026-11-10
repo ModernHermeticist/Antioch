@@ -47,6 +47,25 @@ private:
 };
 
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
+/** New song: a style and a key set up the whole suite. */
+class SessionPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit SessionPanel (OuroborosProcessor&);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    void timerCallback() override;
+    void updateInfo();
+
+    OuroborosProcessor& processor;
+    juce::ComboBox style, root, scale;
+    juce::Label styleLabel, keyLabel, info, result;
+    juce::TextButton go { "Set up the song" };
+    uint32_t sentSeq = 0;
+};
+
 class ArrangePanel : public juce::Component
 {
 public:
@@ -109,7 +128,7 @@ private:
     juce::String lastSnapshotVerb;
     void snapshotCommand (suite::SnapshotAction, int slot);
     void refreshSnapshots();
-    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." };
+    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." }, sessionButton { "New song..." };
     std::unique_ptr<juce::FileChooser> referenceChooser;
     double referenceBpm = 138.0;
     juce::String previewNote;

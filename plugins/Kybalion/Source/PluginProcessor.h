@@ -44,6 +44,13 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
+    /** New song (Ouroboros): section scenes on, with the suggested offsets. */
+    bool applySession (const suite::SessionStyle&, int, int) override
+    {
+        setParameterPlain (apvts, suite::SceneEngine::enabledId, 1.0f);
+        scenes.applySuggested();
+        return true;
+    }
     enum SceneSlot { sGateDepth, sGateLength, sGateFilter, sSwing, sDuckDepth };
 
     // Read by the UI.

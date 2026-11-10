@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "SceneUI.h"
+#include "Music.h"
 
 using namespace suite::ui;
 using suite::SectionType;
@@ -242,6 +243,78 @@ void SuitePanel::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
+{
+    for (const auto& s : suite::sessionStyles()) style.addItem (s.name, style.getNumItems() + 1);
+    style.setSelectedId (1, juce::dontSendNotification);
+    for (int n = 0; n < 12; ++n) root.addItem (suite::music::noteNames()[n], n + 1);
+    root.setSelectedId (10, juce::dontSendNotification);   // A
+    for (const auto& sc : suite::music::scales()) scale.addItem (sc.name, scale.getNumItems() + 1);
+    scale.setSelectedId (1, juce::dontSendNotification);
+    style.onChange = [this] { updateInfo(); };
+    for (auto* l : { &styleLabel, &keyLabel, &info, &result })
+    {
+        l->setFont (juce::FontOptions (13.0f));
+        addAndMakeVisible (l);
+    }
+    styleLabel.setText ("Style", juce::dontSendNotification);
+    keyLabel.setText ("Key", juce::dontSendNotification);
+    info.setJustificationType (juce::Justification::topLeft);
+    info.setColour (juce::Label::textColourId, Colours::dimText);
+    result.setColour (juce::Label::textColourId, Colours::moss);
+    go.onClick = [this]
+    {
+        sentSeq = processor.startSession (style.getSelectedId() - 1, root.getSelectedId() - 1, scale.getSelectedId() - 1);
+        timerCallback();
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &go })
+        addAndMakeVisible (c);
+    updateInfo();
+    setSize (460, 250);
+    startTimerHz (4);
+}
+
+void SessionPanel::updateInfo()
+{
+    const auto& s = suite::sessionStyles()[(size_t) juce::jmax (0, style.getSelectedId() - 1)];
+    const auto bars = suite::sessionBars (s);
+    const auto seconds = bars * 4.0 * 60.0 / s.bpm;
+    info.setText (juce::String (bars) + " bars (" + juce::String ((int) seconds / 60) + ":" + juce::String ((int) seconds % 60).paddedLeft ('0', 2)
+                      + "), " + juce::String (s.drops) + (s.drops == 1 ? " drop" : " drops")
+                      + (s.finalLift > 0 ? ", key up for the last drop" : "") + ".\nSet FL's tempo to " + juce::String (juce::roundToInt (s.bpm))
+                      + " BPM. This replaces the song map and the other plugins' key, progression, loudness target and scenes.",
+                  juce::dontSendNotification);
+}
+
+void SessionPanel::timerCallback()
+{
+    if (sentSeq == 0) return;
+    const auto n = suite::SessionBus::acknowledgements (sentSeq);
+    result.setText ("Song map ready; " + juce::String (n) + (n == 1 ? " other plugin" : " other plugins") + " set up.", juce::dontSendNotification);
+}
+
+void SessionPanel::paint (juce::Graphics& g) { g.fillAll (Colours::panel); }
+
+void SessionPanel::resized()
+{
+    auto r = getLocalBounds().reduced (12);
+    auto row1 = r.removeFromTop (28);
+    styleLabel.setBounds (row1.removeFromLeft (60));
+    style.setBounds (row1);
+    r.removeFromTop (8);
+    auto row2 = r.removeFromTop (28);
+    keyLabel.setBounds (row2.removeFromLeft (60));
+    root.setBounds (row2.removeFromLeft (90).reduced (0, 0));
+    row2.removeFromLeft (8);
+    scale.setBounds (row2);
+    r.removeFromTop (8);
+    result.setBounds (r.removeFromBottom (22));
+    auto bottom = r.removeFromBottom (32);
+    go.setBounds (bottom.removeFromRight (160));
+    info.setBounds (r);
+}
+
+//==============================================================================
 ArrangePanel::ArrangePanel (arrangement::GenSettings initial, double tempo, std::function<void (arrangement::GenSettings)> onGenerate)
     : bpm (tempo), generate (std::move (onGenerate))
 {
@@ -443,6 +516,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
                                 "its sections are proposed as a map to Apply or Discard");
     referenceButton.onClick = [this] { chooseReference(); };
     addAndMakeVisible (referenceButton);
+    sessionButton.setTooltip ("Start a new song: a style and a key set up the map, key, progression, loudness target and scenes across the suite");
+    sessionButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<SessionPanel> (processor), sessionButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (sessionButton);
     suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");
     suiteButton.onClick = [this]
     {
@@ -674,6 +753,7 @@ void OuroborosEditor::resized()
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);
     dropGap.setBounds (n.removeFromRight (190).withTrimmedTop (-10));
+    sessionButton.setBounds (n.removeFromRight (140).withSizeKeepingCentre (130, 30));
     nowLabel.setBounds (n.removeFromLeft (n.getWidth() / 2));
     nextLabel.setBounds (n);
     bounds.removeFromTop (10);

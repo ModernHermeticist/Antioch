@@ -94,6 +94,22 @@ public:
         return 0.0f;
     }
     std::atomic<float> morphAmount { 0.0f };
+
+    /** New song: builds this style's map (Arrange), sets its key change, and asks the rest of
+        the suite to set up (key, progression, loudness target, scenes). Returns the message's
+        sequence number, for counting the plugins that answered. */
+    uint32_t startSession (int styleIndex, int root, int scale)
+    {
+        const auto& style = suite::sessionStyles()[(size_t) juce::jlimit (0, (int) suite::sessionStyles().size() - 1, styleIndex)];
+        arrangement::GenSettings g;
+        g.totalBars = suite::sessionBars (style);
+        g.drops = style.drops;
+        g.djIntro = style.djIntro;
+        g.longBreakdown = style.longBreakdown;
+        setParameterPlain (apvts, liftId, (float) style.finalLift);
+        setMap (arrangement::generate (g));
+        return suite::SessionBus::send ({ styleIndex, root, scale });
+    }
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 

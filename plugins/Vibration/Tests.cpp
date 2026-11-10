@@ -157,6 +157,19 @@ int main (int argc, char** argv)
         check (std::abs (diff) < 1.0f, "output within 1 dB of input despite heavy drive (" + juce::String (diff, 2) + " dB)");
     }
 
+    section ("New song (session preset)");
+    {
+        auto p = makeNeutral();
+        set (*p, suite::SceneEngine::enabledId, 0.0f);
+        p->scenes.clearAll();
+        suite::SessionBus::send ({ 0, 9, 0 });
+        p->pollSession();
+        bool anyOffset = false;
+        for (int t = 0; t < suite::numSceneSlots; ++t)
+            for (int i = 0; i < p->scenes.getNumParams(); ++i) anyOffset = anyOffset || std::abs (p->scenes.getOffset (t, i)) > 1.0e-6f;
+        check (p->apvts.getRawParameterValue (suite::SceneEngine::enabledId)->load() > 0.5f && anyOffset, "turns scenes on with the suggested offsets");
+    }
+
     section ("Final-drop snapshot morph");
     {
         suite::MorphBus::withdraw();

@@ -232,6 +232,21 @@ int main (int argc, char** argv)
         suite::MorphBus::withdraw();
     }
 
+    section ("New song (session preset)");
+    {
+        suite::SessionBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        const auto seq = p->startSession (0, 2, 0);   // Uplifting anthem in D minor
+        const auto m = p->getMap();
+        int drops = 0;
+        for (int i = 0; i < m.count; ++i) drops += m.sections[(size_t) i].type == suite::SectionType::Drop;
+        check (m.totalBars == suite::sessionBars (suite::sessionStyles()[0]) && m.totalBars == 240 && drops == 2,
+               "Uplifting anthem: a 240-bar (7:00 at 138) map with two drops (" + arrangement::toString (m) + ")");
+        check ((int) p->apvts.getRawParameterValue (OuroborosProcessor::liftId)->load() == 1, "with the key up a semitone for the last drop");
+        suite::SessionRequest r;
+        check (suite::SessionBus::read (seq, r) && r.style == 0 && r.root == 2 && r.scale == 0, "and asks the suite to set up D minor");
+    }
+
     section ("Suite overview");
     {
         using namespace suite;
@@ -423,6 +438,8 @@ int main (int argc, char** argv)
 
         ArrangePanel panel ({}, 138.0, {});
         snapshot (panel, outDir.getChildFile ("ouroboros_arrange.png"));
+        SessionPanel session (*p);
+        snapshot (session, outDir.getChildFile ("ouroboros_session.png"));
     }
 
     return finish();
