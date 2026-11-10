@@ -5,6 +5,8 @@
 #include "Limiter.h"
 #include "Analysis.h"
 #include "TargetBus.h"
+#include "FixBus.h"
+#include "SuiteDSP.h"
 
 class LapisProcessor : public suite::SuiteProcessor
 {
@@ -38,7 +40,8 @@ public:
 
     // Parameters
     static inline const juce::String targetId { "target" }, modeId { "mode" }, ceilingId { "ceiling" }, clipId { "clip" },
-                                     releaseId { "release" }, manualGainId { "manualgain" };
+                                     releaseId { "release" }, manualGainId { "manualgain" },
+                                     toneLowId { "tone_low" }, toneHighId { "tone_high" };   // gentle shelves (100 Hz / 8 kHz); Mentalism's reference match sets them
     enum Mode { Auto = 0, Hold, Manual };
     static constexpr int followMentalism = 0;
     static float targetLufsFor (int index) { static const float t[] = { -8.0f, -8.0f, -6.0f, -14.0f }; return t[juce::jlimit (0, 3, index)]; }
@@ -66,11 +69,14 @@ public:
     analysis::TruePeakMeter outputPeak;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's reference match
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
 
     LookaheadLimiter limiter;
+    std::array<suite::Biquad, 2> lowShelf, highShelf;
+    float shownLow = 1000.0f, shownHigh = 1000.0f;
     analysis::LoudnessMeter loudness;
     std::atomic<float> learnedGainDb { 0.0f };
     std::atomic<bool> resetRequested { false };

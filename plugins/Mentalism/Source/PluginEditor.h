@@ -75,7 +75,9 @@ private:
     suite::ui::LookAndFeel lnf;
 
     suite::ui::Choice loudTarget, tonalTarget;
-    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" };
+    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" },
+                     matchButton { "Match reference" };
+    uint32_t matchSeq = 0;
     juce::Label roughStatus;
     juce::Label referenceLabel;
     std::unique_ptr<juce::FileChooser> chooser;

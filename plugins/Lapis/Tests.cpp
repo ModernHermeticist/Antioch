@@ -118,6 +118,38 @@ int main (int argc, char** argv)
                                                                          + juce::String (gainAfterDrop, 1) + " -> " + juce::String (gainAfterBreakdown, 1) + " dB)");
     }
 
+    section ("Tone shelves (reference match)");
+    {
+        suite::FixBus::reset();
+        auto p = make (1);
+        set (*p, LapisProcessor::modeId, (float) LapisProcessor::Manual);
+        set (*p, LapisProcessor::manualGainId, 0.0f);
+        auto levelAt = [&p] (float hz)
+        {
+            juce::AudioBuffer<float> out;
+            render (*p, 1.0, [hz] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = 0.05f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, &out);
+            return juce::Decibels::gainToDecibels (rmsBetween (out, 0.5, 1.0));
+        };
+        const auto low0 = levelAt (40.0f), high0 = levelAt (14000.0f), mid0 = levelAt (1000.0f);
+        const auto seq = suite::FixBus::send (suite::Fix::ReferenceTone, suite::packTone (2.0f, -1.5f));
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::toneLowId)->load() - 2.0f) < 0.01f
+                   && std::abs (p->apvts.getRawParameterValue (LapisProcessor::toneHighId)->load() + 1.5f) < 0.01f, "Mentalism's amounts land on the shelves");
+        const auto low1 = levelAt (40.0f), high1 = levelAt (14000.0f), mid1 = levelAt (1000.0f);
+        check (std::abs ((low1 - low0) - 2.0f) < 0.4f && std::abs ((high1 - high0) + 1.5f) < 0.4f && std::abs (mid1 - mid0) < 0.3f,
+               "40 Hz up " + juce::String (low1 - low0, 2) + " dB, 14 kHz down " + juce::String (high0 - high1, 2) + " dB, 1 kHz untouched");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::toneLowId)->load()) < 0.01f, "undo flattens them again");
+    }
+
     section ("Follows Mentalism's target");
     {
         auto p = make (LapisProcessor::followMentalism);

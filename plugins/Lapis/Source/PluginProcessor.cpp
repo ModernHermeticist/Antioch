@@ -23,6 +23,8 @@ namespace
         rel.setSkewForCentre (80.0f);
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::releaseId, 1 }, "Release", rel, 80.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; })));
+        l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::toneLowId, 1 }, "Low Tone", NormalisableRange<float> (-6.0f, 6.0f), 0.0f, db));
+        l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::toneHighId, 1 }, "High Tone", NormalisableRange<float> (-6.0f, 6.0f), 0.0f, db));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::manualGainId, 1 }, "Manual Gain",
                                                       NormalisableRange<float> (-6.0f, 24.0f), 0.0f, db));
         return l;
@@ -35,6 +37,15 @@ LapisProcessor::LapisProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "LapisState", layout())
 {
+    // Mentalism's "Match reference": nudge the tone shelves by the amounts it sends.
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
+    {
+        if (fix != suite::Fix::ReferenceTone) return {};
+        float lowDb = 0.0f, highDb = 0.0f;
+        suite::unpackTone (data, lowDb, highDb);
+        const auto low = value (toneLowId), high = value (toneHighId);
+        return { { toneLowId, juce::jlimit (-6.0f, 6.0f, low + lowDb) }, { toneHighId, juce::jlimit (-6.0f, 6.0f, high + highDb) } };
+    });
 }
 
 bool LapisProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -47,6 +58,8 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     limiter.prepare (sampleRate);
+    for (auto* f : { &lowShelf[0], &lowShelf[1], &highShelf[0], &highShelf[1] }) f->reset();
+    shownLow = shownHigh = 1000.0f;   // recalculate the shelves for this sample rate
     setLatencySamples (limiter.getLatency());
     loudness.prepare (sampleRate);
     outputPeak.reset();
@@ -89,6 +102,16 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto clip = value (clipId);
     const auto clipThreshold = ceiling;
 
+    // Tone shelves (only recalculated when they change; bypassed at 0 dB).
+    const auto toneLow = value (toneLowId), toneHigh = value (toneHighId);
+    if (std::abs (toneLow - shownLow) > 1.0e-3f || std::abs (toneHigh - shownHigh) > 1.0e-3f)
+    {
+        for (auto& f : lowShelf) f.setLowShelf (100.0f, toneLow, (float) sampleRate);
+        for (auto& f : highShelf) f.setHighShelf (8000.0f, toneHigh, (float) sampleRate);
+        shownLow = toneLow; shownHigh = toneHigh;
+    }
+    const auto toneOn = std::abs (toneLow) > 0.01f || std::abs (toneHigh) > 0.01f;
+
     auto* L = buffer.getWritePointer (0);
     auto* R = buffer.getWritePointer (1);
     float maxGr = 0.0f;
@@ -99,6 +122,11 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         appliedGainDb += 0.0005f * (wantedGainDb - appliedGainDb);
         const auto g = juce::Decibels::decibelsToGain (appliedGainDb);
         auto l = L[n] * g, r = R[n] * g;
+        if (toneOn)
+        {
+            l = highShelf[0].process (lowShelf[0].process (l));
+            r = highShelf[1].process (lowShelf[1].process (r));
+        }
 
         // Soft clipper: shaves the sharpest peaks so the limiter works less hard.
         if (clip > 0.0f)

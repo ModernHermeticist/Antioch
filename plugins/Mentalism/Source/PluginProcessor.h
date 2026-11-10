@@ -102,14 +102,21 @@ public:
         return true;
     }
 
+    /** Reference match: half the difference from the loaded reference at the low end (below
+        ~150 Hz) and the top (above ~6 kHz), at most 4 dB each, sent to Lapis' tone shelves; and
+        the loudness target set to match the reference. Needs a reference and 10 s of the song.
+        Returns the fix's sequence number (0 if there's nothing to go on). */
+    uint32_t matchReference();
+    std::atomic<float> lastMatchLow { 0.0f }, lastMatchHigh { 0.0f };
+
     /** Samples at full scale since the last Reset (for the pre-export checklist). */
     std::atomic<int> clippedSamples { 0 };
 
     /** Fix history (fixes and rough mixes sent from here), newest last. */
     struct FixRecord { uint32_t seq = 0; suite::Fix fix = suite::Fix::None; juce::Time when; uint32_t undoSeq = 0; };
-    uint32_t sendFix (suite::Fix fix)
+    uint32_t sendFix (suite::Fix fix, uint32_t data = 0)
     {
-        const auto seq = suite::FixBus::send (fix);
+        const auto seq = data != 0 ? suite::FixBus::send (fix, data) : suite::FixBus::send (fix);
         const juce::ScopedLock sl (historyLock);
         fixHistory.push_back ({ seq, fix, juce::Time::getCurrentTime(), 0 });
         if (fixHistory.size() > 16) fixHistory.erase (fixHistory.begin());

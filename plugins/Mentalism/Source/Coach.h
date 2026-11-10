@@ -139,6 +139,7 @@ namespace coach
             case suite::Fix::LaterDropBigger:  return "Prima Materia: Drop 2+ 1.5 dB up; Azoth: bigger later drops";
             case suite::Fix::RoughMix:         return "Prima Materia: each track's trim set for its role, relative to the kick";
             case suite::Fix::DjIntroOutro:     return "Prima Materia: pads, leads and vocals out of the intro and outro";
+            case suite::Fix::ReferenceTone:    return "Lapis: low and high tone moved towards the reference";
             case suite::Fix::None:
             default:                           return {};
         }

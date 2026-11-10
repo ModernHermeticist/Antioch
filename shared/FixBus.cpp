@@ -14,6 +14,7 @@ namespace suite::FixBus
     }
 
     uint32_t send (Fix fix) noexcept { return ring().post (pack (false, fix, 0)); }
+    uint32_t send (Fix fix, uint32_t arg) noexcept { return ring().post (pack (false, fix, arg)); }
     uint32_t sendUndo (uint32_t fixSeq) noexcept { return ring().post (pack (true, Fix::None, fixSeq)); }
     uint32_t latest() noexcept { return ring().latest(); }
     void acknowledge (uint32_t seq) noexcept { ring().acknowledge (seq); }

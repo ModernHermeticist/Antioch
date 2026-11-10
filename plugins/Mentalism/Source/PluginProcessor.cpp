@@ -206,6 +206,25 @@ void MentalismProcessor::setReference (const ReferenceProfile& p)
     reference = p;
 }
 
+uint32_t MentalismProcessor::matchReference()
+{
+    const auto ref = getReference();
+    if (! ref.valid || bands.longSeconds.load() < 10.0f)
+        return 0;
+    advisor::Bands now {};
+    for (size_t b = 0; b < (size_t) analysis::numBands; ++b) now[b] = bands.longDb[b].load();
+    const auto diff = advisor::difference (now, ref.bands);   // + = we have more than the reference
+    const auto low = (diff[0] + diff[1] + diff[2]) / 3.0f, high = (diff[8] + diff[9]) / 2.0f;
+    auto correction = [] (float d) { return juce::jlimit (-4.0f, 4.0f, std::round (-0.5f * d * 4.0f) / 4.0f); };
+    const auto cl = correction (low), ch = correction (high);
+    lastMatchLow.store (cl);
+    lastMatchHigh.store (ch);
+    setParameterPlain (apvts, Params::loudnessTarget, (float) advisor::matchReferenceIndex);
+    if (std::abs (cl) < 0.25f && std::abs (ch) < 0.25f)
+        return 0;
+    return sendFix (suite::Fix::ReferenceTone, suite::packTone (cl, ch));
+}
+
 MentalismProcessor::Report MentalismProcessor::report() const
 {
     Report rep;

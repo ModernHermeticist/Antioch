@@ -163,6 +163,17 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<ChecklistPanel> (processor), checklistButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (checklistButton);
+    matchButton.setTooltip ("Moves Lapis' low and high tone half-way towards the reference (at most 4 dB) and sets the loudness "
+                            "target to match it. Undo it in History.");
+    matchButton.onClick = [this]
+    {
+        matchSeq = processor.matchReference();
+        const auto l = processor.lastMatchLow.load(), h = processor.lastMatchHigh.load();
+        auto fmt = [] (float v) { return (v >= 0.0f ? "+" : "") + juce::String (v, 1); };
+        matchButton.setButtonText (matchSeq != 0 ? "Matched: low " + fmt (l) + ", high " + fmt (h) + " dB"
+                                   : processor.getReference().valid ? juce::String ("Tone already close; loudness matched")
+                                                                    : juce::String ("Load a reference first"));
+    };
     roughStatus.setFont (juce::FontOptions (12.0f));
     roughStatus.setJustificationType (juce::Justification::centredRight);
     for (auto* c : std::initializer_list<juce::Component*> { &roughMixButton, &roughUndoButton, &roughStatus })
@@ -183,12 +194,12 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     referenceLabel.setFont (juce::FontOptions (12.0f));
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs })
+    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs, &matchButton })
         addAndMakeVisible (c);
     balanceTabs.setComponentID ("tabs");
     balanceTabs.onChange = [this] (int i)
     {
-        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel })
+        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton })
             c->setVisible (i == 0);
         undoFixButton.setVisible (i == 1);
         fixStatus.setVisible (i == 1);
@@ -598,6 +609,7 @@ void MentalismEditor::resized()
     auto controls = b.removeFromTop (54);
     tonalTarget.setBounds (controls.removeFromLeft (220));
     loadButton.setBounds (controls.removeFromLeft (150).withTrimmedTop (18).reduced (4, 2));
+    matchButton.setBounds (controls.removeFromLeft (230).withTrimmedTop (18).reduced (4, 2));
     referenceLabel.setBounds (controls.withTrimmedTop (18).withTrimmedLeft (8));
     b.removeFromTop (6);
     balanceContent = b;

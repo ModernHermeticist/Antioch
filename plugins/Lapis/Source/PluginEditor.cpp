@@ -11,15 +11,17 @@ LapisEditor::LapisEditor (LapisProcessor& p)
       ceiling (p.apvts, LapisProcessor::ceilingId, "Ceiling", accent),
       clip (p.apvts, LapisProcessor::clipId, "Clip", Colours::ember),
       release (p.apvts, LapisProcessor::releaseId, "Release", accent),
-      manualGain (p.apvts, LapisProcessor::manualGainId, "Manual gain", Colours::brass)
+      manualGain (p.apvts, LapisProcessor::manualGainId, "Manual gain", Colours::brass),
+      toneLow (p.apvts, LapisProcessor::toneLowId, "Low tone", accent),
+      toneHigh (p.apvts, LapisProcessor::toneHighId, "High tone", accent)
 {
     setLookAndFeel (&lnf);
     resetButton.onClick = [this] { processor.resetLearning(); };
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &resetButton, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &resetButton, &status })
         addAndMakeVisible (c);
-    setSize (900, 520);
+    setSize (1000, 520);
     startTimerHz (20);
 }
 
@@ -117,5 +119,5 @@ void LapisEditor::resized()
     auto statusRow = c.removeFromBottom (30);
     resetButton.setBounds (statusRow.removeFromRight (140).reduced (2));
     status.setBounds (statusRow);
-    layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain });
+    layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh });
 }

@@ -350,6 +350,34 @@ int main (int argc, char** argv)
                "sets the style's loudness target (streaming for a radio edit)");
     }
 
+    section ("Match reference");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        check (p->matchReference() == 0, "nothing to match without a reference");
+        juce::Random rng (5);
+        render (*p, 12.0, [&rng] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i) { const auto v = 0.2f * (rng.nextFloat() * 2.0f - 1.0f); b.setSample (0, i, v); b.setSample (1, i, v); }
+        });
+        ReferenceProfile ref;
+        ref.valid = true; ref.name = "Brighter, leaner"; ref.lufs = -8.0f;
+        for (size_t b = 0; b < (size_t) analysis::numBands; ++b) ref.bands[b] = p->bands.longDb[b].load();
+        for (size_t b : { (size_t) 0, (size_t) 1, (size_t) 2 }) ref.bands[b] -= 2.0f;   // the reference has less low end
+        for (size_t b : { (size_t) 8, (size_t) 9 }) ref.bands[b] += 4.0f;               // ... and more top
+        p->setReference (ref);
+        const auto seq = p->matchReference();
+        const auto lo = p->lastMatchLow.load(), hi = p->lastMatchHigh.load();
+        check (seq != 0 && lo < -0.5f && lo > -1.5f && hi > 1.5f && hi < 2.5f,
+               "moves half-way: less low, more top (" + juce::String (lo, 2) + " / +" + juce::String (hi, 2) + " dB)");
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::matchReferenceIndex, "and aims the loudness at the reference");
+        float l = 0, h = 0;
+        suite::FixBus::Message m;
+        check (suite::FixBus::read (seq, m) && m.fix == suite::Fix::ReferenceTone && (suite::unpackTone (m.target, l, h), std::abs (l - lo) < 0.01f && std::abs (h - hi) < 0.01f),
+               "the amounts travel with the fix");
+        check (p->getFixHistory().back().fix == suite::Fix::ReferenceTone, "and it's in the history, to undo");
+    }
+
     section ("Versions");
     {
         auto p = make();

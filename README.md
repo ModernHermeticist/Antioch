@@ -220,6 +220,12 @@ track (or its loudest section) and read the numbers:
   (250 Hz) is 5.0 dB above the target: classic mud: cut 200-400 Hz on pads, bass and
   reverbs."*
 
+**Match reference** (Tonal Balance tab, with a reference loaded and at least 10 s of the
+song measured) compares your mix's long-term balance with the reference and moves Lapis'
+new **Low tone** (100 Hz shelf) and **High tone** (8 kHz shelf) half-way towards it, at
+most 4 dB each, and sets the loudness target to match the reference. It's deliberately
+gentle, so press it again if you want to go further, and it's in History to undo.
+
 **Reset** starts a new measurement, for example after changing the mix.
 
 **Export checklist** (Suggestions panel) is the last look before rendering: the song has
@@ -303,6 +309,16 @@ plugin in the project, change things, choose B and save again, then click A and 
 compare whole versions of the song (mix, scenes, map and all). Each plugin keeps its own
 copies inside its own saved state, so snapshots travel with the FL project. Right-click a
 slot to clear it.
+
+**Recipes…** saves the whole suite's settings under a name (each plugin writes its own,
+matched by track name, or by plugin when it's used once) and loads them into any other
+project: your go-to anthem setup in one click. Recipes live in your user application
+data folder under *Antioch Suite/Recipes*.
+
+**Make versions** keeps the current song in snapshot A, then makes a **radio edit** in B
+(about 3:30, short intro and breakdown, at most two drops, streaming loudness target) and
+an **extended mix** in C (64 bars longer, DJ intro and outro, club target), and returns to
+A. Click the slots to switch between versions.
 
 **Final drop snapshot.** Pick a slot under *Final drop snapshot* and the whole suite morphs
 into it for the last drop: every plugin's knobs glide from your settings to the
@@ -776,6 +792,12 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   the same clip always humanises the same way, and 0% gives the plain pattern.
 - **DJ check:** a pad in the intro is flagged with a fix; beat-led passes; no kick in the
   intro is flagged; the fix takes the pads out of the intro and outro and leaves the kick.
+- **Recipes and versions:** a recipe saved in one project loads into another; an unknown
+  recipe changes nothing; versions give a 120-bar radio edit in B, a map 64 bars longer
+  in C and the original in A; Mentalism switches to streaming / club accordingly.
+- **Match reference:** with a reference that has 2 dB less low end and 4 dB more top, it
+  asks for -1 dB low and +2 dB high; Lapis' shelves move 40 Hz and 14 kHz by that much,
+  leave 1 kHz alone, and undo flattens them.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

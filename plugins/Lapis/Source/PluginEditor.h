@@ -19,7 +19,7 @@ private:
     LapisProcessor& processor;
     suite::ui::LookAndFeel lnf;
     suite::ui::Choice target, mode;
-    suite::ui::Knob ceiling, clip, release, manualGain;
+    suite::ui::Knob ceiling, clip, release, manualGain, toneLow, toneHigh;
     juce::TextButton resetButton { "Reset learning" };
     juce::Label status;
     juce::Rectangle<int> meterArea, controlArea;

@@ -14,12 +14,25 @@
 
 namespace suite
 {
-    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro };
+    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone };
+
+    /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */
+    inline uint32_t packTone (float lowDb, float highDb) noexcept
+    {
+        auto q = [] (float db) { return (uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 4.0f)); };
+        return (q (lowDb) << 8) | q (highDb);
+    }
+    inline void unpackTone (uint32_t arg, float& lowDb, float& highDb) noexcept
+    {
+        lowDb = (float) (int8_t) (uint8_t) ((arg >> 8) & 0xff) / 4.0f;
+        highDb = (float) (int8_t) (uint8_t) (arg & 0xff) / 4.0f;
+    }
 
     namespace FixBus
     {
         /** Sender: returns the message's sequence number. */
         uint32_t send (Fix fix) noexcept;
+        uint32_t send (Fix fix, uint32_t arg) noexcept;   // with 16 bits of data (e.g. packTone)
         uint32_t sendUndo (uint32_t fixSeq) noexcept;
         /** How many plugins applied (or undid) message `seq`. */
         int acknowledgements (uint32_t seq) noexcept;
@@ -38,8 +51,12 @@ namespace suite
     public:
         struct Change { juce::String paramId; float plainValue; };
         using Planner = std::function<std::vector<Change> (Fix)>;
+        using DataPlanner = std::function<std::vector<Change> (Fix, uint32_t data)>;
 
         FixReceiver (juce::AudioProcessorValueTreeState& state, Planner planner)
+            : FixReceiver (state, DataPlanner ([p = std::move (planner)] (Fix f, uint32_t) { return p (f); })) {}
+
+        FixReceiver (juce::AudioProcessorValueTreeState& state, DataPlanner planner)
             : apvts (state), plan (std::move (planner)), lastSeen (FixBus::latest())
         {
             startTimerHz (5);
@@ -81,7 +98,7 @@ namespace suite
 
         void apply (const FixBus::Message& m)
         {
-            const auto changes = plan (m.fix);
+            const auto changes = plan (m.fix, m.target);
             if (changes.empty())
                 return;
             Entry entry { m.seq, {} };
@@ -122,7 +139,7 @@ namespace suite
         }
 
         juce::AudioProcessorValueTreeState& apvts;
-        Planner plan;
+        DataPlanner plan;
         uint32_t lastSeen = 0;
         std::vector<Entry> history;
         int applied = 0;
