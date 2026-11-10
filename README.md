@@ -43,6 +43,11 @@ With the full suite loaded, here is everything that happens without automation c
 9. **Every drop after the first goes bigger**: more echo and Euphoria, louder impacts,
    longer swells and the lead up an octave (see *Bigger later drops*).
 10. **Solve et Coagula** makes room for the vocal in the music, only where and when it sings.
+11. **Set-up:** Prima Materia and Kybalion set themselves up from the track names, every
+    Kybalion can duck to the real kick with no routing (**Suite kick**), **Rough mix**
+    balances the tracks, and Ouroboros' **Suite** overview says what's still missing.
+12. **Snapshots** save and compare whole versions of the song across every plugin, and
+    **Export all** writes the song's MIDI in one go.
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
 
@@ -146,6 +151,16 @@ the last few bars.
   with a threshold.
 - Presets for each element: Bass (tight), Pads (deep), Leads (gentle), Classic pump,
   Reverb & delays, and Lows only.
+- In **Suite kick** mode it ducks to the real kick with no routing at all: turn on
+  **Share kick** in a Kybalion on the kick track, and it learns where the kick hits in the
+  bar (separately for each section type) and shares that pattern. Every Kybalion set to
+  Suite kick then ducks on it, offbeat kicks, gaps and all. Until a kick is shared, it
+  ducks on the beat grid. A Kybalion on a track named "Kick" turns Share kick on by
+  itself.
+- **Fit to kick:** with a kick on the sidechain (or shared), Kybalion measures how long
+  it rings and the pitch of its body. The button sets Hold and Release to match, and the
+  status line shows the kick's note against the song's root (for example *"55.1 Hz (A1 +4
+  ct): in tune with the root"*, or how many semitones to retune it).
 - **Split** ducks only below a chosen frequency, using a Linkwitz-Riley crossover, so the
   bass pumps and the top stays put.
 - **BREAKDOWN** switches ducking off. Automate it for breakdowns where the kick drops
@@ -260,6 +275,20 @@ Map out your song once, and the rest of the suite follows it with no automation:
 - The arrangement is saved with the project. Put Ouroboros on any insert (the master is
   fine): it doesn't touch the audio.
 
+**Suite snapshots (A–D).** Click **Save A** to store the current settings of every suite
+plugin in the project, change things, choose B and save again, then click A and B to
+compare whole versions of the song (mix, scenes, map and all). Each plugin keeps its own
+copies inside its own saved state, so snapshots travel with the FL project. Right-click a
+slot to clear it.
+
+**Suite overview.** The **Suite** button lists every suite plugin that's loaded and on
+which track, and checks the setup. It flags a Kybalion set to sidechain with nothing
+routed, a Prima Materia without a role, Lapis or Mentalism off the master, Suite kick with
+no kick shared, no key source, no song map, and two Ouroboros at once. It shows **!**
+when something needs attention.
+
+![Suite overview](docs/ouroboros_suite.png)
+
 How it works: Ouroboros shares the section map, not the current section, through the same
 kind of shared memory as the key. Each plugin then works out the section from its own copy
 of FL's transport, so every reaction lands exactly on the bar line, whatever order FL
@@ -362,9 +391,13 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
 | Across a **Build** | a **snare roll** that speeds up in steps (1/4 → 1/8 → 1/16 → 1/32), gets louder and rises up to 12 semitones |
 | Into a **Groove** after the intro | a lighter crash (optional) |
 
-- **Gap before drop** silences the roll and swell for the last half or whole beat.
-- **Roll starts** sets whether the roll covers the whole build, its second half, or just
-  the last 4 bars. **Tone** sets how bright the crash is.
+- **Gap before drop** silences the roll, risers and swell for the last half or whole beat.
+- **Roll & riser start** sets whether the roll and risers cover the whole build, its
+  second half, or just the last 4 bars. **Tone** sets how bright the crash is.
+- **Build risers:** the **tonal riser** is detuned saws on the song's root and fifth,
+  sweeping up one or two octaves while a filter opens. The **track riser** pitches this
+  track's own audio up to an octave across the build and fades it in, the classic
+  "everything lifts" effect.
 - **Play** buttons audition each sound.
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
@@ -404,6 +437,18 @@ readout shows the values in use.
 With these on each track, you can loop one full 8-bar groove across the whole song and the
 arrangement happens by itself.
 
+**Auto-role.** A new Prima Materia picks its role from the track's name: Kick, Bass/Sub,
+Hats/Perc/Clap, Pad/Chords/Pluck/Keys, Lead/Saw/Arp, Vox/Vocal and FX/Atmos/Riser. It only
+does this while no role has been chosen, so renaming a track later never overrides your
+choice. This needs FL to pass the mixer track's name to the plugin. If it doesn't, the
+Suite overview shows "(track name unknown)" and you pick roles by hand.
+
+**Trim and rough mix.** Each Prima Materia measures its track's loudness in the drops and
+has a **Trim**. Mentalism's **Rough mix** button sets every Trim so each track sits at the
+usual trance level for its role, relative to the kick: bass 2 LU under, vocal 1, lead 4,
+pads 7, hats 10, FX 12. It's a starting balance to refine by ear, and **Undo** puts the
+trims back. Play a drop first so there's something to measure.
+
 ## Correspondence: full-song MIDI
 
 The second row of drag tiles (**SONG CHORDS**, **SONG BASS**, **SONG ARP**) exports clips the
@@ -421,6 +466,11 @@ section plays. The defaults:
 
 The progression restarts at every section, and notes never spill into the next one. Song
 clips need Ouroboros to be running; without it the tile says so.
+
+**Export all…** writes a new song folder (named with the key, tempo and time) holding every
+clip, plus *"<key> - all parts.mid"*: one MIDI file with the song's chords, bass, arp and
+lead on separate tracks and the sections as markers. Drag it into FL to get the whole song
+in one go.
 
 ### Melodia: lead melodies
 
@@ -493,7 +543,11 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
    Ouroboros on any insert, Lapis on the master before Mentalism, Emerald Tablet wherever
    you want the key detected, Azoth on its own track, and Prima Materia on individual tracks, and Solve et Coagula on the music under a vocal.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
-   sidechain, then select that input in the plugin's wrapper settings.
+   sidechain, then select that input in the plugin's wrapper settings. Or skip the routing:
+   put a Kybalion on the kick track with **Share kick** on, and choose **Suite kick**
+   everywhere else.
+5. Name your mixer tracks (Kick, Bass, Pad, Lead, Vox...) before loading Prima Materia and
+   Kybalion, so they can set themselves up.
 
 On macOS, copy the `.vst3` folders to `~/Library/Audio/Plug-Ins/VST3/`. The CI builds are
 not code-signed, so you may need to run
@@ -583,6 +637,25 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   Drop 2+ column starts from the drop's settings; Cause & Effect and Azoth step their
   build and later-drop controls; a plugin loaded later doesn't replay old fixes; the
   fixed sections are re-measured.
+- **Snapshots:** Save stores each plugin's own settings, Recall restores them, an empty
+  slot changes nothing, slots survive a save and load, old projects load as before, and a
+  plugin loaded later doesn't replay old commands.
+- **Suite overview:** every plugin is listed with its track; unrouted sidechains, missing
+  roles, Lapis off the master and Suite kick with nothing shared are flagged; a tidy
+  session gets "Everything is set up".
+- **Suite kick:** the kick track learns an offbeat pattern exactly; another track ducks
+  right after each shared kick and not on the beat grid; with nothing shared it falls back
+  to the grid; a Kybalion on "Kick 1" shares automatically.
+- **Fit to kick:** a synthetic kick measures 196 ms and 55.1 Hz; hold and release follow
+  it; the tuning text recognises in tune, the fifth and 2 semitones sharp.
+- **Auto-role and rough mix:** track names map to roles; a new Prima Materia on "Sub Bass"
+  becomes Bass and a later rename doesn't override it; the rough mix trims a pad to 7 LU
+  under the kick (re-measured afterwards), leaves the kick alone, and Undo restores it.
+- **Export all:** 8 clips plus the all-parts file, with 4 tracks of notes and the
+  sections as markers (Groove, Drop, Breakdown, Drop 2).
+- **Build risers:** silent before the build, rising through it, starting on the song's
+  root, sweeping away from it, and stopping at the drop; the track riser pitches the
+  track's own audio up an octave.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
@@ -608,6 +681,10 @@ shared/                  code used by every plugin
   SectionBus.*           cross-plugin arrangement broadcast + SectionFollower helper
   TargetBus.*            Mentalism's loudness target, for Lapis
   FixBus.*               Mentalism's fix-it messages and the receiver the other plugins use
+  CommandRing.*          lock-free shared-memory command ring (fixes, snapshots)
+  SuiteProcessor.h       base class of every plugin: snapshots, registry, track name
+  Registry.*             which suite plugins are loaded, on which track, with status
+  KickBus.h/.cpp         the shared kick pattern (KickLearner) for Suite kick ducking
   Scenes.h, SceneUI.h    section scenes engine, ghost rings and scene editor panel
   Analysis.h             BS.1770 loudness, true peak, stereo and band meters
   Music.h                scales, note names, tempo divisions
@@ -620,7 +697,7 @@ plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), previe
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
 plugins/Mentalism/       Advisor.h (suggestions), Coach.h (arrangement arc), tests
-plugins/Ouroboros/       Arrangement.h (section editing), Listen.h (section detection), timeline editor, tests
+plugins/Ouroboros/       Arrangement.h (editing, Arrange), Listen.h (section detection), SuiteCheck.h, timeline editor, tests
 plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop, tests
 plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
 plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), ReverseSwell.h, section-driven triggering, tests
