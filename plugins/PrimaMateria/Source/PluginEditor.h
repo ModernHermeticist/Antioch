@@ -18,7 +18,7 @@ private:
     PrimaMateriaProcessor& processor;
     suite::ui::LookAndFeel lnf;
     juce::ComboBox roleBox;
-    suite::ui::Toggle follow, ramp, laterOn;
+    suite::ui::Toggle follow, ramp, laterOn, lowManager;
     suite::ui::Choice morph, gap;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;

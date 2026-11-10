@@ -15,7 +15,7 @@ namespace pm
     inline juce::String levelId (int t)   { return "lvl_" + juce::String (t); }
     inline juce::String lowCutId (int t)  { return "lc_" + juce::String (t); }
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
-    inline const juce::String roleId { "role" }, trimId { "trim" };   // role: 0 = not set, k + 1 = roles()[k]
+    inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" };   // role: 0 = not set, k + 1 = roles()[k]
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
 
     inline double morphQuarters (int i) { static const double q[] = { 0.0, 0.25, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
@@ -68,6 +68,14 @@ namespace pm
         return -1;
     }
 
+    /** Low-end manager: the low cut a role gets wherever a kick or bass track is playing
+        (0 = the role owns the low end, or isn't managed). */
+    inline float lowEndCut (int role)
+    {
+        static const float cuts[] = { 0.0f, 0.0f, 0.0f, 250.0f, 150.0f, 200.0f, 120.0f, 150.0f };
+        return juce::isPositiveAndBelow (role, 8) ? cuts[role] : 0.0f;
+    }
+
     /** Rough mix: where each role sits relative to the kick, in LU (drop loudness). */
     inline float roughMixOffset (int role)
     {
@@ -106,6 +114,7 @@ namespace pm
             for (const auto& r : roles()) roleNames.add (r.name);
             l.add (std::make_unique<AudioParameterChoice> (id (roleId), "Track Role", roleNames, 0));
         }
+        l.add (std::make_unique<AudioParameterBool> (id (lowManagerId), "Low-End Manager", true));
         l.add (std::make_unique<AudioParameterFloat> (id (trimId), "Trim", NormalisableRange<float> (-24.0f, 12.0f), 0.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));
         l.add (std::make_unique<AudioParameterBool> (id (laterOnId), "Separate Settings for Drop 2+", false));

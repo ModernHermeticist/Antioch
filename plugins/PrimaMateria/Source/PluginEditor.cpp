@@ -9,6 +9,7 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
       follow (p.apvts, pm::followId, "Follow Ouroboros", Colours::ember),
       ramp (p.apvts, pm::rampId, "Ramp through builds", Colours::brass),
       laterOn (p.apvts, pm::laterOnId, "Separate Drop 2+", Colours::ember),
+      lowManager (p.apvts, pm::lowManagerId, "Low-end manager", Colours::verdigris),
       morph (p.apvts, pm::morphId, "Morph"),
       gap (p.apvts, pm::gapId, "Gap before drop")
 {
@@ -41,7 +42,8 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     addAndMakeVisible (*trim);
 
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
-    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &morph, &gap, &status })
+    lowManager.setTooltip ("Where a kick or bass track is playing, this track leaves the low end to them (an automatic low cut for its role)");
+    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &status })
         addAndMakeVisible (c);
 
     setSize (1120, 600);
@@ -81,6 +83,8 @@ void PrimaMateriaEditor::timerCallback()
                                              : "No Ouroboros: passing audio unchanged";
     }
     status.setColour (juce::Label::textColourId, t >= 0 ? sectionColour ((suite::SectionType) juce::jmin (t, pm::numTypes - 1)) : Colours::dimText);
+    if (const auto cut = processor.managerCutNow.load(); cut > 0.0f)
+        text << "   |   Low end left to the kick/bass (cut " << juce::String (juce::roundToInt (cut)) << " Hz)";
     const auto lufs = processor.measuredLufs();
     if (lufs > -70.0f)
         text << "   |   Drop loudness " << juce::String (lufs, 1) << " LUFS";
@@ -128,12 +132,13 @@ void PrimaMateriaEditor::resized()
     trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);
 
     auto controls = bounds.removeFromTop (60);
-    roleBox.setBounds (controls.removeFromLeft (240).withSizeKeepingCentre (240, 28).translated (0, 8));
-    controls.removeFromLeft (16);
-    ramp.setBounds (controls.removeFromLeft (190).withSizeKeepingCentre (180, 30).translated (0, 8));
-    laterOn.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 30).translated (0, 8));
-    morph.setBounds (controls.removeFromLeft (170));
-    gap.setBounds (controls.removeFromLeft (170));
+    roleBox.setBounds (controls.removeFromLeft (220).withSizeKeepingCentre (220, 28).translated (0, 8));
+    controls.removeFromLeft (12);
+    ramp.setBounds (controls.removeFromLeft (180).withSizeKeepingCentre (172, 30).translated (0, 8));
+    laterOn.setBounds (controls.removeFromLeft (160).withSizeKeepingCentre (152, 30).translated (0, 8));
+    lowManager.setBounds (controls.removeFromLeft (160).withSizeKeepingCentre (152, 30).translated (0, 8));
+    morph.setBounds (controls.removeFromLeft (150));
+    gap.setBounds (controls.removeFromLeft (150));
 
 
     status.setBounds (bounds.removeFromBottom (30));

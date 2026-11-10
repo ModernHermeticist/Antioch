@@ -490,6 +490,14 @@ does this while no role has been chosen, so renaming a track later never overrid
 choice. This needs FL to pass the mixer track's name to the plugin. If it doesn't, the
 Suite overview shows "(track name unknown)" and you pick roles by hand.
 
+**Low-end manager** (on by default). Below about 120 Hz, the kick and bass own the mix.
+Each Prima Materia shares which sections its track plays in, and wherever a Kick or Bass
+track is playing, every other role gets an automatic low cut: pads and FX at 150 Hz, lead
+200, hats 250, vocal 120. Where no kick or bass plays (typically breakdowns), the pads
+keep their low end. Without a kick or bass track in the project nothing is cut, and your
+own low-cut knob still wins when it's set higher. The status line shows when it's
+cutting.
+
 **Trim and rough mix.** Each Prima Materia measures its track's loudness in the drops and
 has a **Trim**. Mentalism's **Rough mix** button sets every Trim so each track sits at the
 usual trance level for its role, relative to the kick: bass 2 LU under, vocal 1, lead 4,
@@ -733,6 +741,9 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   first.
 - **Before every drop:** a kick-only bar silences the pads for the bar while the kick
   plays on; a beat of silence stops everything; a per-track 1-bar gap works.
+- **Low-end manager:** with a bass track that plays in drops, a pad's 60 Hz drops 20 dB
+  in the drop (16 dB more than its 1 kHz) but not in the breakdown; nothing changes with
+  the manager off or no kick/bass loaded; a Bass track reports playing in drops only.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

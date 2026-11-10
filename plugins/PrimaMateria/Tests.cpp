@@ -231,6 +231,45 @@ int main (int argc, char** argv)
         check (rmsBetween (none, 3.55, 3.95) > 0.1f, "'Per track' with no gap: plays through");
     }
 
+    section ("Low-end manager");
+    {
+        // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 2;
+        m.sections[0] = { 1, T::Breakdown };
+        m.sections[1] = { 3, T::Drop };
+        auto run = [&m] (float hz, bool manager, bool bassLoaded)
+        {
+            suite::Registry::reset();
+            if (bassLoaded)   // a Bass track elsewhere in the project that plays in drops only
+                suite::Registry::announce (999, "Prima Materia", "Bass", suite::Status::roleSet, { 2.0f, -10.0f, 0.0f, (float) (1u << (int) T::Drop) });
+            auto pad = make (roleIndex ("Pads"));
+            set (*pad, pm::morphId, 0.0f);
+            set (*pad, pm::lowManagerId, manager ? 1.0f : 0.0f);
+            pad->refreshLowOwners();
+            suite::SectionBus::publish (m);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            pad->setPlayHead (&head);
+            juce::AudioBuffer<float> a;
+            render (*pad, 8.0, tone (hz), &a, &head);
+            pad->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            suite::Registry::reset();
+            return juce::Decibels::gainToDecibels (rmsBetween (a, 5.0, 7.5) / rmsBetween (a, 1.0, 3.5));   // drop vs breakdown
+        };
+        // The Pads role is +2 dB in breakdowns and -2 dB in drops: 4 dB down anyway.
+        const auto low = run (60.0f, true, true), high = run (1000.0f, true, true);
+        check (std::abs (high + 4.0f) < 0.5f, "1 kHz: just the role's 4 dB (" + juce::String (high, 1) + " dB)");
+        check (low < -14.0f, "60 Hz: the pad leaves the low end to the bass in the drop (" + juce::String (low, 1) + " dB)");
+        check (std::abs (run (60.0f, false, true) + 4.0f) < 0.5f, "manager off: untouched");
+        check (std::abs (run (60.0f, true, false) + 4.0f) < 0.5f, "no kick or bass track loaded: untouched");
+
+        auto bass = make (roleIndex ("Bass"));
+        check ((bass->soundingMask() & (1u << (int) T::Drop)) != 0 && (bass->soundingMask() & (1u << (int) T::Breakdown)) == 0,
+               "a Bass track reports that it plays in drops, not breakdowns");
+    }
+
     section ("Auto-role from the track name");
     {
         const std::pair<const char*, const char*> names[] = { { "Kick", "Kick" }, { "Sub Bass", "Bass" }, { "HH open", "Hats" },

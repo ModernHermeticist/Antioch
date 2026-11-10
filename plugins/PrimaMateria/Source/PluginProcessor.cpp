@@ -112,11 +112,15 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     int typeNow = -1;
     bool rampNow = false, gapNow = false, laterNow = false;
     const auto isKick = getRole() == 1;   // a kick-only bar before drops spares the kick
+    const auto managerCut = apvts.getRawParameterValue (pm::lowManagerId)->load() > 0.5f ? pm::lowEndCut (getRole()) : 0.0f;
+    const auto owners = lowOwners.load();
+    float cutNow = 0.0f;
 
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         pm::Setting target;   // unity when not following
-        bool inGap = false;
+        bool inGap = false, laterThis = false;
+        int typeThis = -1;
 
         if (follow)
         {
@@ -124,7 +128,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             const auto sec = sections.locate (pos, barQ);
             if (sec.valid)
             {
-                typeNow = (int) sec.type;
+                typeNow = typeThis = (int) sec.type;
+                laterThis = sec.isLaterDrop();
                 const auto useLater = sec.isLaterDrop() && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f;
                 target = settingFor (useLater ? pm::laterDrop : typeNow);
                 laterNow = laterNow || useLater;
@@ -147,6 +152,14 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 inGap = thisGap > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - thisGap && sec.endQ - sec.startQ > thisGap;
                 gapNow = gapNow || inGap;
             }
+        }
+
+        // Low-end manager: where a kick or bass plays, other roles leave the low end to them.
+        if (managerCut > 0.0f)
+        {
+            const auto bit = laterThis ? 6 : typeThis;   // -1 without a map: any owner counts
+            const auto ownersHere = bit < 0 ? owners != 0 : (owners & (1u << bit)) != 0;
+            if (ownersHere && target.lowCut < managerCut) { target.lowCut = managerCut; cutNow = managerCut; }
         }
 
         // Glide towards the target (instant when Morph is off).
@@ -185,6 +198,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     gapping.store (gapNow);
     nowLevelDb.store (levelDb);
     nowLowCut.store (std::exp2 (lowLog));
+    managerCutNow.store (cutNow);
     nowHighCut.store (std::exp2 (highLog));
 }
 
@@ -196,8 +210,28 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
     if (apvts.getRawParameterValue (pm::followId)->load() > 0.5f) s.flags |= suite::Status::followsOuroboros;
     const auto lufs = measuredLufs();
     if (lufs > -70.0f) s.flags |= suite::Status::measuring;
-    s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), 0.0f };
+    s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
+    refreshLowOwners();
     return s;
+}
+
+uint32_t PrimaMateriaProcessor::soundingMask() const
+{
+    uint32_t mask = 0;
+    for (int t = 0; t < pm::numTypes; ++t)
+        if (apvts.getRawParameterValue (pm::levelId (t))->load() > pm::offDb + 0.5f) mask |= 1u << t;
+    const auto later = apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f ? pm::laterDrop : (int) suite::SectionType::Drop;
+    if (apvts.getRawParameterValue (pm::levelId (later))->load() > pm::offDb + 0.5f) mask |= 1u << 6;
+    return mask;
+}
+
+void PrimaMateriaProcessor::refreshLowOwners()
+{
+    uint32_t owners = 0;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Prima Materia" && e.id != getInstanceId() && ((int) e.metrics[0] == 1 || (int) e.metrics[0] == 2))
+            owners |= (uint32_t) e.metrics[3];
+    lowOwners.store (owners);
 }
 
 void PrimaMateriaProcessor::trackNameChanged (const juce::String& name)

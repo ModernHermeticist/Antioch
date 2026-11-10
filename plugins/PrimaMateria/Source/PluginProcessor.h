@@ -50,6 +50,14 @@ public:
     /** Rough mix: the trim that puts this track at its role's level relative to the kick (nullopt = no change). */
     std::optional<float> roughMixTrim() const;
 
+    /** Low-end manager: section types (bits; bit 6 = Drop 2+) where a kick or bass track plays,
+        from the suite registry (updated once a second). */
+    std::atomic<uint32_t> lowOwners { 0 };
+    std::atomic<float> managerCutNow { 0.0f };   // the cut the manager is applying now (0 = none), for the UI
+    /** Which section types this track sounds in (bits; bit 6 = Drop 2+). */
+    uint32_t soundingMask() const;
+    void refreshLowOwners();
+
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
