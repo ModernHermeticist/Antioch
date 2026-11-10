@@ -28,7 +28,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
 {
     setLookAndFeel (&lnf);
 
-    euphoria.maxHeight = 240;
+    euphoria.maxHeight = 200;
     euphoria.caption.setFont (juce::FontOptions (15.0f, juce::Font::bold));
     euphoria.caption.setColour (juce::Label::textColourId, accent);
 
@@ -102,9 +102,9 @@ void VibrationEditor::resized()
     auto m = macroArea.reduced (14, 8).withTrimmedTop (14);
     presetBox.setBounds (m.removeFromTop (28));
     m.removeFromTop (6);
-    euphoria.setBounds (m.removeFromTop (220));
+    euphoria.setBounds (m.removeFromTop (180));
     macroInfo.setBounds (m.removeFromTop (40));
-    auto row = m.removeFromTop (60);
+    auto row = m;
     output.setBounds (row.removeFromRight (110));
     autoGain.setBounds (row.removeFromTop (30).reduced (4, 2));
     autoGainInfo.setBounds (row);
