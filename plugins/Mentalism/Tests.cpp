@@ -308,6 +308,24 @@ int main (int argc, char** argv)
         for (auto& i : items) if (i.name == "No silent sections") detail = i.detail;
         check (stateOf (items, "No silent sections") == State::Fail && detail.contains ("Breakdown (bars 5-8)"), "flags a silent breakdown: " + detail);
 
+        // DJ-friendly intro and outro, from the Prima Materia tracks in the suite.
+        {
+            using namespace suite;
+            const auto introBit = 1u << (int) SectionType::Intro, dropBit = 1u << (int) SectionType::Drop;
+            std::vector<SuiteEntry> tracks (3);
+            tracks[0].plugin = "Prima Materia"; tracks[0].track = "Kick"; tracks[0].flags = Status::roleSet; tracks[0].metrics = { 1.0f, 0, 0, (float) (introBit | dropBit) };
+            tracks[1].plugin = "Prima Materia"; tracks[1].track = "Pad";  tracks[1].flags = Status::roleSet; tracks[1].metrics = { 4.0f, 0, 0, (float) (introBit | dropBit) };
+            tracks[2].plugin = "Prima Materia"; tracks[2].track = "Lead"; tracks[2].flags = Status::roleSet; tracks[2].metrics = { 5.0f, 0, 0, (float) dropBit };
+            auto dj = checklist::djCheck (tracks, true);
+            check (dj.state == State::Warn && dj.detail.contains ("Pad") && ! dj.detail.contains ("Lead") && dj.fix == Fix::DjIntroOutro,
+                   "flags a pad in the intro, offering a fix: " + dj.detail);
+            tracks[1].metrics[3] = (float) dropBit;
+            check (checklist::djCheck (tracks, true).state == State::Pass, "beat-led intro and outro pass");
+            tracks[0].metrics[3] = (float) dropBit;
+            check (checklist::djCheck (tracks, true).detail.contains ("No kick in the intro"), "no kick in the intro is flagged");
+            check (checklist::djCheck ({}, true).optional && checklist::djCheck ({}, true).state == State::Unknown, "without Prima Materia it can't tell (and doesn't block export)");
+        }
+
         rep = {};
         check (stateOf (checklist::check (rep, 0), "Measured the song") == State::Unknown && ! checklist::readyToExport (checklist::check (rep, 0)),
                "nothing measured: not ready");

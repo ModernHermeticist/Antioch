@@ -9,14 +9,18 @@
 class ChecklistPanel : public juce::Component, private juce::Timer
 {
 public:
-    explicit ChecklistPanel (MentalismProcessor& p) : processor (p) { refresh(); setSize (600, 380); startTimerHz (2); }
+    explicit ChecklistPanel (MentalismProcessor& p);
     void paint (juce::Graphics&) override;
 
 private:
     void timerCallback() override { refresh(); }
-    void refresh() { items = checklist::check (processor.report(), processor.clippedSamples.load()); repaint(); }
+    void refresh();
+    void resized() override;
     MentalismProcessor& processor;
     std::vector<checklist::Item> items;
+    juce::TextButton fixButton;
+    suite::Fix pendingFix = suite::Fix::None;
+    uint32_t sentSeq = 0;
 };
 
 /** Fix history: every fix and rough mix sent from Mentalism, with Undo for each. */

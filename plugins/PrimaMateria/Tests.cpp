@@ -183,6 +183,15 @@ int main (int argc, char** argv)
             pads->fixes->poll();
         }
 
+        // DJ-friendly fix: melodic roles leave the intro and outro, the kick stays.
+        {
+            auto pad = make (roleIndex ("Pads")), kickTrack = make (roleIndex ("Kick"));
+            suite::FixBus::send (suite::Fix::DjIntroOutro);
+            pad->fixes->poll(); kickTrack->fixes->poll();
+            check (lvl (*pad, (int) T::Intro) <= pm::offDb + 0.5f && lvl (*pad, (int) T::Outro) <= pm::offDb + 0.5f
+                       && lvl (*kickTrack, (int) T::Intro) > pm::offDb + 0.5f, "DJ fix: the pads leave the intro and outro; the kick stays");
+        }
+
         // Later drops: turns on the Drop 2+ column, starting from the drop's settings.
         auto lead = make (roleIndex ("Pads"));
         const auto drop = lvl (*lead, (int) T::Drop);

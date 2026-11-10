@@ -16,6 +16,32 @@ namespace
 }
 
 //==============================================================================
+ChecklistPanel::ChecklistPanel (MentalismProcessor& p) : processor (p)
+{
+    fixButton.onClick = [this] { if (pendingFix != suite::Fix::None) sentSeq = processor.sendFix (pendingFix); refresh(); };
+    addChildComponent (fixButton);
+    refresh();
+    setSize (640, 420);
+    startTimerHz (2);
+}
+
+void ChecklistPanel::refresh()
+{
+    items = checklist::check (processor.report(), processor.clippedSamples.load(), suite::Registry::list());
+    pendingFix = suite::Fix::None;
+    for (const auto& i : items) if (i.fix != suite::Fix::None) pendingFix = i.fix;
+    fixButton.setButtonText (sentSeq != 0 && suite::FixBus::acknowledgements (sentSeq) > 0
+                                 ? "Fixed in " + juce::String (suite::FixBus::acknowledgements (sentSeq)) + " tracks (Undo in History)"
+                                 : juce::String ("Fix: ") + coach::describe (pendingFix).fromFirstOccurrenceOf (": ", false, false));
+    fixButton.setVisible (pendingFix != suite::Fix::None || sentSeq != 0);
+    repaint();
+}
+
+void ChecklistPanel::resized()
+{
+    fixButton.setBounds (getLocalBounds().reduced (14, 10).removeFromBottom (30));
+}
+
 void ChecklistPanel::paint (juce::Graphics& g)
 {
     using checklist::State;

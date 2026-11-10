@@ -4,13 +4,54 @@
 // Pure logic, so it's directly testable.
 
 #include "PluginProcessor.h"
+#include "Registry.h"
 
 namespace checklist
 {
     enum class State { Pass, Warn, Fail, Unknown };
-    struct Item { juce::String name, detail; State state = State::Unknown; };
+    struct Item { juce::String name, detail; State state = State::Unknown; suite::Fix fix = suite::Fix::None; bool optional = false; };
 
-    inline std::vector<Item> check (const MentalismProcessor::Report& rep, int clippedSamples)
+    /** Intro and outro for DJs: beat-led, with no pads, leads or vocals (from the Prima Materia
+        tracks in the suite registry; masks say which section types each track sounds in). */
+    inline Item djCheck (const std::vector<suite::SuiteEntry>& entries, bool hasIntroOrOutro)
+    {
+        Item item { "DJ-friendly intro/outro", {}, State::Unknown, suite::Fix::None, true };
+        if (! hasIntroOrOutro) { item.detail = "No intro or outro in the map"; return item; }
+        bool anyTracks = false, kickInIntro = false;
+        juce::StringArray melodic;
+        const auto introBit = 1u << (int) suite::SectionType::Intro, outroBit = 1u << (int) suite::SectionType::Outro;
+        for (const auto& e : entries)
+        {
+            if (e.plugin != "Prima Materia" || ! e.has (suite::Status::roleSet)) continue;
+            anyTracks = true;
+            const auto role = (int) e.metrics[0];
+            const auto mask = (uint32_t) e.metrics[3];
+            if (role == 1 && (mask & introBit) != 0) kickInIntro = true;
+            if ((role == 4 || role == 5 || role == 6) && (mask & (introBit | outroBit)) != 0)
+                melodic.add (e.track.isNotEmpty() ? e.track : juce::String ("a ") + (role == 4 ? "pad" : role == 5 ? "lead" : "vocal") + " track");
+        }
+        if (! anyTracks) { item.detail = "Put Prima Materia (with roles) on your tracks to check"; return item; }
+        if (! melodic.isEmpty())
+        {
+            item.state = State::Warn;
+            item.detail = "Melodic parts in the intro/outro: " + melodic.joinIntoString (", ");
+            item.fix = suite::Fix::DjIntroOutro;
+        }
+        else if (! kickInIntro)
+        {
+            item.state = State::Warn;
+            item.detail = "No kick in the intro: DJs mix in on the beat";
+        }
+        else
+        {
+            item.state = State::Pass;
+            item.detail = "Beat-led intro and outro";
+        }
+        return item;
+    }
+
+    inline std::vector<Item> check (const MentalismProcessor::Report& rep, int clippedSamples,
+                                    const std::vector<suite::SuiteEntry>& suiteEntries = {})
     {
         std::vector<Item> out;
         const auto& m = rep.measurement;
@@ -66,6 +107,11 @@ namespace checklist
             add ("No silent sections", silent.isEmpty() ? (rep.arrangement.complete ? State::Pass : State::Unknown) : State::Fail,
                  silent.isEmpty() ? (rep.arrangement.complete ? juce::String ("Every section has sound") : juce::String ("Not every section heard yet"))
                                   : "Nearly silent: " + silent.joinIntoString (", "));
+            bool introOrOutro = false;
+            for (int i = 0; i < rep.map.count; ++i)
+                introOrOutro = introOrOutro || rep.map.sections[(size_t) i].type == suite::SectionType::Intro
+                                            || rep.map.sections[(size_t) i].type == suite::SectionType::Outro;
+            out.push_back (djCheck (suiteEntries, introOrOutro));
             add ("Energy arc", ! rep.arrangement.complete ? State::Unknown : rep.arrangement.problems == 0 ? State::Pass : State::Warn,
                  ! rep.arrangement.complete ? juce::String ("Play every section once")
                  : rep.arrangement.problems == 0 ? juce::String ("The coach is happy")
@@ -76,7 +122,7 @@ namespace checklist
 
     inline bool readyToExport (const std::vector<Item>& items)
     {
-        for (const auto& i : items) if (i.state == State::Fail || i.state == State::Unknown) return false;
+        for (const auto& i : items) if (i.state == State::Fail || (i.state == State::Unknown && ! i.optional)) return false;
         return true;
     }
 }

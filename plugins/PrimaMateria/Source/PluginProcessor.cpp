@@ -41,6 +41,16 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                          { pm::levelId (pm::laterDrop), juce::jmin (6.0f, level (drop) + 1.5f) },
                          { pm::laterOnId, 1.0f } };
             }
+            case suite::Fix::DjIntroOutro:
+            {
+                // DJ-friendly: melodic parts out of the intro and outro, so it mixes in and out on the beat.
+                const auto role = getRole();
+                if (role != 4 && role != 5 && role != 6) return {};
+                std::vector<suite::FixReceiver::Change> changes;
+                for (auto t : { T::Intro, T::Outro })
+                    if (! muted (level ((int) t))) changes.push_back ({ pm::levelId ((int) t), pm::offDb });
+                return changes;
+            }
             case suite::Fix::RoughMix:
             {
                 if (const auto t = roughMixTrim()) return { { pm::trimId, *t } };
