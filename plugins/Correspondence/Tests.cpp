@@ -322,6 +322,83 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Melodia: learning a motif");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceMotifTest");
+        dir.createDirectory();
+
+        // A 2-bar A minor motif, starting in bar 3 of the clip (Melodia should rebase it to bar 1).
+        const int pitches[] = { 69, 72, 76, 74, 72, 71, 69 };
+        const double starts[] = { 0.0, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0 };
+        juce::MidiMessageSequence seq;
+        for (int i = 0; i < 7; ++i)
+        {
+            const auto t = (8.0 + starts[i]) * 960.0;
+            seq.addEvent (juce::MidiMessage::noteOn (1, pitches[i], (juce::uint8) 100), t);
+            seq.addEvent (juce::MidiMessage::noteOff (1, pitches[i]), t + 0.5 * 960.0);
+            if (i == 2) seq.addEvent (juce::MidiMessage::noteOn (1, 64, (juce::uint8) 80), t);   // a lower harmony note at the same time
+        }
+        seq.addEvent (juce::MidiMessage::noteOff (1, 64), (8.0 + 2.0) * 960.0);
+        seq.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), (8.0 + 9.0) * 960.0);   // past the 2 bars: ignored
+        seq.addEvent (juce::MidiMessage::noteOff (1, 60), (8.0 + 9.5) * 960.0);
+        seq.updateMatchedPairs();
+        juce::MidiFile midi;
+        midi.setTicksPerQuarterNote (960);
+        midi.addTrack (seq);
+        const auto file = dir.getChildFile ("motif.mid");
+        { juce::FileOutputStream out (file); out.setPosition (0); out.truncate(); midi.writeTo (out); }
+
+        auto p = make();
+        const auto learned = p->learnMotif (file);
+        check (learned == 7, "learns 7 notes (one per onset, highest wins, 2 bars) - got " + juce::String (learned));
+        const auto motif = p->getMotif();
+        check (! motif.empty() && std::abs (motif.front().start) < 1.0e-9 && std::abs (motif.back().start - 6.0) < 1.0e-9,
+               "the motif is rebased to the start of its bar");
+
+        auto s = aMinor();
+        const auto mel = chords::melody (s, p->melodySettings());
+        bool callMatches = mel.size() >= 7;
+        for (int i = 0; callMatches && i < 7; ++i)
+            callMatches = std::abs (mel[(size_t) i].start - starts[i]) < 1.0e-9
+                       && mel[(size_t) i].pitch - mel[0].pitch == pitches[i] - pitches[0]
+                       && mel[(size_t) i].pitch % 12 == pitches[i] % 12;
+        check (callMatches, "the call is the motif as played (rhythm, notes and shape)");
+
+        std::vector<double> answer;
+        for (const auto& n : mel) if (n.start >= 8.0 && n.start < 16.0) answer.push_back (n.start - 8.0);
+        bool sameRhythm = answer.size() == 7;
+        for (size_t i = 0; sameRhythm && i < answer.size(); ++i) sameRhythm = std::abs (answer[i] - starts[i]) < 1.0e-9;
+        check (sameRhythm, "the answer repeats the motif's rhythm");
+        const auto answerStart = std::find_if (mel.begin(), mel.end(), [] (const auto& n) { return n.start >= 8.0; });
+        const auto tones = chords::chordTonesAt (s, 8.0);
+        check (answerStart != mel.end() && std::find (tones.begin(), tones.end(), answerStart->pitch % 12) != tones.end(),
+               "the answer starts on a chord tone of bar 3");
+
+        // An out-of-key motif note is pulled into the key.
+        auto m = p->melodySettings();
+        m.motif[1].pitch = 73;   // C#, not in A minor
+        const auto snapped = chords::melody (s, m);
+        const auto& steps = suite::music::scales()[0].steps;
+        check (std::find (steps.begin(), steps.end(), ((snapped[1].pitch - 9) % 12 + 12) % 12) != steps.end(),
+               "out-of-key motif notes are fitted to the key");
+
+        // State round trip.
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getMotif().size() == 7, "the motif is saved with the project");
+
+        p->forgetMotif();
+        check (p->getMotif().empty() && chords::melody (s, p->melodySettings()).size() == chords::melody (s, chords::MelodySettings {}).size(),
+               "Forget motif goes back to generated melodies");
+
+        const auto junk = dir.getChildFile ("notmidi.mid");
+        junk.replaceWithText ("hello");
+        check (p->learnMotif (junk) == 0 && p->getMotif().empty(), "a file that isn't MIDI is ignored");
+        dir.deleteRecursively();
+    }
+
     section ("Adopting a key from Emerald Tablet");
     {
         auto p = make();

@@ -257,6 +257,11 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     songButton.onClick = [this] { showSongPatterns(); };
     newMelodyButton.onClick = [this]
     {
+        if (! processor.getMotif().empty())
+        {
+            processor.forgetMotif();
+            return;
+        }
         if (auto* seed = processor.apvts.getParameter (Params::melodySeed))
         {
             const auto next = juce::Random::getSystemRandom().nextInt (999) + 1;
@@ -417,7 +422,7 @@ void CorrespondenceEditor::timerCallback()
         // The melody plays along with the progression.
         const auto quarterMs = 60000.0 / processor.currentBpm.load();
         const auto elapsedQ = (now - playStart) / quarterMs;
-        const auto lead = chords::melody (settings, Params::readMelody (processor.apvts));
+        const auto lead = chords::melody (settings, processor.melodySettings());
         while (nextMelodyNote < lead.size() && lead[nextMelodyNote].start <= elapsedQ)
             processor.preview.playLead (lead[nextMelodyNote++].pitch);
 
@@ -452,9 +457,13 @@ void CorrespondenceEditor::timerCallback()
         view.quality.setEnabled (view.active);
         view.repaint();
     }
-    melodyNotes = chords::melody (settings, Params::readMelody (processor.apvts));
+    melodyNotes = chords::melody (settings, processor.melodySettings());
     roll.setData (voiced, bassNotes, settings.count, playingSlot, melodyNotes, settings.quartersPerChord);
-    newMelodyButton.setButtonText ("New melody (#" + juce::String ((int) processor.apvts.getRawParameterValue (Params::melodySeed)->load()) + ")");
+    const auto motifSize = (int) processor.getMotif().size();
+    newMelodyButton.setButtonText (motifSize > 0 ? "Forget motif (" + juce::String (motifSize) + " notes)"
+                                                 : "New melody (#" + juce::String ((int) processor.apvts.getRawParameterValue (Params::melodySeed)->load()) + ")");
+    newMelodyButton.setTooltip ("Drop a MIDI clip on the plugin to use your own motif");
+    melodyStyle.setEnabled (motifSize == 0);
 
     const auto broadcasting = processor.apvts.getRawParameterValue (Params::broadcast)->load() > 0.5f;
     broadcastStatus.setColour (juce::Label::textColourId, broadcasting ? accent : Colours::dimText);
@@ -463,15 +472,40 @@ void CorrespondenceEditor::timerCallback()
                              juce::dontSendNotification);
 }
 
+bool CorrespondenceEditor::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    for (const auto& f : files)
+        if (f.endsWithIgnoreCase (".mid") || f.endsWithIgnoreCase (".midi"))
+            return true;
+    return false;
+}
+
+void CorrespondenceEditor::filesDropped (const juce::StringArray& files, int, int)
+{
+    dropHover = false;
+    for (const auto& f : files)
+        if (isInterestedInFileDrag ({ f }) && processor.learnMotif (juce::File (f)) > 0)
+            break;
+    repaint();
+}
+
 void CorrespondenceEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
     drawHeader (g, { 20, 12, 700, 32 }, "CORRESPONDENCE", "key & chord engine", accent);
     drawPanel (g, keyArea, "Key");
     drawPanel (g, progressionArea, "Progression  (click a chord to hear it)", accent);
-    drawPanel (g, voicingArea, "Voicing & melody", accent);
+    drawPanel (g, voicingArea, processor.getMotif().empty() ? "Voicing & melody  (drop a MIDI motif here)" : "Voicing & melody  (your motif)", accent);
     drawPanel (g, patternArea, "Rhythm", Colours::brass);
     drawPanel (g, exportArea, "Drag into FL  (loop / whole song)", Colours::amethyst);
+    if (dropHover)
+    {
+        g.setColour (Colours::ember.withAlpha (0.15f));
+        g.fillRect (getLocalBounds());
+        g.setColour (Colours::ember);
+        g.setFont (juce::FontOptions (24.0f, juce::Font::bold));
+        g.drawText ("Drop to use this MIDI clip as the melody motif", getLocalBounds(), juce::Justification::centred);
+    }
 }
 
 void CorrespondenceEditor::resized()

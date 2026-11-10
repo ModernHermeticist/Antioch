@@ -352,6 +352,7 @@ namespace chords
         MelodyStyle style = MelodyStyle::ThreeThreeTwo;
         int seed = 7;
         int octave = 5;   // the melody sits around this octave
+        std::vector<Note> motif;   // a learned 2-bar motif (from a dropped MIDI clip); empty = generate
     };
 
     namespace detail
@@ -398,6 +399,25 @@ namespace chords
             return p;
         }
 
+        /** Signed number of scale steps from a to b. */
+        inline int degreesBetween (int a, int b, int root, int scale)
+        {
+            int n = 0;
+            if (b > a) { for (int p = a + 1; p <= b; ++p) if (inScale (p, root, scale)) ++n; }
+            else       { for (int p = a - 1; p >= b; --p) if (inScale (p, root, scale)) --n; }
+            return n;
+        }
+
+        inline int snapToScale (int pitch, int root, int scale)
+        {
+            for (int d = 0; d < 6; ++d)
+            {
+                if (inScale (pitch - d, root, scale)) return pitch - d;
+                if (inScale (pitch + d, root, scale)) return pitch + d;
+            }
+            return pitch;
+        }
+
         inline int nearestChordTone (int pitch, const std::vector<int>& pcs, int lo, int hi)
         {
             int best = pitch, bestDist = 1000;
@@ -432,17 +452,39 @@ namespace chords
         const auto totalQ = s.quartersPerChord * juce::jlimit (1, maxSlots, s.count);
         const auto centre = 12 * (m.octave + 1) + s.root + 4;
         const auto lo = centre - 9, hi = centre + 10;
-        const auto& hits = rhythm (m.style);
-        juce::Random rng ((juce::int64) m.seed * 7919 + 13);
+        std::vector<Hit> hits;
+        std::vector<int> contour, motifPitches;
 
-        // The call: a contour of scale-step moves between hits, chosen once.
-        std::vector<int> contour;
-        int direction = rng.nextBool() ? 1 : -1;
-        for (size_t i = 0; i < hits.size(); ++i)
+        if (! m.motif.empty())
         {
-            if (rng.nextFloat() < 0.3f) direction = -direction;
-            const auto size = rng.nextFloat() < 0.75f ? 1 : 2 + rng.nextInt (2);   // mostly steps, some leaps
-            contour.push_back (direction * size);
+            // Learned motif: its rhythm, its notes (fitted to the key and register) and its shape.
+            double mean = 0.0;
+            for (const auto& n : m.motif) mean += n.pitch;
+            mean /= (double) m.motif.size();
+            const auto shift = 12 * (int) std::round ((centre - mean) / 12.0);
+            for (const auto& n : m.motif)
+            {
+                const auto step = (int) std::round (n.start * 4.0);
+                if (step >= 32) continue;
+                hits.push_back ({ step, std::max (1, (int) std::round (n.length * 4.0)) });
+                motifPitches.push_back (snapToScale (n.pitch + shift, s.root, s.scale));
+            }
+            for (size_t i = 0; i < motifPitches.size(); ++i)
+                contour.push_back (i == 0 ? 0 : degreesBetween (motifPitches[i - 1], motifPitches[i], s.root, s.scale));
+        }
+        else
+        {
+            hits = rhythm (m.style);
+            juce::Random rng ((juce::int64) m.seed * 7919 + 13);
+
+            // The call: a contour of scale-step moves between hits, chosen once.
+            int direction = rng.nextBool() ? 1 : -1;
+            for (size_t i = 0; i < hits.size(); ++i)
+            {
+                if (rng.nextFloat() < 0.3f) direction = -direction;
+                const auto size = rng.nextFloat() < 0.75f ? 1 : 2 + rng.nextInt (2);   // mostly steps, some leaps
+                contour.push_back (direction * size);
+            }
         }
 
         auto previous = nearestChordTone (centre, chordTonesAt (s, 0.0), lo, hi);
@@ -455,10 +497,22 @@ namespace chords
                 const auto length = std::min (hits[i].length * 0.25 * 0.9, totalQ - start);
                 const auto strong = hits[i].step % 4 == 0;
 
-                const auto firstNote = out.empty();
-                auto pitch = firstNote ? previous : scaleStepFrom (previous, contour[i], s.root, s.scale);
-                if (pitch < lo || pitch > hi) pitch = scaleStepFrom (previous, -contour[i], s.root, s.scale);   // bounce off the edges
-                if (strong) pitch = nearestChordTone (pitch, chordTonesAt (s, start), lo, hi);
+                int pitch;
+                if (! motifPitches.empty() && phrase < 1.0e-9)
+                {
+                    pitch = motifPitches[i];   // the call is your motif as played
+                }
+                else if (! motifPitches.empty() && i == 0)
+                {
+                    pitch = nearestChordTone (motifPitches[0], chordTonesAt (s, start), lo - 3, hi + 3);   // answers start from a chord tone
+                }
+                else
+                {
+                    const auto firstNote = out.empty();
+                    pitch = firstNote ? previous : scaleStepFrom (previous, contour[i], s.root, s.scale);
+                    if (pitch < lo || pitch > hi) pitch = scaleStepFrom (previous, -contour[i], s.root, s.scale);   // bounce off the edges
+                    if (strong) pitch = nearestChordTone (pitch, chordTonesAt (s, start), lo, hi);
+                }
 
                 out.push_back ({ pitch, start, length, strong ? 110 : 92 });
                 previous = pitch;

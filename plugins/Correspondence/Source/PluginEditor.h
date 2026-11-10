@@ -38,7 +38,7 @@ private:
     int count = 4, highlight = -1;
 };
 
-class CorrespondenceEditor : public juce::AudioProcessorEditor, private juce::Timer
+class CorrespondenceEditor : public juce::AudioProcessorEditor, public juce::FileDragAndDropTarget, private juce::Timer
 {
 public:
     explicit CorrespondenceEditor (CorrespondenceProcessor&);
@@ -47,7 +47,14 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // Drop a MIDI clip anywhere on the plugin to teach Melodia your motif.
+    bool isInterestedInFileDrag (const juce::StringArray&) override;
+    void filesDropped (const juce::StringArray&, int, int) override;
+    void fileDragEnter (const juce::StringArray&, int, int) override { dropHover = true; repaint(); }
+    void fileDragExit (const juce::StringArray&) override { dropHover = false; repaint(); }
+
 private:
+    bool dropHover = false;
     struct SlotView : public juce::Component
     {
         SlotView (juce::AudioProcessorValueTreeState&, int index);

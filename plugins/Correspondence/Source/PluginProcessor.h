@@ -40,6 +40,12 @@ public:
     /** Loads a preset into the parameters (message thread). */
     void applyPreset (int index);
 
+    /** Learns a melody motif from the first two bars of a MIDI file (message thread). Returns the note count. */
+    int learnMotif (const juce::File&);
+    void forgetMotif();
+    std::vector<chords::Note> getMotif() const;
+    chords::MelodySettings melodySettings() const;   // parameters + learned motif
+
     /** Writes the chords/bass/arp clip to a .mid file and returns it. */
     juce::File exportClip (const juce::String& kind, const juce::File& directory) const;
 
@@ -52,6 +58,8 @@ private:
     void timerCallback() override { publishKey(); }
 
     bool wasBroadcasting = false;
+    mutable juce::CriticalSection motifLock;
+    std::vector<chords::Note> motif;
     uint32_t lastSuggestion = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceProcessor)

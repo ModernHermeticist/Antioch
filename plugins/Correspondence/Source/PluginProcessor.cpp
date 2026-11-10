@@ -109,6 +109,66 @@ void CorrespondenceProcessor::applyPreset (int index)
     }
 }
 
+int CorrespondenceProcessor::learnMotif (const juce::File& file)
+{
+    juce::MidiFile midi;
+    juce::FileInputStream in (file);
+    if (! in.openedOk() || ! midi.readFrom (in) || midi.getTimeFormat() <= 0)
+        return 0;
+
+    const auto ppq = (double) midi.getTimeFormat();
+    std::vector<chords::Note> notes;
+    for (int t = 0; t < midi.getNumTracks(); ++t)
+    {
+        juce::MidiMessageSequence seq (*midi.getTrack (t));
+        seq.updateMatchedPairs();
+        for (auto* e : seq)
+            if (e->message.isNoteOn())
+            {
+                const auto start = e->message.getTimeStamp() / ppq;
+                const auto end = e->noteOffObject != nullptr ? e->noteOffObject->message.getTimeStamp() / ppq : start + 0.25;
+                notes.push_back ({ e->message.getNoteNumber(), start, std::max (0.05, end - start), e->message.getVelocity() });
+            }
+    }
+    if (notes.empty())
+        return 0;
+
+    // Start at the bar of the first note; keep two bars; one note per onset (the highest, as a lead line).
+    std::sort (notes.begin(), notes.end(), [] (const auto& a, const auto& b) { return a.start < b.start || (std::abs (a.start - b.start) < 1.0e-6 && a.pitch > b.pitch); });
+    const auto barStart = std::floor (notes.front().start / 4.0) * 4.0;
+    std::vector<chords::Note> learned;
+    for (auto n : notes)
+    {
+        n.start -= barStart;
+        if (n.start >= 8.0 - 1.0e-9) break;
+        if (! learned.empty() && std::abs (learned.back().start - n.start) < 1.0e-6) continue;
+        learned.push_back (n);
+    }
+
+    const juce::ScopedLock sl (motifLock);
+    motif = learned;
+    return (int) learned.size();
+}
+
+void CorrespondenceProcessor::forgetMotif()
+{
+    const juce::ScopedLock sl (motifLock);
+    motif.clear();
+}
+
+std::vector<chords::Note> CorrespondenceProcessor::getMotif() const
+{
+    const juce::ScopedLock sl (motifLock);
+    return motif;
+}
+
+chords::MelodySettings CorrespondenceProcessor::melodySettings() const
+{
+    auto m = Params::readMelody (apvts);
+    m.motif = getMotif();
+    return m;
+}
+
 juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
 {
     const auto s = Params::readSettings (apvts);
@@ -121,12 +181,14 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
             return {};
         const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp
                         : kind.endsWith ("Lead") ? chords::SongPart::Lead : chords::SongPart::Chords;
-        notes = chords::songClip (s, map, Params::readSongPatterns (apvts), part);
+        auto patterns = Params::readSongPatterns (apvts);
+        patterns.melody = melodySettings();
+        notes = chords::songClip (s, map, patterns, part);
     }
     else
     {
         notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s)
-              : kind == "Melody" ? chords::melody (s, Params::readMelody (apvts)) : chords::chordClip (s);
+              : kind == "Melody" ? chords::melody (s, melodySettings()) : chords::chordClip (s);
     }
 
     juce::String progression;
@@ -150,7 +212,20 @@ juce::AudioProcessorEditor* CorrespondenceProcessor::createEditor()
 
 void CorrespondenceProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    state.removeChild (state.getChildWithName ("Motif"), nullptr);
+    juce::ValueTree m ("Motif");
+    for (const auto& n : getMotif())
+    {
+        juce::ValueTree note ("Note");
+        note.setProperty ("p", n.pitch, nullptr);
+        note.setProperty ("s", n.start, nullptr);
+        note.setProperty ("l", n.length, nullptr);
+        note.setProperty ("v", n.velocity, nullptr);
+        m.appendChild (note, nullptr);
+    }
+    state.appendChild (m, nullptr);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -158,7 +233,18 @@ void CorrespondenceProcessor::setStateInformation (const void* data, int sizeInB
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            std::vector<chords::Note> loaded;
+            for (const auto& note : state.getChildWithName ("Motif"))
+                loaded.push_back ({ (int) note["p"], (double) note["s"], (double) note["l"], (int) note["v"] });
+            {
+                const juce::ScopedLock sl (motifLock);
+                motif = loaded;
+            }
+            state.removeChild (state.getChildWithName ("Motif"), nullptr);
+            apvts.replaceState (state);
+        }
     publishKey();
 }
 
