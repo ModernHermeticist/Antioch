@@ -11,6 +11,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Registry.h"
+#include "MorphBus.h"
 #include <array>
 
 namespace suite
@@ -33,10 +34,15 @@ namespace suite
         static constexpr int numSnapshotSlots = 4;
         static juce::String slotName (int slot) { return juce::String::charToString ((juce::juce_wchar) ('A' + slot)); }
 
-        explicit SuiteProcessor (const BusesProperties& buses) : juce::AudioProcessor (buses) { poller.startTimerHz (5); }
+        explicit SuiteProcessor (const BusesProperties& buses) : juce::AudioProcessor (buses)
+        {
+            poller.startTimerHz (5);
+            morpher.startTimerHz (30);
+        }
         ~SuiteProcessor() override
         {
             poller.stopTimer();
+            morpher.stopTimer();
             Registry::remove (instanceId);
         }
 
@@ -87,8 +93,17 @@ namespace suite
                     {
                         auto* e = xml.createNewChildElement ("Snapshot");
                         e->setAttribute ("slot", s);
+                        juce::StringArray values;
+                        for (auto v : slotParams[(size_t) s]) values.add (juce::String (v, 6));
+                        e->setAttribute ("params", values.joinIntoString (","));
                         e->addTextElement (slots[(size_t) s].toBase64Encoding());
                     }
+            }
+            if (morphing)   // saved mid-morph: remember the user's own values, not the morphed ones
+            {
+                juce::StringArray values;
+                for (auto v : morphBase) values.add (juce::String (v, 6));
+                xml.createNewChildElement ("MorphBase")->setAttribute ("params", values.joinIntoString (","));
             }
             copyXmlToBinary (xml, dest);
         }
@@ -104,11 +119,16 @@ namespace suite
             {
                 const juce::ScopedLock sl (slotLock);
                 for (auto& s : slots) s.reset();
+                for (auto& p : slotParams) p.clear();
                 for (auto* e : xml->getChildWithTagNameIterator ("Snapshot"))
                 {
                     const auto s = e->getIntAttribute ("slot", -1);
                     if (juce::isPositiveAndBelow (s, numSnapshotSlots))
+                    {
                         slots[(size_t) s].fromBase64Encoding (e->getAllSubText());
+                        for (const auto& v : juce::StringArray::fromTokens (e->getStringAttribute ("params"), ",", ""))
+                            if (v.isNotEmpty()) slotParams[(size_t) s].push_back (v.getFloatValue());
+                    }
                 }
             }
             if (auto* own = xml->getChildByName ("Plugin"))
@@ -117,6 +137,15 @@ namespace suite
                 if (block.fromBase64Encoding (own->getAllSubText()))
                     setPluginState (block.getData(), (int) block.getSize());
             }
+            if (auto* base = xml->getChildByName ("MorphBase"))
+            {
+                const auto values = juce::StringArray::fromTokens (base->getStringAttribute ("params"), ",", "");
+                const auto& params = getParameters();
+                if (values.size() == params.size())
+                    for (int i = 0; i < params.size(); ++i)
+                        params[i]->setValueNotifyingHost (values[i].getFloatValue());
+            }
+            morphing = false;
         }
 
         //==============================================================================
@@ -131,8 +160,13 @@ namespace suite
             if (! juce::isPositiveAndBelow (slot, numSnapshotSlots)) return;
             juce::MemoryBlock own;
             getPluginState (own);
+            std::vector<float> values;
+            const auto& params = getParameters();
+            for (int i = 0; i < params.size(); ++i)   // while morphing, the user's own values are the ones to keep
+                values.push_back (morphing && (size_t) i < morphBase.size() ? morphBase[(size_t) i] : params[i]->getValue());
             const juce::ScopedLock sl (slotLock);
             slots[(size_t) slot] = std::move (own);
+            slotParams[(size_t) slot] = std::move (values);
         }
 
         bool recallSnapshot (int slot)
@@ -150,7 +184,7 @@ namespace suite
         void clearSnapshot (int slot)
         {
             const juce::ScopedLock sl (slotLock);
-            if (juce::isPositiveAndBelow (slot, numSnapshotSlots)) slots[(size_t) slot].reset();
+            if (juce::isPositiveAndBelow (slot, numSnapshotSlots)) { slots[(size_t) slot].reset(); slotParams[(size_t) slot].clear(); }
         }
 
         /** Handles new snapshot commands (message thread; the timer calls it, tests call it directly). */
@@ -177,7 +211,68 @@ namespace suite
             lastSeen = latest;
         }
 
+        //==============================================================================
+        // Snapshot morph (Ouroboros' "Final drop snapshot"): glide every parameter from the
+        // user's own values towards the snapshot as the morph amount rises, and put them back
+        // when it returns to 0. Choices and switches change at the drop (amount 1).
+
+        /** The sender (Ouroboros) doesn't morph itself. */
+        virtual bool morphsWithSnapshots() const { return true; }
+        bool isMorphing() const noexcept { return morphing; }
+
+        /** Message thread, 30 times a second (tests call it directly). */
+        void updateMorph()
+        {
+            if (! morphsWithSnapshots()) return;
+            const auto m = MorphBus::read();
+            const auto& params = getParameters();
+            std::vector<float> target;
+            {
+                const juce::ScopedLock sl (slotLock);
+                if (m.valid && juce::isPositiveAndBelow (m.slot, numSnapshotSlots))
+                    target = slotParams[(size_t) m.slot];
+            }
+            const auto amount = target.size() == (size_t) params.size() ? m.amount : 0.0f;
+
+            if (amount <= 0.0f)
+            {
+                if (morphing)
+                {
+                    for (int i = 0; i < params.size() && (size_t) i < morphBase.size(); ++i)
+                        setIfDifferent (*params[i], morphBase[(size_t) i]);
+                    morphing = false;
+                }
+                return;
+            }
+            if (! morphing)
+            {
+                morphBase.clear();
+                for (auto* p : params) morphBase.push_back (p->getValue());
+                morphing = true;
+            }
+            for (int i = 0; i < params.size(); ++i)
+            {
+                auto* p = params[i];
+                const auto from = morphBase[(size_t) i], to = target[(size_t) i];
+                const auto value = p->isDiscrete() || p->isBoolean() ? (amount >= 0.999f ? to : from) : from + (to - from) * amount;
+                setIfDifferent (*p, value);
+            }
+        }
+
     private:
+        static void setIfDifferent (juce::AudioProcessorParameter& p, float value)
+        {
+            if (std::abs (p.getValue() - value) > 1.0e-4f)
+                p.setValueNotifyingHost (value);
+        }
+
+        struct Morpher : juce::Timer
+        {
+            explicit Morpher (SuiteProcessor& p) : owner (p) {}
+            void timerCallback() override { owner.updateMorph(); }
+            SuiteProcessor& owner;
+        };
+
         struct Poller : juce::Timer
         {
             explicit Poller (SuiteProcessor& p) : owner (p) {}
@@ -194,7 +289,11 @@ namespace suite
         juce::String trackName;
         const uint32_t instanceId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) + 1u;
         std::array<juce::MemoryBlock, numSnapshotSlots> slots;
+        std::array<std::vector<float>, numSnapshotSlots> slotParams;   // normalised parameter values per slot
+        std::vector<float> morphBase;   // the user's values while a morph is under way
+        bool morphing = false;
         uint32_t lastSeen = SnapshotBus::latest();   // commands sent before this plugin loaded don't apply
         Poller poller { *this };
+        Morpher morpher { *this };
     };
 }

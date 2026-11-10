@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
+#include "MorphBus.h"
 
 using namespace suite::test;
 using suite::SectionType;
@@ -198,6 +199,37 @@ int main (int argc, char** argv)
         p->setMap (p->getMap());
         check (suite::SectionBus::read (shared) && shared.finalLift == 0, "and can be turned off");
         suite::SectionBus::withdraw();
+    }
+
+    section ("Final-drop snapshot morph amount");
+    {
+        suite::SectionMap map;   // Drop 1-2, Breakdown 3-4, Build 5-6, Drop 7-8, Outro 9-10
+        map.totalBars = 10; map.count = 5;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Build };
+        map.sections[3] = { 7, suite::SectionType::Drop };
+        map.sections[4] = { 9, suite::SectionType::Outro };
+        suite::SectionBus::publish (map);
+        suite::SectionFollower f;
+        f.refresh();
+        auto at = [&] (double bar) { const auto ppq = (bar - 1.0) * 4.0; return OuroborosProcessor::finalMorphAmount (f.locate (ppq, 4.0), f.getMap(), ppq); };
+        check (at (1.5) < 1.0e-6f && at (3.5) < 1.0e-6f, "nothing in the first drop and the breakdown");
+        check (std::abs (at (6.0) - 0.5f) < 0.01f, "half-way through the build into the last drop: 0.5");
+        check (at (7.0) > 0.999999f && at (9.5) > 0.999999f, "fully in from the last drop to the end");
+
+        auto p = std::make_unique<OuroborosProcessor>();
+        set (*p, OuroborosProcessor::finalSnapId, 2.0f);   // B
+        p->setMap (map);
+        FakePlayHead head;
+        head.ppq = 5.0 * 4.0;   // bar 6
+        p->setPlayHead (&head);
+        render (*p, 0.02, {});
+        p->setPlayHead (nullptr);
+        const auto m = suite::MorphBus::read();
+        check (m.valid && m.slot == 1 && std::abs (m.amount - 0.5f) < 0.02f, "Ouroboros shares 'snapshot B, 50%'");
+        suite::SectionBus::withdraw();
+        suite::MorphBus::withdraw();
     }
 
     section ("Suite overview");

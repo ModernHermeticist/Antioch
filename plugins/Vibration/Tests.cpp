@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "MorphBus.h"
 #include "SceneUI.h"
 
 using namespace suite::test;
@@ -154,6 +155,47 @@ int main (int argc, char** argv)
         render (*p, 4.0, signal (440.0f, 0.2f), &audio);
         const auto diff = juce::Decibels::gainToDecibels (rmsBetween (audio, 3.0, 4.0) / (0.2f / std::sqrt (2.0f)));
         check (std::abs (diff) < 1.0f, "output within 1 dB of input despite heavy drive (" + juce::String (diff, 2) + " dB)");
+    }
+
+    section ("Final-drop snapshot morph");
+    {
+        suite::MorphBus::withdraw();
+        auto p = makeNeutral();
+        auto norm = [&p] (const juce::String& id) { return p->apvts.getParameter (id)->getValue(); };
+        set (*p, Params::euphoria, 80.0f);
+        set (*p, Params::autoGain, 0.0f);
+        p->captureSnapshot (1);                       // B: big Euphoria, auto gain off
+        const auto target = norm (Params::euphoria);
+        set (*p, Params::euphoria, 0.0f);
+        set (*p, Params::autoGain, 1.0f);              // the user's own settings
+        const auto base = norm (Params::euphoria);
+
+        suite::MorphBus::publish (1, 0.5f);           // half-way through the build
+        p->updateMorph();
+        check (std::abs (norm (Params::euphoria) - 0.5f * (base + target)) < 0.01f, "half-way through the build: half-way to the snapshot");
+        check (norm (Params::autoGain) > 0.5f, "switches wait for the drop");
+
+        juce::MemoryBlock midMorph;
+        p->getStateInformation (midMorph);            // a save during the morph
+
+        suite::MorphBus::publish (1, 1.0f);           // the drop
+        p->updateMorph();
+        check (std::abs (norm (Params::euphoria) - target) < 0.01f && norm (Params::autoGain) < 0.5f, "in the drop: exactly the snapshot");
+
+        suite::MorphBus::publish (1, 0.0f);           // playhead back before the build
+        p->updateMorph();
+        check (std::abs (norm (Params::euphoria) - base) < 0.001f && norm (Params::autoGain) > 0.5f && ! p->isMorphing(),
+               "before the build: the user's own settings come back");
+
+        auto q = makeNeutral();
+        q->setStateInformation (midMorph.getData(), (int) midMorph.getSize());
+        check (std::abs (q->apvts.getParameter (Params::euphoria)->getValue() - base) < 0.001f,
+               "a project saved mid-morph reloads with the user's settings");
+
+        suite::MorphBus::publish (2, 1.0f);           // an empty slot: nothing happens
+        p->updateMorph();
+        check (std::abs (norm (Params::euphoria) - base) < 0.001f, "morphing to an empty slot changes nothing");
+        suite::MorphBus::withdraw();
     }
 
     section ("Stress: everything maxed on full-scale noise");

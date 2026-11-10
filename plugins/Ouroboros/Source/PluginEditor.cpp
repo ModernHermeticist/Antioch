@@ -321,6 +321,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       broadcast (p.apvts, OuroborosProcessor::broadcastId, "Broadcast to suite", accent),
       snap (p.apvts, OuroborosProcessor::snapId, "Snap"),
       lift (p.apvts, OuroborosProcessor::liftId, "Final drop key"),
+      finalSnap (p.apvts, OuroborosProcessor::finalSnapId, "Final drop snapshot"),
       timeline (p)
 {
     setLookAndFeel (&lnf);
@@ -458,7 +459,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         addAndMakeVisible (c);
 
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
-                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &timeline, &deleteButton })
+                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &finalSnap, &timeline, &deleteButton })
         addAndMakeVisible (c);
 
     setSize (1060, 560);
@@ -648,12 +649,16 @@ void OuroborosEditor::resized()
     bounds.removeFromTop (10);
 
     auto bottom = bounds.removeFromTop (130);
-    markArea = bottom.removeFromLeft (bottom.getWidth() / 2 - 5);
+    markArea = bottom.removeFromLeft (bottom.getWidth() * 58 / 100);
     bottom.removeFromLeft (10);
     selectArea = bottom;
 
     auto ma = markArea.reduced (12, 6).withTrimmedTop (16);
-    lift.setBounds (ma.removeFromRight (140));
+    {
+        auto column = ma.removeFromRight (150);
+        lift.setBounds (column.removeFromTop (column.getHeight() / 2));
+        finalSnap.setBounds (column);
+    }
     auto snapCell = ma.removeFromRight (110);
     snap.setBounds (snapCell);
     const auto bw = ma.getWidth() / 3;
@@ -668,10 +673,9 @@ void OuroborosEditor::resized()
     deleteButton.setBounds (info.removeFromRight (130));
     selectionLabel.setBounds (info);
     sa.removeFromTop (6);
-    const auto tw = sa.getWidth() / numTypes;
-    auto typeRow = sa.removeFromTop (34);
+    const auto tw = sa.getWidth() / 3, th = juce::jmin (34, sa.getHeight() / 2);
     for (int t = 0; t < numTypes; ++t)
-        typeButtons[(size_t) t]->setBounds (typeRow.removeFromLeft (tw).reduced (2));
+        typeButtons[(size_t) t]->setBounds (juce::Rectangle<int> (sa.getX() + (t % 3) * tw, sa.getY() + (t / 3) * th, tw, th).reduced (2));
 
     bounds.removeFromTop (8);
     legend.setBounds (bounds);

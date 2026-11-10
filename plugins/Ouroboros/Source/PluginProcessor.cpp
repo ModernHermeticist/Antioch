@@ -12,6 +12,8 @@ namespace
                                                              juce::StringArray { "1 bar", "4 bars", "8 bars", "16 bars" }, 2));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::liftId, 1 }, "Final Drop Key Change",
                                                              juce::StringArray { "None", "+1 semitone", "+2 semitones" }, 0));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::finalSnapId, 1 }, "Final Drop Snapshot",
+                                                             juce::StringArray { "None", "A", "B", "C", "D" }, 0));
         return l;
     }
 }
@@ -62,6 +64,17 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     playing.store (host.playing);
     if (host.hasPpq)
         ppq.store (host.ppq);
+
+    // Final-drop snapshot: tell the suite how far to morph at this position (also while stopped,
+    // so the plugins match wherever the playhead is).
+    if (const auto slot = (int) apvts.getRawParameterValue (finalSnapId)->load() - 1; slot >= 0 && host.hasPpq && morphFollower.refresh())
+    {
+        const auto amount = finalMorphAmount (morphFollower.locate (host.ppq, host.barQuarters()), morphFollower.getMap(), host.ppq);
+        morphAmount.store (amount);
+        suite::MorphBus::publish (slot, amount);
+    }
+    else
+        morphAmount.store (0.0f);
 
     if (resetFeatures.exchange (false))
         for (auto& b : barData) { b.flux.store (0.0f); b.high.store (0.0f); b.full.store (0.0f); b.samples.store (0); }

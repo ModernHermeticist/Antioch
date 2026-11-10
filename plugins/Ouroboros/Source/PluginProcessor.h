@@ -64,8 +64,21 @@ public:
     // Transport, written by the audio thread, read by the UI.
     std::atomic<double> ppq { 0.0 }, bpm { 138.0 }, barQuarters { 4.0 };
     std::atomic<bool> playing { false };
+    suite::SectionFollower morphFollower;
 
-    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" };
+    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" };
+    bool morphsWithSnapshots() const override { return false; }   // Ouroboros sends the morph
+    /** How far the suite morphs into the final-drop snapshot at this position (0..1). */
+    static float finalMorphAmount (const suite::SectionFollower::Position& pos, const suite::SectionMap& map, double ppq) noexcept
+    {
+        const auto last = map.lastDropIndex();
+        if (! pos.valid || last < 0) return 0.0f;
+        if (pos.index >= last) return 1.0f;
+        if (pos.index == last - 1 && pos.type == suite::SectionType::Build)
+            return (float) juce::jlimit (0.0, 1.0, pos.progress (ppq));
+        return 0.0f;
+    }
+    std::atomic<float> morphAmount { 0.0f };
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
