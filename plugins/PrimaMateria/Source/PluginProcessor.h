@@ -71,6 +71,9 @@ private:
 
     suite::SectionFollower sections;
     analysis::LoudnessMeter loudness;
+    analysis::BandAnalyzer spectrum;   // the track's spectrum in the drops, for the masking map
+    std::array<suite::Biquad, 2> carve;
+    int carveBandNow = -1; float carveDepthNow = 0.0f;
     juce::SmoothedValue<float> trimGain;
     float lastTrim = 0.0f;
     std::array<suite::Svf, 2> lowCut, highCut;

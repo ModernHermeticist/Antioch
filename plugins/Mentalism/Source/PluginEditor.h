@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
 #include "Checklist.h"
+#include "Masking.h"
 
 /** Pre-export checklist: pass / warn / fail for what Mentalism has measured. */
 class ChecklistPanel : public juce::Component, private juce::Timer
@@ -56,7 +57,12 @@ private:
     void paintBalance (juce::Graphics&, juce::Rectangle<int>);
     void paintAdvice (juce::Graphics&, juce::Rectangle<int>);
     void paintArrangement (juce::Graphics&, juce::Rectangle<int>);
-    suite::ui::TabBar balanceTabs { { "TONAL BALANCE", "ARRANGEMENT" }, { suite::ui::Colours::brass, suite::ui::Colours::ember } };
+    suite::ui::TabBar balanceTabs { { "TONAL BALANCE", "ARRANGEMENT", "MASKING" },
+                                    { suite::ui::Colours::brass, suite::ui::Colours::ember, suite::ui::Colours::amethyst } };
+    void paintMasking (juce::Graphics&, juce::Rectangle<int>);
+    void updateCarveButtons();
+    std::vector<masking::Clash> clashes;
+    std::array<juce::TextButton, 5> carveButtons;
     juce::Rectangle<int> arrangementContent, arrangementNotes;
 
     // Fix-it buttons, one per shown problem, plus undo and a confirmation line.

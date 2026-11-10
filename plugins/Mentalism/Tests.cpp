@@ -350,6 +350,42 @@ int main (int argc, char** argv)
                "sets the style's loudness target (streaming for a radio edit)");
     }
 
+    section ("Masking map");
+    {
+        using namespace suite;
+        auto track = [] (uint32_t id, const char* name, int role, std::array<float, 10> bands)
+        {
+            SuiteEntry e; e.id = id; e.plugin = "Prima Materia"; e.track = name; e.flags = Status::roleSet | Status::hasBands;
+            e.metrics = { (float) role, -12.0f, 0.0f, 0.0f }; e.bands = bands; return e;
+        };
+        //                                       31   63  125  250  500   1k   2k   4k   8k  16k
+        const auto pad  = track (11, "Pad",  4, { -60, -50, -30, -22, -20, -24, -18, -30, -40, -60 });
+        const auto lead = track (12, "Lead", 5, { -70, -60, -45, -35, -28, -22, -16, -20, -30, -45 });
+        const auto hats = track (13, "Hats", 3, { -80, -80, -70, -60, -50, -40, -30, -20, -14, -30 });
+        const auto found = masking::find ({ pad, lead, hats });
+        check (! found.empty() && found[0].band == 6 && found[0].carveId == 11 && found[0].text.contains ("Pad and Lead clash at 2 kHz"),
+               "finds the pad and lead fighting at 2 kHz and carves the pad: " + (found.empty() ? juce::String ("-") : found[0].text));
+        bool hatsVsPad = false;
+        for (auto& c : found) if (c.text.contains ("Hats") && c.text.contains ("Pad")) hatsVsPad = true;
+        check (! hatsVsPad, "tracks whose main energy is elsewhere don't clash");
+        check (masking::priority (6) > masking::priority (5) && masking::priority (5) > masking::priority (4) && masking::priority (4) > masking::priority (7),
+               "vocal keeps over lead, lead over pads, pads over FX");
+        check (masking::find ({ pad }).empty(), "one track: nothing to compare");
+        if (outDir != juce::File())
+        {
+            Registry::reset();
+            for (auto& e : { pad, lead, hats })
+                Registry::announce (e.id, e.plugin, e.track, e.flags, e.metrics, e.bands);
+            auto m = make();
+            std::unique_ptr<juce::AudioProcessorEditor> ed (m->createEditor());
+            if (auto* tabs = dynamic_cast<suite::ui::TabBar*> (ed->findChildWithID ("tabs"))) tabs->setSelected (2);
+            if (auto* t = dynamic_cast<juce::Timer*> (ed.get())) juce::ignoreUnused (t);
+            snapshot (*ed, outDir.getChildFile ("mentalism_masking.png"));
+            ed.reset();
+            Registry::reset();
+        }
+    }
+
     section ("Match reference");
     {
         suite::FixBus::reset();

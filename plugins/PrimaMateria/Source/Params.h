@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Analysis.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SectionBus.h"
 
@@ -15,7 +16,8 @@ namespace pm
     inline juce::String levelId (int t)   { return "lvl_" + juce::String (t); }
     inline juce::String lowCutId (int t)  { return "lc_" + juce::String (t); }
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
-    inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" };   // role: 0 = not set, k + 1 = roles()[k]
+    inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" },
+                              carveBandId { "carve_band" }, carveDepthId { "carve_depth" };   // masking fix: a dip in one octave band   // role: 0 = not set, k + 1 = roles()[k]
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
 
     inline double morphQuarters (int i) { static const double q[] = { 0.0, 0.25, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
@@ -115,6 +117,13 @@ namespace pm
             l.add (std::make_unique<AudioParameterChoice> (id (roleId), "Track Role", roleNames, 0));
         }
         l.add (std::make_unique<AudioParameterBool> (id (lowManagerId), "Low-End Manager", true));
+        {
+            StringArray bands { "Off" };
+            for (auto hz : analysis::bandCentres()) bands.add (hz >= 1000.0f ? String (hz / 1000.0f, hz < 10000.0f ? 0 : 0) + " kHz" : String (roundToInt (hz)) + " Hz");
+            l.add (std::make_unique<AudioParameterChoice> (id (carveBandId), "Carve Band", bands, 0));
+            l.add (std::make_unique<AudioParameterFloat> (id (carveDepthId), "Carve Depth", NormalisableRange<float> (-9.0f, 0.0f), -3.0f,
+                                                          Attr().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
+        }
         l.add (std::make_unique<AudioParameterFloat> (id (trimId), "Trim", NormalisableRange<float> (-24.0f, 12.0f), 0.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));
         l.add (std::make_unique<AudioParameterBool> (id (laterOnId), "Separate Settings for Drop 2+", false));

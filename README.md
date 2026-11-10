@@ -220,6 +220,14 @@ track (or its loudest section) and read the numbers:
   (250 Hz) is 5.0 dB above the target: classic mud: cut 200-400 Hz on pads, bass and
   reverbs."*
 
+**Masking** (third tab). Each Prima Materia measures its track's spectrum in the drops
+and shares it. Mentalism lists the pairs of tracks fighting for the same band (from
+250 Hz to 8 kHz: a band that's prominent in both, at similar levels), worst first, e.g.
+*"Pad and Lead clash at 2 kHz in the drops: carve Pad"*. **Fix** carves a 3 dB dip at that
+band into the less important track (vocal keeps over lead, lead over kick and bass, then
+pads, hats, FX); press again to go deeper (up to 9 dB). Prima Materia's status line shows
+the carve, and History undoes it.
+
 **Match reference** (Tonal Balance tab, with a reference loaded and at least 10 s of the
 song measured) compares your mix's long-term balance with the reference and moves Lapis'
 new **Low tone** (100 Hz shelf) and **High tone** (8 kHz shelf) half-way towards it, at
@@ -798,6 +806,9 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Match reference:** with a reference that has 2 dB less low end and 4 dB more top, it
   asks for -1 dB low and +2 dB high; Lapis' shelves move 40 Hz and 14 kHz by that much,
   leave 1 kHz alone, and undo flattens them.
+- **Masking map:** a pad and a lead both strong at 2 kHz are found and the pad is carved;
+  tracks whose energy is elsewhere don't clash; the carve reaches only the addressed
+  track, deepens on a second press, and measures about 4.5 dB down at 2 kHz.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

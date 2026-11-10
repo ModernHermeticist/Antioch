@@ -18,6 +18,7 @@ namespace suite::Registry
             char track[56];
             uint32_t flags;
             float metrics[4];
+            float bands[10];
         };
 
         struct Shared { Slot slots[maxEntries]; };
@@ -26,7 +27,7 @@ namespace suite::Registry
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_registry_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_registry_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -46,7 +47,7 @@ namespace suite::Registry
     }
 
     void announce (uint32_t id, const juce::String& plugin, const juce::String& track, uint32_t flags,
-                   const std::array<float, 4>& metrics) noexcept
+                   const std::array<float, 4>& metrics, const std::array<float, 10>& bands) noexcept
     {
         if (id == 0) return;
         auto& s = shared();
@@ -75,6 +76,7 @@ namespace suite::Registry
         copyText (mine->track, sizeof (mine->track), track);
         mine->flags = flags;
         for (size_t i = 0; i < 4; ++i) mine->metrics[i] = metrics[i];
+        for (size_t i = 0; i < 10; ++i) mine->bands[i] = bands[i];
         mine->stamp.store (t, std::memory_order_release);
         mine->seq.fetch_add (1, std::memory_order_acq_rel);   // even: done
     }
@@ -108,6 +110,7 @@ namespace suite::Registry
                 e.track = juce::String::fromUTF8 (slot.track, (int) strnlen (slot.track, sizeof (slot.track)));
                 e.flags = slot.flags;
                 for (size_t i = 0; i < 4; ++i) e.metrics[i] = slot.metrics[i];
+                for (size_t i = 0; i < 10; ++i) e.bands[i] = slot.bands[i];
                 e.ageSeconds = (int) (t - stamp);
                 if (slot.seq.load (std::memory_order_acquire) != before) continue;
                 if (e.ageSeconds <= maxAgeSeconds && e.ageSeconds >= -2) out.push_back (e);

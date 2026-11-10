@@ -157,6 +157,22 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<FixHistoryPanel> (processor), historyButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (historyButton);
+    for (int i = 0; i < (int) carveButtons.size(); ++i)
+    {
+        auto& b = carveButtons[(size_t) i];
+        b.setButtonText ("Fix");
+        b.setTooltip ("Carves a 3 dB dip in that band on the less important track (again: deeper). Undo in History.");
+        b.setColour (juce::TextButton::buttonColourId, Colours::amethyst.withAlpha (0.35f));
+        b.onClick = [this, i]
+        {
+            if (i >= (int) clashes.size()) return;
+            lastFix = suite::Fix::Carve;
+            lastFixSeq = processor.sendFix (suite::Fix::Carve, suite::packCarve (clashes[(size_t) i].carveId, clashes[(size_t) i].band));
+            lastUndoSeq = 0;
+            fixStatusTicks = 0;
+        };
+        addChildComponent (b);
+    }
     checklistButton.setTooltip ("Pass/fail list to check before rendering: loudness, true peak, clipping, mono, sections");
     checklistButton.onClick = [this]
     {
@@ -201,9 +217,10 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     {
         for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton })
             c->setVisible (i == 0);
-        undoFixButton.setVisible (i == 1);
-        fixStatus.setVisible (i == 1);
+        undoFixButton.setVisible (i == 1 || i == 2);
+        fixStatus.setVisible (i == 1 || i == 2);
         layoutFixButtons();
+        updateCarveButtons();
         repaint();
     };
 
@@ -321,6 +338,8 @@ void MentalismEditor::layoutFixButtons()
 void MentalismEditor::timerCallback()
 {
     rep = processor.report();
+    clashes = masking::find (suite::Registry::list());
+    updateCarveButtons();
     layoutFixButtons();
     updateFixStatus();
     const auto ref = processor.getReference();
@@ -339,16 +358,18 @@ void MentalismEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "MENTALISM", "mix assistant", accent);
     drawPanel (g, loudArea, "Loudness", accent);
     drawPanel (g, stereoArea, "Stereo", Colours::amethyst);
-    const auto arrangementTab = balanceTabs.getSelected() == 1;
+    const auto arrangementTab = balanceTabs.getSelected() == 1, maskingTab = balanceTabs.getSelected() == 2;
     drawPanel (g, balanceArea, arrangementTab ? "Arrangement: loudness per section (Ouroboros)"
-                                              : "Tonal balance vs target  (bars = whole song, line = last 3 s)",
-               arrangementTab ? Colours::ember : Colours::brass);
+                               : maskingTab ? "Masking: tracks fighting for the same frequencies in the drops"
+                                            : "Tonal balance vs target  (bars = whole song, line = last 3 s)",
+               arrangementTab ? Colours::ember : maskingTab ? Colours::amethyst : Colours::brass);
     drawPanel (g, adviceArea, "Suggestions", Colours::ember);
 
     paintLoudness (g, loudContent);
     paintStereo (g, stereoContent);
-    if (arrangementTab) paintArrangement (g, arrangementContent);
-    else                paintBalance (g, balanceContent);
+    if (arrangementTab)  paintArrangement (g, arrangementContent);
+    else if (maskingTab) paintMasking (g, arrangementContent);
+    else                 paintBalance (g, balanceContent);
     paintAdvice (g, adviceContent);
 }
 
@@ -566,6 +587,41 @@ void MentalismEditor::paintArrangement (juce::Graphics& g, juce::Rectangle<int> 
     }
 }
 
+void MentalismEditor::updateCarveButtons()
+{
+    auto rows = arrangementContent.reduced (4, 2);
+    for (int i = 0; i < (int) carveButtons.size(); ++i)
+    {
+        auto row = rows.removeFromTop (34);
+        auto& b = carveButtons[(size_t) i];
+        b.setBounds (row.removeFromRight (80).reduced (2, 4));
+        b.setVisible (balanceTabs.getSelected() == 2 && i < (int) clashes.size());
+    }
+}
+
+void MentalismEditor::paintMasking (juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (clashes.empty())
+    {
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (14.0f));
+        g.drawFittedText ("No clashes found. Put Prima Materia (with roles) on your tracks and play a drop: "
+                          "each track shares its spectrum, and tracks fighting for the same band show up here.",
+                          area.reduced (20), juce::Justification::centred, 3);
+        return;
+    }
+    g.setFont (juce::FontOptions (13.5f));
+    auto rows = area.reduced (4, 2);
+    for (size_t i = 0; i < clashes.size(); ++i)
+    {
+        auto row = rows.removeFromTop (34);
+        g.setColour (Colours::amethyst);
+        g.fillEllipse ((float) row.getX() + 2.0f, (float) row.getCentreY() - 3.0f, 6.0f, 6.0f);
+        g.setColour (Colours::text);
+        g.drawFittedText (clashes[i].text, row.withTrimmedLeft (16).withTrimmedRight (90), juce::Justification::centredLeft, 1, 0.8f);
+    }
+}
+
 void MentalismEditor::paintAdvice (juce::Graphics& g, juce::Rectangle<int> area)
 {
     g.setFont (juce::FontOptions (13.0f));
@@ -621,7 +677,7 @@ void MentalismEditor::resized()
         fixStatus.setBounds (c.withTrimmedLeft (8));
     }
     layoutFixButtons();
-    balanceTabs.setBounds (balanceArea.getRight() - 372, balanceArea.getY() + 6, 360, 28);
+    balanceTabs.setBounds (balanceArea.getRight() - 522, balanceArea.getY() + 6, 510, 28);
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);
     checklistButton.setBounds (adviceArea.getRight() - 162, adviceArea.getY() + 6, 150, 26);

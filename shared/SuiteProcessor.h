@@ -54,7 +54,7 @@ namespace suite
         //==============================================================================
         // Suite registry: what this instance tells the rest of the suite about itself.
 
-        struct SuiteStatus { uint32_t flags = 0; std::array<float, 4> metrics {}; };
+        struct SuiteStatus { uint32_t flags = 0; std::array<float, 4> metrics {}; std::array<float, 10> bands {}; };
         /** Message thread, about once a second. Override to report flags and numbers. */
         virtual SuiteStatus suiteStatus() { return {}; }
         /** Called when the host tells us the track's name (FL: the mixer track). */
@@ -78,7 +78,7 @@ namespace suite
         void announce()
         {
             const auto status = suiteStatus();
-            Registry::announce (instanceId, getName(), getTrackName(), status.flags, status.metrics);
+            Registry::announce (instanceId, getName(), getTrackName(), status.flags, status.metrics, status.bands);
         }
 
         /** The plugin's own settings (what it saved before snapshots existed). */

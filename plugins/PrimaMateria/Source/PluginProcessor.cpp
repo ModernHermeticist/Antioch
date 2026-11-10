@@ -8,7 +8,7 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
       apvts (*this, nullptr, "PrimaMateriaState", pm::layout())
 {
     // Mentalism's fix-it buttons: nudge this track's section levels (muted sections stay muted).
-    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
     {
         using T = suite::SectionType;
         auto level = [this] (int column) { return apvts.getRawParameterValue (pm::levelId (column))->load(); };
@@ -51,6 +51,15 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                     if (! muted (level ((int) t))) changes.push_back ({ pm::levelId ((int) t), pm::offDb });
                 return changes;
             }
+            case suite::Fix::Carve:
+            {
+                if ((data & 0xfffu) != (getInstanceId() & 0xfffu)) return {};   // meant for another track
+                const auto band = (int) ((data >> 12) & 0xf);
+                const auto current = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
+                const auto depth = apvts.getRawParameterValue (pm::carveDepthId)->load();
+                return { { pm::carveBandId, (float) (band + 1) },
+                         { pm::carveDepthId, current == band ? juce::jmax (-9.0f, depth - 1.5f) : -3.0f } };   // again: deeper
+            }
             case suite::Fix::RoughMix:
             {
                 if (const auto t = roughMixTrim()) return { { pm::trimId, *t } };
@@ -80,6 +89,9 @@ void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
     highLog = std::log2 (pm::highCutOff);
     gapGain = 1.0f;
     loudness.prepare (sampleRate);
+    spectrum.prepare (sampleRate);
+    for (auto& c : carve) c.reset();
+    carveBandNow = -1;
     lastTrim = apvts.getRawParameterValue (pm::trimId)->load();
     trimGain.reset (sampleRate, 0.05);
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (lastTrim));
@@ -111,6 +123,17 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto tauSamples = morphQ > 0.0 ? (float) (morphQ / qPerSample / 3.0) : 0.0f;
     const auto glide = tauSamples > 1.0f ? 1.0f - std::exp (-1.0f / tauSamples) : 1.0f;
     const auto gapStep = 1.0f / (0.003f * sr);   // 3 ms fade in/out of the gap
+
+    // Carve (the masking fix): a peaking dip in one octave band.
+    const auto carveBand = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
+    const auto carveDepth = apvts.getRawParameterValue (pm::carveDepthId)->load();
+    if (carveBand != carveBandNow || std::abs (carveDepth - carveDepthNow) > 1.0e-3f)
+    {
+        if (carveBand >= 0)
+            for (auto& c : carve) c.setPeak (analysis::bandCentres()[(size_t) carveBand], 1.4f, carveDepth, sr);
+        carveBandNow = carveBand; carveDepthNow = carveDepth;
+    }
+    const auto carving = carveBand >= 0 && carveDepth < -0.05f;
 
     // Trim (the rough mix sets it). A new trim makes the old loudness reading stale.
     const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
@@ -197,10 +220,18 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         const auto t = trimGain.getNextValue();
         left[n] = processChannel (left[n], 0) * t;
         if (right != nullptr) right[n] = processChannel (right[n], 1) * t;
+        if (carving)
+        {
+            left[n] = carve[0].process (left[n]);
+            if (right != nullptr) right[n] = carve[1].process (right[n]);
+        }
 
         // Loudness for the rough mix: the drops (where everything plays), or all playback without a map.
         if (host.playing && (! follow || typeNow == (int) T::Drop))
+        {
             loudness.process (left[n], right != nullptr ? right[n] : left[n]);
+            spectrum.process (left[n], right != nullptr ? right[n] : left[n]);
+        }
     }
 
     currentType.store (follow ? (laterNow ? pm::laterDrop : typeNow) : -1);
@@ -220,6 +251,11 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
     if (apvts.getRawParameterValue (pm::followId)->load() > 0.5f) s.flags |= suite::Status::followsOuroboros;
     const auto lufs = measuredLufs();
     if (lufs > -70.0f) s.flags |= suite::Status::measuring;
+    if (spectrum.longSeconds.load() >= 2.0f)
+    {
+        s.flags |= suite::Status::hasBands;
+        for (size_t b = 0; b < s.bands.size(); ++b) s.bands[b] = spectrum.longDb[b].load();
+    }
     s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
     refreshLowOwners();
     return s;

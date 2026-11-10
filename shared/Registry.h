@@ -22,7 +22,8 @@ namespace suite
             hasMap             = 1u << 3,   // Ouroboros: has a section map
             kickSource         = 1u << 4,   // Kybalion: sharing its kick pattern
             roleSet            = 1u << 5,   // Prima Materia: a role preset is applied
-            measuring          = 1u << 6    // has a loudness reading (metric 1)
+            measuring          = 1u << 6,   // has a loudness reading (metric 1)
+            hasBands           = 1u << 7    // has a spectrum (bands, dB per octave band 31.5 Hz .. 16 kHz)
         };
     }
 
@@ -32,6 +33,7 @@ namespace suite
         juce::String plugin, track;
         uint32_t flags = 0;
         std::array<float, 4> metrics {};   // plugin-specific (see each plugin's suiteStatus)
+        std::array<float, 10> bands {};    // with hasBands: the track's spectrum in octave bands (dB)
         int ageSeconds = 0;
         bool has (uint32_t f) const noexcept { return (flags & f) != 0; }
     };
@@ -41,7 +43,7 @@ namespace suite
         constexpr int maxEntries = 64;
         /** Message thread: create or refresh this instance's entry. */
         void announce (uint32_t id, const juce::String& plugin, const juce::String& track, uint32_t flags,
-                       const std::array<float, 4>& metrics) noexcept;
+                       const std::array<float, 4>& metrics, const std::array<float, 10>& bands = {}) noexcept;
         void remove (uint32_t id) noexcept;
         /** Everything announced in the last `maxAgeSeconds`. */
         std::vector<SuiteEntry> list (int maxAgeSeconds = 5);

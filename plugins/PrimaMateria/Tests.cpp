@@ -192,6 +192,29 @@ int main (int argc, char** argv)
                        && lvl (*kickTrack, (int) T::Intro) > pm::offDb + 0.5f, "DJ fix: the pads leave the intro and outro; the kick stays");
         }
 
+        // Masking fix: only the addressed track carves, in the asked band; again = deeper.
+        {
+            auto padTrack = make (roleIndex ("Pads")), other = make (roleIndex ("Lead"));
+            const auto band = 6;   // 2 kHz
+            suite::FixBus::send (suite::Fix::Carve, suite::packCarve (padTrack->getInstanceId(), band));
+            padTrack->fixes->poll(); other->fixes->poll();
+            auto carveOf = [] (PrimaMateriaProcessor& p) { return (int) p.apvts.getRawParameterValue (pm::carveBandId)->load() - 1; };
+            check (carveOf (*padTrack) == band && std::abs (padTrack->apvts.getRawParameterValue (pm::carveDepthId)->load() + 3.0f) < 0.01f
+                       && carveOf (*other) == -1, "carve: the addressed pad gets a 3 dB dip at 2 kHz, the lead is untouched");
+            suite::FixBus::send (suite::Fix::Carve, suite::packCarve (padTrack->getInstanceId(), band));
+            padTrack->fixes->poll();
+            check (std::abs (padTrack->apvts.getRawParameterValue (pm::carveDepthId)->load() + 4.5f) < 0.01f, "asking again carves deeper (4.5 dB)");
+            set (*padTrack, pm::followId, 0.0f);
+            const auto at2k = [&padTrack] (float hz)
+            {
+                juce::AudioBuffer<float> a;
+                render (*padTrack, 0.5, tone (hz), &a);
+                return juce::Decibels::gainToDecibels (rmsBetween (a, 0.2, 0.5));
+            };
+            const auto dip = at2k (2000.0f) - at2k (250.0f);
+            check (dip < -3.5f && dip > -5.5f, "and you hear it: 2 kHz down " + juce::String (-dip, 1) + " dB against 250 Hz");
+        }
+
         // Later drops: turns on the Drop 2+ column, starting from the drop's settings.
         auto lead = make (roleIndex ("Pads"));
         const auto drop = lvl (*lead, (int) T::Drop);

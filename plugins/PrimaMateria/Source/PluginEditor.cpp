@@ -85,6 +85,9 @@ void PrimaMateriaEditor::timerCallback()
     status.setColour (juce::Label::textColourId, t >= 0 ? sectionColour ((suite::SectionType) juce::jmin (t, pm::numTypes - 1)) : Colours::dimText);
     if (const auto cut = processor.managerCutNow.load(); cut > 0.0f)
         text << "   |   Low end left to the kick/bass (cut " << juce::String (juce::roundToInt (cut)) << " Hz)";
+    if (const auto carveBand = (int) processor.apvts.getRawParameterValue (pm::carveBandId)->load() - 1; carveBand >= 0)
+        text << "   |   Carved " << juce::String (processor.apvts.getRawParameterValue (pm::carveDepthId)->load(), 1) << " dB at "
+             << processor.apvts.getParameter (pm::carveBandId)->getCurrentValueAsText();
     const auto lufs = processor.measuredLufs();
     if (lufs > -70.0f)
         text << "   |   Drop loudness " << juce::String (lufs, 1) << " LUFS";
