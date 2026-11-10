@@ -64,7 +64,7 @@ What's left to you is writing and arranging the music, plus choosing taste setti
 - **Voicing:** Close, Open (drop-2, pad-like) or Wide (root doubled below). Voice leading
   keeps each chord close to the previous one, so pads move smoothly.
 - **Rhythm:** chords can be sustained, offbeat stabs, a 3-3-2 pluck or a 16th gate. Bass
-  can be offbeat, rolling, galloping or sustained. Arps go up, down, up-down or bounce.
+  can be offbeat, rolling, galloping, sustained or walking. Arps go up, down, up-down or bounce.
 - **Drag into FL:** drag the **Chords**, **Bass** or **Arp** tile straight onto FL's
   playlist or into a piano roll, and it lands as a MIDI clip. **Save MIDI…** writes all
   three to a folder instead.
