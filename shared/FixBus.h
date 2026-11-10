@@ -75,31 +75,43 @@ namespace suite
     private:
         void timerCallback() override { poll(); }
 
+        // Each applied fix remembers, per parameter, the value before and after (last 16 fixes).
+        struct Saved { juce::RangedAudioParameter* param; float before, after; };
+        struct Entry { uint32_t seq; std::vector<Saved> changes; };
+
         void apply (const FixBus::Message& m)
         {
             const auto changes = plan (m.fix);
             if (changes.empty())
                 return;
-            saved.clear();
+            Entry entry { m.seq, {} };
             for (const auto& c : changes)
                 if (auto* p = apvts.getParameter (c.paramId))
                 {
-                    saved.push_back ({ p, p->getValue() });
+                    const auto before = p->getValue();
                     set (*p, p->convertTo0to1 (p->getNormalisableRange().snapToLegalValue (c.plainValue)));
+                    entry.changes.push_back ({ p, before, p->getValue() });
                 }
-            savedSeq = m.seq;
+            history.push_back (std::move (entry));
+            if (history.size() > 16) history.erase (history.begin());
             ++applied;
             FixBus::acknowledge (m.seq);
         }
 
+        /** Undo any remembered fix. A parameter is only put back if nothing has moved it since
+            the fix (otherwise that later change wins). */
         void undo (const FixBus::Message& m)
         {
-            if (saved.empty() || (savedSeq & 0xffffu) != (m.target & 0xffffu))
-                return;
-            for (auto it = saved.rbegin(); it != saved.rend(); ++it)
-                set (*it->first, it->second);
-            saved.clear();
-            FixBus::acknowledge (m.seq);
+            for (auto it = history.begin(); it != history.end(); ++it)
+                if ((it->seq & 0xffffu) == (m.target & 0xffffu))
+                {
+                    for (auto c = it->changes.rbegin(); c != it->changes.rend(); ++c)
+                        if (std::abs (c->param->getValue() - c->after) < 1.0e-4f)
+                            set (*c->param, c->before);
+                    history.erase (it);
+                    FixBus::acknowledge (m.seq);
+                    return;
+                }
         }
 
         static void set (juce::RangedAudioParameter& p, float normalised)
@@ -111,8 +123,8 @@ namespace suite
 
         juce::AudioProcessorValueTreeState& apvts;
         Planner plan;
-        uint32_t lastSeen = 0, savedSeq = 0;
-        std::vector<std::pair<juce::RangedAudioParameter*, float>> saved;
+        uint32_t lastSeen = 0;
+        std::vector<Entry> history;
         int applied = 0;
     };
 }

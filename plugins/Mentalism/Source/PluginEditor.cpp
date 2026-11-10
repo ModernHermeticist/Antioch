@@ -15,6 +15,69 @@ namespace
     }
 }
 
+//==============================================================================
+void FixHistoryPanel::refresh()
+{
+    auto latest = processor.getFixHistory();
+    std::reverse (latest.begin(), latest.end());   // newest first
+    const auto changed = latest.size() != records.size()
+                      || ! std::equal (latest.begin(), latest.end(), records.begin(),
+                                       [] (const auto& a, const auto& b) { return a.seq == b.seq && a.undoSeq == b.undoSeq; });
+    records = latest;
+    if (changed)
+    {
+        undoButtons.clear();
+        for (const auto& r : records)
+        {
+            auto* b = undoButtons.add (new juce::TextButton ("Undo"));
+            b->onClick = [this, seq = r.seq] { processor.undoFix (seq); refresh(); };
+            addAndMakeVisible (b);
+        }
+        resized();
+    }
+    for (size_t i = 0; i < records.size() && (int) i < undoButtons.size(); ++i)
+        undoButtons[(int) i]->setEnabled (records[i].undoSeq == 0 && suite::FixBus::acknowledgements (records[i].seq) > 0);
+    repaint();
+}
+
+void FixHistoryPanel::resized()
+{
+    for (int i = 0; i < undoButtons.size(); ++i)
+        undoButtons[i]->setBounds (getWidth() - 84, 36 + i * 30, 70, 24);
+}
+
+void FixHistoryPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    g.setColour (Colours::verdigris);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("FIX HISTORY (NEWEST FIRST)", 14, 8, getWidth() - 28, 20, juce::Justification::centredLeft);
+    if (records.empty())
+    {
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (13.0f));
+        g.drawText ("No fixes yet: use Fix in the Arrangement tab, or Rough mix.", 14, 40, getWidth() - 28, 20, juce::Justification::centredLeft);
+        return;
+    }
+    for (size_t i = 0; i < records.size(); ++i)
+    {
+        const auto& r = records[i];
+        const auto y = 36 + (int) i * 30;
+        const auto applied = suite::FixBus::acknowledgements (r.seq);
+        const auto undone = r.undoSeq != 0;
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (12.0f));
+        g.drawText (r.when.formatted ("%H:%M"), 14, y, 44, 24, juce::Justification::centredLeft);
+        g.setColour (undone ? Colours::dimText : Colours::text);
+        g.setFont (juce::FontOptions (13.0f));
+        const auto what = coach::describe (r.fix) + (undone ? juce::String ("  (undone)")
+                                                  : applied > 0 ? "  (" + juce::String (applied) + (applied == 1 ? " plugin)" : " plugins)")
+                                                                : juce::String ("  (nothing applied it)"));
+        g.drawFittedText (what, 62, y, getWidth() - 62 - 96, 24, juce::Justification::centredLeft, 1, 0.8f);
+    }
+}
+
+//==============================================================================
 MentalismEditor::MentalismEditor (MentalismProcessor& p)
     : AudioProcessorEditor (p), processor (p),
       loudTarget (p.apvts, Params::loudnessTarget, "Loudness target"),
@@ -28,11 +91,17 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     roughMixButton.onClick = [this]
     {
         lastFix = suite::Fix::RoughMix;
-        lastFixSeq = suite::FixBus::send (suite::Fix::RoughMix);
+        lastFixSeq = processor.sendFix (suite::Fix::RoughMix);
         lastUndoSeq = 0;
         fixStatusTicks = 0;
     };
     roughUndoButton.onClick = [this] { undoFixButton.onClick(); };
+    historyButton.setTooltip ("Every fix and rough mix so far, with Undo for each");
+    historyButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<FixHistoryPanel> (processor), historyButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (historyButton);
     roughStatus.setFont (juce::FontOptions (12.0f));
     roughStatus.setJustificationType (juce::Justification::centredRight);
     for (auto* c : std::initializer_list<juce::Component*> { &roughMixButton, &roughUndoButton, &roughStatus })
@@ -77,7 +146,7 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     undoFixButton.onClick = [this]
     {
         if (lastFixSeq == 0) return;
-        lastUndoSeq = suite::FixBus::sendUndo (lastFixSeq);
+        lastUndoSeq = processor.undoFix (lastFixSeq);
         fixStatusTicks = 0;
     };
     undoFixButton.setEnabled (false);
@@ -102,7 +171,7 @@ void MentalismEditor::sendFix (int row)
     const auto fix = shownFixes[(size_t) row];
     if (fix == suite::Fix::None) return;
     lastFix = fix;
-    lastFixSeq = suite::FixBus::send (fix);
+    lastFixSeq = processor.sendFix (fix);
     lastUndoSeq = 0;
     fixStatusTicks = 0;
 
@@ -445,7 +514,8 @@ void MentalismEditor::resized()
     resetButton.setBounds (header.removeFromRight (110).reduced (4, 8));
     roughUndoButton.setBounds (header.removeFromRight (70).reduced (4, 8));
     roughMixButton.setBounds (header.removeFromRight (110).reduced (4, 8));
-    roughStatus.setBounds (header.removeFromRight (300).reduced (4, 8));
+    historyButton.setBounds (header.removeFromRight (90).reduced (4, 8));
+    roughStatus.setBounds (header.removeFromRight (250).reduced (4, 8));
 
     auto top = bounds.removeFromTop (190);
     loudArea = top.removeFromLeft (top.getWidth() * 62 / 100);

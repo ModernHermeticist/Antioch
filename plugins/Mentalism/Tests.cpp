@@ -1,6 +1,7 @@
 // Offline tests for Mentalism. Usage: MentalismTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include "TestUtils.h"
 #include "SectionBus.h"
 #include "SuiteUI.h"
@@ -262,6 +263,26 @@ int main (int argc, char** argv)
             check (! after.sections[1].heard() && after.sections[3].heard(), "forgetting breakdowns keeps the other sections' measurements");
         }
         suite::SectionBus::withdraw();
+    }
+
+    section ("Fix history");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        const auto a = p->sendFix (suite::Fix::BreakdownQuieter);
+        const auto b = p->sendFix (suite::Fix::RoughMix);
+        suite::FixBus::acknowledge (a);   // as if one plugin applied each
+        suite::FixBus::acknowledge (b);
+        const auto h = p->getFixHistory();
+        check (h.size() == 2 && h[0].seq == a && h[1].fix == suite::Fix::RoughMix, "remembers every fix sent, in order");
+        const auto u = p->undoFix (a);
+        check (u != 0 && p->getFixHistory()[0].undoSeq == u, "undo any of them, not just the last");
+        check (p->undoFix (a) == 0, "a fix can only be undone once");
+        if (outDir != juce::File())
+        {
+            FixHistoryPanel panel (*p);
+            snapshot (panel, outDir.getChildFile ("mentalism_history.png"));
+        }
     }
 
     section ("Pass-through");

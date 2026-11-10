@@ -4,6 +4,23 @@
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
 
+/** Fix history: every fix and rough mix sent from Mentalism, with Undo for each. */
+class FixHistoryPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit FixHistoryPanel (MentalismProcessor& p) : processor (p) { refresh(); setSize (560, 360); startTimerHz (4); }
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    void timerCallback() override { refresh(); }
+    void refresh();
+
+    MentalismProcessor& processor;
+    std::vector<MentalismProcessor::FixRecord> records;
+    juce::OwnedArray<juce::TextButton> undoButtons;
+};
+
 class MentalismEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -39,7 +56,7 @@ private:
     suite::ui::LookAndFeel lnf;
 
     suite::ui::Choice loudTarget, tonalTarget;
-    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" };
+    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" };
     juce::Label roughStatus;
     juce::Label referenceLabel;
     std::unique_ptr<juce::FileChooser> chooser;

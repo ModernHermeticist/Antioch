@@ -155,6 +155,34 @@ int main (int argc, char** argv)
         kick->fixes->poll();
         check (std::abs (lvl (*pads, (int) T::Breakdown) - padsBefore) < 0.05f && suite::FixBus::acknowledgements (undo) == 1, "undo restores it");
 
+        // Undo history: two fixes in a row, undone in any order.
+        {
+            const auto base = lvl (*pads, (int) T::Breakdown);
+            const auto first = suite::FixBus::send (suite::Fix::BreakdownQuieter);
+            pads->fixes->poll();
+            const auto second = suite::FixBus::send (suite::Fix::BreakdownQuieter);
+            pads->fixes->poll();
+            check (std::abs (lvl (*pads, (int) T::Breakdown) - (base - 4.0f)) < 0.05f, "two fixes: 4 dB quieter");
+            suite::FixBus::sendUndo (first);
+            pads->fixes->poll();
+            check (std::abs (lvl (*pads, (int) T::Breakdown) - (base - 4.0f)) < 0.05f,
+                   "undoing the older fix leaves a parameter the newer one changed since");
+            suite::FixBus::sendUndo (second);
+            pads->fixes->poll();
+            check (std::abs (lvl (*pads, (int) T::Breakdown) - (base - 2.0f)) < 0.05f, "undoing the newer one steps back to -2 dB");
+            const auto third = suite::FixBus::send (suite::Fix::IntroQuieter);
+            pads->fixes->poll();
+            const auto intro = lvl (*pads, (int) T::Intro);
+            const auto fourth = suite::FixBus::send (suite::Fix::BreakdownLouder);
+            pads->fixes->poll();
+            suite::FixBus::sendUndo (third);   // an older fix on a different parameter: undone
+            pads->fixes->poll();
+            check (std::abs (lvl (*pads, (int) T::Intro) - (intro + 2.0f)) < 0.05f && std::abs (lvl (*pads, (int) T::Breakdown) - base) < 0.05f,
+                   "an older fix can be undone on its own when nothing touched it since");
+            suite::FixBus::sendUndo (fourth);
+            pads->fixes->poll();
+        }
+
         // Later drops: turns on the Drop 2+ column, starting from the drop's settings.
         auto lead = make (roleIndex ("Pads"));
         const auto drop = lvl (*lead, (int) T::Drop);

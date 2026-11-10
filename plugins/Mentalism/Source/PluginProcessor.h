@@ -88,6 +88,26 @@ public:
     /** Loudness gathered per section of the current Ouroboros map (any thread). */
     std::vector<coach::SectionStat> sectionStats() const;
 
+    /** Fix history (fixes and rough mixes sent from here), newest last. */
+    struct FixRecord { uint32_t seq = 0; suite::Fix fix = suite::Fix::None; juce::Time when; uint32_t undoSeq = 0; };
+    uint32_t sendFix (suite::Fix fix)
+    {
+        const auto seq = suite::FixBus::send (fix);
+        const juce::ScopedLock sl (historyLock);
+        fixHistory.push_back ({ seq, fix, juce::Time::getCurrentTime(), 0 });
+        if (fixHistory.size() > 16) fixHistory.erase (fixHistory.begin());
+        return seq;
+    }
+    uint32_t undoFix (uint32_t seq)
+    {
+        const juce::ScopedLock sl (historyLock);
+        for (auto& r : fixHistory)
+            if (r.seq == seq && r.undoSeq == 0)
+                return r.undoSeq = suite::FixBus::sendUndo (seq);
+        return 0;
+    }
+    std::vector<FixRecord> getFixHistory() const { const juce::ScopedLock sl (historyLock); return fixHistory; }
+
     /** After a fix: forget what was measured for sections of `type`, so the coach re-checks them. */
     void forgetSections (suite::SectionType type, const suite::SectionMap& map)
     {
@@ -98,6 +118,8 @@ public:
 
 private:
     void timerCallback() override;
+    juce::CriticalSection historyLock;
+    std::vector<FixRecord> fixHistory;
 
     struct AtomicStat
     {
