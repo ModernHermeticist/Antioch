@@ -15,6 +15,7 @@ namespace pm
     inline juce::String levelId (int t)   { return "lvl_" + juce::String (t); }
     inline juce::String lowCutId (int t)  { return "lc_" + juce::String (t); }
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
+    inline const juce::String roleId { "role" }, trimId { "trim" };   // role: 0 = not set, k + 1 = roles()[k]
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
 
     inline double morphQuarters (int i) { static const double q[] = { 0.0, 0.25, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
@@ -40,6 +41,32 @@ namespace pm
             { "Atmos & FX",           { { { 0, lo, hi }, { -3, lo, hi }, { 3, lo, hi }, { 0, lo, hi }, { -6, lo, hi }, { 0, lo, hi } } }, false, 0, true, { -3, lo, hi } },
         };
         return r;
+    }
+
+    /** Auto-role: a role index from a track name ("Kick", "Sub Bass", "Lead 2", "Vox chop"...), or -1. */
+    inline int roleFromTrackName (const juce::String& trackName)
+    {
+        const auto n = " " + trackName.toLowerCase().replaceCharacters ("_-.", "   ") + " ";
+        auto any = [&n] (std::initializer_list<const char*> words)
+        {
+            for (auto* w : words) if (n.contains (w)) return true;
+            return false;
+        };
+        if (any ({ "kick", " bd ", "bassdrum" }))                                              return 1;
+        if (any ({ "vox", "vocal", "voc ", "acap", "voice", "chop" }))                        return 6;
+        if (any ({ "bass", " sub", "reese" }))                                                 return 2;
+        if (any ({ "hat", " hh", "perc", "clap", "snare", "ride", "shaker", "top", "cymbal", "tamb" })) return 3;
+        if (any ({ "fx", "atmos", "riser", "sweep", "noise", "impact", "crash", "downlift", "texture" })) return 7;
+        if (any ({ "lead", "saw", "melody", "arp", "hook", "synth" }))                        return 5;
+        if (any ({ "pad", "chord", "string", "keys", "piano", "pluck", "stab" }))             return 4;
+        return -1;
+    }
+
+    /** Rough mix: where each role sits relative to the kick, in LU (drop loudness). */
+    inline float roughMixOffset (int role)
+    {
+        static const float offsets[] = { 0.0f, 0.0f, -2.0f, -10.0f, -7.0f, -4.0f, -1.0f, -12.0f };
+        return juce::isPositiveAndBelow (role, 8) ? offsets[role] : 0.0f;
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout layout()
@@ -68,6 +95,13 @@ namespace pm
             l.add (std::make_unique<AudioParameterFloat> (id (highCutId (t)), name + " High Cut", hc, highCutOff, hzText (highCutOff)));
         }
         l.add (std::make_unique<AudioParameterBool> (id (followId), "Follow Ouroboros", true));
+        {
+            StringArray roleNames { "Not set" };
+            for (const auto& r : roles()) roleNames.add (r.name);
+            l.add (std::make_unique<AudioParameterChoice> (id (roleId), "Track Role", roleNames, 0));
+        }
+        l.add (std::make_unique<AudioParameterFloat> (id (trimId), "Trim", NormalisableRange<float> (-24.0f, 12.0f), 0.0f,
+                                                      Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));
         l.add (std::make_unique<AudioParameterBool> (id (laterOnId), "Separate Settings for Drop 2+", false));
         l.add (std::make_unique<AudioParameterChoice> (id (morphId), "Morph", StringArray { "Instant", "1/4 beat", "1 beat", "1 bar" }, 1));
         l.add (std::make_unique<AudioParameterBool> (id (rampId), "Ramp Through Builds", true));

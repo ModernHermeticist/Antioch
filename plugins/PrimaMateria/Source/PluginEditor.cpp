@@ -34,6 +34,11 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
         addAndMakeVisible (*k);
     }
 
+    trim = std::make_unique<Knob> (p.apvts, pm::trimId, "Trim", accent);
+    trim->maxHeight = 60;
+    trim->slider.setTooltip ("Track level after everything else. Mentalism's Rough mix sets it for the track's role.");
+    addAndMakeVisible (*trim);
+
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &morph, &gap, &status })
         addAndMakeVisible (c);
@@ -75,7 +80,15 @@ void PrimaMateriaEditor::timerCallback()
                                              : "No Ouroboros: passing audio unchanged";
     }
     status.setColour (juce::Label::textColourId, t >= 0 ? sectionColour ((suite::SectionType) juce::jmin (t, pm::numTypes - 1)) : Colours::dimText);
+    const auto lufs = processor.measuredLufs();
+    if (lufs > -70.0f)
+        text << "   |   Drop loudness " << juce::String (lufs, 1) << " LUFS";
     status.setText (text, juce::dontSendNotification);
+
+    // The role (also set automatically from the track's name).
+    const auto role = processor.getRole();
+    if (role >= 0 && roleBox.getSelectedId() != role + 1)
+        roleBox.setSelectedId (role + 1, juce::dontSendNotification);
 }
 
 void PrimaMateriaEditor::paint (juce::Graphics& g)
@@ -117,6 +130,7 @@ void PrimaMateriaEditor::resized()
     laterOn.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 30).translated (0, 8));
     morph.setBounds (controls.removeFromLeft (170));
     gap.setBounds (controls.removeFromLeft (170));
+    trim->setBounds (controls.removeFromLeft (130).withTrimmedTop (-8));
 
     status.setBounds (bounds.removeFromBottom (30));
     bounds.removeFromBottom (6);

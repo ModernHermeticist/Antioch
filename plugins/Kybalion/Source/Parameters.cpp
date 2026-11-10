@@ -93,7 +93,7 @@ namespace Params
         layout.add (floatParam (Gate::res,     "Gate Resonance", { 0.0f, 1.0f }, 0.25f, percent()));
 
         // ---- Duck ----
-        layout.add (std::make_unique<AudioParameterChoice> (id (Duck::source), "Duck Source", StringArray { "Tempo", "Sidechain" }, 0));
+        layout.add (std::make_unique<AudioParameterChoice> (id (Duck::source), "Duck Source", StringArray { "Tempo", "Sidechain", "Suite kick" }, 0));
         layout.add (std::make_unique<AudioParameterChoice> (id (Duck::rate), "Duck Rate", StringArray { "1/2", "1/4", "1/8" }, 1));
         layout.add (floatParam (Duck::nudge, "Duck Nudge", { -30.0f, 30.0f }, 0.0f, millis()));
         layout.add (floatParam (Duck::depth, "Duck Depth", { 0.0f, 1.0f }, 0.85f,
@@ -117,6 +117,7 @@ namespace Params
         layout.add (floatParam (Duck::threshold, "Sidechain Threshold", { -48.0f, 0.0f }, -24.0f,
                                 Attr().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::breakdown), "Breakdown (no ducking)", false));
+        layout.add (std::make_unique<AudioParameterBool> (id (Duck::shareKick), "Share This Kick With the Suite", false));
         suite::SceneEngine::addParameters (layout);
 
         return layout;

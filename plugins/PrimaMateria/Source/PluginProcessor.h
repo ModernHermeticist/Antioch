@@ -6,6 +6,9 @@
 #include "Params.h"
 #include "SuiteDSP.h"
 #include "HostInfo.h"
+#include "Analysis.h"
+#include "Registry.h"
+#include <optional>
 
 class PrimaMateriaProcessor : public suite::SuiteProcessor
 {
@@ -38,6 +41,14 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyRole (int index);
+    int getRole() const { return (int) apvts.getRawParameterValue (pm::roleId)->load() - 1; }   // -1 = not set
+
+    /** This track's loudness (LUFS, gated), measured in Drop sections (or all playback without a map). */
+    float measuredLufs() const { return loudness.integrated(); }
+    SuiteStatus suiteStatus() override;
+    void trackNameChanged (const juce::String&) override;
+    /** Rough mix: the trim that puts this track at its role's level relative to the kick (nullopt = no change). */
+    std::optional<float> roughMixTrim() const;
 
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
@@ -51,9 +62,13 @@ private:
     pm::Setting settingFor (int type) const;
 
     suite::SectionFollower sections;
+    analysis::LoudnessMeter loudness;
+    juce::SmoothedValue<float> trimGain;
+    float lastTrim = 0.0f;
     std::array<suite::Svf, 2> lowCut, highCut;
     float levelDb = 0.0f, lowLog = 0.0f, highLog = 0.0f, gapGain = 1.0f;
     double sampleRate = 48000.0;
 
+    JUCE_DECLARE_WEAK_REFERENCEABLE (PrimaMateriaProcessor)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PrimaMateriaProcessor)
 };

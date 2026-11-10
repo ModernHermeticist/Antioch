@@ -41,6 +41,11 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                          { pm::levelId (pm::laterDrop), juce::jmin (6.0f, level (drop) + 1.5f) },
                          { pm::laterOnId, 1.0f } };
             }
+            case suite::Fix::RoughMix:
+            {
+                if (const auto t = roughMixTrim()) return { { pm::trimId, *t } };
+                return {};
+            }
             case suite::Fix::BuildRise:
             case suite::Fix::None:
             default: return {};
@@ -64,6 +69,10 @@ void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
     lowLog = std::log2 (pm::lowCutOff);
     highLog = std::log2 (pm::highCutOff);
     gapGain = 1.0f;
+    loudness.prepare (sampleRate);
+    lastTrim = apvts.getRawParameterValue (pm::trimId)->load();
+    trimGain.reset (sampleRate, 0.05);
+    trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (lastTrim));
 }
 
 pm::Setting PrimaMateriaProcessor::settingFor (int type) const
@@ -92,6 +101,11 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto tauSamples = morphQ > 0.0 ? (float) (morphQ / qPerSample / 3.0) : 0.0f;
     const auto glide = tauSamples > 1.0f ? 1.0f - std::exp (-1.0f / tauSamples) : 1.0f;
     const auto gapStep = 1.0f / (0.003f * sr);   // 3 ms fade in/out of the gap
+
+    // Trim (the rough mix sets it). A new trim makes the old loudness reading stale.
+    const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
+    if (std::abs (trim - lastTrim) > 0.05f) { loudness.reset(); lastTrim = trim; }
+    trimGain.setTargetValue (juce::Decibels::decibelsToGain (trim));
 
     auto* left = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
@@ -153,8 +167,13 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             const auto lp = highCut[c].lowpass (useLow ? hp : x);
             return (useHigh ? lp : (useLow ? hp : x)) * gain;
         };
-        left[n] = processChannel (left[n], 0);
-        if (right != nullptr) right[n] = processChannel (right[n], 1);
+        const auto t = trimGain.getNextValue();
+        left[n] = processChannel (left[n], 0) * t;
+        if (right != nullptr) right[n] = processChannel (right[n], 1) * t;
+
+        // Loudness for the rough mix: the drops (where everything plays), or all playback without a map.
+        if (host.playing && (! follow || typeNow == (int) T::Drop))
+            loudness.process (left[n], right != nullptr ? right[n] : left[n]);
     }
 
     currentType.store (follow ? (laterNow ? pm::laterDrop : typeNow) : -1);
@@ -163,6 +182,55 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     nowLevelDb.store (levelDb);
     nowLowCut.store (std::exp2 (lowLog));
     nowHighCut.store (std::exp2 (highLog));
+}
+
+PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
+{
+    SuiteStatus s;
+    const auto role = getRole();
+    if (role >= 0) s.flags |= suite::Status::roleSet;
+    if (apvts.getRawParameterValue (pm::followId)->load() > 0.5f) s.flags |= suite::Status::followsOuroboros;
+    const auto lufs = measuredLufs();
+    if (lufs > -70.0f) s.flags |= suite::Status::measuring;
+    s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), 0.0f };
+    return s;
+}
+
+void PrimaMateriaProcessor::trackNameChanged (const juce::String& name)
+{
+    // Auto-role: only for an instance whose role hasn't been chosen yet.
+    const auto role = pm::roleFromTrackName (name);
+    if (role < 0 || getRole() >= 0)
+        return;
+    if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+        applyRole (role);
+    else
+        juce::MessageManager::callAsync ([safe = juce::WeakReference<PrimaMateriaProcessor> (this), role]
+        {
+            if (auto* p = safe.get()) if (p->getRole() < 0) p->applyRole (role);
+        });
+}
+
+std::optional<float> PrimaMateriaProcessor::roughMixTrim() const
+{
+    const auto role = getRole();
+    const auto lufs = measuredLufs();
+    if (role <= 0 || lufs <= -60.0f)   // not set, Neutral, or nothing measured yet
+        return std::nullopt;
+
+    // Reference: the loudest measured kick track in the suite.
+    float kick = -100.0f;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Prima Materia" && (int) e.metrics[0] == 1 && e.has (suite::Status::measuring))
+            kick = std::max (kick, e.metrics[1]);
+    if (kick <= -60.0f)
+        return std::nullopt;
+
+    const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
+    const auto wanted = juce::jlimit (-24.0f, 12.0f, trim + (kick + pm::roughMixOffset (role) - lufs));
+    if (std::abs (wanted - trim) < 0.5f)
+        return std::nullopt;
+    return wanted;
 }
 
 void PrimaMateriaProcessor::applyRole (int index)
@@ -191,6 +259,7 @@ void PrimaMateriaProcessor::applyRole (int index)
     setValue (pm::highCutId (pm::laterDrop), role.later.highCut);
     setValue (pm::laterOnId, role.useLater ? 1.0f : 0.0f);
     setValue (pm::rampId, role.ramp ? 1.0f : 0.0f);
+    setValue (pm::roleId, (float) (index + 1));
     setValue (pm::gapId, (float) role.gap);
 }
 

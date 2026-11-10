@@ -72,7 +72,7 @@ private:
     juce::ComboBox presetBox;
     suite::ui::Choice source, duckRate;
     suite::ui::Knob nudge, duckDepth, duckAttack, hold, duckRelease, curve, split, threshold;
-    suite::ui::Toggle breakdown;
+    suite::ui::Toggle breakdown, shareKick;
     juce::Label sourceStatus;
     juce::TextButton fitButton { "Fit to kick" };
 

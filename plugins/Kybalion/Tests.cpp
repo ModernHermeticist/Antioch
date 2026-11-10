@@ -4,6 +4,7 @@
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "KickBus.h"
 
 using namespace suite::test;
 
@@ -265,6 +266,73 @@ int main (int argc, char** argv)
         auto none = std::make_unique<KybalionProcessor>();
         none->prepareToPlay (sampleRate, blockSize);
         check (! none->fitToKick(), "no sidechain, no kicks: nothing changes");
+    }
+
+    section ("Duck to the suite kick (no routing)");
+    {
+        suite::KickBus::withdraw();
+        const auto beat = 60.0 / 138.0;
+        // Kicks on the offbeats (an unusual pattern, so it can't be the beat grid by accident).
+        InputFn offbeatKick = [beat] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto k = std::fmod (t + 0.5 * beat, beat);   // hits at 0.5, 1.5, 2.5, 3.5 beats
+                const auto v = (float) (0.9 * std::sin (juce::MathConstants<double>::twoPi * 55.0 * k) * std::exp (-k / 0.05));
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+
+        auto kickTrack = make (false, false);
+        set (*kickTrack, Params::Duck::shareKick, 1.0f);
+        FakePlayHead head;
+        kickTrack->setPlayHead (&head);
+        render (*kickTrack, 4.0 * 4.0 * beat + 0.05, offbeatKick, nullptr, &head);   // 4 bars
+        kickTrack->setPlayHead (nullptr);
+        const auto& learned = kickTrack->kickLearner.patterns().bySection[(size_t) suite::KickPatternSet::anySection];
+        bool positionsRight = learned.count == 4;
+        for (int i = 0; positionsRight && i < 4; ++i)
+            positionsRight = std::abs (learned.positions[(size_t) i] - (0.5f + (float) i)) < 0.03f;
+        check (positionsRight, "the kick track learns its pattern (" + juce::String (learned.count) + " hits: "
+                   + juce::String (learned.positions[0], 2) + ", " + juce::String (learned.positions[1], 2) + " ...)");
+        check (suite::KickBus::read().valid, "and shares it with the suite");
+
+        auto pad = make (false, true);
+        set (*pad, Params::Duck::source, (float) Params::Duck::SuiteKick);
+        head.ppq = 0.0;
+        pad->setPlayHead (&head);
+        juce::AudioBuffer<float> out;
+        render (*pad, 2.0 * 4.0 * beat, tone (220.0f), &out, &head);
+        pad->setPlayHead (nullptr);
+        // Ducked just after each offbeat kick, open again just before the next.
+        const auto bar2 = 4.0 * beat;
+        const auto justAfter = channelRms (out, 0, bar2 + 1.5 * beat + 0.005, bar2 + 1.5 * beat + 0.03);
+        const auto before = channelRms (out, 0, bar2 + 1.5 * beat - 0.05, bar2 + 1.5 * beat - 0.01);
+        const auto onBeat = channelRms (out, 0, bar2 + 2.0 * beat + 0.005, bar2 + 2.0 * beat + 0.03);
+        check (justAfter < 0.5f * before, "another track ducks right after each shared kick (" + juce::String (justAfter, 3)
+                   + " vs " + juce::String (before, 3) + ")");
+        check (onBeat > justAfter * 1.5f, "... and not on the beat grid, where there's no kick");
+        check (pad->suiteKickAvailable.load(), "reports the suite kick as available");
+
+        suite::KickBus::withdraw();
+        auto alone = make (false, true);
+        set (*alone, Params::Duck::source, (float) Params::Duck::SuiteKick);
+        head.ppq = 0.0;
+        alone->setPlayHead (&head);
+        render (*alone, 4.0 * beat, tone (220.0f), &out, &head);
+        alone->setPlayHead (nullptr);
+        check (! alone->suiteKickAvailable.load() && channelRms (out, 0, beat + 0.005, beat + 0.03) < 0.5f * channelRms (out, 0, beat - 0.05, beat - 0.01),
+               "no shared kick yet: falls back to ducking on the beat grid");
+
+        // Auto-role: on a track called "Kick", Kybalion shares the kick and doesn't duck itself.
+        auto named = make (false, true);
+        juce::AudioProcessor::TrackProperties props;
+        props.name = juce::String ("Kick 1");
+        named->updateTrackProperties (props);
+        check (named->apvts.getRawParameterValue (Params::Duck::shareKick)->load() > 0.5f
+                   && named->apvts.getRawParameterValue (Params::duckOn)->load() < 0.5f, "a track named 'Kick' shares its kick automatically");
+        check (named->getTrackName() == "Kick 1", "knows its track name");
     }
 
     section ("Ouroboros: no ducking in breakdowns and builds");

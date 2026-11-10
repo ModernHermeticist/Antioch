@@ -9,5 +9,7 @@ target_sources(suite_shared INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandRing.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FixBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SnapshotBus.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Registry.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/KickBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuiteUI.cpp)
 target_include_directories(suite_shared INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

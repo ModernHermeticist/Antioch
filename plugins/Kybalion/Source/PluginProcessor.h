@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "KickBus.h"
 #include "Engines.h"
 #include "SectionBus.h"
 #include "Scenes.h"
@@ -60,6 +61,12 @@ public:
     bool fitToKick();
     static constexpr int kicksNeeded = 3;
 
+    /** On the kick track: learns the kick pattern and shares it (Share kick). */
+    suite::KickLearner kickLearner;
+    std::atomic<bool> suiteKickAvailable { false };   // a shared pattern is being received
+    SuiteStatus suiteStatus() override;
+    void trackNameChanged (const juce::String&) override;
+
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     void setParam (const juce::String& id, float plainValue);
@@ -72,5 +79,6 @@ private:
     juce::SmoothedValue<float> outGain;
     double position = 0.0, sampleRate = 44100.0;
 
+    JUCE_DECLARE_WEAK_REFERENCEABLE (KybalionProcessor)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KybalionProcessor)
 };

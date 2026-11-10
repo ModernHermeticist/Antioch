@@ -184,7 +184,8 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       curve (p.apvts, Params::Duck::curve, "Curve", duckColour),
       split (p.apvts, Params::Duck::split, "Split", Colours::verdigris),
       threshold (p.apvts, Params::Duck::threshold, "SC threshold", Colours::brass),
-      breakdown (p.apvts, Params::Duck::breakdown, "BREAKDOWN", Colours::ember)
+      breakdown (p.apvts, Params::Duck::breakdown, "BREAKDOWN", Colours::ember),
+      shareKick (p.apvts, Params::Duck::shareKick, "Share kick", Colours::ember)
 {
     setLookAndFeel (&lnf);
 
@@ -202,6 +203,8 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     fitButton.setTooltip ("Set Hold and Release from the kick on the sidechain, so the duck recovers as the kick's tail dies away");
     fitButton.onClick = [this] { processor.fitToKick(); };
     duckPanel.addAndMakeVisible (fitButton);
+    shareKick.setTooltip ("On the kick track: learn where the kick hits and share it, so every Kybalion set to 'Suite kick' ducks to it with no routing");
+    duckPanel.addAndMakeVisible (shareKick);
     sourceStatus.setFont (juce::FontOptions (12.0f));
     sourceStatus.setJustificationType (juce::Justification::centredLeft);
 
@@ -258,7 +261,23 @@ void KybalionEditor::timerCallback()
     duckRate.setEnabled (! wantsSidechain);
     nudge.setEnabled (! wantsSidechain);
     sourceStatus.setColour (juce::Label::textColourId, wantsSidechain && ! connected ? Colours::ember : Colours::dimText);
-    if (heard)
+    const auto sourceIndex = (int) processor.apvts.getRawParameterValue (Params::Duck::source)->load();
+    const auto sharingKick = processor.apvts.getRawParameterValue (Params::Duck::shareKick)->load() > 0.5f;
+    if (sharingKick)
+    {
+        sourceStatus.setColour (juce::Label::textColourId, Colours::ember);
+        sourceStatus.setText ("Sharing this track's kick with the suite (" + juce::String (processor.kickLearner.barsLearned()) + " bars learned)",
+                              juce::dontSendNotification);
+    }
+    else if (sourceIndex == Params::Duck::SuiteKick)
+    {
+        const auto ok = processor.suiteKickAvailable.load();
+        sourceStatus.setColour (juce::Label::textColourId, ok ? Colours::text : Colours::ember);
+        sourceStatus.setText (ok ? "Ducking to the suite kick (no routing needed)"
+                                 : "Suite kick: none shared yet, ducking on the beat grid. Turn on Share kick on the kick track.",
+                              juce::dontSendNotification);
+    }
+    else if (heard)
     {
         const auto key = suite::KeyBus::read();
         sourceStatus.setColour (juce::Label::textColourId, Colours::text);
@@ -340,6 +359,7 @@ void KybalionEditor::resized()
         breakdown.setBounds (bar.removeFromRight (130).reduced (2));
         presetBox.setBounds (bar.removeFromRight (200).reduced (2));
         fitButton.setBounds (bar.removeFromRight (110).reduced (2));
+        shareKick.setBounds (bar.removeFromRight (120).reduced (2));
         sourceStatus.setBounds (bar);
         top.removeFromTop (8);
         duckView.setBounds (top);

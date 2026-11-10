@@ -22,6 +22,7 @@ private:
     suite::ui::Choice morph, gap;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;
+    std::unique_ptr<suite::ui::Knob> trim;
     juce::Rectangle<int> gridArea;
     std::array<juce::Rectangle<int>, pm::numColumns> columns;
     int shownType = -2;

@@ -10,6 +10,7 @@
 // class wraps that with the slots. Projects saved before snapshots existed load as is.
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Registry.h"
 #include <array>
 
 namespace suite
@@ -33,7 +34,41 @@ namespace suite
         static juce::String slotName (int slot) { return juce::String::charToString ((juce::juce_wchar) ('A' + slot)); }
 
         explicit SuiteProcessor (const BusesProperties& buses) : juce::AudioProcessor (buses) { poller.startTimerHz (5); }
-        ~SuiteProcessor() override { poller.stopTimer(); }
+        ~SuiteProcessor() override
+        {
+            poller.stopTimer();
+            Registry::remove (instanceId);
+        }
+
+        //==============================================================================
+        // Suite registry: what this instance tells the rest of the suite about itself.
+
+        struct SuiteStatus { uint32_t flags = 0; std::array<float, 4> metrics {}; };
+        /** Message thread, about once a second. Override to report flags and numbers. */
+        virtual SuiteStatus suiteStatus() { return {}; }
+        /** Called when the host tells us the track's name (FL: the mixer track). */
+        virtual void trackNameChanged (const juce::String&) {}
+
+        void updateTrackProperties (const TrackProperties& properties) override
+        {
+            const auto name = properties.name.value_or (juce::String());
+            {
+                const juce::ScopedLock sl (nameLock);
+                if (name == trackName) return;
+                trackName = name;
+            }
+            trackNameChanged (name);
+        }
+
+        juce::String getTrackName() const { const juce::ScopedLock sl (nameLock); return trackName; }
+        uint32_t getInstanceId() const noexcept { return instanceId; }
+
+        /** Announces this instance now (the timer does it every second; tests call it directly). */
+        void announce()
+        {
+            const auto status = suiteStatus();
+            Registry::announce (instanceId, getName(), getTrackName(), status.flags, status.metrics);
+        }
 
         /** The plugin's own settings (what it saved before snapshots existed). */
         virtual void getPluginState (juce::MemoryBlock&) = 0;
@@ -146,11 +181,18 @@ namespace suite
         struct Poller : juce::Timer
         {
             explicit Poller (SuiteProcessor& p) : owner (p) {}
-            void timerCallback() override { owner.pollSnapshots(); }
+            void timerCallback() override
+            {
+                owner.pollSnapshots();
+                if (++ticks % 5 == 1) owner.announce();
+            }
+            int ticks = 0;
             SuiteProcessor& owner;
         };
 
-        juce::CriticalSection slotLock;
+        juce::CriticalSection slotLock, nameLock;
+        juce::String trackName;
+        const uint32_t instanceId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) + 1u;
         std::array<juce::MemoryBlock, numSnapshotSlots> slots;
         uint32_t lastSeen = SnapshotBus::latest();   // commands sent before this plugin loaded don't apply
         Poller poller { *this };

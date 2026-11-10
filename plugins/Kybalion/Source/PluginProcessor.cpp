@@ -48,6 +48,7 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
     ducker.prepare (sampleRate);
     scTrigger.prepare (sampleRate);
     kick.prepare (sampleRate);
+    kickLearner.prepare (sampleRate);
     outGain.reset (sampleRate, 0.03);
     outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (value (Params::output)));
     position = 0.0;
@@ -111,6 +112,11 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const auto scActive = scBus != nullptr && scBus->isEnabled() && scBus->getNumberOfChannels() > 0;
     sidechainConnected.store (scActive);
     const auto useSidechain = (int) value (Duck::source) == Duck::Sidechain && scActive;
+    const auto useSuiteKick = (int) value (Duck::source) == Duck::SuiteKick;
+    const auto sharing = value (Duck::shareKick) > 0.5f && host.playing && host.hasPpq;
+    const auto suiteKick = useSuiteKick ? suite::KickBus::read() : suite::KickPatternSet {};
+    suiteKickAvailable.store (suiteKick.valid);
+    if (! sharing) kickLearner.interrupt();
     const auto scBuffer = scActive ? getBusBuffer (buffer, true, 1) : juce::AudioBuffer<float>();
     const auto threshold = juce::Decibels::decibelsToGain (value (Duck::threshold));
     const auto duckRateQ = Duck::rateQuarters ((int) value (Duck::rate));
@@ -132,6 +138,16 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         auto l = left[n];
         auto r = right != nullptr ? right[n] : l;
 
+        // On the kick track: learn where the kick hits (from this track's own audio, before any processing).
+        int typeHere = -1;
+        if ((sharing || useSuiteKick) && haveSections)
+        {
+            const auto sec = sections.locate (position, barQ);
+            typeHere = sec.valid ? (int) sec.type : -1;
+        }
+        if (sharing)
+            kickLearner.process (0.5f * (l + r), position, barQ, typeHere, threshold);
+
         if (gateEnabled)
             gate.process (position, l, r);
 
@@ -147,6 +163,13 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         if (useSidechain)
         {
             ms = scTrigger.process (sc, threshold);
+        }
+        else if (useSuiteKick && suiteKick.valid)
+        {
+            // Duck on the shared kick pattern for this section (the nudge still applies).
+            auto phase = std::fmod (position - nudgeQ, barQ);
+            if (phase < 0.0) phase += barQ;
+            ms = suiteKick.msSinceHit (typeHere, phase, barQ, msPerQ);
         }
         else
         {
@@ -183,6 +206,45 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     duckMs.store (lastMs);
     currentSection.store (haveSections ? sectionNow : -1);
     autoBreakdown.store (pausedNow);
+}
+
+KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
+{
+    SuiteStatus s;
+    const auto source = (int) value (Params::Duck::source);
+    if (source == Params::Duck::Sidechain) s.flags |= suite::Status::sidechainWanted;
+    if (sidechainConnected.load()) s.flags |= suite::Status::sidechainConnected;
+    if (value (Params::follow) > 0.5f) s.flags |= suite::Status::followsOuroboros;
+    if (value (Params::Duck::shareKick) > 0.5f)
+    {
+        s.flags |= suite::Status::kickSource;
+        if (kickLearner.patterns().valid)
+            suite::KickBus::publish (kickLearner.patterns());   // keep the shared pattern fresh while stopped
+    }
+    s.metrics[0] = (float) source;
+    s.metrics[1] = suiteKickAvailable.load() ? 1.0f : 0.0f;
+    return s;
+}
+
+void KybalionProcessor::trackNameChanged (const juce::String& name)
+{
+    // Auto-role: a Kybalion on a track called "Kick" shares its kick with the suite.
+    const auto n = name.toLowerCase();
+    if ((n.contains ("kick") || n.startsWith ("bd")) && value (Params::Duck::shareKick) < 0.5f)
+    {
+        auto apply = [] (KybalionProcessor& p)
+        {
+            p.setParam (Params::Duck::shareKick, 1.0f);
+            p.setParam (Params::duckOn, 0.0f);   // the kick itself doesn't duck
+        };
+        if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+            apply (*this);
+        else
+            juce::MessageManager::callAsync ([safe = juce::WeakReference<KybalionProcessor> (this), apply]
+            {
+                if (auto* p = safe.get()) apply (*p);
+            });
+    }
 }
 
 bool KybalionProcessor::fitToKick()

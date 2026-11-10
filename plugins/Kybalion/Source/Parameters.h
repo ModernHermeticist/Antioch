@@ -47,8 +47,9 @@ namespace Params
         inline const juce::String split     { "d_split" };
         inline const juce::String threshold { "d_threshold" };
         inline const juce::String breakdown { "d_breakdown" };
+        inline const juce::String shareKick { "d_sharekick" };   // on the kick track: share its pattern with the suite
 
-        enum Source { Tempo = 0, Sidechain = 1 };
+        enum Source { Tempo = 0, Sidechain = 1, SuiteKick = 2 };
         double rateQuarters (int index);
         constexpr float fullBandBelow = 30.0f; // split values under this mean "full band"
 
