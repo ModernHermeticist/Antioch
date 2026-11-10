@@ -116,6 +116,61 @@ int main (int argc, char** argv)
         check (rmsBetween (audio, 12.02, 12.5) > 0.05f, "then the drop hits");
     }
 
+    section ("Build risers");
+    {
+        // testMap: Build bars 5-6 = 8-12 s at 120 BPM. Only the riser on.
+        auto riserOnly = [] ()
+        {
+            auto p = make();
+            for (const auto& id : { AzothProcessor::impactId, AzothProcessor::crashId, AzothProcessor::swellId, AzothProcessor::downId,
+                                    AzothProcessor::rollId })
+                set (*p, id, 0.0f);
+            set (*p, AzothProcessor::grooveCrashId, 0.0f);
+            return p;
+        };
+        suite::SectionBus::publish (testMap());
+        auto p = riserOnly();
+        set (*p, AzothProcessor::riserId, 1.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 12.5, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        check (rmsBetween (audio, 0.0, 7.95) < 1.0e-6f, "silent before the build");
+        check (rmsBetween (audio, 11.0, 11.9) > 4.0f * rmsBetween (audio, 8.4, 9.0), "rises in level through the build");
+        float peakHz = 0.0f, peakLevel = 0.0f;
+        for (float hz = 180.0f; hz <= 280.0f; hz += 1.0f)
+            if (const auto l = bandLevel (audio, hz, 8.1, 8.5); l > peakLevel) { peakLevel = l; peakHz = hz; }
+        check (peakHz > 214.0f && peakHz < 227.0f, "starts on the song's root (A3 = 220 Hz, from the key): strongest at " + juce::String (peakHz, 0) + " Hz");
+        check (bandLevel (audio, 220.0f, 11.5, 11.9) < 0.5f * bandLevel (audio, 220.0f, 8.6, 9.0) * (rmsBetween (audio, 11.5, 11.9) / rmsBetween (audio, 8.6, 9.0)),
+               "has swept up away from the root by the end");
+        check (rmsBetween (audio, 12.05, 12.5) < 1.0e-6f, "stops at the drop");
+
+        // Track riser: the track's own audio pitched up through the build.
+        auto q = riserOnly();
+        set (*q, AzothProcessor::riserId, 0.0f);
+        set (*q, AzothProcessor::trackRiserId, 1.0f);
+        head.ppq = 0.0;
+        q->setPlayHead (&head);
+        auto tone = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * (double) (pos + i) / sampleRate);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        render (*q, 12.5, tone, &audio, &head);
+        q->setPlayHead (nullptr);
+        // Near the end of the build the shift is ~11 semitones: 440 Hz -> ~830 Hz.
+        const auto shifted = bandLevel (audio, 830.0f, 11.6, 11.95), before = bandLevel (audio, 830.0f, 6.0, 7.0);
+        check (shifted > 0.05f && before < 0.005f, "the track's audio rises an octave across the build ("
+                   + juce::String (shifted, 3) + " at 830 Hz, before " + juce::String (before, 4) + ")");
+        check (std::abs (bandLevel (audio, 440.0f, 6.0, 7.0) - 0.3f) < 0.01f, "the track passes through untouched before the build");
+        check (bandLevel (audio, 830.0f, 12.6 - 0.5, 12.5) < 0.2f * shifted, "and lets go at the drop");
+    }
+
     section ("Reverse swells from the track's own audio");
     {
         // Groove bars 1-2 (0-4 s), Drop bars 3-4 (4-8 s); a single pluck on the drop's downbeat.

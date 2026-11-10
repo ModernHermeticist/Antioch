@@ -16,12 +16,15 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       rollPitch (p.apvts, AzothProcessor::rollPitchId, "Roll pitch rise", accent),
       laterDrops (p.apvts, AzothProcessor::laterDropsId, "Bigger later drops", suite::ui::sectionColour (suite::SectionType::Drop)),
       swellLen (p.apvts, AzothProcessor::swellLenId, "Swell length"),
-      rollStart (p.apvts, AzothProcessor::rollStartId, "Roll starts"),
+      rollStart (p.apvts, AzothProcessor::rollStartId, "Roll & riser start"),
       gap (p.apvts, AzothProcessor::gapId, "Gap before drop"),
       follow (p.apvts, AzothProcessor::followId, "Follow Ouroboros", Colours::ember),
       grooveCrash (p.apvts, AzothProcessor::grooveCrashId, "Crash into groove", accent),
       reverseOn (p.apvts, AzothProcessor::reverseOnId, "Reverse swells", Colours::amethyst),
       reverseLevel (p.apvts, AzothProcessor::reverseLevelId, "Level", Colours::amethyst),
+      riser (p.apvts, AzothProcessor::riserId, "Tonal riser", sectionColour (suite::SectionType::Build)),
+      trackRiser (p.apvts, AzothProcessor::trackRiserId, "Track riser", sectionColour (suite::SectionType::Build)),
+      riserRange (p.apvts, AzothProcessor::riserRangeId, "Riser range"),
       reverseTarget (p.apvts, AzothProcessor::reverseTargetId, "Swell into"),
       reverseLength (p.apvts, AzothProcessor::reverseLengthId, "Length")
 {
@@ -38,14 +41,20 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     next.setFont (juce::FontOptions (20.0f, juce::Font::bold));
     for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch, &laterDrops,
                                                              &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
-                                                             &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote })
+                                                             &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
+                                                             &riser, &trackRiser, &riserRange, &riserNote })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
     reverseNote.setJustificationType (juce::Justification::centredLeft);
     reverseNote.setText ("Put Azoth on the vocal or lead track: it captures the first beat of each target section from "
                          "this track's own audio and swells its reversed reverb into it. Adds 3 s of latency (FL compensates).",
                          juce::dontSendNotification);
-    setSize (980, 700);
+    riserNote.setFont (juce::FontOptions (12.0f));
+    riserNote.setJustificationType (juce::Justification::centredLeft);
+    riserNote.setText ("Across each Build: a tonal riser on the song's root and fifth sweeping up, and the track riser, "
+                       "this track's own audio pitched up to an octave and faded in. Both stop for the gap before the drop.",
+                       juce::dontSendNotification);
+    setSize (980, 840);
     timerCallback();
     startTimerHz (10);
 }
@@ -78,6 +87,7 @@ void AzothEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "AZOTH", "automatic transition FX", accent);
     drawPanel (g, elementArea, "Transitions");
     drawPanel (g, shapeArea, "Shape", accent);
+    drawPanel (g, riserArea, "Build risers", sectionColour (suite::SectionType::Build));
     drawPanel (g, reverseArea, "Reverse swells from this track", Colours::amethyst);
 }
 
@@ -94,7 +104,15 @@ void AzothEditor::resized()
     bounds.removeFromTop (12);
     shapeArea = bounds.removeFromTop (150);
     bounds.removeFromTop (12);
+    riserArea = bounds.removeFromTop (130);
+    bounds.removeFromTop (12);
     reverseArea = bounds;
+
+    auto ri = riserArea.reduced (10, 6).withTrimmedTop (14);
+    riser.setBounds (ri.removeFromLeft (120));
+    riserRange.setBounds (ri.removeFromLeft (160));
+    trackRiser.setBounds (ri.removeFromLeft (120));
+    riserNote.setBounds (ri.reduced (8, 0));
 
     auto rv = reverseArea.reduced (10, 6).withTrimmedTop (14);
     reverseOn.setBounds (rv.removeFromLeft (170).withSizeKeepingCentre (160, 30));

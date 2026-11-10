@@ -23,7 +23,10 @@ namespace
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::downId), "Downlifter", NormalisableRange<float> (0.0f, 1.0f), 0.6f, percent));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::rollId), "Snare Roll", NormalisableRange<float> (0.0f, 1.0f), 0.6f, percent));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::swellLenId), "Swell Length", StringArray { "1 beat", "2 beats", "1 bar", "2 bars" }, 1));
-        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollStartId), "Roll Starts", StringArray { "Whole build", "Second half", "Last 4 bars" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::riserId), "Tonal Riser", NormalisableRange<float> (0.0f, 1.0f), 0.4f, percent));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::riserRangeId), "Riser Range", StringArray { "1 octave", "2 octaves" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::trackRiserId), "Track Riser", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollStartId), "Roll and Riser Start", StringArray { "Whole build", "Second half", "Last 4 bars" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::rollPitchId), "Roll Pitch Rise", NormalisableRange<float> (0.0f, 12.0f, 1.0f), 7.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return "+" + String (roundToInt (v)) + " st"; })));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::gapId), "Gap Before Drop", StringArray { "None", "1/2 beat", "1 beat" }, 0));
@@ -89,6 +92,9 @@ void AzothProcessor::prepareToPlay (double newSampleRate, int)
     crash.prepare (sr);
     downlifter.prepare (sr);
     for (auto& s : snares) s.prepare (sr);
+    riser.prepare (sr);
+    for (auto& t : trackShift) t.prepare (sampleRate, 0.06f);
+    trackRiseMix = 0.0f;
     swellFilter.reset();
     previousIndex = -1;
     rollPos = -1.0e9;
@@ -153,6 +159,9 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto gapQ = gapQuarters ((int) value (gapId));
     const auto rollStart = (int) value (rollStartId);
     const auto rollPitch = value (rollPitchId);
+    const auto riserLevel = value (riserId), trackRiser = value (trackRiserId);
+    const auto riserRange = (int) value (riserRangeId) == 1 ? 24.0f : 12.0f;
+    const auto riserRootHz = rootHz * 4.0f;   // octave 3
 
     // Auditions from the UI play immediately.
     if (const auto a = pendingAudition.exchange (0))
@@ -181,6 +190,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         float fx = 0.0f;
+        float rise = -1.0f;   // progress through this build's riser, or -1
 
         if (follow)
         {
@@ -200,6 +210,16 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             if (sec.valid)
             {
                 const auto end = sec.endQ - (sec.hasNext && sec.next == T::Drop ? gapQ : 0.0);
+
+                // Risers across the Build (same start as the roll), stopping for the gap.
+                if (sec.type == T::Build)
+                {
+                    const auto startQ = rollStart == 0 ? sec.startQ
+                                      : rollStart == 1 ? 0.5 * (sec.startQ + sec.endQ)
+                                                       : juce::jmax (sec.startQ, sec.endQ - 4.0 * barQ);
+                    if (pos >= startQ && pos < end)
+                        rise = (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ));
+                }
 
                 // Snare roll through the Build, accelerating in steps and rising in pitch.
                 if (sec.type == T::Build && rollLevel > 0.0f)
@@ -248,6 +268,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         fx += impact.process() + crash.process() + downlifter.process();
+        fx += riser.process (rise, riserRootHz, riserRange, riserLevel);
         for (auto& s : snares) fx += s.process();
 
         fx *= level;
@@ -294,8 +315,27 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             if (dryDelayPos >= latency) dryDelayPos = 0;   // the delay line is exactly `latency` long
         }
 
+        // Track riser: this track's own audio, pitched up to an octave across the build and faded in.
+        {
+            const auto target = rise >= 0.0f ? trackRiser * rise * rise : 0.0f;
+            trackRiseMix += 0.002f * (target - trackRiseMix);
+            if (trackShiftCounter-- <= 0)
+            {
+                trackShiftCounter = 32;
+                for (auto& t : trackShift) t.setSemitones (rise >= 0.0f ? 12.0f * rise : 0.0f);
+            }
+            const auto shiftedL = trackShift[0].process (left[n]);
+            const auto shiftedR = trackShift[1].process (right != nullptr ? right[n] : left[n]);
+            if (trackRiseMix > 1.0e-5f)
+            {
+                left[n] += shiftedL * trackRiseMix;
+                if (right != nullptr) right[n] += shiftedR * trackRiseMix;
+            }
+        }
+
         left[n] += fx;
         if (right != nullptr) right[n] += fx;
+        lastRise.store (rise);
     }
 
     if (reverseOn)

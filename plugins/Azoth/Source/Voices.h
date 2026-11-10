@@ -115,4 +115,43 @@ namespace azoth
         float sr = 48000.0f, t = 0.0f, gain = 0.0f, ratio = 1.0f, phase = 0.0f;
         bool active = false;
     };
+
+    /** Tonal riser: detuned saws on the song's root and fifth, sweeping up over the build
+        while a filter opens. `progress` runs 0..1 across the riser; silent outside. */
+    class Riser
+    {
+    public:
+        void prepare (float sampleRate)
+        {
+            sr = sampleRate;
+            for (size_t i = 0; i < saws.size(); ++i) saws[i].setPhase ((float) i * 0.23f);
+            filter.reset();
+            counter = 0;
+        }
+
+        float process (float progress, float rootHz, float rangeSemitones, float level) noexcept
+        {
+            if (progress < 0.0f || progress >= 1.0f || level <= 0.0f)
+                return 0.0f;
+            if (counter-- <= 0)
+            {
+                counter = 32;
+                const auto bend = std::exp2 (rangeSemitones * std::pow (progress, 1.6f) / 12.0f);
+                const float detune[] = { 1.0f, 1.007f, 0.993f, 1.5f, 1.505f };
+                for (size_t i = 0; i < saws.size(); ++i)
+                    saws[i].setFrequency (rootHz * bend * detune[i], sr);
+                filter.set (300.0f * std::pow (40.0f, progress), 0.9f, sr);
+            }
+            float x = 0.0f;
+            for (size_t i = 0; i < saws.size(); ++i)
+                x += saws[i].process() * (i < 3 ? 1.0f : 0.5f);
+            return filter.lowpass (x) * 0.12f * level * std::pow (progress, 1.5f);
+        }
+
+    private:
+        float sr = 48000.0f;
+        std::array<suite::SawOsc, 5> saws;
+        suite::Svf filter;
+        int counter = 0;
+    };
 }

@@ -20,12 +20,14 @@ private:
     suite::ui::Knob impact, crash, swell, down, roll, level, tone, rollPitch, laterDrops;
     suite::ui::Choice swellLen, rollStart, gap;
     suite::ui::Toggle follow, grooveCrash, reverseOn;
-    suite::ui::Knob reverseLevel;
+    suite::ui::Knob reverseLevel, riser, trackRiser;
+    suite::ui::Choice riserRange;
+    juce::Label riserNote;
     suite::ui::Choice reverseTarget, reverseLength;
     juce::Label reverseNote;
     std::array<juce::TextButton, 4> auditions;
     juce::Label status, next;
-    juce::Rectangle<int> elementArea, shapeArea, reverseArea;
+    juce::Rectangle<int> elementArea, shapeArea, riserArea, reverseArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AzothEditor)
 };

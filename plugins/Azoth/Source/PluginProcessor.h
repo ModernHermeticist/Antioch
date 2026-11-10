@@ -42,7 +42,7 @@ public:
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },
         impactId { "impact" }, crashId { "crash" }, swellId { "swell" }, downId { "downlifter" }, rollId { "roll" },
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
-        laterDropsId { "laterdrops" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
+        laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
     static constexpr double lookaheadSeconds = 3.0;
     static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }
 
@@ -63,6 +63,7 @@ public:
     std::atomic<int> eventsFired { 0 }, snareHits { 0 };
     std::atomic<float> lastImpactLevel { 0.0f };
     std::atomic<bool> mapAvailable { false };
+    std::atomic<float> lastRise { -1.0f };   // riser progress, for tests and the UI
     std::atomic<int> nextType { -1 };
     std::atomic<float> barsToNext { 0.0f };
 
@@ -75,6 +76,10 @@ private:
     azoth::Crash crash;
     azoth::Downlifter downlifter;
     std::array<azoth::Snare, 3> snares;
+    azoth::Riser riser;
+    std::array<suite::PitchShifter, 2> trackShift;   // the track's own audio, pitched up through builds
+    float trackRiseMix = 0.0f;
+    int trackShiftCounter = 0;
     int nextSnare = 0;
     suite::Noise swellNoise { 0x51E11u };
     suite::Svf swellFilter;
