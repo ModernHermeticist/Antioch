@@ -419,6 +419,18 @@ int main (int argc, char** argv)
         auto q = make (true, true);
         q->setStateInformation (state.getData(), (int) state.getSize());
         check (std::abs (q->apvts.getRawParameterValue (Params::Gate::step (3))->load() - 1.0f) < 1.0e-6f, "gate steps restored");
+
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("KybalionPatterns");
+        folder.deleteRecursively();
+        set (*p, Params::Gate::step (5), 0.5f);
+        check (p->saveGatePattern (folder, "My/groove"), "a pattern saves as a file");
+        const auto mine = KybalionProcessor::loadGatePatterns (folder);
+        check (mine.size() == 1 && std::abs (mine[0].second[5] - 0.5f) < 1.0e-3f && std::abs (mine[0].second[3] - 1.0f) < 1.0e-3f,
+               "and loads back with its steps (" + (mine.empty() ? juce::String ("none") : mine[0].first) + ")");
+        auto r = make (true, true);
+        if (! mine.empty()) r->applySteps (mine[0].second);
+        check (std::abs (r->apvts.getRawParameterValue (Params::Gate::step (5))->load() - 0.5f) < 1.0e-3f, "and applies in another project");
+        folder.deleteRecursively();
     }
 
     if (outDir != juce::File())

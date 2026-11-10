@@ -62,6 +62,9 @@ private:
     juce::Component gatePanel;
     StepGrid grid;
     juce::ComboBox patternBox;
+    std::vector<std::pair<juce::String, std::array<float, Params::numSteps>>> userPatterns;
+    std::unique_ptr<juce::AlertWindow> nameWindow;
+    void fillPatterns();
     juce::TextButton randomButton { "Randomise" };
     suite::ui::Choice gateRate, fills, fillStyle;
     suite::ui::Knob length, attack, release, depth, swing, stereo, filter, res;

@@ -192,9 +192,31 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     setLookAndFeel (&lnf);
 
     patternBox.setTextWhenNothingSelected ("Gate pattern...");
-    for (size_t i = 0; i < Params::Gate::patterns().size(); ++i)
-        patternBox.addItem (Params::Gate::patterns()[i].name, (int) i + 1);
-    patternBox.onChange = [this] { if (patternBox.getSelectedId() > 0) processor.applyGatePattern (patternBox.getSelectedId() - 1); };
+    fillPatterns();
+    patternBox.onChange = [this]
+    {
+        const auto id = patternBox.getSelectedId();
+        const auto builtIn = (int) Params::Gate::patterns().size();
+        if (id <= 0) return;
+        if (id == 999)
+        {
+            patternBox.setSelectedId (0, juce::dontSendNotification);
+            nameWindow = std::make_unique<juce::AlertWindow> ("Save gate pattern", "Name for this pattern:", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My gate");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr && nameWindow->getTextEditorContents ("name").trim().isNotEmpty())
+                    processor.saveGatePattern (KybalionProcessor::userPatternFolder(), nameWindow->getTextEditorContents ("name").trim());
+                nameWindow.reset();
+                fillPatterns();
+            }));
+            return;
+        }
+        if (id <= builtIn) processor.applyGatePattern (id - 1);
+        else if (id - builtIn - 1 < (int) userPatterns.size()) processor.applySteps (userPatterns[(size_t) (id - builtIn - 1)].second);
+    };
     randomButton.onClick = [this] { juce::Random rng; processor.randomiseGate (rng); patternBox.setSelectedId (0, juce::dontSendNotification); };
 
     presetBox.setTextWhenNothingSelected ("Ducking preset...");
@@ -317,6 +339,22 @@ void KybalionEditor::paint (juce::Graphics& g)
                               { gb.withTrimmedTop (310), "Shape" } }, gateColour);
     const auto db = duckPanel.getLocalBounds();
     drawSection (duckPanel, { { db.withHeight (250), "Ducking curve" }, { db.withTrimmedTop (260), "Shape & trigger" } }, duckColour);
+}
+
+void KybalionEditor::fillPatterns()
+{
+    patternBox.clear (juce::dontSendNotification);
+    for (size_t i = 0; i < Params::Gate::patterns().size(); ++i)
+        patternBox.addItem (Params::Gate::patterns()[i].name, (int) i + 1);
+    userPatterns = KybalionProcessor::loadGatePatterns (KybalionProcessor::userPatternFolder());
+    if (! userPatterns.empty())
+    {
+        patternBox.addSeparator();
+        for (size_t i = 0; i < userPatterns.size(); ++i)
+            patternBox.addItem ("Mine: " + userPatterns[i].first, (int) (Params::Gate::patterns().size() + i + 1));
+    }
+    patternBox.addSeparator();
+    patternBox.addItem ("Save this pattern...", 999);
 }
 
 void KybalionEditor::resized()

@@ -144,6 +144,11 @@ the last few bars.
   breakdown) plays a fill instead of the pattern: **Stutter** (1/32 chops), **Half-time**,
   **Gap** (silence on the last beat), **Roll** (1/8 → 1/16 → 1/32), or **Auto**, which
   alternates roll and gap into drops and uses half-time into breakdowns.
+- **Your own patterns:** draw a pattern and choose *Save this pattern…* in the pattern
+  list. It's saved as a file (in *Antioch Suite/Gate patterns*) and listed as *"Mine: …"*
+  in every project.
+- **Suite groove:** when Correspondence's *Groove* is a shuffle, the gate swings with it
+  (unless its own Swing is set higher), so gated pads sit with the exported MIDI.
 
 ![Kybalion polarity tab](docs/kybalion_polarity.png)
 
@@ -294,6 +299,11 @@ Map out your song once, and the rest of the suite follows it with no automation:
   broadcasts it, Mentalism sets the loudness target, and Antioch, Kybalion, Vibration and
   Solve et Coagula turn on their suggested scenes. FL's tempo can't be set from a plugin,
   so the panel tells you which tempo to set.
+  **Mood** (As the style, Euphoric, Hopeful, Melancholic, Dark) colours the new song:
+  Correspondence takes the mood's progression (Euphoria, Ascension, Heartbreak or
+  Driving) instead of the style's, Ouroboros sets the intensity (Euphoric 120%) and draws
+  deeper breakdowns for Melancholic and Dark, and Vibration's drop scene gets brighter or
+  darker.
 - **Arrange…** builds a map for you: choose the length in bars (it shows the duration at
   the current tempo), 1–3 drops, a DJ-friendly 32-bar or short 16-bar intro and outro,
   and a long or short first breakdown. Every section is a whole number of 8-bar phrases
@@ -613,6 +623,16 @@ clip, plus *"<key> - all parts.mid"*: one MIDI file with the song's chords, bass
 lead on separate tracks and the sections as markers. Drag it into FL to get the whole song
 in one go.
 
+**Your song's name.** Type a title and artist in Song patterns. Export all then names the
+folder *"Artist - Title (Am 138 BPM)"* and adds **Song sheet.txt**: title, artist, key,
+tempo, the progression, the length and every section with its start time and the key
+change. Both are saved with the project.
+
+**Groove** (Song patterns): *Straight*, *Trance shuffle* or *Hard shuffle* delays the off
+16ths of every exported clip (by 15% or 30% of a 16th). **Accents as CC 74** (on by
+default) also writes each note's accent as a CC 74 value just before it, so a synth's
+filter cutoff can follow the groove: map CC 74 to cutoff in your synth.
+
 ### Melodia: lead melodies
 
 Correspondence also writes a lead melody over the progression, shown in orange in the
@@ -641,6 +661,17 @@ chord). The motif becomes the call of every phrase as you played it, fitted to t
 register. The answers keep its rhythm and shape, start on a chord tone and follow the
 chords. It's saved with the project and goes into the MELODY and SONG LEAD exports.
 **Forget motif** goes back to generated melodies.
+
+**Drop anything MIDI.** The same panel works out what you dropped:
+
+- **A chord clip** (most onsets have three or more notes) sets the key, the number of
+  chords, their degrees (with major or minor where they're not the key's own) and how
+  long each lasts. Drop your favourite progression and the whole engine follows it.
+- **Two or more melody clips** teach Melodia your **melodic DNA**: where in two bars you
+  like to put notes, and how far you like to move between them. New melodies use your
+  rhythm and your kind of steps and leaps, over any chords. It's saved with the project;
+  **Forget my DNA** clears it.
+- **One melody clip** becomes the motif, as above.
 
 ## Solve et Coagula: vocal unmasking
 
@@ -839,6 +870,16 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   it, in key, with chord tones on the beat; in the song it plays with the full lead in the
   drop, not under the breakdown teaser, and can be switched off; Export all gains the
   Counter clip and track.
+- **Learning from MIDI:** an Am F C G block-chord clip sets A minor, 4 chords, i VI III
+  VII; two melody clips teach DNA (16 notes) that keeps their dotted rhythm, new melodies
+  land on it, it's saved and Forget clears it; Trance shuffle moves only the off 16ths;
+  exports carry one CC 74 per note (none when off); a titled song exports to
+  *"Me - Sunrise (Am 138 BPM)"* with a song sheet, and the title is saved.
+- **Mood:** a Dark song draws 20% breakdowns and sends the mood; Euphoric sets 120%
+  intensity; Melancholic gives Correspondence Heartbreak over the style's progression;
+  Vibration's drop euphoria goes up for Euphoric and down for Dark.
+- **Gate patterns:** a saved pattern is a file that loads back with its steps and applies
+  in another project.
 - **Humanise:** off-beat bass notes are accented, timing moves by at most about 5 ms,
   the same clip always humanises the same way, and 0% gives the plain pattern.
 - **DJ check:** a pad in the intro is flagged with a fix; beat-led passes; no kick in the

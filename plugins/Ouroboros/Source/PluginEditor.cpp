@@ -369,27 +369,41 @@ SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
     root.setSelectedId (10, juce::dontSendNotification);   // A
     for (const auto& sc : suite::music::scales()) scale.addItem (sc.name, scale.getNumItems() + 1);
     scale.setSelectedId (1, juce::dontSendNotification);
+    for (const auto& m : suite::sessionMoods()) mood.addItem (m.name, mood.getNumItems() + 1);
+    mood.setSelectedId (1, juce::dontSendNotification);
     style.onChange = [this] { updateInfo(); };
-    for (auto* l : { &styleLabel, &keyLabel, &info, &result })
+    mood.onChange = [this] { updateInfo(); };
+    for (auto* l : { &styleLabel, &keyLabel, &moodLabel, &info, &result })
     {
         l->setFont (juce::FontOptions (13.0f));
         addAndMakeVisible (l);
     }
     styleLabel.setText ("Style", juce::dontSendNotification);
     keyLabel.setText ("Key", juce::dontSendNotification);
+    moodLabel.setText ("Mood", juce::dontSendNotification);
     info.setJustificationType (juce::Justification::topLeft);
     info.setColour (juce::Label::textColourId, Colours::dimText);
     result.setColour (juce::Label::textColourId, Colours::moss);
     go.onClick = [this]
     {
-        sentSeq = processor.startSession (style.getSelectedId() - 1, root.getSelectedId() - 1, scale.getSelectedId() - 1);
+        sentSeq = processor.startSession (style.getSelectedId() - 1, root.getSelectedId() - 1, scale.getSelectedId() - 1,
+                                           mood.getSelectedId() - 1);
         timerCallback();
     };
-    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &go })
+    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &mood, &go })
         addAndMakeVisible (c);
     updateInfo();
-    setSize (460, 250);
+    setSize (460, 290);
     startTimerHz (4);
+}
+
+juce::String SessionPanel::moodText() const
+{
+    const auto& m = suite::sessionMood (mood.getSelectedId() - 1);
+    if (m.progression < 0) return {};
+    return juce::String ("\nMood: ") + m.name + " - intensity " + juce::String (m.intensity) + "%"
+         + (m.breakdownEnergy >= 0 ? ", deeper breakdowns" : "")
+         + (m.dropEuphoria > 0.0f ? ", brighter drop leads" : m.dropEuphoria < 0.0f ? ", darker drop leads" : "") + ".";
 }
 
 void SessionPanel::updateInfo()
@@ -400,7 +414,8 @@ void SessionPanel::updateInfo()
     info.setText (juce::String (bars) + " bars (" + juce::String ((int) seconds / 60) + ":" + juce::String ((int) seconds % 60).paddedLeft ('0', 2)
                       + "), " + juce::String (s.drops) + (s.drops == 1 ? " drop" : " drops")
                       + (s.finalLift > 0 ? ", key up for the last drop" : "") + ".\nSet FL's tempo to " + juce::String (juce::roundToInt (s.bpm))
-                      + " BPM. This replaces the song map and the other plugins' key, progression, loudness target and scenes.",
+                      + " BPM. This replaces the song map and the other plugins' key, progression, loudness target and scenes."
+                      + moodText(),
                   juce::dontSendNotification);
 }
 
@@ -425,6 +440,10 @@ void SessionPanel::resized()
     root.setBounds (row2.removeFromLeft (90).reduced (0, 0));
     row2.removeFromLeft (8);
     scale.setBounds (row2);
+    r.removeFromTop (8);
+    auto row3 = r.removeFromTop (28);
+    moodLabel.setBounds (row3.removeFromLeft (60));
+    mood.setBounds (row3);
     r.removeFromTop (8);
     result.setBounds (r.removeFromBottom (22));
     auto bottom = r.removeFromBottom (32);

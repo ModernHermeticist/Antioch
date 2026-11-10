@@ -73,6 +73,38 @@ public:
     suite::KickLearner kickLearner;
     std::atomic<bool> suiteKickAvailable { false };   // a shared pattern is being received
     SuiteStatus suiteStatus() override;
+    std::atomic<float> suiteSwing { 0.0f };   // Correspondence's groove (the gate swings with it)
+
+    /** Your own gate patterns: saved as files, offered in every project. */
+    static juce::File userPatternFolder()
+    {
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Gate patterns");
+    }
+    bool saveGatePattern (const juce::File& folder, const juce::String& name) const
+    {
+        juce::StringArray steps;
+        for (int i = 0; i < Params::numSteps; ++i) steps.add (juce::String (stepParams[(size_t) i]->load(), 3));
+        folder.createDirectory();
+        return folder.getChildFile (juce::File::createLegalFileName (name) + ".gate").replaceWithText (steps.joinIntoString (","));
+    }
+    static std::vector<std::pair<juce::String, std::array<float, Params::numSteps>>> loadGatePatterns (const juce::File& folder)
+    {
+        std::vector<std::pair<juce::String, std::array<float, Params::numSteps>>> out;
+        for (const auto& f : folder.findChildFiles (juce::File::findFiles, false, "*.gate"))
+        {
+            const auto v = juce::StringArray::fromTokens (f.loadFileAsString(), ",", "");
+            if (v.size() != Params::numSteps) continue;
+            std::array<float, Params::numSteps> steps {};
+            for (int i = 0; i < Params::numSteps; ++i) steps[(size_t) i] = juce::jlimit (0.0f, 1.0f, v[i].getFloatValue());
+            out.push_back ({ f.getFileNameWithoutExtension(), steps });
+        }
+        std::sort (out.begin(), out.end(), [] (const auto& a, const auto& b) { return a.first < b.first; });
+        return out;
+    }
+    void applySteps (const std::array<float, Params::numSteps>& steps)
+    {
+        for (int i = 0; i < Params::numSteps; ++i) setParam (Params::Gate::step (i), steps[(size_t) i]);
+    }
     void trackNameChanged (const juce::String&) override;
 
 private:

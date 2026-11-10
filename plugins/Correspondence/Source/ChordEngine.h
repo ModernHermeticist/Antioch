@@ -373,12 +373,22 @@ namespace chords
         return n;
     }
 
+    /** Melodic DNA: how your leads tend to move, learned from several MIDI clips. */
+    struct MelodyDna
+    {
+        bool valid = false;
+        std::array<float, 32> onset {};   // chance of a note starting on each 16th of a 2-bar phrase
+        std::array<float, 9> steps {};    // how often the next note moves -4..+4 scale steps
+        int clips = 0, notes = 0;
+    };
+
     struct MelodySettings
     {
         MelodyStyle style = MelodyStyle::ThreeThreeTwo;
         int seed = 7;
         int octave = 5;   // the melody sits around this octave
         std::vector<Note> motif;   // a learned 2-bar motif (from a dropped MIDI clip); empty = generate
+        MelodyDna dna;             // learned style (from several clips): used when there's no motif
     };
 
     namespace detail
@@ -497,6 +507,35 @@ namespace chords
             }
             for (size_t i = 0; i < motifPitches.size(); ++i)
                 contour.push_back (i == 0 ? 0 : degreesBetween (motifPitches[i - 1], motifPitches[i], s.root, s.scale));
+        }
+        else if (m.dna.valid)
+        {
+            // Your melodic DNA: the rhythm positions you use most, and steps drawn from how you move.
+            juce::Random rng ((juce::int64) m.seed * 7919 + 13);
+            std::vector<int> starts;
+            for (int st = 0; st < 32; ++st) if (m.dna.onset[(size_t) st] >= 0.4f) starts.push_back (st);
+            if (starts.size() < 4)
+            {
+                std::vector<int> order (32);
+                for (int st = 0; st < 32; ++st) order[(size_t) st] = st;
+                std::sort (order.begin(), order.end(), [&m] (int a, int b) { return m.dna.onset[(size_t) a] > m.dna.onset[(size_t) b]; });
+                starts.assign (order.begin(), order.begin() + 6);
+                std::sort (starts.begin(), starts.end());
+            }
+            for (size_t k = 0; k < starts.size(); ++k)
+            {
+                const auto next = k + 1 < starts.size() ? starts[k + 1] : 32;
+                hits.push_back ({ starts[k], std::max (1, next - starts[k]) });
+            }
+            float total = 0.0f;
+            for (auto v : m.dna.steps) total += v;
+            for (size_t i = 0; i < hits.size(); ++i)
+            {
+                auto pick = rng.nextFloat() * std::max (1.0e-6f, total);
+                int step = 1;
+                for (int k = 0; k < 9; ++k) { pick -= m.dna.steps[(size_t) k]; if (pick <= 0.0f) { step = k - 4; break; } }
+                contour.push_back (step);
+            }
         }
         else
         {
@@ -667,6 +706,158 @@ namespace chords
 
     enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter };
 
+    //==============================================================================
+    /** Learns melodic DNA from several clips (each rebased to the bar of its first note). */
+    inline MelodyDna learnDna (const std::vector<std::vector<Note>>& clips, int root, int scale)
+    {
+        MelodyDna d;
+        int windows = 0;
+        for (const auto& clip : clips)
+        {
+            if (clip.size() < 3) continue;
+            auto notes = clip;
+            std::sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.start < b.start; });
+            const auto barStart = std::floor (notes.front().start / 4.0) * 4.0;
+            double last = 0.0;
+            for (size_t i = 0; i < notes.size(); ++i)
+            {
+                const auto t = notes[i].start - barStart;
+                last = std::max (last, t);
+                const auto step = (int) std::lround (std::fmod (t, 8.0) * 4.0) % 32;
+                d.onset[(size_t) step] += 1.0f;
+                if (i > 0)
+                {
+                    const auto moved = juce::jlimit (-4, 4, detail::degreesBetween (notes[i - 1].pitch, notes[i].pitch, root, scale));
+                    d.steps[(size_t) (moved + 4)] += 1.0f;
+                }
+                ++d.notes;
+            }
+            windows += std::max (1, (int) std::ceil ((last + 1.0e-6) / 8.0));
+            ++d.clips;
+        }
+        if (d.notes < 6) return {};
+        for (auto& o : d.onset) o /= (float) std::max (1, windows);
+        d.valid = true;
+        return d;
+    }
+
+    //==============================================================================
+    /** A chord progression read from MIDI: the key, chords as degrees (with qualities where
+        they're not the key's own), and how long each chord lasts. */
+    struct ProgressionGuess
+    {
+        bool valid = false;
+        int root = 9, scale = 0, count = 0;
+        std::array<Slot, maxSlots> slots {};
+        double quartersPerChord = 4.0;
+    };
+
+    inline ProgressionGuess progressionFromNotes (const std::vector<Note>& notes)
+    {
+        ProgressionGuess g;
+        // Chord onsets: three or more notes starting together.
+        std::vector<double> onsets;
+        for (const auto& n : notes)
+        {
+            int together = 0;
+            for (const auto& o : notes) together += std::abs (o.start - n.start) < 0.06;
+            if (together >= 3 && (onsets.empty() || std::none_of (onsets.begin(), onsets.end(), [&n] (double t) { return std::abs (t - n.start) < 0.06; })))
+                onsets.push_back (n.start);
+        }
+        std::sort (onsets.begin(), onsets.end());
+        if (onsets.size() < 2) return g;
+
+        std::vector<std::array<float, 12>> chroma;
+        std::array<float, 12> total {};
+        std::vector<double> lengths;
+        for (size_t i = 0; i < onsets.size() && (int) chroma.size() < maxSlots; ++i)
+        {
+            std::array<float, 12> c {};
+            for (const auto& n : notes)
+                if (n.start < onsets[i] + 0.06 && n.start + n.length > onsets[i] + 0.06)
+                    c[(size_t) (((n.pitch % 12) + 12) % 12)] += 1.0f;
+            chroma.push_back (c);
+            for (int k = 0; k < 12; ++k) total[(size_t) k] += c[(size_t) k];
+            lengths.push_back (i + 1 < onsets.size() ? onsets[i + 1] - onsets[i] : 4.0);
+        }
+
+        // Key: the major or minor scale that covers the notes best (minor wins ties, trance-style),
+        // with a bonus when the first chord is its tonic.
+        float best = -1.0f;
+        for (int scale : { 0, 1 })
+            for (int root = 0; root < 12; ++root)
+            {
+                const auto& steps = suite::music::scales()[(size_t) scale].steps;
+                float score = 0.0f;
+                for (int k = 0; k < 12; ++k)
+                    if (std::find (steps.begin(), steps.end(), ((k - root) % 12 + 12) % 12) != steps.end()) score += total[(size_t) k];
+                if (chroma[0][(size_t) root] > 0.0f) score += 0.5f;
+                if (scale == 0) score += 0.01f;
+                if (score > best) { best = score; g.root = root; g.scale = scale; }
+            }
+
+        // Each chord: the triad root that explains it best, as a degree of the key.
+        const auto& steps = suite::music::scales()[(size_t) g.scale].steps;
+        for (size_t i = 0; i < chroma.size(); ++i)
+        {
+            const auto& c = chroma[i];
+            int bestRoot = 0, bestThird = 4;
+            float bestFit = -1.0f;
+            for (int r = 0; r < 12; ++r)
+                for (int third : { 3, 4 })
+                {
+                    const auto fit = c[(size_t) r] * 1.2f + c[(size_t) ((r + third) % 12)] + c[(size_t) ((r + 7) % 12)];
+                    if (fit > bestFit) { bestFit = fit; bestRoot = r; bestThird = third; }
+                }
+            const auto rel = ((bestRoot - g.root) % 12 + 12) % 12;
+            int degree = 1;
+            for (int d = 0; d < 7; ++d) if (steps[(size_t) d] == rel) degree = d + 1;
+            // The key's own triad on that degree: a minor third when the scale's 3rd above is 3 semitones.
+            const auto diatonicThird = ((steps[(size_t) ((degree + 1) % 7)] - steps[(size_t) (degree - 1)]) % 12 + 12) % 12;
+            Slot slot { degree, Quality::Auto };
+            if (diatonicThird != bestThird) slot.quality = bestThird == 4 ? Quality::Major : Quality::Minor;
+            g.slots[i] = slot;
+        }
+        g.count = (int) chroma.size();
+        std::sort (lengths.begin(), lengths.end());
+        const auto typical = lengths[lengths.size() / 2];
+        g.quartersPerChord = typical < 3.0 ? 2.0 : typical < 6.0 ? 4.0 : 8.0;
+        g.valid = true;
+        return g;
+    }
+
+    /** True when a clip looks like chords (most onsets have three or more notes) rather than a melody. */
+    inline bool looksLikeChords (const std::vector<Note>& notes)
+    {
+        int chordal = 0, onsets = 0;
+        for (size_t i = 0; i < notes.size(); ++i)
+        {
+            bool first = true;
+            for (size_t k = 0; k < i; ++k) if (std::abs (notes[k].start - notes[i].start) < 0.06) first = false;
+            if (! first) continue;
+            ++onsets;
+            int together = 0;
+            for (const auto& o : notes) together += std::abs (o.start - notes[i].start) < 0.06;
+            chordal += together >= 3;
+        }
+        return onsets > 0 && chordal * 2 >= onsets;
+    }
+
+    //==============================================================================
+    /** Groove: delays the off 16ths by `swing` of a 16th (0 = straight). */
+    inline std::vector<Note> applyGroove (std::vector<Note> notes, float swing)
+    {
+        if (swing <= 0.0f) return notes;
+        for (auto& n : notes)
+        {
+            const auto inBeat = n.start - std::floor (n.start + 1.0e-9);
+            const auto sixteenth = (int) std::lround (inBeat * 4.0);
+            if (std::abs (inBeat * 4.0 - sixteenth) < 1.0e-3 && (sixteenth == 1 || sixteenth == 3))
+                n.start += swing * 0.25;
+        }
+        return notes;
+    }
+
     /** Pattern choice per section type. 0 = none, otherwise (pattern enum value + 1). */
     struct SongPatterns
     {
@@ -762,7 +953,7 @@ namespace chords
     }
 
     //==============================================================================
-    inline juce::MidiFile toMidiFile (const std::vector<Note>& notes, double bpm, const juce::String& trackName)
+    inline juce::MidiFile toMidiFile (const std::vector<Note>& notes, double bpm, const juce::String& trackName, int accentCC = 0)
     {
         constexpr int ppq = 960;
         juce::MidiMessageSequence seq;
@@ -773,6 +964,8 @@ namespace chords
         for (const auto& n : notes)
         {
             const auto on = n.start * ppq, off = (n.start + n.length) * ppq;
+            if (accentCC > 0)   // the note's accent as a controller too (e.g. CC 74), so synths can open up on accents
+                seq.addEvent (juce::MidiMessage::controllerEvent (1, accentCC, juce::jlimit (0, 127, n.velocity)), std::max (0.0, on - 1.0));
             seq.addEvent (juce::MidiMessage::noteOn (1, n.pitch, (juce::uint8) juce::jlimit (1, 127, n.velocity)), on);
             seq.addEvent (juce::MidiMessage::noteOff (1, n.pitch), off);
         }
@@ -807,7 +1000,7 @@ namespace chords
     /** One MIDI file with a part per track (each on its own channel) and the song's sections
         as markers on the first track, for importing everything into FL in one go. */
     inline juce::MidiFile toMultiTrackMidi (const std::vector<std::pair<juce::String, std::vector<Note>>>& parts, double bpm,
-                                            const std::vector<std::pair<double, juce::String>>& markers)
+                                            const std::vector<std::pair<double, juce::String>>& markers, int accentCC = 0)
     {
         constexpr int ppq = 960;
         juce::MidiFile file;
@@ -829,6 +1022,8 @@ namespace chords
             seq.addEvent (juce::MidiMessage::textMetaEvent (3, name), 0.0);
             for (const auto& n : notes)
             {
+                if (accentCC > 0)
+                    seq.addEvent (juce::MidiMessage::controllerEvent (channel, accentCC, juce::jlimit (0, 127, n.velocity)), std::max (0.0, n.start * ppq - 1.0));
                 seq.addEvent (juce::MidiMessage::noteOn (channel, n.pitch, (juce::uint8) juce::jlimit (1, 127, n.velocity)), n.start * ppq);
                 seq.addEvent (juce::MidiMessage::noteOff (channel, n.pitch), (n.start + n.length) * ppq);
             }

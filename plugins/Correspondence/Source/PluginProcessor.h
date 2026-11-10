@@ -43,7 +43,8 @@ public:
     /** New song (Ouroboros): the key, a progression for the style, and the key broadcast on. */
     bool applySession (const suite::SessionStyle& style, int root, int scale) override
     {
-        applyPreset (style.progression);
+        const auto& mood = sessionMood();
+        applyPreset (mood.progression >= 0 ? mood.progression : style.progression);
         setParameterPlain (apvts, Params::rootNote, (float) juce::jlimit (0, 11, root));
         setParameterPlain (apvts, Params::scale, (float) scale);   // the chosen key wins over the preset's scale
         setParameterPlain (apvts, Params::broadcast, 1.0f);
@@ -56,6 +57,32 @@ public:
     juce::File exportEverything (const juce::File& parent) const;
 
     int learnMotif (const juce::File&);
+
+    /** Reads every note of a MIDI file (all tracks), in quarter notes. */
+    static std::vector<chords::Note> readMidiNotes (const juce::File&);
+    /** Dropped MIDI: several clips teach Melodia your melodic DNA; one chord clip becomes the
+        progression (and key); one melodic clip becomes the motif. Returns what happened, for the UI. */
+    juce::String learnFromFiles (const juce::StringArray& paths);
+    /** Sets key, chords and chord length from a detected progression. */
+    void applyProgression (const chords::ProgressionGuess&);
+    void forgetDna() { const juce::ScopedLock sl (motifLock); dna = {}; }
+    chords::MelodyDna getDna() const { const juce::ScopedLock sl (motifLock); return dna; }
+
+    /** Song info for exports (stored with the project). */
+    juce::String getSongTitle() const { return apvts.state["songTitle"].toString(); }
+    juce::String getArtist() const { return apvts.state["artist"].toString(); }
+    void setSongInfo (const juce::String& title, const juce::String& artist)
+    {
+        apvts.state.setProperty ("songTitle", title, nullptr);
+        apvts.state.setProperty ("artist", artist, nullptr);
+    }
+    /** Shares the groove with the suite (Kybalion's gate swings with it). */
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus st;
+        st.metrics[0] = Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load());
+        return st;
+    }
     void forgetMotif();
     std::vector<chords::Note> getMotif() const;
     chords::MelodySettings melodySettings() const;   // parameters + learned motif
@@ -74,6 +101,7 @@ private:
     bool wasBroadcasting = false;
     mutable juce::CriticalSection motifLock;
     std::vector<chords::Note> motif;
+    chords::MelodyDna dna;
     uint32_t lastSuggestion = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceProcessor)

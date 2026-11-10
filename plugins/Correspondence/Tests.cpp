@@ -31,6 +31,24 @@ namespace
         for (auto p : v) pcs.insert (((p % 12) + 12) % 12);
         return pcs;
     }
+
+    juce::File writeClip (const juce::File& file, const std::vector<chords::Note>& notes)
+    {
+        juce::MidiMessageSequence seq;
+        for (const auto& n : notes)
+        {
+            seq.addEvent (juce::MidiMessage::noteOn (1, n.pitch, (juce::uint8) n.velocity), n.start * 960.0);
+            seq.addEvent (juce::MidiMessage::noteOff (1, n.pitch), (n.start + n.length) * 960.0);
+        }
+        seq.updateMatchedPairs();
+        juce::MidiFile midi;
+        midi.setTicksPerQuarterNote (960);
+        midi.addTrack (seq);
+        juce::FileOutputStream out (file);
+        out.setPosition (0); out.truncate();
+        midi.writeTo (out);
+        return file;
+    }
 }
 
 int main (int argc, char** argv)
@@ -366,6 +384,14 @@ int main (int argc, char** argv)
         auto q = make();
         q->pollSession();
         check ((int) q->apvts.getRawParameterValue (Params::rootNote)->load() == 9, "a plugin loaded afterwards doesn't replay it");
+
+        suite::SessionBus::send ({ 2, 7, 0, 3 });   // Tech trance, but Melancholic
+        p->pollSession();
+        const auto sad = Params::readSettings (p->apvts);
+        const auto& heartbreak = chords::presets()[(size_t) suite::sessionMood (3).progression];
+        bool same = sad.count == heartbreak.count;
+        for (int i = 0; same && i < sad.count; ++i) same = sad.slots[(size_t) i].degree == heartbreak.slots[(size_t) i].degree;
+        check (same, "a mood picks its own progression over the style's (" + juce::String (heartbreak.name) + ")");
     }
 
     section ("Final-drop key change");
@@ -618,6 +644,104 @@ int main (int argc, char** argv)
         junk.replaceWithText ("hello");
         check (p->learnMotif (junk) == 0 && p->getMotif().empty(), "a file that isn't MIDI is ignored");
         dir.deleteRecursively();
+    }
+
+    section ("Learning chords, DNA and groove from MIDI");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceLearnTest");
+        dir.deleteRecursively();
+        dir.createDirectory();
+
+        // Am F C G, a bar each, played as triads in D-something voicings.
+        const std::vector<std::vector<int>> triads { { 57, 60, 64 }, { 53, 57, 60 }, { 48, 52, 55 }, { 55, 59, 62 } };
+        std::vector<chords::Note> chordClip;
+        for (int i = 0; i < 4; ++i)
+            for (auto pitch : triads[(size_t) i]) chordClip.push_back ({ pitch, i * 4.0, 3.9, 90 });
+        check (chords::looksLikeChords (chordClip), "a block-chord clip looks like chords");
+
+        auto p = make();
+        set (*p, Params::rootNote, 0.0f);
+        const auto msg = p->learnFromFiles ({ writeClip (dir.getChildFile ("chords.mid"), chordClip).getFullPathName() });
+        const auto s = Params::readSettings (p->apvts);
+        check (s.root == 9 && s.scale == 0 && s.count == 4, "dropping Am F C G sets A minor with 4 chords (" + msg + ")");
+        const int expected[] = { 1, 6, 3, 7 };
+        bool degrees = true;
+        for (int i = 0; i < 4; ++i) degrees = degrees && s.slots[(size_t) i].degree == expected[i];
+        check (degrees, "... as degrees i VI III VII");
+
+        // Two melody clips: melodic DNA.
+        std::vector<chords::Note> a, b;
+        const int mel[] = { 69, 72, 71, 69, 67, 69, 72, 74 };
+        for (int i = 0; i < 8; ++i)
+        {
+            a.push_back ({ mel[i], i * 0.75, 0.5, 100 });
+            b.push_back ({ mel[7 - i], 16.0 + i * 0.75, 0.5, 100 });
+        }
+        check (! chords::looksLikeChords (a), "a single-note line doesn't look like chords");
+        const auto dnaMsg = p->learnFromFiles ({ writeClip (dir.getChildFile ("a.mid"), a).getFullPathName(),
+                                                 writeClip (dir.getChildFile ("b.mid"), b).getFullPathName() });
+        const auto dna = p->getDna();
+        check (dna.valid && dna.clips == 2 && dna.notes == 16, "two clips teach melodic DNA (" + dnaMsg + ")");
+        check (dna.onset[3] > 0.5f && dna.onset[1] < 0.01f, "the DNA keeps the clips' dotted rhythm");
+
+        auto settings = aMinor();
+        const auto withDna = chords::melody (settings, p->melodySettings());
+        int onDna = 0;
+        for (const auto& n : withDna)
+            onDna += dna.onset[(size_t) ((int) std::lround (std::fmod (n.start, 8.0) * 4.0) % 32)] > 0.0f;
+        check (! withDna.empty() && onDna * 10 >= (int) withDna.size() * 9, "new melodies land on the DNA's rhythm (" + juce::String (onDna) + "/" + juce::String ((int) withDna.size()) + ")");
+
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getDna().valid && q->getDna().notes == 16, "the DNA is saved with the project");
+        p->forgetDna();
+        check (! p->getDna().valid, "Forget clears it");
+
+        // Groove: off 16ths move later, on-beats stay.
+        std::vector<chords::Note> grid { { 60, 0.0, 0.2, 100 }, { 60, 0.25, 0.2, 100 }, { 60, 0.5, 0.2, 100 }, { 60, 0.75, 0.2, 100 } };
+        const auto swung = chords::applyGroove (grid, Params::grooveSwing (1));
+        check (std::abs (swung[0].start) < 1e-9 && std::abs (swung[2].start - 0.5) < 1e-9
+                   && std::abs (swung[1].start - 0.2875) < 1e-6 && std::abs (swung[3].start - 0.7875) < 1e-6,
+               "trance shuffle delays the off 16ths only");
+
+        // Accent CC in exported MIDI.
+        const auto midi = chords::toMidiFile (grid, 138.0, "Test", 74);
+        int ccs = 0;
+        for (auto* e : *midi.getTrack (0)) ccs += e->message.isControllerOfType (74);
+        check (ccs == 4, "exports carry accents as CC 74 (" + juce::String (ccs) + " events)");
+        int none = 0;
+        const auto plain = chords::toMidiFile (grid, 138.0, "Test");
+        for (auto* e : *plain.getTrack (0)) none += e->message.isController();
+        check (none == 0, "... and none when it's off");
+        dir.deleteRecursively();
+    }
+
+    section ("Song title and song sheet");
+    {
+        auto p = make();
+        p->applyPreset (8);
+        p->setSongInfo ("Sunrise", "Me");
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceSheet");
+        parent.deleteRecursively();
+        const auto folder = p->exportEverything (parent);
+        check (folder.getFileName().startsWith ("Me - Sunrise ("), "the song folder is named after the song: " + folder.getFileName());
+        const auto sheet = folder.getChildFile ("Song sheet.txt").loadFileAsString();
+        check (sheet.contains ("Sunrise") && sheet.contains ("Breakdown") && sheet.contains ("Drop"), "with a song sheet listing the structure");
+
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getSongTitle() == "Sunrise", "the title is saved with the project");
+        suite::SectionBus::withdraw();
+        parent.deleteRecursively();
     }
 
     section ("Adopting a key from Emerald Tablet");

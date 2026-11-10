@@ -87,7 +87,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         s.attackMs = value (Gate::attack);
         s.releaseMs = value (Gate::release);
         s.depth = scenes.plain (sGateDepth);
-        s.swing = scenes.plain (sSwing);
+        s.swing = juce::jmax (scenes.plain (sSwing), suiteSwing.load());   // Correspondence's groove, unless the gate swings more
         s.stereoOffset = (int) value (Gate::stereo);
         s.filter = scenes.plain (sGateFilter);
         s.res = value (Gate::res);
@@ -245,6 +245,10 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
             suite::KickBus::publish (kickLearner.patterns());   // keep the shared pattern fresh while stopped
     }
     s.metrics[0] = (float) source;
+    float swing = 0.0f;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Correspondence") swing = std::max (swing, e.metrics[0]);
+    suiteSwing.store (swing);
     s.metrics[1] = suiteKickAvailable.load() ? 1.0f : 0.0f;
     return s;
 }

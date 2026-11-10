@@ -81,10 +81,11 @@ public:
 private:
     void timerCallback() override;
     void updateInfo();
+    juce::String moodText() const;
 
     OuroborosProcessor& processor;
-    juce::ComboBox style, root, scale;
-    juce::Label styleLabel, keyLabel, info, result;
+    juce::ComboBox style, root, scale, mood;
+    juce::Label styleLabel, keyLabel, moodLabel, info, result;
     juce::TextButton go { "Set up the song" };
     uint32_t sentSeq = 0;
 };

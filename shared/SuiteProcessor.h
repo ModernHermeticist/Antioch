@@ -258,6 +258,8 @@ namespace suite
 
         /** Override to apply a session style (message thread). Return true if anything changed. */
         virtual bool applySession (const SessionStyle&, int /*root*/, int /*scale*/) { return false; }
+        /** The mood of the session being applied (valid inside applySession). */
+        const SessionMood& sessionMood() const { return suite::sessionMood (currentMood); }
 
         /** Handles new session messages (the timer calls it; tests call it directly). */
         void pollSession()
@@ -266,8 +268,10 @@ namespace suite
             for (auto seq = lastSessionSeen + 1; seq <= latest && seq != 0; ++seq)
             {
                 SessionRequest r;
-                if (SessionBus::read (seq, r) && juce::isPositiveAndBelow (r.style, (int) sessionStyles().size())
-                    && applySession (sessionStyles()[(size_t) r.style], r.root, r.scale))
+                if (! SessionBus::read (seq, r) || ! juce::isPositiveAndBelow (r.style, (int) sessionStyles().size()))
+                    continue;
+                currentMood = r.mood;
+                if (applySession (sessionStyles()[(size_t) r.style], r.root, r.scale))
                     SessionBus::acknowledge (seq);
             }
             lastSessionSeen = latest;
@@ -369,6 +373,7 @@ namespace suite
         bool morphing = false;
         uint32_t lastSeen = SnapshotBus::latest();   // commands sent before this plugin loaded don't apply
         uint32_t lastSessionSeen = SessionBus::latest();
+        int currentMood = 0;
         uint32_t lastRecipeSeen = RecipeBus::latest();
         Poller poller { *this };
         Morpher morpher { *this };

@@ -245,6 +245,15 @@ int main (int argc, char** argv)
         check ((int) p->apvts.getRawParameterValue (OuroborosProcessor::liftId)->load() == 1, "with the key up a semitone for the last drop");
         suite::SessionRequest r;
         check (suite::SessionBus::read (seq, r) && r.style == 0 && r.root == 2 && r.scale == 0, "and asks the suite to set up D minor");
+
+        const auto darkSeq = p->startSession (0, 2, 0, 4);   // Dark
+        const auto dark = p->getMap();
+        bool deep = false;
+        for (int i = 0; i < dark.count; ++i)
+            if (dark.sections[(size_t) i].type == suite::SectionType::Breakdown) deep = dark.sections[(size_t) i].energy == 20;
+        check (deep && suite::SessionBus::read (darkSeq, r) && r.mood == 4, "a Dark mood draws deeper breakdowns and tells the suite");
+        p->startSession (0, 2, 0, 1);   // Euphoric
+        check ((int) p->apvts.getRawParameterValue (OuroborosProcessor::intensityId)->load() == 120, "a Euphoric mood turns the intensity up");
     }
 
     section ("Energy curve");

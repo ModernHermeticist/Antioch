@@ -51,6 +51,8 @@ public:
     {
         setParameterPlain (apvts, suite::SceneEngine::enabledId, 1.0f);
         scenes.applySuggested();
+        const auto drop = (int) suite::SectionType::Drop;
+        scenes.setOffset (drop, sEuphoria, scenes.getOffset (drop, sEuphoria) + sessionMood().dropEuphoria);
         return true;
     }
     enum SceneSlot { sEuphoria, sAir, sDrive, sMultiband, sWidth };

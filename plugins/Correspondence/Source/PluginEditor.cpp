@@ -258,9 +258,10 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     songButton.onClick = [this] { showSongPatterns(); };
     newMelodyButton.onClick = [this]
     {
-        if (! processor.getMotif().empty())
+        if (! processor.getMotif().empty() || processor.getDna().valid)
         {
             processor.forgetMotif();
+            processor.forgetDna();
             return;
         }
         if (auto* seed = processor.apvts.getParameter (Params::melodySeed))
@@ -344,6 +345,25 @@ namespace
             vary = std::make_unique<juce::ToggleButton> ("Vary the lead + harmony in drop 2+");
             varyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songVary, *vary);
             addAndMakeVisible (*vary);
+            grooveBox = std::make_unique<juce::ComboBox>();
+            grooveBox->addItemList (state.getParameter (Params::groove)->getAllValueStrings(), 1);
+            grooveBox->setTooltip ("The feel of the exported MIDI; Kybalion's gate swings with it too");
+            grooveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::groove, *grooveBox);
+            addAndMakeVisible (*grooveBox);
+            accent = std::make_unique<juce::ToggleButton> ("Accents as CC 74");
+            accent->setTooltip ("Each note's accent is also written as CC 74, so a synth's filter can open on the accents");
+            accentAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::accentCC, *accent);
+            addAndMakeVisible (*accent);
+            for (const auto& [editor, prop, hint] : { std::tuple<juce::TextEditor*, const char*, const char*> { &title, "songTitle", "Song title (for exports)" },
+                                               { &artist, "artist", "Artist" } })
+            {
+                editor->setTextToShowWhenEmpty (hint, Colours::dimText);
+                editor->setText (state.state[prop].toString(), juce::dontSendNotification);
+                auto* ed = editor;
+                const juce::Identifier id (prop);
+                ed->onTextChange = [&state, ed, id] { state.state.setProperty (id, ed->getText(), nullptr); };
+                addAndMakeVisible (*editor);
+            }
             breakdownBox = std::make_unique<juce::ComboBox>();
             breakdownBox->addItemList (state.getParameter (Params::songBreakdown)->getAllValueStrings(), 1);
             breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder");
@@ -351,7 +371,7 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (900, 360);
+            setSize (900, 400);
         }
 
         void paint (juce::Graphics& g) override
@@ -368,6 +388,13 @@ namespace
             auto r = getLocalBounds().reduced (6);
             r.removeFromTop (20);
             hint.setBounds (r.removeFromBottom (24));
+            {
+                auto extras = r.removeFromBottom (30);
+                grooveBox->setBounds (extras.removeFromLeft (160).reduced (2));
+                accent->setBounds (extras.removeFromLeft (170));
+                artist.setBounds (extras.removeFromRight (200).reduced (2));
+                title.setBounds (extras.removeFromRight (260).reduced (2));
+            }
             {
                 auto toggles = r.removeFromBottom (28);
                 breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
@@ -393,7 +420,11 @@ namespace
         juce::Label hint;
         std::unique_ptr<juce::ToggleButton> lift, vary, counter;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment;
-        std::unique_ptr<juce::ComboBox> breakdownBox;
+        std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox;
+        std::unique_ptr<juce::ToggleButton> accent;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> grooveAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> accentAttachment;
+        juce::TextEditor title, artist;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> breakdownAttachment;
     };
 }
@@ -482,7 +513,8 @@ void CorrespondenceEditor::timerCallback()
         for (const auto& n : chords::counterMelody (melodyNotes, settings)) melodyNotes.push_back (n);
     roll.setData (voiced, bassNotes, settings.count, playingSlot, melodyNotes, settings.quartersPerChord);
     const auto motifSize = (int) processor.getMotif().size();
-    newMelodyButton.setButtonText (motifSize > 0 ? "Forget motif (" + juce::String (motifSize) + " notes)"
+    newMelodyButton.setButtonText (motifSize == 0 && processor.getDna().valid ? juce::String ("Forget my DNA")
+                                   : motifSize > 0 ? "Forget motif (" + juce::String (motifSize) + " notes)"
                                                  : "New melody (#" + juce::String ((int) processor.apvts.getRawParameterValue (Params::melodySeed)->load()) + ")");
     newMelodyButton.setTooltip ("Drop a MIDI clip on the plugin to use your own motif");
     melodyStyle.setEnabled (motifSize == 0);
@@ -505,9 +537,10 @@ bool CorrespondenceEditor::isInterestedInFileDrag (const juce::StringArray& file
 void CorrespondenceEditor::filesDropped (const juce::StringArray& files, int, int)
 {
     dropHover = false;
-    for (const auto& f : files)
-        if (isInterestedInFileDrag ({ f }) && processor.learnMotif (juce::File (f)) > 0)
-            break;
+    juce::StringArray midiFiles;
+    for (const auto& f : files) if (isInterestedInFileDrag ({ f })) midiFiles.add (f);
+    dropMessage = processor.learnFromFiles (midiFiles);
+    dropMessageUntil = juce::Time::getMillisecondCounterHiRes() + 6000.0;
     repaint();
 }
 
@@ -517,7 +550,11 @@ void CorrespondenceEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "CORRESPONDENCE", "key & chord engine", accent);
     drawPanel (g, keyArea, "Key");
     drawPanel (g, progressionArea, "Progression  (click a chord to hear it)", accent);
-    drawPanel (g, voicingArea, processor.getMotif().empty() ? "Voicing & melody  (drop a MIDI motif here)" : "Voicing & melody  (your motif)", accent);
+    const auto showDrop = juce::Time::getMillisecondCounterHiRes() < dropMessageUntil;
+    drawPanel (g, voicingArea, showDrop ? "Voicing & melody  (" + dropMessage + ")"
+                               : ! processor.getMotif().empty() ? juce::String ("Voicing & melody  (your motif)")
+                               : processor.getDna().valid ? juce::String ("Voicing & melody  (your melodic DNA)")
+                                                          : juce::String ("Voicing & melody  (drop MIDI: a motif, chords, or several leads)"), accent);
     drawPanel (g, patternArea, "Rhythm", Colours::brass);
     drawPanel (g, exportArea, "Drag into FL  (loop / whole song)", Colours::amethyst);
     if (dropHover)

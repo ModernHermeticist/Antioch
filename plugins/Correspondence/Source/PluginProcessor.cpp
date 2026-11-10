@@ -109,6 +109,70 @@ void CorrespondenceProcessor::applyPreset (int index)
     }
 }
 
+std::vector<chords::Note> CorrespondenceProcessor::readMidiNotes (const juce::File& file)
+{
+    juce::MidiFile midi;
+    juce::FileInputStream in (file);
+    std::vector<chords::Note> notes;
+    if (! in.openedOk() || ! midi.readFrom (in) || midi.getTimeFormat() <= 0)
+        return notes;
+    const auto ppq = (double) midi.getTimeFormat();
+    for (int t = 0; t < midi.getNumTracks(); ++t)
+    {
+        juce::MidiMessageSequence seq (*midi.getTrack (t));
+        seq.updateMatchedPairs();
+        for (auto* e : seq)
+            if (e->message.isNoteOn())
+            {
+                const auto start = e->message.getTimeStamp() / ppq;
+                const auto end = e->noteOffObject != nullptr ? e->noteOffObject->message.getTimeStamp() / ppq : start + 0.25;
+                notes.push_back ({ e->message.getNoteNumber(), start, std::max (0.05, end - start), e->message.getVelocity() });
+            }
+    }
+    std::sort (notes.begin(), notes.end(), [] (const auto& a, const auto& b) { return a.start < b.start; });
+    return notes;
+}
+
+void CorrespondenceProcessor::applyProgression (const chords::ProgressionGuess& g)
+{
+    if (! g.valid) return;
+    setParameterPlain (apvts, Params::rootNote, (float) g.root);
+    setParameterPlain (apvts, Params::scale, (float) g.scale);
+    setParameterPlain (apvts, Params::count, (float) g.count);
+    setParameterPlain (apvts, Params::perChord, g.quartersPerChord < 3.0 ? 0.0f : g.quartersPerChord < 6.0 ? 1.0f : 2.0f);
+    for (int i = 0; i < chords::maxSlots; ++i)
+    {
+        setParameterPlain (apvts, Params::slotDegree (i), (float) (g.slots[(size_t) i].degree - 1));
+        setParameterPlain (apvts, Params::slotQuality (i), (float) (int) g.slots[(size_t) i].quality);
+    }
+}
+
+juce::String CorrespondenceProcessor::learnFromFiles (const juce::StringArray& paths)
+{
+    std::vector<std::vector<chords::Note>> clips;
+    for (const auto& p : paths)
+        if (auto notes = readMidiNotes (juce::File (p)); ! notes.empty()) clips.push_back (std::move (notes));
+    if (clips.empty()) return "No notes in that MIDI";
+
+    const auto s = Params::readSettings (apvts);
+    if (clips.size() >= 2)
+    {
+        auto learned = chords::learnDna (clips, s.root, s.scale);
+        if (! learned.valid) return "Not enough notes to learn from";
+        { const juce::ScopedLock sl (motifLock); dna = learned; motif.clear(); }
+        return "Learned your melodic DNA from " + juce::String (learned.clips) + " clips (" + juce::String (learned.notes) + " notes)";
+    }
+    if (chords::looksLikeChords (clips[0]))
+    {
+        const auto g = chords::progressionFromNotes (clips[0]);
+        if (! g.valid) return "Couldn't read chords from that clip";
+        applyProgression (g);
+        return "Read " + juce::String (g.count) + " chords";
+    }
+    const auto n = learnMotif (juce::File (paths[0]));
+    return n > 0 ? "Learned a " + juce::String (n) + "-note motif" : "No notes in that MIDI";
+}
+
 int CorrespondenceProcessor::learnMotif (const juce::File& file)
 {
     juce::MidiFile midi;
@@ -166,6 +230,7 @@ chords::MelodySettings CorrespondenceProcessor::melodySettings() const
 {
     auto m = Params::readMelody (apvts);
     m.motif = getMotif();
+    m.dna = getDna();
     return m;
 }
 
@@ -206,8 +271,10 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     directory.createDirectory();
     file.deleteFile();
     if (auto stream = file.createOutputStream())
-        chords::toMidiFile (chords::humanise (notes, apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode()),
-                            currentBpm.load(), "Correspondence " + kind).writeTo (*stream);
+        chords::toMidiFile (chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
+                                              apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode()),
+                            currentBpm.load(), "Correspondence " + kind,
+                            apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0).writeTo (*stream);
     return file;
 }
 
@@ -216,13 +283,47 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     const auto s = Params::readSettings (apvts);
     const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
     const auto bpm = currentBpm.load();
-    auto folder = parent.getChildFile (juce::File::createLegalFileName (key + " " + juce::String (juce::roundToInt (bpm)) + " BPM "
-                                                                        + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M")));
+    const auto title = getSongTitle().trim(), artist = getArtist().trim();
+    const auto keyBpm = key + " " + juce::String (juce::roundToInt (bpm)) + " BPM";
+    const auto folderName = title.isNotEmpty() ? (artist.isNotEmpty() ? artist + " - " : juce::String()) + title + " (" + keyBpm + ")"
+                                               : keyBpm + " " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M");
+    auto folder = parent.getChildFile (juce::File::createLegalFileName (folderName));
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
+
+    // A song sheet for labels and DJs: title, artist, key, tempo, progression, structure.
+    {
+        juce::StringArray sheet;
+        if (title.isNotEmpty()) sheet.add ("Title:  " + title);
+        if (artist.isNotEmpty()) sheet.add ("Artist: " + artist);
+        sheet.add ("Key:    " + suite::music::noteNames()[s.root] + " " + suite::music::scales()[(size_t) s.scale].name);
+        sheet.add ("Tempo:  " + juce::String (bpm, 1) + " BPM");
+        juce::StringArray progression;
+        for (int i = 0; i < s.count; ++i) progression.add (chords::chordName (s, s.slots[(size_t) i]));
+        sheet.add ("Chords: " + progression.joinIntoString (" - "));
+        suite::SectionMap shared;
+        if (suite::SectionBus::read (shared) && shared.count > 0)
+        {
+            const auto seconds = shared.totalBars * 4.0 * 60.0 / bpm;
+            sheet.add ("Length: " + juce::String (shared.totalBars) + " bars (" + juce::String ((int) seconds / 60) + ":"
+                       + juce::String ((int) seconds % 60).paddedLeft ('0', 2) + ")");
+            sheet.add ("");
+            sheet.add ("Structure:");
+            for (int i = 0; i < shared.count; ++i)
+            {
+                const auto& sec = shared.sections[(size_t) i];
+                const auto startSeconds = (sec.startBar - 1) * 4.0 * 60.0 / bpm;
+                sheet.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + juce::String ((int) startSeconds / 60) + ":"
+                           + juce::String ((int) startSeconds % 60).paddedLeft ('0', 2) + "  " + suite::sectionName (sec.type)
+                           + " (" + juce::String (shared.endBar (i) - sec.startBar) + " bars)"
+                           + (shared.keyShiftOf (i) != 0 && i == shared.lastDropIndex() ? "  key +" + juce::String (shared.keyShiftOf (i)) : juce::String()));
+            }
+        }
+        folder.getChildFile ("Song sheet.txt").replaceWithText (sheet.joinIntoString ("\n") + "\n");
+    }
 
     suite::SectionMap map;
     if (suite::SectionBus::read (map) && map.count > 0)
@@ -248,11 +349,12 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
                                      + (map.keyShiftOf (i) != 0 && i == map.lastDropIndex() ? " (key +" + juce::String (map.keyShiftOf (i)) + ")" : juce::String()) });
         }
         const auto amount = apvts.getRawParameterValue (Params::humanise)->load();
+        const auto swing = Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load());
         for (auto& [name, notes] : parts)
-            notes = chords::humanise (notes, amount, ("Song " + name).hashCode());
+            notes = chords::humanise (chords::applyGroove (notes, swing), amount, ("Song " + name).hashCode());
         const auto file = folder.getChildFile (juce::File::createLegalFileName (key + " - all parts.mid"));
         if (auto stream = file.createOutputStream())
-            chords::toMultiTrackMidi (parts, bpm, markers).writeTo (*stream);
+            chords::toMultiTrackMidi (parts, bpm, markers, apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0).writeTo (*stream);
     }
     return folder;
 }
@@ -277,6 +379,19 @@ void CorrespondenceProcessor::getPluginState (juce::MemoryBlock& destData)
         m.appendChild (note, nullptr);
     }
     state.appendChild (m, nullptr);
+    state.removeChild (state.getChildWithName ("Dna"), nullptr);
+    if (const auto d = getDna(); d.valid)
+    {
+        juce::ValueTree dt ("Dna");
+        juce::StringArray onset, steps;
+        for (auto v : d.onset) onset.add (juce::String (v, 4));
+        for (auto v : d.steps) steps.add (juce::String (v, 2));
+        dt.setProperty ("onset", onset.joinIntoString (","), nullptr);
+        dt.setProperty ("steps", steps.joinIntoString (","), nullptr);
+        dt.setProperty ("clips", d.clips, nullptr);
+        dt.setProperty ("notes", d.notes, nullptr);
+        state.appendChild (dt, nullptr);
+    }
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -295,6 +410,22 @@ void CorrespondenceProcessor::setPluginState (const void* data, int sizeInBytes)
                 motif = loaded;
             }
             state.removeChild (state.getChildWithName ("Motif"), nullptr);
+            chords::MelodyDna learned;
+            if (const auto dt = state.getChildWithName ("Dna"); dt.isValid())
+            {
+                const auto onset = juce::StringArray::fromTokens (dt["onset"].toString(), ",", "");
+                const auto steps = juce::StringArray::fromTokens (dt["steps"].toString(), ",", "");
+                if (onset.size() == 32 && steps.size() == 9)
+                {
+                    for (int i = 0; i < 32; ++i) learned.onset[(size_t) i] = onset[i].getFloatValue();
+                    for (int i = 0; i < 9; ++i) learned.steps[(size_t) i] = steps[i].getFloatValue();
+                    learned.clips = (int) dt["clips"];
+                    learned.notes = (int) dt["notes"];
+                    learned.valid = true;
+                }
+                state.removeChild (dt, nullptr);
+            }
+            { const juce::ScopedLock sl (motifLock); dna = learned; }
             apvts.replaceState (state);
         }
     publishKey();

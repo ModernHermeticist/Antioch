@@ -172,8 +172,9 @@ public:
     /** New song: builds this style's map (Arrange), sets its key change, and asks the rest of
         the suite to set up (key, progression, loudness target, scenes). Returns the message's
         sequence number, for counting the plugins that answered. */
-    uint32_t startSession (int styleIndex, int root, int scale)
+    uint32_t startSession (int styleIndex, int root, int scale, int moodIndex = 0)
     {
+        const auto& mood = suite::sessionMood (moodIndex);
         const auto& style = suite::sessionStyles()[(size_t) juce::jlimit (0, (int) suite::sessionStyles().size() - 1, styleIndex)];
         arrangement::GenSettings g;
         g.totalBars = suite::sessionBars (style);
@@ -181,8 +182,13 @@ public:
         g.djIntro = style.djIntro;
         g.longBreakdown = style.longBreakdown;
         setParameterPlain (apvts, liftId, (float) style.finalLift);
-        setMap (arrangement::generate (g));
-        return suite::SessionBus::send ({ styleIndex, root, scale });
+        setParameterPlain (apvts, intensityId, (float) mood.intensity);
+        auto m = arrangement::generate (g);
+        if (mood.breakdownEnergy >= 0)
+            for (int i = 0; i < m.count; ++i)
+                if (m.sections[(size_t) i].type == suite::SectionType::Breakdown) m.sections[(size_t) i].energy = mood.breakdownEnergy;
+        setMap (m);
+        return suite::SessionBus::send ({ styleIndex, root, scale, moodIndex });
     }
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }

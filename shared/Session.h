@@ -39,7 +39,37 @@ namespace suite
     /** Song length in bars for a style, rounded to 8-bar phrases. */
     inline int sessionBars (const SessionStyle& s) { return juce::jmax (32, (int) std::round (s.minutes * s.bpm / 4.0 / 8.0) * 8); }
 
-    struct SessionRequest { int style = 0, root = 9, scale = 0; };
+    /** Mood: one dial from dark to euphoric that colours a new song across the suite -
+        Correspondence's progression, Ouroboros' intensity and breakdown depth, Vibration's
+        drop euphoria. Index 0 leaves everything to the style. */
+    struct SessionMood
+    {
+        const char* name;
+        int progression;        // Correspondence preset index, -1 = the style's
+        int intensity;          // Ouroboros intensity (%)
+        int breakdownEnergy;    // drawn breakdown energy (0..100), -1 = default
+        float dropEuphoria;     // Vibration: added to the Drop scene's euphoria offset
+    };
+
+    inline const std::vector<SessionMood>& sessionMoods()
+    {
+        static const std::vector<SessionMood> m
+        {
+            { "As the style", -1, 100, -1,  0.0f },
+            { "Euphoric",      2, 120, -1,  0.15f },   // Euphoria (VI VII i i)
+            { "Hopeful",       5, 105, -1,  0.05f },   // Ascension (iv VI VII i)
+            { "Melancholic",   4,  90, 25, -0.05f },   // Heartbreak (i III VII iv)
+            { "Dark",          6, 100, 20, -0.15f },   // Driving (i i VI VII)
+        };
+        return m;
+    }
+
+    inline const SessionMood& sessionMood (int index)
+    {
+        return sessionMoods()[(size_t) juce::jlimit (0, (int) sessionMoods().size() - 1, index)];
+    }
+
+    struct SessionRequest { int style = 0, root = 9, scale = 0, mood = 0; };
 
     namespace SessionBus
     {

@@ -70,6 +70,8 @@ private:
     };
 
     void timerCallback() override;
+    juce::String dropMessage;
+    double dropMessageUntil = 0.0;
     void auditionSlot (int slot, double seconds);
     void togglePlay();
 

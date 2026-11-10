@@ -168,6 +168,17 @@ int main (int argc, char** argv)
         for (int t = 0; t < suite::numSceneSlots; ++t)
             for (int i = 0; i < p->scenes.getNumParams(); ++i) anyOffset = anyOffset || std::abs (p->scenes.getOffset (t, i)) > 1.0e-6f;
         check (p->apvts.getRawParameterValue (suite::SceneEngine::enabledId)->load() > 0.5f && anyOffset, "turns scenes on with the suggested offsets");
+
+        const auto drop = (int) suite::SectionType::Drop;
+        const auto usual = p->scenes.getOffset (drop, VibrationProcessor::sEuphoria);
+        suite::SessionBus::send ({ 0, 9, 0, 1 });   // Euphoric
+        p->pollSession();
+        const auto euphoric = p->scenes.getOffset (drop, VibrationProcessor::sEuphoria);
+        suite::SessionBus::send ({ 0, 9, 0, 4 });   // Dark
+        p->pollSession();
+        const auto dark = p->scenes.getOffset (drop, VibrationProcessor::sEuphoria);
+        check (euphoric > usual + 0.1f && dark < usual - 0.1f, "the mood pushes the drop's euphoria up (Euphoric) or down (Dark): "
+                   + juce::String (dark, 2) + " < " + juce::String (usual, 2) + " < " + juce::String (euphoric, 2));
     }
 
     section ("Final-drop snapshot morph");
