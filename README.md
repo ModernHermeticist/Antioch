@@ -1,7 +1,7 @@
 # Antioch Suite
 
-Eleven VST3 plugins for uplifting trance production in FL Studio. They're built to replace
-the setup work you'd otherwise redo in every project. All three share one key: set it once
+Twelve VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+the setup work you'd otherwise redo in every project. They share one key: set it once
 in **Correspondence**, and the others follow it.
 
 | Plugin | What it replaces |
@@ -17,6 +17,7 @@ in **Correspondence**, and the others follow it.
 | **Emerald Tablet**: key detector | Working out the key of a track, loop or acapella by ear |
 | **Azoth**: automatic transition FX | Placing impacts, crashes, swells, downlifters and snare rolls at every transition |
 | **Prima Materia**: section mixer | Muting, filtering and riding individual tracks section by section with automation |
+| **Solve et Coagula**: vocal unmasking | Carving EQ space for the vocal by hand, or a static cut that's there even when nobody sings |
 
 ## How much runs on its own
 
@@ -39,6 +40,9 @@ With the full suite loaded, here is everything that happens without automation c
 8. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
    gain to hit it. Mentalism's **arrangement coach** checks the energy arc section by
    section.
+9. **Every drop after the first goes bigger**: more echo and Euphoria, louder impacts,
+   longer swells and the lead up an octave (see *Bigger later drops*).
+10. **Solve et Coagula** makes room for the vocal in the music, only where and when it sings.
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
 
@@ -261,6 +265,20 @@ up to 1 bar.
 Scenes follow Ouroboros and are saved with the project. The section is checked once per
 audio block, so changes land within about 10 ms of the bar line.
 
+### Bigger later drops
+
+The second, third and later drops build on the first, so the last drop isn't a repeat:
+
+- Section scenes have a **Drop 2+** column, added on top of the Drop scene. Suggested:
+  a little more echo and shimmer (Antioch), deeper gate and duck (Kybalion), more Euphoria
+  and width (Vibration).
+- **Azoth's** *Bigger later drops* knob makes later impacts and crashes louder and the
+  swell into them longer.
+- **Prima Materia** has a **Separate Drop 2+** column, e.g. the lead 2 dB up, hats up,
+  atmos down.
+- **Correspondence's** full-song lead jumps up an octave in later drops (*Lift later drops*
+  in Song patterns).
+
 ## Ouroboros Listen
 
 Turn on **LISTEN** and play the song through. While it plays, Ouroboros measures each bar's
@@ -397,6 +415,36 @@ piano roll and played along when you press **Play**:
   Lead column defaults to a sparser **Teaser** in breakdowns and the full **Melody** in
   drops.
 
+**Your own motif.** Drag a MIDI clip (from FL's piano roll or a file) onto the *Voicing &
+Melody* panel. Melodia keeps its first two bars, one note per onset (the top note of any
+chord). The motif becomes the call of every phrase as you played it, fitted to the key and
+register. The answers keep its rhythm and shape, start on a chord tone and follow the
+chords. It's saved with the project and goes into the MELODY and SONG LEAD exports.
+**Forget motif** goes back to generated melodies.
+
+## Solve et Coagula: vocal unmasking
+
+![Solve et Coagula](docs/solveetcoagula.png)
+
+Put Solve et Coagula on the music (a pad, lead or music bus) and feed the vocal into its
+**sidechain**. It follows the vocal in 8 bands from 250 Hz to 6.3 kHz. Where the vocal is
+loud enough and prominent, it opens a matching EQ dip in the music; when the vocal stops,
+the dips close. The music keeps its full sound between phrases, and the vocal sits on top
+without being turned up.
+
+- **Depth:** the deepest dip per band (default 6 dB).
+- **Sensitivity:** how quiet a vocal still triggers dips.
+- **Focus:** narrow cuts only the vocal's strongest bands; wide follows more of it.
+- **Speed:** how fast dips open and close (fast, medium or slow).
+- **Mix:** scales all dips (0% = off).
+
+With no sidechain, or a silent one, the music passes through bit-for-bit. The display shows
+the vocal's level per band (up) and the dip in the music (down).
+
+In FL Studio, select the vocal's mixer track, right-click the arrow below the music's
+track and choose **Sidechain to this track**. Then select that input in the plugin
+wrapper's settings, as for Kybalion's sidechain.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -412,12 +460,12 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the eleven `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the twelve `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
 4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
    and Mentalism last on the master,
    Ouroboros on any insert, Lapis on the master before Mentalism, Emerald Tablet wherever
-   you want the key detected, Azoth on its own track, and Prima Materia on individual tracks.
+   you want the key detected, Azoth on its own track, and Prima Materia on individual tracks, and Solve et Coagula on the music under a vocal.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
    sidechain, then select that input in the plugin's wrapper settings.
 
@@ -432,7 +480,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3 Azoth_VST3 PrimaMateria_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3 Azoth_VST3 PrimaMateria_VST3 SolveEtCoagula_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -442,7 +490,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests AzothTests PrimaMateriaTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests AzothTests PrimaMateriaTests SolveEtCoagulaTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -495,7 +543,16 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Melodia:** every note is in key (or in the chord), notes on the beat are chord tones,
   the answer repeats the call's rhythm, it stays within a singable range, it ends on the
   last chord's root, and seeds are reproducible. The breakdown teaser is sparser than the
-  drop melody.
+  drop melody. A dropped MIDI motif is rebased to bar 1 (top note per onset, 2 bars), the
+  call plays it as written, the answer keeps its rhythm and starts on a chord tone,
+  out-of-key notes are fitted to the key, and the motif survives a save and load.
+- **Bigger later drops:** the Drop 2+ scene adds on top of the Drop scene only from the
+  second drop; Azoth's later impacts are louder and swells longer; Prima Materia uses its
+  Drop 2+ column; the song lead goes up an octave.
+- **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
+  vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
+  depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
+  below the threshold is ignored; narrow focus leaves the vocal's weaker bands alone.
 - **Arrangement coach:** a flat arrangement gets flagged (breakdown only 1.0 LU below the
   drop, build not rising); a good arc gets no complaints; a weaker second drop is
   flagged.
@@ -532,7 +589,8 @@ plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop
 plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
 plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), ReverseSwell.h, section-driven triggering, tests
 plugins/PrimaMateria/    Params.h (per-section settings, role presets), section mixer, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all eleven
+plugins/SolveEtCoagula/  Unmasker.h (sidechain-keyed dynamic EQ), band display, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all twelve
 ```
 
 ## Licence note
