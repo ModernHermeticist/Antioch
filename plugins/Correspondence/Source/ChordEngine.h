@@ -738,6 +738,25 @@ namespace chords
         return file;
     }
 
+    /** Humanised MIDI: beats accented, off-beats a little, the rest softer, plus small
+        repeatable variations of velocity and timing (`amount` 0..1, the same `seed` gives
+        the same result). Starts stay at or after 0. */
+    inline std::vector<Note> humanise (std::vector<Note> notes, float amount, int seed)
+    {
+        if (amount <= 0.0f) return notes;
+        juce::Random rng ((juce::int64) seed * 104729 + 7);
+        for (auto& n : notes)
+        {
+            const auto inBeat = n.start - std::floor (n.start + 1.0e-9);
+            const auto accent = inBeat < 1.0e-6 ? 6.0f : std::abs (inBeat - 0.5) < 1.0e-6 ? 3.0f : -4.0f;
+            const auto jitter = (rng.nextFloat() * 2.0f - 1.0f) * 10.0f;
+            n.velocity = juce::jlimit (1, 127, (int) std::lround ((float) n.velocity + amount * (accent + jitter)));
+            const auto shift = (rng.nextDouble() * 2.0 - 1.0) * 0.012 * amount;   // about +-5 ms at 138 BPM, full amount
+            n.start = std::max (0.0, n.start + shift);
+        }
+        return notes;
+    }
+
     /** One MIDI file with a part per track (each on its own channel) and the song's sections
         as markers on the first track, for importing everything into FL in one go. */
     inline juce::MidiFile toMultiTrackMidi (const std::vector<std::pair<juce::String, std::vector<Note>>>& parts, double bpm,

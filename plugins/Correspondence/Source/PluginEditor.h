@@ -87,7 +87,7 @@ private:
 
     suite::ui::Choice voicing, chordPattern, bassPattern, arpPattern;
     suite::ui::Toggle voiceLead, addBass;
-    suite::ui::Knob registerOct, bassOctave, arpOctaves, previewVolume;
+    suite::ui::Knob registerOct, bassOctave, arpOctaves, previewVolume, humanise;
 
     DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile, melodyTile, songLeadTile;
     suite::ui::Choice melodyStyle;

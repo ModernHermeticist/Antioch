@@ -204,7 +204,8 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     directory.createDirectory();
     file.deleteFile();
     if (auto stream = file.createOutputStream())
-        chords::toMidiFile (notes, currentBpm.load(), "Correspondence " + kind).writeTo (*stream);
+        chords::toMidiFile (chords::humanise (notes, apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode()),
+                            currentBpm.load(), "Correspondence " + kind).writeTo (*stream);
     return file;
 }
 
@@ -243,6 +244,9 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
                                  juce::String (suite::sectionName (type)) + (n > 1 ? " " + juce::String (n) : juce::String())
                                      + (map.keyShiftOf (i) != 0 && i == map.lastDropIndex() ? " (key +" + juce::String (map.keyShiftOf (i)) + ")" : juce::String()) });
         }
+        const auto amount = apvts.getRawParameterValue (Params::humanise)->load();
+        for (auto& [name, notes] : parts)
+            notes = chords::humanise (notes, amount, ("Song " + name).hashCode());
         const auto file = folder.getChildFile (juce::File::createLegalFileName (key + " - all parts.mid"));
         if (auto stream = file.createOutputStream())
             chords::toMultiTrackMidi (parts, bpm, markers).writeTo (*stream);

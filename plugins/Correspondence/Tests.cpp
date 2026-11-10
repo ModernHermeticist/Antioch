@@ -288,6 +288,35 @@ int main (int argc, char** argv)
         check (chords::songClip (s, map, patterns, chords::SongPart::Bass).front().pitch % 12 == 9, "'Same as the drop' keeps Am first");
     }
 
+    section ("Humanised exports");
+    {
+        auto s = aMinor();
+        s.bassPattern = chords::BassPattern::Rolling;
+        const auto raw = chords::bassClip (s);
+        const auto human = chords::humanise (raw, 1.0f, 42);
+        double onBeat = 0.0, other = 0.0; int nOn = 0, nOther = 0;
+        bool timingSmall = human.size() == raw.size(), sameVelocities = true;
+        for (size_t i = 0; i < raw.size() && i < human.size(); ++i)
+        {
+            const auto inBeat = raw[i].start - std::floor (raw[i].start);
+            if (std::abs (inBeat - 0.5) < 1.0e-6) { onBeat += human[i].velocity; ++nOn; }
+            else if (inBeat > 1.0e-6) { other += human[i].velocity; ++nOther; }
+            timingSmall = timingSmall && std::abs (human[i].start - raw[i].start) <= 0.0121;
+            sameVelocities = sameVelocities && human[i].velocity == raw[i].velocity;
+        }
+        check (nOn > 0 && nOther > 0 && onBeat / nOn > other / nOther + 4.0, "off-beat bass notes are accented over the rest ("
+                   + juce::String (onBeat / nOn, 1) + " vs " + juce::String (other / nOther, 1) + ")");
+        check (timingSmall && ! sameVelocities, "timing moves by at most about 5 ms; velocities vary");
+        const auto again = chords::humanise (raw, 1.0f, 42);
+        bool same = again.size() == human.size();
+        for (size_t i = 0; same && i < again.size(); ++i) same = again[i].velocity == human[i].velocity && std::abs (again[i].start - human[i].start) < 1.0e-12;
+        check (same, "the same clip humanises the same way every time");
+        const auto none = chords::humanise (raw, 0.0f, 42);
+        bool untouched = none.size() == raw.size();
+        for (size_t i = 0; untouched && i < raw.size(); ++i) untouched = none[i].velocity == raw[i].velocity && std::abs (none[i].start - raw[i].start) < 1.0e-12;
+        check (untouched, "Humanise 0%: exactly the plain pattern");
+    }
+
     section ("New song (session preset)");
     {
         auto p = make();

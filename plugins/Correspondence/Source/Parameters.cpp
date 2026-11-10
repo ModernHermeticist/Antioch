@@ -71,6 +71,8 @@ namespace Params
         layout.add (std::make_unique<AudioParameterInt> (id (melodyOctave), "Melody Octave", 4, 6, 5));
         layout.add (std::make_unique<AudioParameterBool> (id (songLift), "Lead Up an Octave in Later Drops", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVary), "Vary the Lead and Add Harmony in Later Drops", true));
+        layout.add (std::make_unique<AudioParameterFloat> (id (humanise), "Humanise Exports", NormalisableRange<float> (0.0f, 1.0f), 0.3f,
+                                                           AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; })));
         layout.add (std::make_unique<AudioParameterChoice> (id (songBreakdown), "Breakdown Progression",
                                                             StringArray { "Same as the drop", "Start on VI", "Start on IV" }, 1));
 

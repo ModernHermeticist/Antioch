@@ -219,6 +219,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       bassOctave (p.apvts, Params::bassOctave, "Bass octave", Colours::brass),
       arpOctaves (p.apvts, Params::arpOctaves, "Arp octaves", Colours::amethyst),
       previewVolume (p.apvts, Params::preview, "Preview vol", Colours::text),
+      humanise (p.apvts, Params::humanise, "Humanise", Colours::text),
       chordTile (p, "Chords", accent),
       bassTile (p, "Bass", Colours::brass),
       arpTile (p, "Arp", Colours::amethyst),
@@ -290,7 +291,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &root, &scale, &perChord, &count, &broadcast, &acceptDetected, &broadcastStatus,
                                                              &presetCaption, &presetBox, &roll, &voicing, &chordPattern,
                                                              &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
-                                                             &bassOctave, &arpOctaves, &previewVolume, &chordTile, &bassTile,
+                                                             &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile,
                                                              &arpTile, &songChordTile, &songBassTile, &songArpTile,
                                                              &melodyTile, &songLeadTile, &melodyStyle, &newMelodyButton,
                                                              &playButton, &saveButton, &songButton })
@@ -579,8 +580,8 @@ void CorrespondenceEditor::resized()
     auto pa = inner (patternArea);
     auto paTop = pa.removeFromTop (pa.getHeight() / 2);
     layoutRow (paTop, { &chordPattern, &bassPattern, &arpPattern });
-    layoutRow (pa, { &bassOctave, &arpOctaves, &previewVolume });
-    for (auto* knob : { &bassOctave, &arpOctaves, &previewVolume })
+    layoutRow (pa, { &bassOctave, &arpOctaves, &humanise, &previewVolume });
+    for (auto* knob : { &bassOctave, &arpOctaves, &humanise, &previewVolume })
         knob->setBounds (knob->getBounds().withSizeKeepingCentre (knob->getWidth(), knob->getHeight() + 10));
 
     auto ex = inner (exportArea);
