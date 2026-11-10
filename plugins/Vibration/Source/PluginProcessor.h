@@ -7,6 +7,7 @@
 #include "SuiteDSP.h"
 #include "Spectrum.h"
 #include "Scenes.h"
+#include "Fingerprint.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
 {
@@ -39,6 +40,17 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyPreset (int index);
+
+    /** Lead fingerprint: measured on this plugin's output (needs ~5 s of the lead playing). */
+    analysis::BandAnalyzer outBands;
+    bool fingerprintReady() const { return outBands.longSeconds.load() >= 5.0f; }
+    fingerprint::Shape measuredShape() const;
+    /** Saves this lead's fingerprint as `name` in `dir` (message thread). */
+    bool saveFingerprint (const juce::File& dir, const juce::String& name);
+    /** Recalls a fingerprint's character and, once the lead has been heard, moves the EQ
+        towards its tone. Returns a line saying what changed. */
+    juce::String matchFingerprint (const fingerprint::Fingerprint&);
+    void restartFingerprintMeasure() { outBands.reset(); }
 
     /** Settings after the Euphoria macro is added (what is actually applied). */
     struct Effective { float air, presence, mud, drive, mbDepth, width; };

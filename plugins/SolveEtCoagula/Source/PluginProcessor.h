@@ -4,6 +4,7 @@
 #include "SuiteProcessor.h"
 #include "Unmasker.h"
 #include "Scenes.h"
+#include "VocalChops.h"
 
 class SolveEtCoagulaProcessor : public suite::SuiteProcessor
 {
@@ -36,7 +37,14 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     static inline const juce::String depthId { "depth" }, sensitivityId { "sensitivity" }, focusId { "focus" },
-                                     speedId { "speed" }, mixId { "mix" };
+                                     speedId { "speed" }, mixId { "mix" },
+                                     chopsOnId { "chops_on" }, chopsWhereId { "chops_where" }, chopsPatternId { "chops_pattern" },
+                                     chopsLevelId { "chops_level" }, chopsOctaveId { "chops_octave" };
+    enum ChopsWhere { inBuilds, inDrops, inBuildsAndDrops, inBreakdowns };
+
+    /** Vocal chops (from the sidechain vocal), for the UI and tests. */
+    VocalChops chops;
+    std::atomic<bool> chopsReady { false }, chopsPlaying { false };
 
     /** Sensitivity 0..100% maps to the vocal level where cutting starts (-30 .. -60 dB). */
     static float thresholdFor (float sensitivityPercent) { return -30.0f - 0.3f * sensitivityPercent; }
@@ -63,6 +71,8 @@ public:
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     double sampleRate = 48000.0;
+    suite::SectionFollower sections;
+    bool inChopSection = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaProcessor)
 };

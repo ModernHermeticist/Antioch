@@ -181,6 +181,50 @@ int main (int argc, char** argv)
                    + juce::String (dark, 2) + " < " + juce::String (usual, 2) + " < " + juce::String (euphoric, 2));
     }
 
+    section ("Lead fingerprint");
+    {
+        // Noise as a stand-in lead: a bright one to save, a dark one (one-pole low-passed) to match.
+        auto noise = [] (float lowpass)
+        {
+            auto rng = std::make_shared<juce::Random> (7);
+            auto state = std::make_shared<float> (0.0f);
+            return [rng, state, lowpass] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto x = 0.2f * (rng->nextFloat() * 2.0f - 1.0f);
+                    *state += lowpass * (x - *state);
+                    for (int c = 0; c < b.getNumChannels(); ++c) b.setSample (c, i, lowpass >= 1.0f ? x : *state);
+                }
+            };
+        };
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("VibrationFingerprints");
+        dir.deleteRecursively();
+
+        auto p = makeNeutral();
+        set (*p, Params::drive, 12.0f);
+        set (*p, Params::autoGain, 0.0f);
+        render (*p, 1.0, noise (1.0f));
+        check (! p->fingerprintReady() && ! p->saveFingerprint (dir, "Bright"), "needs about 5 s of the lead first");
+        render (*p, 5.5, noise (1.0f));
+        check (p->saveFingerprint (dir, "Bright"), "saves a fingerprint");
+        const auto saved = fingerprint::loadAll (dir);
+        check (saved.size() == 1 && saved[0].name == "Bright" && std::abs (saved[0].character.at (Params::drive) - 12.0f) < 0.01f,
+               "it loads back with its character (drive 12 dB)");
+
+        auto q = makeNeutral();
+        set (*q, Params::autoGain, 0.0f);
+        render (*q, 6.0, noise (0.08f));   // a dark lead from another synth
+        const auto airBefore = q->apvts.getRawParameterValue (Params::air)->load();
+        const auto line = q->matchFingerprint (saved[0]);
+        const auto airAfter = q->apvts.getRawParameterValue (Params::air)->load();
+        const auto presenceAfter = q->apvts.getRawParameterValue (Params::presence)->load();
+        check (std::abs (q->apvts.getRawParameterValue (Params::drive)->load() - 12.0f) < 0.01f, "matching recalls the character");
+        check (airAfter > airBefore + 2.0f && presenceAfter > 0.5f, "and opens the dark lead's top towards the saved tone (" + line + ")");
+        check (! q->fingerprintReady(), "then listens afresh for the next refinement");
+        dir.deleteRecursively();
+    }
+
     section ("Final-drop snapshot morph");
     {
         suite::MorphBus::withdraw();

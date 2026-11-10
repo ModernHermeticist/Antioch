@@ -64,7 +64,7 @@ private:
     void timerCallback() override;
     void send (suite::RecipeAction);
     juce::ComboBox names;
-    juce::TextButton save { "Save" }, load { "Load" };
+    juce::TextButton save { "Save" }, load { "Load" }, saveSignature { "Save as my signature" };
     juce::Label caption, result;
     uint32_t sentSeq = 0;
     juce::String sentWhat;
@@ -85,6 +85,7 @@ private:
 
     OuroborosProcessor& processor;
     juce::ComboBox style, root, scale, mood;
+    juce::ToggleButton signature { "Start from my signature" };
     juce::Label styleLabel, keyLabel, moodLabel, info, result;
     juce::TextButton go { "Set up the song" };
     uint32_t sentSeq = 0;

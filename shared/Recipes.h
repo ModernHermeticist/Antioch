@@ -24,6 +24,8 @@ namespace suite
 
     namespace Recipes
     {
+        /** Your signature: the recipe a new song can start from (your sound, every time). */
+        inline const juce::String signature { "My signature" };
         /** <user app data>/Antioch Suite/Recipes (tests can redirect it). */
         juce::File folder();
         void setFolderForTests (const juce::File&);

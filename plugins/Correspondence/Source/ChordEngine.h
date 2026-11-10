@@ -870,6 +870,7 @@ namespace chords
         bool varyLaterDrops = true;   // ... and is embellished, with a harmony line (SongPart::Harmony)
         int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV
         bool counter = true;          // a counter-melody wherever the full lead plays (SongPart::Counter)
+        bool phraseVariation = true;  // the last bar of each 8-bar phrase (inside a section) turns around: bass bounces octaves, arp lifts
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -942,12 +943,24 @@ namespace chords
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
             for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
+            {
+                int bounce = 0;
                 for (const auto& n : cycle)
                 {
                     const auto start = offset + n.start;
                     if (start >= endQ - 1.0e-9) continue;
-                    out.push_back ({ n.pitch + lift + keyChange, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                    // Phrase variation: the last bar of every 8-bar phrase that the section carries on
+                    // past is a turnaround (the section's own last bar is left to the transition).
+                    int turn = 0;
+                    const auto bar = (int) std::floor ((start - startQ) / 4.0 + 1.0e-9);
+                    if (patterns.phraseVariation && bar % 8 == 7 && start < endQ - 4.0 - 1.0e-9)
+                    {
+                        if (part == SongPart::Bass && start - (startQ + bar * 4.0) >= 2.0 - 1.0e-9) turn = (bounce++ % 2 == 1) ? 12 : 0;   // octave bounce on beats 3-4
+                        if (part == SongPart::Arp) turn = 12;                                                                            // the arp lifts an octave
+                    }
+                    out.push_back ({ n.pitch + lift + keyChange + turn, start, std::min (n.length, endQ - start - 0.01), n.velocity });
                 }
+            }
         }
         return out;
     }

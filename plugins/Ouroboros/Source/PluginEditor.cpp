@@ -324,9 +324,11 @@ RecipePanel::RecipePanel()
     result.setColour (juce::Label::textColourId, Colours::moss);
     save.onClick = [this] { send (suite::RecipeAction::Save); };
     load.onClick = [this] { send (suite::RecipeAction::Load); };
-    for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &caption, &result })
+    saveSignature.setTooltip ("Saves every suite plugin's settings as your signature: New song can start from it");
+    saveSignature.onClick = [this] { names.setText (suite::Recipes::signature, juce::dontSendNotification); send (suite::RecipeAction::Save); };
+    for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &saveSignature, &caption, &result })
         addAndMakeVisible (c);
-    setSize (460, 190);
+    setSize (460, 230);
     startTimerHz (4);
 }
 
@@ -356,6 +358,8 @@ void RecipePanel::resized()
     save.setBounds (row.removeFromRight (70).reduced (2, 0));
     names.setBounds (row.withTrimmedRight (6));
     r.removeFromTop (8);
+    saveSignature.setBounds (r.removeFromTop (30).removeFromLeft (200));
+    r.removeFromTop (8);
     result.setBounds (r.removeFromBottom (22));
     caption.setBounds (r);
 }
@@ -373,6 +377,11 @@ SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
     mood.setSelectedId (1, juce::dontSendNotification);
     style.onChange = [this] { updateInfo(); };
     mood.onChange = [this] { updateInfo(); };
+    const auto hasSignature = suite::Recipes::list().contains (suite::Recipes::signature);
+    signature.setToggleState (hasSignature, juce::dontSendNotification);
+    signature.setEnabled (hasSignature);
+    signature.setTooltip (hasSignature ? "Loads your signature recipe into every plugin first, then the style and key"
+                                       : "Save one first: Recipes..., Save as my signature");
     for (auto* l : { &styleLabel, &keyLabel, &moodLabel, &info, &result })
     {
         l->setFont (juce::FontOptions (13.0f));
@@ -387,10 +396,10 @@ SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
     go.onClick = [this]
     {
         sentSeq = processor.startSession (style.getSelectedId() - 1, root.getSelectedId() - 1, scale.getSelectedId() - 1,
-                                           mood.getSelectedId() - 1);
+                                           mood.getSelectedId() - 1, signature.getToggleState());
         timerCallback();
     };
-    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &mood, &go })
+    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &mood, &signature, &go })
         addAndMakeVisible (c);
     updateInfo();
     setSize (460, 290);
@@ -448,6 +457,7 @@ void SessionPanel::resized()
     result.setBounds (r.removeFromBottom (22));
     auto bottom = r.removeFromBottom (32);
     go.setBounds (bottom.removeFromRight (160));
+    signature.setBounds (bottom.removeFromLeft (220));
     info.setBounds (r);
 }
 

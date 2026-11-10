@@ -172,8 +172,15 @@ public:
     /** New song: builds this style's map (Arrange), sets its key change, and asks the rest of
         the suite to set up (key, progression, loudness target, scenes). Returns the message's
         sequence number, for counting the plugins that answered. */
-    uint32_t startSession (int styleIndex, int root, int scale, int moodIndex = 0)
+    uint32_t startSession (int styleIndex, int root, int scale, int moodIndex = 0, bool fromSignature = false)
     {
+        // Your signature first (every plugin's own sound), then the song's style and key on top.
+        // Ouroboros keeps its new map: it skips the signature itself.
+        if (fromSignature && suite::Recipes::list().contains (suite::Recipes::signature))
+        {
+            suite::RecipeBus::send (suite::RecipeAction::Load, suite::Recipes::signature);
+            ignorePendingRecipes();
+        }
         const auto& mood = suite::sessionMood (moodIndex);
         const auto& style = suite::sessionStyles()[(size_t) juce::jlimit (0, (int) suite::sessionStyles().size() - 1, styleIndex)];
         arrangement::GenSettings g;

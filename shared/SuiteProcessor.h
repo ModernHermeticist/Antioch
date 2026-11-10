@@ -224,6 +224,9 @@ namespace suite
             e.g. a shorter map or a streaming loudness target. Return true if anything changed. */
         virtual bool applyVersion (int /*kind*/) { return false; }
 
+        /** Skips recipe messages already sent (Ouroboros, which sent them itself). */
+        void ignorePendingRecipes() { lastRecipeSeen = RecipeBus::latest(); }
+
         /** Recipes: save or load this plugin's settings under a recipe name (message thread). */
         void pollRecipes()
         {
@@ -356,8 +359,8 @@ namespace suite
             void timerCallback() override
             {
                 owner.pollSnapshots();
+                owner.pollRecipes();   // before sessions: a new song can load your signature, then set its key
                 owner.pollSession();
-                owner.pollRecipes();
                 if (++ticks % 5 == 1) owner.announce();
             }
             int ticks = 0;

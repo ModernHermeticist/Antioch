@@ -74,6 +74,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterFloat> (id (humanise), "Humanise Exports", NormalisableRange<float> (0.0f, 1.0f), 0.3f,
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; })));
         layout.add (std::make_unique<AudioParameterBool> (id (songCounter), "Counter-Melody", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songPhrase), "Phrase Variation", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (groove), "Groove", StringArray { "Straight", "Trance shuffle", "Hard shuffle" }, 0));
         layout.add (std::make_unique<AudioParameterBool> (id (accentCC), "Accents as CC 74", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (songBreakdown), "Breakdown Progression",
@@ -126,6 +127,7 @@ namespace Params
         p.varyLaterDrops = state.getRawParameterValue (songVary)->load() > 0.5f;
         p.breakdownStart = (int) state.getRawParameterValue (songBreakdown)->load();
         p.counter = state.getRawParameterValue (songCounter)->load() > 0.5f;
+        p.phraseVariation = state.getRawParameterValue (songPhrase)->load() > 0.5f;
         return p;
     }
 

@@ -24,7 +24,11 @@ private:
     juce::Label status;
     suite::ui::TabBar viewTabs;
     std::unique_ptr<suite::ui::ScenePanel> scenePanel;
-    juce::Rectangle<int> bandArea, controlArea;
+    suite::ui::Toggle chopsOn, chopsOctave;
+    suite::ui::Choice chopsWhere, chopsPattern;
+    suite::ui::Knob chopsLevel;
+    juce::Label chopsStatus;
+    juce::Rectangle<int> bandArea, controlArea, chopsArea;
     std::array<float, Unmasker::numBands> cutShown {}, keyShown {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaEditor)

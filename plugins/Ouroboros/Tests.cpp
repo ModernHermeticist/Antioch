@@ -390,6 +390,21 @@ int main (int argc, char** argv)
         const auto missing = suite::RecipeBus::send (suite::RecipeAction::Load, "No such recipe");
         q->pollRecipes();
         check (suite::RecipeBus::acknowledgements (missing) == 0 && q->getMap() == original, "an unknown recipe changes nothing");
+
+        // Your signature: New song loads it into the suite first, then the style and key.
+        const auto sig = suite::RecipeBus::send (suite::RecipeAction::Save, suite::Recipes::signature);
+        p->pollRecipes();
+        check (suite::RecipeBus::acknowledgements (sig) == 1, "Save as my signature stores a recipe called '" + suite::Recipes::signature + "'");
+        const auto beforeSession = suite::RecipeBus::latest();
+        const auto sessionSeq = q->startSession (0, 2, 0, 0, true);
+        suite::RecipeAction action {};
+        juce::String name;
+        check (suite::RecipeBus::latest() == beforeSession + 1 && suite::RecipeBus::read (beforeSession + 1, action, name)
+                   && action == suite::RecipeAction::Load && name == suite::Recipes::signature && sessionSeq != 0,
+               "New song from my signature: the suite loads the signature, then gets the session");
+        const auto sessionMap = q->getMap();
+        q->pollRecipes();
+        check (q->getMap() == sessionMap && sessionMap.totalBars == 240, "Ouroboros keeps the new song's map (it skips its own signature)");
         folder.deleteRecursively();
         suite::Recipes::setFolderForTests ({});
     }

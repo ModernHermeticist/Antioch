@@ -19,6 +19,11 @@ namespace
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return v < 9.0f ? String ("Narrow") : v > 18.0f ? String ("Wide") : String (roundToInt (v)) + " dB"; })));
         l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::speedId, 1 }, "Speed", StringArray { "Fast", "Medium", "Slow" }, 1));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { P::mixId, 1 }, "Mix", NormalisableRange<float> (0.0f, 100.0f), 100.0f, percent));
+        l.add (std::make_unique<AudioParameterBool> (ParameterID { P::chopsOnId, 1 }, "Vocal Chops", false));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::chopsWhereId, 1 }, "Chops In", StringArray { "Builds", "Drops", "Builds and drops", "Breakdowns" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::chopsPatternId, 1 }, "Chop Pattern", StringArray { "Stutter", "Off-beats", "3-3-2", "Shuffled" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (ParameterID { P::chopsLevelId, 1 }, "Chops Level", NormalisableRange<float> (-24.0f, 6.0f), -6.0f, db));
+        l.add (std::make_unique<AudioParameterBool> (ParameterID { P::chopsOctaveId, 1 }, "Chops Octave Up", false));
         suite::SceneEngine::addParameters (l);
         return l;
     }
@@ -59,6 +64,8 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     unmasker.prepare (sampleRate);
+    chops.prepare (sampleRate);
+    inChopSection = false;
     scenes.prepare();
 }
 
@@ -68,7 +75,8 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
     static const float attack[] = { 3.0f, 10.0f, 25.0f }, release[] = { 60.0f, 150.0f, 350.0f };
     const auto speed = juce::jlimit (0, 2, (int) value (speedId));
-    scenes.beginBlock (suite::HostInfo::read (getPlayHead()), sampleRate, buffer.getNumSamples());
+    const auto host = suite::HostInfo::read (getPlayHead());
+    scenes.beginBlock (host, sampleRate, buffer.getNumSamples());
     Unmasker::Settings s;
     s.depthDb = scenes.plain (sDepth);
     s.thresholdDb = thresholdFor (scenes.plain (sSensitivity));
@@ -89,6 +97,22 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     auto* right = mainBus.getNumChannels() > 1 ? mainBus.getWritePointer (1) : nullptr;
     float keyPeak = 0.0f;
 
+    // Vocal chops: listen to the vocal outside the chop sections, play its last bar chopped inside them.
+    const auto chopsOn = value (chopsOnId) > 0.5f && scActive && sections.refresh() && host.playing && host.hasPpq;
+    const auto where = (int) value (chopsWhereId);
+    const auto chopPattern = (int) value (chopsPatternId);
+    const auto octaveUp = value (chopsOctaveId) > 0.5f;
+    const auto chopGain = juce::Decibels::decibelsToGain (value (chopsLevelId));
+    const auto barQ = host.barQuarters();
+    const auto qPerSample = host.quartersPerSample (sampleRate);
+    bool played = false;
+    auto isChopSection = [where] (suite::SectionType t)
+    {
+        using T = suite::SectionType;
+        return where == inBuilds ? t == T::Build : where == inDrops ? t == T::Drop
+             : where == inBuildsAndDrops ? (t == T::Build || t == T::Drop) : t == T::Breakdown;
+    };
+
     for (int n = 0; n < numSamples; ++n)
     {
         float key = 0.0f;
@@ -101,9 +125,29 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         auto l = left[n];
         auto r = right != nullptr ? right[n] : l;
         unmasker.process (l, r, key);
+        if (chopsOn)
+        {
+            const auto pos = host.ppq + qPerSample * n;
+            auto posInBar = std::fmod (pos, barQ);
+            if (posInBar < 0.0) posInBar += barQ;
+            const auto sec = sections.locate (pos, barQ);
+            const auto chopHere = sec.valid && isChopSection (sec.type);
+            if (chopHere && ! inChopSection) chops.finishBar (barQ, qPerSample);   // keep the bar just heard, if it was a whole one
+            inChopSection = chopHere;
+            if (chopHere)
+            {
+                const auto c = chops.play (posInBar, barQ, qPerSample, chopPattern, octaveUp) * chopGain;
+                l += c; r += c;
+                played = played || chops.ready();
+            }
+            else
+                chops.listen (key, posInBar, barQ, qPerSample);
+        }
         left[n] = l;
         if (right != nullptr) right[n] = r;
     }
+    chopsReady.store (chops.ready());
+    chopsPlaying.store (played);
     vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > s.thresholdDb);
 }
 

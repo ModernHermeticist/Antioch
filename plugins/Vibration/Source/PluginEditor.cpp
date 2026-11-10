@@ -56,6 +56,13 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
     viewTabs.onChange = [this] (int i) { spectrum.setVisible (i == 0); scenePanel->setVisible (i == 1); repaint(); };
     viewTabs.onChange (0);
 
+    fingerprintButton.setTooltip ("Save this lead's sound as your fingerprint, or match a new lead to one you saved");
+    fingerprintButton.onClick = [this] { showFingerprintMenu(); };
+    fingerprintStatus.setFont (juce::FontOptions (12.0f));
+    fingerprintStatus.setJustificationType (juce::Justification::centredRight);
+    fingerprintStatus.setColour (juce::Label::textColourId, Colours::dimText);
+    addAndMakeVisible (fingerprintButton);
+    addAndMakeVisible (fingerprintStatus);
     setSize (1000, 660);
     timerCallback();
     startTimerHz (30);
@@ -97,10 +104,46 @@ void VibrationEditor::paint (juce::Graphics& g)
     drawPanel (g, widthArea, "Width", Colours::moss);
 }
 
+void VibrationEditor::showFingerprintMenu()
+{
+    const auto saved = fingerprint::loadAll (fingerprint::folder());
+    juce::PopupMenu m;
+    m.addItem (1, processor.fingerprintReady() ? "Save this lead's fingerprint..." : "Save this lead's fingerprint (play it for 5 s first)",
+               processor.fingerprintReady());
+    if (! saved.empty()) m.addSeparator();
+    for (size_t i = 0; i < saved.size(); ++i) m.addItem (100 + (int) i, "Match: " + saved[i].name);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fingerprintButton), [this, saved] (int id)
+    {
+        if (id >= 100 && id - 100 < (int) saved.size())
+            fingerprintStatus.setText (processor.matchFingerprint (saved[(size_t) (id - 100)]), juce::dontSendNotification);
+        else if (id == 1)
+        {
+            nameWindow = std::make_unique<juce::AlertWindow> ("Lead fingerprint", "Name this lead sound:", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My lead");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr)
+                {
+                    const auto name = nameWindow->getTextEditorContents ("name").trim();
+                    fingerprintStatus.setText (processor.saveFingerprint (fingerprint::folder(), name) ? "Saved '" + name + "'"
+                                                                                                    : juce::String ("Couldn't save it"),
+                                               juce::dontSendNotification);
+                }
+            }));
+        }
+    });
+}
+
 void VibrationEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
-    bounds.removeFromTop (48);
+    {
+        auto header = bounds.removeFromTop (48);
+        fingerprintButton.setBounds (header.removeFromRight (170).reduced (4, 8));
+        fingerprintStatus.setBounds (header.removeFromRight (420).reduced (4, 8));
+    }
 
     auto bottom = bounds.removeFromBottom (190);
     bounds.removeFromBottom (12);

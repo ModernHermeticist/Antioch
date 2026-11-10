@@ -646,6 +646,32 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Phrase turnarounds");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };   // one 16-bar drop: phrases end at bars 8 and 16
+        chords::SongPatterns on, off;
+        off.phraseVariation = false;
+        for (auto part : { chords::SongPart::Bass, chords::SongPart::Arp })
+        {
+            const auto a = chords::songClip (s, map, on, part), b = chords::songClip (s, map, off, part);
+            bool sameShape = a.size() == b.size() && ! a.empty();
+            int changedIn8 = 0, changedElsewhere = 0;
+            for (size_t i = 0; sameShape && i < a.size(); ++i)
+            {
+                if (a[i].pitch == b[i].pitch) continue;
+                const auto inBar8 = a[i].start >= 28.0 && a[i].start < 32.0;
+                (inBar8 ? changedIn8 : changedElsewhere)++;
+                sameShape = a[i].pitch - b[i].pitch == 12;
+            }
+            check (sameShape && changedIn8 > 0 && changedElsewhere == 0,
+                   juce::String (part == chords::SongPart::Bass ? "bass" : "arp") + ": only bar 8 turns around, an octave up ("
+                       + juce::String (changedIn8) + " notes; the section's last bar is left alone)");
+        }
+    }
+
     section ("Learning chords, DNA and groove from MIDI");
     {
         const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceLearnTest");

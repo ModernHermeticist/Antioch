@@ -15,12 +15,18 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
       focus (p.apvts, P::focusId, "Focus", accent),
       mix (p.apvts, P::mixId, "Mix", Colours::brass),
       speed (p.apvts, P::speedId, "Speed"),
-      viewTabs ({ "BANDS", "SCENES" }, { accent, Colours::ember })
+      viewTabs ({ "BANDS", "SCENES" }, { accent, Colours::ember }),
+      chopsOn (p.apvts, P::chopsOnId, "Vocal chops", Colours::ember),
+      chopsOctave (p.apvts, P::chopsOctaveId, "Octave up", accent),
+      chopsWhere (p.apvts, P::chopsWhereId, "Chops in"),
+      chopsPattern (p.apvts, P::chopsPatternId, "Pattern"),
+      chopsLevel (p.apvts, P::chopsLevelId, "Level", Colours::ember)
 {
     setLookAndFeel (&lnf);
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &depth, &sensitivity, &focus, &speed, &mix, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &depth, &sensitivity, &focus, &speed, &mix, &status,
+                                                             &chopsOn, &chopsOctave, &chopsWhere, &chopsPattern, &chopsLevel, &chopsStatus })
         addAndMakeVisible (c);
     keyShown.fill (-100.0f);
     scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
@@ -28,7 +34,10 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
     addAndMakeVisible (viewTabs);
     viewTabs.setComponentID ("tabs");
     viewTabs.onChange = [this] (int i) { scenePanel->setVisible (i == 1); repaint(); };
-    setSize (860, 620);
+    chopsStatus.setFont (juce::FontOptions (12.0f));
+    chopsStatus.setJustificationType (juce::Justification::centredLeft);
+    chopsStatus.setColour (juce::Label::textColourId, Colours::dimText);
+    setSize (860, 780);
     timerCallback();
     startTimerHz (30);
 }
@@ -56,6 +65,10 @@ void SolveEtCoagulaEditor::timerCallback()
         text = "Sidechain connected; waiting for the vocal.";
     status.setColour (juce::Label::textColourId, processor.sidechainConnected.load() ? Colours::text : Colours::dimText);
     status.setText (text, juce::dontSendNotification);
+    chopsStatus.setText (processor.chopsPlaying.load() ? "Chopping the vocal's last bar."
+                         : processor.chopsReady.load() ? "A bar of vocal is ready to chop."
+                                                       : "Listens to the sidechain vocal outside the chop sections and keeps its last whole bar.",
+                         juce::dontSendNotification);
     suite::ui::updateSceneGhosts (*this, processor.scenes);
     repaint (bandArea);
 }
@@ -65,6 +78,7 @@ void SolveEtCoagulaEditor::paint (juce::Graphics& g)
     g.fillAll (Colours::background);
     drawHeader (g, { 20, 12, 760, 32 }, "SOLVE ET COAGULA", "vocal unmasking", accent);
     drawPanel (g, controlArea, "Controls", accent);
+    drawPanel (g, chopsArea, "Vocal chops (on top of the music)", Colours::ember);
     if (viewTabs.getSelected() == 1)
         return;   // the scene panel draws itself
     drawPanel (g, bandArea, "Bands  (vocal level up, music cut down)");
@@ -116,7 +130,17 @@ void SolveEtCoagulaEditor::resized()
     bandArea = bounds.removeFromTop (300);
     scenePanel->setBounds (bandArea);
     bounds.removeFromTop (12);
+    chopsArea = bounds.removeFromBottom (140);
+    bounds.removeFromBottom (12);
     controlArea = bounds;
+
+    auto ch = chopsArea.reduced (12, 8).withTrimmedTop (14);
+    chopsStatus.setBounds (ch.removeFromBottom (22));
+    chopsOn.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (130, 30));
+    chopsWhere.setBounds (ch.removeFromLeft (170));
+    chopsPattern.setBounds (ch.removeFromLeft (150));
+    chopsLevel.setBounds (ch.removeFromLeft (110));
+    chopsOctave.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (120, 30));
 
     auto c = controlArea.reduced (12, 8).withTrimmedTop (14);
     status.setBounds (c.removeFromBottom (36));

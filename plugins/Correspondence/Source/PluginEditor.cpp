@@ -342,6 +342,10 @@ namespace
             counter = std::make_unique<juce::ToggleButton> ("Counter-melody");
             counterAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songCounter, *counter);
             addAndMakeVisible (*counter);
+            phrase = std::make_unique<juce::ToggleButton> ("Phrase turnarounds");
+            phrase->setTooltip ("The last bar of every 8-bar phrase: the bass bounces octaves and the arp lifts an octave");
+            phraseAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songPhrase, *phrase);
+            addAndMakeVisible (*phrase);
             vary = std::make_unique<juce::ToggleButton> ("Vary the lead + harmony in drop 2+");
             varyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songVary, *vary);
             addAndMakeVisible (*vary);
@@ -371,7 +375,7 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (900, 400);
+            setSize (1060, 400);
         }
 
         void paint (juce::Graphics& g) override
@@ -392,6 +396,7 @@ namespace
                 auto extras = r.removeFromBottom (30);
                 grooveBox->setBounds (extras.removeFromLeft (160).reduced (2));
                 accent->setBounds (extras.removeFromLeft (170));
+                phrase->setBounds (extras.removeFromLeft (160));
                 artist.setBounds (extras.removeFromRight (200).reduced (2));
                 title.setBounds (extras.removeFromRight (260).reduced (2));
             }
@@ -418,8 +423,8 @@ namespace
         std::vector<std::unique_ptr<juce::ComboBox>> boxes;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
-        std::unique_ptr<juce::ToggleButton> lift, vary, counter;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment;
+        std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;
         std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox;
         std::unique_ptr<juce::ToggleButton> accent;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> grooveAttachment;

@@ -45,6 +45,7 @@ void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBloc
     sampleRate = newSampleRate;
     const auto sr = (float) sampleRate;
     scenes.prepare();
+    outBands.prepare (sampleRate);
 
     oversampler = std::make_unique<juce::dsp::Oversampling<float>> (
         2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, true);
@@ -99,6 +100,7 @@ void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int i = 0; i < n; ++i)
     {
         monoScratch[(size_t) i] = 0.5f * (L[i] + R[i]);
+        outBands.process (L[i], R[i]);
         inPower += powerCoeff * (L[i] * L[i] + R[i] * R[i] - inPower);
     }
     inputTap.push (monoScratch.data(), n);
@@ -234,6 +236,45 @@ void VibrationProcessor::applyPreset (int index)
             param->setValueNotifyingHost (param->convertTo0to1 (v));
             param->endChangeGesture();
         }
+}
+
+fingerprint::Shape VibrationProcessor::measuredShape() const
+{
+    fingerprint::Shape bands {};
+    for (size_t b = 0; b < bands.size(); ++b) bands[b] = outBands.longDb[b].load();
+    return fingerprint::shapeOf (bands);
+}
+
+bool VibrationProcessor::saveFingerprint (const juce::File& dir, const juce::String& name)
+{
+    if (! fingerprintReady() || name.trim().isEmpty()) return false;
+    fingerprint::Fingerprint f;
+    f.name = name.trim();
+    f.shape = measuredShape();
+    for (const auto& id : fingerprint::characterIds())
+        f.character[id] = apvts.getRawParameterValue (id)->load();
+    return fingerprint::save (dir, f);
+}
+
+juce::String VibrationProcessor::matchFingerprint (const fingerprint::Fingerprint& f)
+{
+    for (const auto& [id, v] : f.character) setParameterPlain (apvts, id, v);
+    if (! fingerprintReady())
+        return "Recalled the character of '" + f.name + "'. Play the lead for 5 s and match again for its tone.";
+    const auto move = fingerprint::eqTowards (measuredShape(), f.shape);
+    auto nudge = [this] (const juce::String& id, float db)
+    {
+        auto* p = apvts.getParameter (id);
+        const auto now = apvts.getRawParameterValue (id)->load();
+        setParameterPlain (apvts, id, p->getNormalisableRange().snapToLegalValue (now + db));
+    };
+    nudge (Params::mud, move.mud);
+    nudge (Params::presence, move.presence);
+    nudge (Params::air, move.air);
+    outBands.reset();   // measure the new tone afresh
+    auto fmt = [] (float v) { return (v >= 0.0f ? "+" : "") + juce::String (v, 1); };
+    return "Matched '" + f.name + "': character recalled; mud " + fmt (move.mud) + ", presence " + fmt (move.presence)
+         + ", air " + fmt (move.air) + " dB. Match again to refine.";
 }
 
 juce::AudioProcessorEditor* VibrationProcessor::createEditor()

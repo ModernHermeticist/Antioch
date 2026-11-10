@@ -225,6 +225,64 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Vocal chops");
+    {
+        // 120 BPM (2 s bars): the vocal sings in the breakdown (bars 1-4), the build (bars 5-6) is chopped.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 3;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Build };
+        map.sections[2] = { 7, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        auto p = make (true);
+        set (*p, P::chopsOnId, 1.0f);
+        set (*p, P::chopsLevelId, 0.0f);
+        set (*p, suite::SceneEngine::enabledId, 0.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        // The vocal: a different note on each beat (300, 400, 500, 600 Hz), only in the breakdown.
+        auto vocal = [] (int64_t i)
+        {
+            const auto t = (double) i / sampleRate;
+            if (t >= 8.0) return 0.0f;
+            const auto beat = (int) std::fmod (t / 0.5, 4.0);
+            return 0.2f * (float) std::sin (twoPi * (300.0 + 100.0 * beat) * t);
+        };
+        std::vector<float> out;
+        const auto total = (int64_t) (12.0 * sampleRate);
+        juce::AudioBuffer<float> buffer (4, blockSize);
+        juce::MidiBuffer midi;
+        for (int64_t pos = 0; pos < total; pos += blockSize)
+        {
+            const auto n = (int) std::min<int64_t> (blockSize, total - pos);
+            buffer.setSize (4, n, false, false, true);
+            buffer.clear();
+            for (int i = 0; i < n; ++i) { buffer.setSample (2, i, vocal (pos + i)); buffer.setSample (3, i, vocal (pos + i)); }
+            p->processBlock (buffer, midi);
+            for (int i = 0; i < n; ++i) out.push_back (buffer.getSample (0, i));
+            head.ppq += n * head.bpm / 60.0 / sampleRate;
+        }
+        p->setPlayHead (nullptr);
+        auto band = [&] (double hz, double t0, double t1)
+        {
+            double sn = 0.0, cs = 0.0;
+            for (auto i = (size_t) (t0 * sampleRate); i < (size_t) (t1 * sampleRate); ++i)
+            {
+                sn += out[i] * std::sin (twoPi * hz * (double) i / sampleRate);
+                cs += out[i] * std::cos (twoPi * hz * (double) i / sampleRate);
+            }
+            return (float) (2.0 * std::sqrt (sn * sn + cs * cs) / ((t1 - t0) * sampleRate));
+        };
+        check (rmsDb (out, 0.5, 7.9) < -100.0f, "nothing added while it listens (the music bus here is silent)");
+        check (p->chopsReady.load() && rmsDb (out, 8.0, 12.0) > -30.0f, "the build plays chops of the vocal's last bar");
+        // Stutter: beat 1's first 1/16 four times, then beat 2's... so 300 Hz in the first beat, 400 Hz in the second.
+        check (band (300.0, 8.01, 8.1) > 4.0f * band (400.0, 8.01, 8.1) && band (400.0, 8.51, 8.6) > 4.0f * band (300.0, 8.51, 8.6),
+               "on the beat grid: beat 1 gets the 300 Hz slice, beat 2 the 400 Hz one");
+        check (rmsDb (out, 8.106, 8.124) < rmsDb (out, 8.02, 8.09) - 20.0f, "each chop is gated before the next 1/16");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Layouts and state");
     {
         P p;

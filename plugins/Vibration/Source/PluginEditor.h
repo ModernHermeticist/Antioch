@@ -32,6 +32,11 @@ private:
 
     suite::ui::Knob lowCut, mud, presence, air, drive, satMix, mbDepth, mbTime, width, monoBelow;
 
+    juce::TextButton fingerprintButton { "Lead fingerprint..." };
+    juce::Label fingerprintStatus;
+    std::unique_ptr<juce::AlertWindow> nameWindow;
+    void showFingerprintMenu();
+
     juce::Rectangle<int> macroArea, spectrumArea, eqArea, satArea, mbArea, widthArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VibrationEditor)

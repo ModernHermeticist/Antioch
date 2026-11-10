@@ -201,6 +201,13 @@ Pad, Vocal chop, Arp, Clean), then fine-tune:
 - **Auto gain:** on by default. It matches the output level to the input, so you judge
   the tone rather than the volume.
 - The spectrum shows input (grey) against output (gold).
+- **Lead fingerprint…** keeps your lead sound across projects. Play the lead for about 5
+  seconds and choose *Save this lead's fingerprint*: it stores the character (Euphoria,
+  low cut, drive, saturation, multiband, width) and the tone of the processed lead (its
+  octave-band shape from 125 Hz up). In another song, on another synth, choose *Match:
+  <name>*: the character comes back, and Mud, Presence and Air move 70% of the way towards
+  the stored tone. Play it again and match once more to refine. Fingerprints live in
+  *Antioch Suite/Lead fingerprints*.
 
 ## Mentalism: mix assistant
 
@@ -379,6 +386,11 @@ At the usual levels nothing changes.
 matched by track name, or by plugin when it's used once) and loads them into any other
 project: your go-to anthem setup in one click. Recipes live in your user application
 data folder under *Antioch Suite/Recipes*.
+
+**Your signature.** *Save as my signature* (in Recipes…) stores the whole suite as you like
+it: your reverb, gate, lead chain, loudness habits. **New song…** then offers *Start from
+my signature*: every plugin loads your signature first, and the style, key and mood go on
+top. Ouroboros keeps the new song's map.
 
 **Make versions** keeps the current song in snapshot A, then makes a **radio edit** in B
 (about 3:30, short intro and breakdown, at most two drops, streaming loudness target) and
@@ -670,6 +682,11 @@ change. Both are saved with the project.
 default) also writes each note's accent as a CC 74 value just before it, so a synth's
 filter cutoff can follow the groove: map CC 74 to cutoff in your synth.
 
+**Phrase turnarounds** (Song patterns, on by default): in the last bar of every 8-bar
+phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp lifts an
+octave, so long sections keep moving. The section's own last bar is left to the
+transition.
+
 ### Melodia: lead melodies
 
 Correspondence also writes a lead melody over the progression, shown in orange in the
@@ -732,6 +749,13 @@ and shallower in breakdowns.
 
 With no sidechain, or a silent one, the music passes through bit-for-bit. The display shows
 the vocal's level per band (up) and the dip in the music (down).
+
+**Vocal chops.** Since Solve et Coagula already hears the vocal, it can chop it too. Turn
+on **Vocal chops** and choose where they play (builds, drops, both, or breakdowns). Outside
+those sections it keeps the last whole bar of vocal it heard; inside them it cuts that bar
+into sixteen 1/16 slices and plays them on the beat grid, on top of the music bus:
+**Stutter** (each beat's first slice four times), **Off-beats**, **3-3-2** or **Shuffled**,
+with a crisp gate on every chop, **Level**, and **Octave up**.
 
 In FL Studio, select the vocal's mixer track, right-click the arrow below the music's
 track and choose **Sidechain to this track**. Then select that input in the plugin
@@ -916,6 +940,14 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   it, in key, with chord tones on the beat; in the song it plays with the full lead in the
   drop, not under the breakdown teaser, and can be switched off; Export all gains the
   Counter clip and track.
+- **Phrase turnarounds:** in a 16-bar drop only bar 8 changes: 3 bass notes and 16 arp
+  notes an octave up; bar 16 is left alone.
+- **Signature:** *Save as my signature* stores a recipe; New song from it sends the
+  signature load just before the session, and Ouroboros keeps the new 240-bar map.
+- **Lead fingerprint:** needs 5 s of the lead; saves and loads back with its character;
+  matching a dark lead to a bright fingerprint recalls drive and opens presence and air.
+- **Vocal chops:** silent while listening; in the build it plays the breakdown vocal's last
+  bar, 300 Hz on beat 1 and 400 Hz on beat 2 (Stutter), each chop gated before the next 1/16.
 - **Learning from MIDI:** an Am F C G block-chord clip sets A minor, 4 chords, i VI III
   VII; two melody clips teach DNA (16 notes) that keeps their dotted rhythm, new melodies
   land on it, it's saved and Forget clears it; Trance shuffle moves only the off 16ths;
