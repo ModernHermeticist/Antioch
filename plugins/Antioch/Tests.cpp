@@ -224,6 +224,48 @@ int main (int argc, char** argv)
         check (peakBetween (audio, 9.9, 10.6) > 0.05f, "throws at the end of the Drop (10 s)");
     }
 
+    section ("Section scenes");
+    {
+        suite::SectionMap map;   // Groove bars 1-2, Breakdown 3-4 (120 BPM: 2 s per bar)
+        map.totalBars = 4; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+
+        auto p = make();
+        set (*p, suite::SceneEngine::morphId, 0.0f);       // instant, for a crisp measurement
+        const auto base = p->apvts.getParameter (Params::verbLevel)->getValue();
+        suite::SectionBus::publish (map);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        float inGroove = -1.0f, inBreakdown = -1.0f;
+        render (*p, 7.0, pluck(), nullptr, &head, [&] (int64_t pos)
+        {
+            const auto t = (double) pos / sampleRate;
+            if (inGroove < 0.0f && t > 2.0) inGroove = p->scenes.getEffective (AntiochProcessor::sVerb);
+            if (inBreakdown < 0.0f && t > 5.0) inBreakdown = p->scenes.getEffective (AntiochProcessor::sVerb);
+        });
+        check (std::abs (inGroove - base) < 1.0e-4f, "Groove has no reverb offset");
+        check (std::abs (inBreakdown - (base + 0.25f)) < 1.0e-3f, "Breakdown scene adds +25% reverb ("
+                                                                       + juce::String (base, 2) + " -> " + juce::String (inBreakdown, 2) + ")");
+        check (std::abs (p->apvts.getParameter (Params::verbLevel)->getValue() - base) < 1.0e-6f, "the knob itself doesn't move");
+
+        set (*p, suite::SceneEngine::enabledId, 0.0f);
+        head.ppq = 4.0 * 2.5;
+        render (*p, 0.1, {}, nullptr, &head);
+        check (std::abs (p->scenes.getEffective (AntiochProcessor::sVerb) - base) < 1.0e-4f, "Scenes off: back to the knob value");
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+
+        p->scenes.setOffset ((int) suite::SectionType::Drop, AntiochProcessor::sEcho, -0.4f);
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (std::abs (q->scenes.getOffset ((int) suite::SectionType::Drop, AntiochProcessor::sEcho) + 0.4f) < 1.0e-3f,
+               "scenes are saved with the project");
+    }
+
     section ("Key follow via KeyBus");
     {
         auto p = make();
@@ -262,8 +304,8 @@ int main (int argc, char** argv)
         auto p = make();
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         auto* tabs = dynamic_cast<suite::ui::TabBar*> (editor->findChildWithID ("tabs"));
-        const char* names[] = { "antioch_echo.png", "antioch_reverb.png", "antioch_throw.png" };
-        for (int i = 0; i < 3; ++i)
+        const char* names[] = { "antioch_echo.png", "antioch_reverb.png", "antioch_throw.png", "antioch_scenes.png" };
+        for (int i = 0; i < 4; ++i)
         {
             if (tabs != nullptr) tabs->setSelected (i);
             snapshot (*editor, outDir.getChildFile (names[i]));

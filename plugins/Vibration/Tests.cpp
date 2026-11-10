@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "SceneUI.h"
 
 using namespace suite::test;
 
@@ -9,6 +10,7 @@ namespace
 {
     std::unique_ptr<VibrationProcessor> makeNeutral()
     {
+        suite::SectionBus::withdraw();   // no leftover arrangement from another test
         auto p = std::make_unique<VibrationProcessor>();
         p->applyPreset ((int) Params::presets().size() - 1); // Clean (neutral)
         set (*p, Params::autoGain, 0.0f);
@@ -199,6 +201,11 @@ int main (int argc, char** argv)
             if (auto* spec = dynamic_cast<suite::SpectrumView*> (child))
                 spec->update();
         snapshot (*editor, outDir.getChildFile ("vibration.png"));
+        if (auto* tabs = dynamic_cast<suite::ui::TabBar*> (editor->findChildWithID ("tabs")))
+        {
+            tabs->setSelected (1);
+            snapshot (*editor, outDir.getChildFile ("vibration_scenes.png"));
+        }
         editor.reset();
     }
 

@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "Scenes.h"
 
 namespace Params
 {
@@ -66,6 +67,7 @@ namespace Params
         layout.add (param (monoBelow, "Mono Below",     skewed (20.0f, 400.0f, 150.0f), d.monoBelow, hz (lowCutOffBelow)));
         layout.add (std::make_unique<AudioParameterBool> (id (autoGain), "Auto Gain", true));
         layout.add (param (output,    "Output",         { -24.0f, 12.0f }, 0.0f, db()));
+        suite::SceneEngine::addParameters (layout);
         return layout;
     }
 }

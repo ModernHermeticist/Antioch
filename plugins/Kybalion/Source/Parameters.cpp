@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "Scenes.h"
 
 namespace Params
 {
@@ -116,6 +117,7 @@ namespace Params
         layout.add (floatParam (Duck::threshold, "Sidechain Threshold", { -48.0f, 0.0f }, -24.0f,
                                 Attr().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::breakdown), "Breakdown (no ducking)", false));
+        suite::SceneEngine::addParameters (layout);
 
         return layout;
     }

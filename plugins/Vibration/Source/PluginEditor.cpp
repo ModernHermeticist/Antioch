@@ -15,6 +15,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
       autoGain (p.apvts, Params::autoGain, "Auto gain", Colours::verdigris),
       output (p.apvts, Params::output, "Output", Colours::text),
       spectrum ({ { &p.inputTap, Colours::dimText, false }, { &p.outputTap, accent, true } }),
+      viewTabs ({ "SPECTRUM", "SCENES" }, { accent, Colours::ember }),
       lowCut (p.apvts, Params::lowCut, "Low cut", Colours::verdigris),
       mud (p.apvts, Params::mud, "Mud 320 Hz", Colours::verdigris),
       presence (p.apvts, Params::presence, "Presence 3.2k", Colours::verdigris),
@@ -48,6 +49,13 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
                                                              &mbDepth, &mbTime, &width, &monoBelow })
         addAndMakeVisible (c);
 
+    scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
+    addAndMakeVisible (*scenePanel);
+    addAndMakeVisible (viewTabs);
+    viewTabs.setComponentID ("tabs");
+    viewTabs.onChange = [this] (int i) { spectrum.setVisible (i == 0); scenePanel->setVisible (i == 1); repaint(); };
+    viewTabs.onChange (0);
+
     setSize (1000, 660);
     timerCallback();
     startTimerHz (30);
@@ -73,6 +81,7 @@ void VibrationEditor::timerCallback()
                            + juce::String::fromUTF8 (" \xc2\xb7 width ") + juce::String (juce::roundToInt (e.width * 100.0f)) + "%",
                        juce::dontSendNotification);
     autoGainInfo.setText ("Level matched: " + signedDb (processor.autoGainDb.load()), juce::dontSendNotification);
+    suite::ui::updateSceneGhosts (*this, processor.scenes);
 }
 
 void VibrationEditor::paint (juce::Graphics& g)
@@ -80,7 +89,8 @@ void VibrationEditor::paint (juce::Graphics& g)
     g.fillAll (Colours::background);
     drawHeader (g, { 20, 12, 700, 32 }, "VIBRATION", "lead polish strip", accent);
     drawPanel (g, macroArea, "Macro", accent);
-    drawPanel (g, spectrumArea, "Spectrum  (grey = in, gold = out)");
+    if (spectrum.isVisible())
+        drawPanel (g, spectrumArea, "Spectrum  (grey = in, gold = out)");
     drawPanel (g, eqArea, "Tone", Colours::verdigris);
     drawPanel (g, satArea, "Saturation", Colours::ember);
     drawPanel (g, mbArea, "Multiband", Colours::amethyst);
@@ -109,7 +119,10 @@ void VibrationEditor::resized()
     autoGain.setBounds (row.removeFromTop (30).reduced (4, 2));
     autoGainInfo.setBounds (row);
 
+    viewTabs.setBounds (spectrumArea.removeFromTop (30).withTrimmedLeft (200));
+    spectrumArea.removeFromTop (10);
     spectrum.setBounds (spectrumArea.reduced (12, 8).withTrimmedTop (16));
+    if (scenePanel != nullptr) scenePanel->setBounds (spectrumArea);
 
     eqArea = bottom.removeFromLeft (bottom.getWidth() * 4 / 10);
     bottom.removeFromLeft (10);

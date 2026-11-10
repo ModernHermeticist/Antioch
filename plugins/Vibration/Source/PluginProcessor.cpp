@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "HostInfo.h"
 
 VibrationProcessor::VibrationProcessor()
     : AudioProcessor (BusesProperties()
@@ -7,6 +8,13 @@ VibrationProcessor::VibrationProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "VibrationState", Params::createLayout())
 {
+    using T = suite::SectionType;
+    scenes.setup (apvts,
+                  { { Params::euphoria, "Euphoria" }, { Params::air, "Air" }, { Params::drive, "Drive" },
+                    { Params::mbDepth, "Multiband depth" }, { Params::width, "Width" } },
+                  { { T::Breakdown, sEuphoria, -0.15f }, { T::Breakdown, sWidth, 0.15f }, { T::Breakdown, sAir, 0.05f },
+                    { T::Build, sDrive, 0.10f }, { T::Build, sAir, 0.05f },
+                    { T::Drop, sEuphoria, 0.20f }, { T::Drop, sWidth, 0.10f } });
 }
 
 bool VibrationProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -21,19 +29,21 @@ bool VibrationProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 VibrationProcessor::Effective VibrationProcessor::effective() const
 {
     using namespace Params;
-    const auto m = value (euphoria);
-    return { juce::jlimit (-6.0f, 12.0f, value (air) + m * Macro::air),
+    // Scene-able values come through the scene engine (base knob + section offset).
+    const auto m = scenes.plain (sEuphoria);
+    return { juce::jlimit (-6.0f, 12.0f, scenes.plain (sAir) + m * Macro::air),
              juce::jlimit (-6.0f, 9.0f, value (presence) + m * Macro::presence),
              juce::jlimit (-12.0f, 3.0f, value (mud) + m * Macro::mud),
-             juce::jlimit (0.0f, 30.0f, value (drive) + m * Macro::drive),
-             juce::jlimit (0.0f, 1.0f, value (mbDepth) + m * Macro::mbDepth),
-             juce::jlimit (0.0f, 2.5f, value (width) + m * Macro::width) };
+             juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive),
+             juce::jlimit (0.0f, 1.0f, scenes.plain (sMultiband) + m * Macro::mbDepth),
+             juce::jlimit (0.0f, 2.5f, scenes.plain (sWidth) + m * Macro::width) };
 }
 
 void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 {
     sampleRate = newSampleRate;
     const auto sr = (float) sampleRate;
+    scenes.prepare();
 
     oversampler = std::make_unique<juce::dsp::Oversampling<float>> (
         2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, true);
@@ -79,6 +89,7 @@ void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         monoScratch.resize ((size_t) n); // only if the host exceeds the announced block size
 
     const auto sr = (float) sampleRate;
+    scenes.beginBlock (suite::HostInfo::read (getPlayHead()), sampleRate, n);
     const auto e = effective();
     auto* L = buffer.getWritePointer (0);
     auto* R = buffer.getWritePointer (1);
@@ -231,7 +242,9 @@ juce::AudioProcessorEditor* VibrationProcessor::createEditor()
 
 void VibrationProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    scenes.writeInto (state);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -239,7 +252,11 @@ void VibrationProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            scenes.readFrom (state);
+            apvts.replaceState (state);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

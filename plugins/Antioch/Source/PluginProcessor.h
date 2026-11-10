@@ -4,6 +4,7 @@
 #include "Engines.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
+#include "Scenes.h"
 #include "Parameters.h"
 
 class AntiochProcessor : public juce::AudioProcessor
@@ -37,6 +38,10 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    suite::SceneEngine scenes;
+
+    /** Scene parameter slots (indices into `scenes`). */
+    enum SceneSlot { sDry, sEcho, sVerb, sThrow, sDecay, sShimmer, sHarmonics, sEchoDamp };
 
     // Read by the UI.
     std::atomic<double> currentBpm { 120.0 };

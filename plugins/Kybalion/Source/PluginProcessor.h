@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Engines.h"
 #include "SectionBus.h"
+#include "Scenes.h"
 
 class KybalionProcessor : public juce::AudioProcessor
 {
@@ -40,6 +41,8 @@ public:
     void randomiseGate (juce::Random&);
 
     juce::AudioProcessorValueTreeState apvts;
+    suite::SceneEngine scenes;
+    enum SceneSlot { sGateDepth, sGateLength, sGateFilter, sSwing, sDuckDepth };
 
     // Read by the UI.
     std::atomic<double> currentBpm { 138.0 };

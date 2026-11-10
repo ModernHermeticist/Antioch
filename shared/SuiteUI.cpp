@@ -61,6 +61,20 @@ namespace suite::ui
         g.setColour (Colours::text);
         g.drawLine ({ centre.getPointOnCircumference (knobR * 0.25f, angle),
                       centre.getPointOnCircumference (knobR * 0.8f, angle) }, 2.0f);
+
+        // Ghost ring: the value actually in use (e.g. base + section scene offset).
+        const auto ghost = (float) (double) slider.getProperties().getWithDefault ("ghost", -1.0);
+        if (ghost >= 0.0f && std::abs (ghost - pos) > 0.004f)
+        {
+            const auto ghostAngle = startAngle + ghost * (endAngle - startAngle);
+            const auto ghostR = arcR + lineW * 0.95f;
+            juce::Path ring;
+            ring.addCentredArc (centre.x, centre.y, ghostR, ghostR, 0.0f, juce::jmin (angle, ghostAngle), juce::jmax (angle, ghostAngle), true);
+            g.setColour (Colours::text.withAlpha (0.7f));
+            g.strokePath (ring, juce::PathStrokeType (1.5f));
+            const auto dot = centre.getPointOnCircumference (ghostR, ghostAngle);
+            g.fillEllipse (dot.x - 3.0f, dot.y - 3.0f, 6.0f, 6.0f);
+        }
     }
 
     void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& button, bool highlighted, bool)
@@ -109,9 +123,38 @@ namespace suite::ui
         g.strokePath (arrow, juce::PathStrokeType (1.5f));
     }
 
+    void LookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height, float sliderPos, float minPos,
+                                        float maxPos, juce::Slider::SliderStyle style, juce::Slider& slider)
+    {
+        if (style != juce::Slider::LinearBar)
+        {
+            LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, sliderPos, minPos, maxPos, style, slider);
+            return;
+        }
+
+        // Bar that fills from zero (the centre, for bipolar ranges) towards the value.
+        const auto r = juce::Rectangle<int> (x, y, width, height).toFloat();
+        g.setColour (slider.findColour (juce::Slider::backgroundColourId));
+        g.fillRoundedRectangle (r, 3.0f);
+
+        const auto zero = slider.getMinimum() < 0.0 && slider.getMaximum() > 0.0
+                              ? (float) slider.getPositionOfValue (0.0) : (float) x;
+        const auto fill = juce::Rectangle<float>::leftTopRightBottom (juce::jmin (zero, sliderPos), r.getY() + 2.0f,
+                                                                      juce::jmax (zero, sliderPos), r.getBottom() - 2.0f);
+        g.setColour (slider.findColour (juce::Slider::trackColourId));
+        g.fillRect (fill);
+        g.setColour (Colours::outline);
+        g.drawRoundedRectangle (r.reduced (0.5f), 3.0f, 1.0f);
+        if (zero > (float) x)
+        {
+            g.setColour (Colours::dimText.withAlpha (0.6f));
+            g.drawVerticalLine ((int) zero, r.getY(), r.getBottom());
+        }
+    }
+
     //==============================================================================
-    Knob::Knob (juce::AudioProcessorValueTreeState& state, const juce::String& paramId, const juce::String& text, juce::Colour colour)
-        : attachment (state, paramId, slider)
+    Knob::Knob (juce::AudioProcessorValueTreeState& state, const juce::String& id, const juce::String& text, juce::Colour colour)
+        : paramId (id), attachment (state, id, slider)
     {
         slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 100, 16);
         slider.setColour (juce::Slider::rotarySliderFillColourId, colour);
@@ -123,6 +166,15 @@ namespace suite::ui
         caption.setFont (juce::FontOptions (12.0f));
         caption.setInterceptsMouseClicks (false, false);
         addAndMakeVisible (caption);
+    }
+
+    void Knob::setGhost (float normalised)
+    {
+        const auto previous = (double) slider.getProperties().getWithDefault ("ghost", -1.0);
+        if (std::abs (previous - (double) normalised) < 1.0e-4)
+            return;
+        slider.getProperties().set ("ghost", (double) normalised);
+        slider.repaint();
     }
 
     void Knob::resized()

@@ -1,22 +1,9 @@
 #include "PluginEditor.h"
+#include "SceneUI.h"
 
 using namespace suite::ui;
 using suite::SectionType;
-
-juce::Colour sectionColour (SectionType t)
-{
-    switch (t)
-    {
-        case SectionType::Intro:     return Colours::verdigris.darker (0.3f);
-        case SectionType::Groove:    return Colours::moss;
-        case SectionType::Breakdown: return Colours::amethyst;
-        case SectionType::Build:     return Colours::brass;
-        case SectionType::Drop:      return Colours::ember;
-        case SectionType::Outro:     return Colours::dimText;
-        case SectionType::count:     break;
-    }
-    return Colours::dimText;
-}
+using suite::ui::sectionColour;
 
 namespace
 {

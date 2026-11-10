@@ -356,17 +356,18 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
       verbLevel (p.apvts, Params::verbLevel, "Reverb", verbColour),
       throwLevel (p.apvts, Params::throwLevel, "Throw", throwColour),
       output (p.apvts, Params::output, "Output", Colours::text),
-      tabs ({ "ECHO", "REVERB", "THROW" }, { echoColour, verbColour, throwColour })
+      tabs ({ "ECHO", "REVERB", "THROW", "SCENES" }, { echoColour, verbColour, throwColour, Colours::ember })
 {
     setLookAndFeel (&lnf);
 
     echoPanel = std::make_unique<EchoPanel> (p);
     reverbPanel = std::make_unique<ReverbPanel> (p);
     throwPanel = std::make_unique<ThrowPanel> (p);
+    scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
 
     for (auto* c : std::initializer_list<juce::Component*> { &syncButton, &bpmLabel, &keyStatus, &rootChoice, &followButton,
                                                              &octave, &dry, &echoLevel, &verbLevel, &throwLevel, &output, &tabs,
-                                                             echoPanel.get(), reverbPanel.get(), throwPanel.get() })
+                                                             echoPanel.get(), reverbPanel.get(), throwPanel.get(), scenePanel.get() })
         addAndMakeVisible (c);
 
     keyStatus.setJustificationType (juce::Justification::centred);
@@ -377,6 +378,7 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
         echoPanel->setVisible (index == 0);
         reverbPanel->setVisible (index == 1);
         throwPanel->setVisible (index == 2);
+        scenePanel->setVisible (index == 3);
     };
     tabs.onChange (0);
     tabs.setComponentID ("tabs");
@@ -410,6 +412,7 @@ void AntiochEditor::timerCallback()
     echoPanel->refresh (synced, suite::music::midiToHz ((float) (12 * (oct + 1) + root)));
     reverbPanel->refresh();
     throwPanel->refresh();
+    suite::ui::updateSceneGhosts (*this, processor.scenes);
 }
 
 void AntiochEditor::paint (juce::Graphics& g)
@@ -444,6 +447,6 @@ void AntiochEditor::resized()
     followButton.setBounds (followCell.withSizeKeepingCentre (cell - 12, 28).translated (0, 8));
     layoutRow (m, { &octave, &dry, &echoLevel, &verbLevel, &throwLevel, &output });
 
-    for (auto* panel : std::initializer_list<juce::Component*> { echoPanel.get(), reverbPanel.get(), throwPanel.get() })
+    for (auto* panel : std::initializer_list<juce::Component*> { echoPanel.get(), reverbPanel.get(), throwPanel.get(), scenePanel.get() })
         panel->setBounds (panelArea);
 }

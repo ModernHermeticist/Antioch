@@ -252,6 +252,8 @@ int main (int argc, char** argv)
         snapshot (*editor, outDir.getChildFile ("kybalion_rhythm.png"));
         if (tabs != nullptr) tabs->setSelected (1);
         snapshot (*editor, outDir.getChildFile ("kybalion_polarity.png"));
+        if (tabs != nullptr) tabs->setSelected (2);
+        snapshot (*editor, outDir.getChildFile ("kybalion_scenes.png"));
         editor.reset();
     }
 

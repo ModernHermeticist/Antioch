@@ -28,6 +28,18 @@ AntiochProcessor::AntiochProcessor()
         p.pan      = apvts.getRawParameterValue (tapId (t, Tap::pan));
         jassert (p.on != nullptr && p.division != nullptr && p.harmonic != nullptr);
     }
+
+    // Section scenes: what moves per section, and sensible starting offsets.
+    using T = suite::SectionType;
+    scenes.setup (apvts,
+                  { { dry, "Dry" }, { echoLevel, "Echo level" }, { verbLevel, "Reverb level" }, { throwLevel, "Throw level" },
+                    { Verb::decay, "Reverb decay" }, { Verb::shimmer, "Shimmer" }, { resMix, "Echo harmonics" },
+                    { damping, "Echo brightness" } },
+                  { { T::Breakdown, sVerb, 0.25f }, { T::Breakdown, sDecay, 0.15f }, { T::Breakdown, sShimmer, 0.30f },
+                    { T::Breakdown, sEcho, 0.15f }, { T::Breakdown, sHarmonics, 0.20f },
+                    { T::Build, sVerb, 0.10f }, { T::Build, sEcho, 0.10f }, { T::Build, sEchoDamp, 0.10f },
+                    { T::Drop, sVerb, -0.10f }, { T::Drop, sShimmer, -0.10f },
+                    { T::Intro, sVerb, 0.05f }, { T::Outro, sVerb, 0.10f }, { T::Outro, sEcho, 0.10f } });
 }
 
 juce::AudioParameterBool* AntiochProcessor::boolParam (const juce::String& id)
@@ -65,6 +77,7 @@ void AntiochProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     echo.prepare (sampleRate, maxDelaySeconds);
+    scenes.prepare();
     reverb.prepare (sampleRate);
     throwDelay.prepare (sampleRate, maxDelaySeconds);
     dryEnvelope.reset();
@@ -90,6 +103,7 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const auto host = suite::HostInfo::read (getPlayHead(), currentBpm.load());
     currentBpm.store (host.bpm);
     const auto sr = (float) sampleRate;
+    scenes.beginBlock (host, sampleRate, numSamples);
 
     // ---- Key: follow Correspondence if it's broadcasting, else use local key ----
     auto root = choiceParam (rootNote)->getIndex();
@@ -108,8 +122,8 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     {
         HarmonicEcho::Settings s;
         s.resonance = value (resonance);
-        s.blend     = value (resMix);
-        s.dampHz    = value (damping);
+        s.blend     = scenes.plain (sHarmonics);
+        s.dampHz    = scenes.plain (sEchoDamp);
         s.lowCutHz  = value (lowCut);
 
         for (int t = 0; t < numTaps; ++t)
@@ -132,13 +146,13 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     // ---- Reverb ----
     {
         EuphoricReverb::Settings s;
-        s.decay = value (Verb::decay);
+        s.decay = scenes.plain (sDecay);
         s.size = value (Verb::size);
         s.predelayMs = value (Verb::predelay);
         s.dampHz = value (Verb::damping);
         s.lowCutHz = value (Verb::lowCut);
         s.highCutHz = value (Verb::highCut);
-        s.shimmer = value (Verb::shimmer);
+        s.shimmer = scenes.plain (sShimmer);
         s.shimmerSemitones = Verb::shimmerSemitones (choiceParam (Verb::shimInt)->getIndex());
         s.width = value (Verb::width);
         s.modulation = value (Verb::mod);
@@ -173,10 +187,10 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     // ---- Levels ----
     const auto out = juce::Decibels::decibelsToGain (value (output));
-    dryGain.setTargetValue (value (dry));
-    echoGain.setTargetValue (value (echoLevel));
-    verbGain.setTargetValue (value (verbLevel));
-    throwGain.setTargetValue (value (throwLevel));
+    dryGain.setTargetValue (scenes.plain (sDry));
+    echoGain.setTargetValue (scenes.plain (sEcho));
+    verbGain.setTargetValue (scenes.plain (sVerb));
+    throwGain.setTargetValue (scenes.plain (sThrow));
     outGain.setTargetValue (out);
     echoSend.setTargetValue (value (echoToVerb));
     throwSend.setTargetValue (value (Throw::toVerb));
@@ -266,7 +280,9 @@ juce::AudioProcessorEditor* AntiochProcessor::createEditor()
 
 void AntiochProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    scenes.writeInto (state);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -274,7 +290,11 @@ void AntiochProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            scenes.readFrom (state);
+            apvts.replaceState (state);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

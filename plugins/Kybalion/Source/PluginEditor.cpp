@@ -161,7 +161,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       duckOn (p.apvts, Params::duckOn, "POLARITY ON", duckColour),
       followSections (p.apvts, Params::follow, "Follow Ouroboros", Colours::ember),
       output (p.apvts, Params::output, "Output", Colours::text),
-      tabs ({ "RHYTHM  (gate)", "POLARITY  (duck)" }, { gateColour, duckColour }),
+      tabs ({ "RHYTHM  (gate)", "POLARITY  (duck)", "SCENES" }, { gateColour, duckColour, Colours::ember }),
       grid (p),
       gateRate (p.apvts, Params::Gate::rate, "Step size"),
       length (p.apvts, Params::Gate::length, "Length", gateColour),
@@ -215,7 +215,9 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
                                                              &tabs, &gatePanel, &duckPanel })
         addAndMakeVisible (c);
 
-    tabs.onChange = [this] (int i) { gatePanel.setVisible (i == 0); duckPanel.setVisible (i == 1); };
+    scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
+    addAndMakeVisible (*scenePanel);
+    tabs.onChange = [this] (int i) { gatePanel.setVisible (i == 0); duckPanel.setVisible (i == 1); scenePanel->setVisible (i == 2); };
     tabs.onChange (0);
     tabs.setComponentID ("tabs");
 
@@ -235,6 +237,7 @@ void KybalionEditor::timerCallback()
     bpmLabel.setText (juce::String (processor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     grid.refresh();
     duckView.repaint();
+    suite::ui::updateSceneGhosts (*this, processor.scenes);
 
     const auto sec = processor.currentSection.load();
     sectionStatus.setColour (juce::Label::textColourId, processor.autoBreakdown.load() ? Colours::ember : Colours::dimText);
@@ -298,6 +301,7 @@ void KybalionEditor::resized()
     bounds.removeFromTop (10);
     gatePanel.setBounds (bounds);
     duckPanel.setBounds (bounds);
+    if (scenePanel != nullptr) scenePanel->setBounds (bounds);
 
     // ---- Rhythm ----
     {

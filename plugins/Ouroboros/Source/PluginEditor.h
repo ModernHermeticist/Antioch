@@ -4,8 +4,6 @@
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
 
-juce::Colour sectionColour (suite::SectionType);
-
 /** The song as coloured section blocks. Drag a boundary to move it, double-click to split,
     right-click for type/delete, click to select. Shows the playhead. */
 class Timeline : public juce::Component

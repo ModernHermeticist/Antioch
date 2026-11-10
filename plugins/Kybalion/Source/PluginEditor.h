@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SceneUI.h"
 
 /** 16 bars you click or drag to draw step levels; the playing step lights up. */
 class StepGrid : public juce::Component
@@ -74,6 +75,7 @@ private:
     suite::ui::Toggle breakdown;
     juce::Label sourceStatus;
 
+    std::unique_ptr<suite::ui::ScenePanel> scenePanel;
     juce::Rectangle<int> masterArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KybalionEditor)

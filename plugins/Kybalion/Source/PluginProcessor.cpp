@@ -11,6 +11,14 @@ KybalionProcessor::KybalionProcessor()
 {
     for (int i = 0; i < Params::numSteps; ++i)
         stepParams[(size_t) i] = apvts.getRawParameterValue (Params::Gate::step (i));
+
+    using T = suite::SectionType;
+    scenes.setup (apvts,
+                  { { Params::Gate::depth, "Gate depth" }, { Params::Gate::length, "Gate length" }, { Params::Gate::filter, "Gate filter" },
+                    { Params::Gate::swing, "Gate swing" }, { Params::Duck::depth, "Duck depth" } },
+                  { { T::Intro, sGateDepth, -0.3f }, { T::Breakdown, sGateDepth, -0.6f }, { T::Breakdown, sGateFilter, 0.2f },
+                    { T::Build, sGateLength, -0.25f }, { T::Build, sGateFilter, 0.3f },
+                    { T::Drop, sGateDepth, 0.2f }, { T::Outro, sGateDepth, -0.3f } });
 }
 
 bool KybalionProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -35,6 +43,7 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     gate.prepare (sampleRate);
+    scenes.prepare();
     ducker.prepare (sampleRate);
     scTrigger.prepare (sampleRate);
     outGain.reset (sampleRate, 0.03);
@@ -61,6 +70,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     if (host.playing && host.hasPpq)
         position = host.ppq;
     const auto qPerSample = host.quartersPerSample (sampleRate);
+    scenes.beginBlock (host, sampleRate, numSamples);
     const auto msPerQ = 60000.0 / host.bpm;
 
     // ---- Gate settings ----
@@ -70,13 +80,13 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         for (int i = 0; i < numSteps; ++i)
             s.steps[(size_t) i] = stepParams[(size_t) i]->load();
         s.stepQ = Gate::rateQuarters ((int) value (Gate::rate));
-        s.length = value (Gate::length);
+        s.length = scenes.plain (sGateLength);
         s.attackMs = value (Gate::attack);
         s.releaseMs = value (Gate::release);
-        s.depth = value (Gate::depth);
-        s.swing = value (Gate::swing);
+        s.depth = scenes.plain (sGateDepth);
+        s.swing = scenes.plain (sSwing);
         s.stereoOffset = (int) value (Gate::stereo);
-        s.filter = value (Gate::filter);
+        s.filter = scenes.plain (sGateFilter);
         s.res = value (Gate::res);
         gate.update (s);
     }
@@ -85,7 +95,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const auto duckEnabled = value (duckOn) > 0.5f;
     {
         Ducker::Settings s;
-        s.depth = value (Duck::depth);
+        s.depth = scenes.plain (sDuckDepth);
         s.attackMs = value (Duck::attack);
         s.holdMs = value (Duck::hold);
         s.releaseMs = value (Duck::release);
@@ -218,7 +228,9 @@ juce::AudioProcessorEditor* KybalionProcessor::createEditor()
 
 void KybalionProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    scenes.writeInto (state);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -226,7 +238,11 @@ void KybalionProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            scenes.readFrom (state);
+            apvts.replaceState (state);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -30,6 +30,8 @@ namespace suite::ui
         void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool highlighted, bool down) override;
         void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool highlighted, bool down) override;
         void drawComboBox (juce::Graphics&, int width, int height, bool down, int bx, int by, int bw, int bh, juce::ComboBox&) override;
+        void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos, float minPos, float maxPos,
+                               juce::Slider::SliderStyle, juce::Slider&) override;
     };
 
     //==============================================================================
@@ -42,9 +44,14 @@ namespace suite::ui
 
         void resized() override;
 
+        /** Shows a second, thin ring at `normalised` (0..1): the value actually in use when
+            something (e.g. a section scene) offsets the knob. Pass a negative value to hide it. */
+        void setGhost (float normalised);
+
         juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
         juce::Label caption;
         int maxHeight = 130;
+        const juce::String paramId;
 
     private:
         juce::AudioProcessorValueTreeState::SliderAttachment attachment;

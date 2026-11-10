@@ -1,5 +1,6 @@
 #include "Parameters.h"
 #include "Music.h"
+#include "Scenes.h"
 
 namespace Params
 {
@@ -180,6 +181,8 @@ namespace Params
         layout.add (floatParam (Throw::drive,    "Throw Drive",     { 0.0f, 1.0f }, 0.25f, percent()));
         layout.add (floatParam (Throw::duck,     "Throw Duck",      { 0.0f, 1.0f }, 0.4f, percent()));
         layout.add (floatParam (Throw::toVerb,   "Throw to Reverb", { 0.0f, 1.0f }, 0.35f, percent()));
+
+        suite::SceneEngine::addParameters (layout);
 
         return layout;
     }

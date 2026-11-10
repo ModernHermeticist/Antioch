@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
 #include "Spectrum.h"
+#include "SceneUI.h"
 
 class VibrationEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -26,6 +27,8 @@ private:
     suite::ui::Toggle autoGain;
     suite::ui::Knob output;
     suite::SpectrumView spectrum;
+    suite::ui::TabBar viewTabs;
+    std::unique_ptr<suite::ui::ScenePanel> scenePanel;
 
     suite::ui::Knob lowCut, mud, presence, air, drive, satMix, mbDepth, mbTime, width, monoBelow;
 

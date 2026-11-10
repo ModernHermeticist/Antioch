@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SceneUI.h"
 
 class EchoPanel;
 class ReverbPanel;
@@ -34,6 +35,7 @@ private:
     std::unique_ptr<EchoPanel> echoPanel;
     std::unique_ptr<ReverbPanel> reverbPanel;
     std::unique_ptr<ThrowPanel> throwPanel;
+    std::unique_ptr<suite::ui::ScenePanel> scenePanel;
 
     juce::Rectangle<int> masterArea, panelArea;
 

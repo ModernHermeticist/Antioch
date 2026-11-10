@@ -5,6 +5,7 @@
 #include "Parameters.h"
 #include "SuiteDSP.h"
 #include "Spectrum.h"
+#include "Scenes.h"
 
 class VibrationProcessor : public juce::AudioProcessor
 {
@@ -43,6 +44,8 @@ public:
     Effective effective() const;
 
     juce::AudioProcessorValueTreeState apvts;
+    suite::SceneEngine scenes;
+    enum SceneSlot { sEuphoria, sAir, sDrive, sMultiband, sWidth };
     suite::AudioTap inputTap, outputTap;
     std::atomic<float> autoGainDb { 0.0f };
 
