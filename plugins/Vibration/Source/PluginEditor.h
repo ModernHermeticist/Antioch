@@ -1,0 +1,35 @@
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include "PluginProcessor.h"
+#include "SuiteUI.h"
+#include "Spectrum.h"
+
+class VibrationEditor : public juce::AudioProcessorEditor, private juce::Timer
+{
+public:
+    explicit VibrationEditor (VibrationProcessor&);
+    ~VibrationEditor() override;
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    void timerCallback() override;
+
+    VibrationProcessor& processor;
+    suite::ui::LookAndFeel lnf;
+
+    suite::ui::Knob euphoria;
+    juce::ComboBox presetBox;
+    juce::Label macroInfo, autoGainInfo;
+    suite::ui::Toggle autoGain;
+    suite::ui::Knob output;
+    suite::SpectrumView spectrum;
+
+    suite::ui::Knob lowCut, mud, presence, air, drive, satMix, mbDepth, mbTime, width, monoBelow;
+
+    juce::Rectangle<int> macroArea, spectrumArea, eqArea, satArea, mbArea, widthArea;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VibrationEditor)
+};

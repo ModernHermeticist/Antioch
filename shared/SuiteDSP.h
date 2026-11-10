@@ -250,6 +250,87 @@ namespace suite
     };
 
     //==============================================================================
+    /** RBJ-cookbook biquad (transposed direct form II): peaking and shelving EQ. */
+    class Biquad
+    {
+    public:
+        void reset() noexcept { z1 = z2 = 0.0f; }
+
+        void setPeak (float hz, float q, float gainDb, float sampleRate) noexcept
+        {
+            const auto A = std::pow (10.0f, gainDb / 40.0f);
+            const auto w = 2.0f * pi * juce::jlimit (10.0f, sampleRate * 0.49f, hz) / sampleRate;
+            const auto alpha = std::sin (w) / (2.0f * q);
+            const auto cw = std::cos (w);
+            setCoeffs (1.0f + alpha * A, -2.0f * cw, 1.0f - alpha * A, 1.0f + alpha / A, -2.0f * cw, 1.0f - alpha / A);
+        }
+
+        void setHighShelf (float hz, float gainDb, float sampleRate) noexcept { shelf (hz, gainDb, sampleRate, true); }
+        void setLowShelf (float hz, float gainDb, float sampleRate) noexcept  { shelf (hz, gainDb, sampleRate, false); }
+
+        float process (float x) noexcept
+        {
+            const auto y = b0 * x + z1;
+            z1 = b1 * x - a1 * y + z2;
+            z2 = b2 * x - a2 * y;
+            return y;
+        }
+
+    private:
+        void shelf (float hz, float gainDb, float sampleRate, bool high) noexcept
+        {
+            const auto A = std::pow (10.0f, gainDb / 40.0f);
+            const auto w = 2.0f * pi * juce::jlimit (10.0f, sampleRate * 0.49f, hz) / sampleRate;
+            const auto cw = std::cos (w), sw = std::sin (w);
+            const auto alpha = sw / 2.0f * std::sqrt (2.0f); // shelf slope S = 1
+            const auto k = 2.0f * std::sqrt (A) * alpha;
+            if (high)
+                setCoeffs (A * ((A + 1) + (A - 1) * cw + k), -2 * A * ((A - 1) + (A + 1) * cw), A * ((A + 1) + (A - 1) * cw - k),
+                           (A + 1) - (A - 1) * cw + k, 2 * ((A - 1) - (A + 1) * cw), (A + 1) - (A - 1) * cw - k);
+            else
+                setCoeffs (A * ((A + 1) - (A - 1) * cw + k), 2 * A * ((A - 1) - (A + 1) * cw), A * ((A + 1) - (A - 1) * cw - k),
+                           (A + 1) + (A - 1) * cw + k, -2 * ((A - 1) + (A + 1) * cw), (A + 1) + (A - 1) * cw - k);
+        }
+
+        void setCoeffs (float nb0, float nb1, float nb2, float na0, float na1, float na2) noexcept
+        {
+            b0 = nb0 / na0; b1 = nb1 / na0; b2 = nb2 / na0; a1 = na1 / na0; a2 = na2 / na0;
+        }
+
+        float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f, z1 = 0.0f, z2 = 0.0f;
+    };
+
+    //==============================================================================
+    /** 4th-order Linkwitz-Riley crossover: low + high sum to an allpass (flat magnitude). */
+    class Crossover
+    {
+    public:
+        void set (float hz, float sampleRate) noexcept
+        {
+            for (auto& f : stages) f.set (hz, 0.70710678f, sampleRate);
+        }
+
+        void reset() noexcept { for (auto& f : stages) f.reset(); }
+
+        void process (float x, float& low, float& high) noexcept
+        {
+            low  = stages[1].lowpass (stages[0].lowpass (x));
+            high = stages[3].highpass (stages[2].highpass (x));
+        }
+
+        /** Same phase response as process() but without splitting, to keep other bands aligned. */
+        float allpass (float x) noexcept
+        {
+            float l, h;
+            process (x, l, h);
+            return l + h;
+        }
+
+    private:
+        std::array<Svf, 4> stages;
+    };
+
+    //==============================================================================
     /** Peak envelope follower with separate attack and release. */
     class EnvelopeFollower
     {
