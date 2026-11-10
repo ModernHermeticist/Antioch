@@ -2,7 +2,7 @@
 #include "PluginEditor.h"
 
 PrimaMateriaProcessor::PrimaMateriaProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PrimaMateriaState", pm::layout())
@@ -199,13 +199,13 @@ juce::AudioProcessorEditor* PrimaMateriaProcessor::createEditor()
     return new PrimaMateriaEditor (*this);
 }
 
-void PrimaMateriaProcessor::getStateInformation (juce::MemoryBlock& destData)
+void PrimaMateriaProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
 
-void PrimaMateriaProcessor::setStateInformation (const void* data, int sizeInBytes)
+void PrimaMateriaProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

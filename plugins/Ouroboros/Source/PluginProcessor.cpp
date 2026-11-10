@@ -15,7 +15,7 @@ namespace
 }
 
 OuroborosProcessor::OuroborosProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "OuroborosState", layout())
@@ -176,7 +176,7 @@ juce::AudioProcessorEditor* OuroborosProcessor::createEditor()
     return new OuroborosEditor (*this);
 }
 
-void OuroborosProcessor::getStateInformation (juce::MemoryBlock& destData)
+void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     const auto m = getMap();
@@ -195,7 +195,7 @@ void OuroborosProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void OuroborosProcessor::setStateInformation (const void* data, int sizeInBytes)
+void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     auto xml = getXmlFromBinary (data, sizeInBytes);
     if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))

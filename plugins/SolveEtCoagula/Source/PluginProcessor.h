@@ -1,10 +1,11 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "Unmasker.h"
 #include "Scenes.h"
 
-class SolveEtCoagulaProcessor : public juce::AudioProcessor
+class SolveEtCoagulaProcessor : public suite::SuiteProcessor
 {
 public:
     SolveEtCoagulaProcessor();
@@ -31,8 +32,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     static inline const juce::String depthId { "depth" }, sensitivityId { "sensitivity" }, focusId { "focus" },
                                      speedId { "speed" }, mixId { "mix" };

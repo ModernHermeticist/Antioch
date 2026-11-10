@@ -25,7 +25,7 @@ namespace
 }
 
 SolveEtCoagulaProcessor::SolveEtCoagulaProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",     juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output",    juce::AudioChannelSet::stereo(), true)
                           .withInput  ("Sidechain", juce::AudioChannelSet::stereo(), false)),
@@ -109,7 +109,7 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
 juce::AudioProcessorEditor* SolveEtCoagulaProcessor::createEditor() { return new SolveEtCoagulaEditor (*this); }
 
-void SolveEtCoagulaProcessor::getStateInformation (juce::MemoryBlock& destData)
+void SolveEtCoagulaProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     scenes.writeInto (state);
@@ -117,7 +117,7 @@ void SolveEtCoagulaProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void SolveEtCoagulaProcessor::setStateInformation (const void* data, int sizeInBytes)
+void SolveEtCoagulaProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

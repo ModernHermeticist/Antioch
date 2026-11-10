@@ -4,7 +4,7 @@
 #include "KeyBus.h"
 
 CorrespondenceProcessor::CorrespondenceProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CorrespondenceState", Params::createLayout())
@@ -210,7 +210,7 @@ juce::AudioProcessorEditor* CorrespondenceProcessor::createEditor()
     return new CorrespondenceEditor (*this);
 }
 
-void CorrespondenceProcessor::getStateInformation (juce::MemoryBlock& destData)
+void CorrespondenceProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.removeChild (state.getChildWithName ("Motif"), nullptr);
@@ -229,7 +229,7 @@ void CorrespondenceProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void CorrespondenceProcessor::setStateInformation (const void* data, int sizeInBytes)
+void CorrespondenceProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

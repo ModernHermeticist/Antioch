@@ -30,7 +30,7 @@ namespace
 }
 
 LapisProcessor::LapisProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "LapisState", layout())
@@ -158,7 +158,7 @@ juce::AudioProcessorEditor* LapisProcessor::createEditor()
     return new LapisEditor (*this);
 }
 
-void LapisProcessor::getStateInformation (juce::MemoryBlock& destData)
+void LapisProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("learnedGain", learnedGainDb.load(), nullptr);
@@ -166,7 +166,7 @@ void LapisProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void LapisProcessor::setStateInformation (const void* data, int sizeInBytes)
+void LapisProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

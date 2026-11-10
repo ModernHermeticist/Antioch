@@ -1,13 +1,14 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "FixBus.h"
 #include "BuildClock.h"
 #include "Parameters.h"
 #include "SuiteDSP.h"
 #include "SectionBus.h"
 
-class CauseEffectProcessor : public juce::AudioProcessor
+class CauseEffectProcessor : public suite::SuiteProcessor
 {
 public:
     CauseEffectProcessor();
@@ -34,8 +35,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons

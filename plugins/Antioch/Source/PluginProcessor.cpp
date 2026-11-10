@@ -9,7 +9,7 @@ namespace
 }
 
 AntiochProcessor::AntiochProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AntiochState", Params::createLayout())
@@ -279,7 +279,7 @@ juce::AudioProcessorEditor* AntiochProcessor::createEditor()
     return new AntiochEditor (*this);
 }
 
-void AntiochProcessor::getStateInformation (juce::MemoryBlock& destData)
+void AntiochProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     scenes.writeInto (state);
@@ -287,7 +287,7 @@ void AntiochProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void AntiochProcessor::setStateInformation (const void* data, int sizeInBytes)
+void AntiochProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

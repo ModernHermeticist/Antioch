@@ -4,7 +4,7 @@
 #include "Music.h"
 
 CauseEffectProcessor::CauseEffectProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CauseEffectState", Params::createLayout())
@@ -284,13 +284,13 @@ juce::AudioProcessorEditor* CauseEffectProcessor::createEditor()
     return new CauseEffectEditor (*this);
 }
 
-void CauseEffectProcessor::getStateInformation (juce::MemoryBlock& destData)
+void CauseEffectProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
 
-void CauseEffectProcessor::setStateInformation (const void* data, int sizeInBytes)
+void CauseEffectProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

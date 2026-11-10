@@ -1,13 +1,14 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "FixBus.h"
 #include "Voices.h"
 #include "SectionBus.h"
 #include "HostInfo.h"
 #include "ReverseSwell.h"
 
-class AzothProcessor : public juce::AudioProcessor, private juce::Timer
+class AzothProcessor : public suite::SuiteProcessor, private juce::Timer
 {
 public:
     AzothProcessor();
@@ -34,8 +35,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     // Parameters
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },

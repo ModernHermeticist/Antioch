@@ -38,7 +38,7 @@ namespace
 }
 
 AzothProcessor::AzothProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AzothState", layout())
@@ -307,13 +307,13 @@ juce::AudioProcessorEditor* AzothProcessor::createEditor()
     return new AzothEditor (*this);
 }
 
-void AzothProcessor::getStateInformation (juce::MemoryBlock& destData)
+void AzothProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
 
-void AzothProcessor::setStateInformation (const void* data, int sizeInBytes)
+void AzothProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "Advisor.h"
 #include "Parameters.h"
 #include "Spectrum.h"
@@ -20,7 +21,7 @@ struct ReferenceProfile
     static ReferenceProfile analyse (const juce::File&, const std::atomic<bool>* cancel = nullptr);
 };
 
-class MentalismProcessor : public juce::AudioProcessor, private juce::Timer
+class MentalismProcessor : public suite::SuiteProcessor, private juce::Timer
 {
 public:
     MentalismProcessor();
@@ -47,8 +48,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Clears integrated loudness, true peak and long-term balance (applied on the next block). */
     void resetMeasurements() { resetRequested.store (true); }

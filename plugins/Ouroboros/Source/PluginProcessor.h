@@ -1,11 +1,12 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "Arrangement.h"
 #include "Listen.h"
 #include "SuiteDSP.h"
 
-class OuroborosProcessor : public juce::AudioProcessor, private juce::Timer
+class OuroborosProcessor : public suite::SuiteProcessor, private juce::Timer
 {
 public:
     OuroborosProcessor();
@@ -32,8 +33,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Message thread: read/replace the arrangement (published to the suite immediately). */
     suite::SectionMap getMap() const;

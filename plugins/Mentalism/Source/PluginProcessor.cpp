@@ -50,7 +50,7 @@ ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::a
 
 //==============================================================================
 MentalismProcessor::MentalismProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "MentalismState", Params::createLayout())
@@ -280,7 +280,7 @@ juce::AudioProcessorEditor* MentalismProcessor::createEditor()
     return new MentalismEditor (*this);
 }
 
-void MentalismProcessor::getStateInformation (juce::MemoryBlock& destData)
+void MentalismProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     const auto ref = getReference();
@@ -300,7 +300,7 @@ void MentalismProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void MentalismProcessor::setStateInformation (const void* data, int sizeInBytes)
+void MentalismProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     auto xml = getXmlFromBinary (data, sizeInBytes);
     if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))

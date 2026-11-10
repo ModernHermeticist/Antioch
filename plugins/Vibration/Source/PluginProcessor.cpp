@@ -3,7 +3,7 @@
 #include "HostInfo.h"
 
 VibrationProcessor::VibrationProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "VibrationState", Params::createLayout())
@@ -241,7 +241,7 @@ juce::AudioProcessorEditor* VibrationProcessor::createEditor()
     return new VibrationEditor (*this);
 }
 
-void VibrationProcessor::getStateInformation (juce::MemoryBlock& destData)
+void VibrationProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     scenes.writeInto (state);
@@ -249,7 +249,7 @@ void VibrationProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void VibrationProcessor::setStateInformation (const void* data, int sizeInBytes)
+void VibrationProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

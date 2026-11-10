@@ -1,13 +1,14 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "Engines.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "Scenes.h"
 #include "Parameters.h"
 
-class AntiochProcessor : public juce::AudioProcessor
+class AntiochProcessor : public suite::SuiteProcessor
 {
 public:
     AntiochProcessor();
@@ -34,8 +35,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;

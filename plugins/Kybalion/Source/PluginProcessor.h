@@ -1,11 +1,12 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "Engines.h"
 #include "SectionBus.h"
 #include "Scenes.h"
 
-class KybalionProcessor : public juce::AudioProcessor
+class KybalionProcessor : public suite::SuiteProcessor
 {
 public:
     KybalionProcessor();
@@ -32,8 +33,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Message thread: load a gate pattern or ducking preset into the parameters. */
     void applyGatePattern (int index);

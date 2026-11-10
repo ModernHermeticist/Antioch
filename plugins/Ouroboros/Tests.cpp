@@ -132,6 +132,57 @@ int main (int argc, char** argv)
         check (! suite::SectionBus::read (after), "withdraw empties the bus");
     }
 
+    section ("Suite snapshots");
+    {
+        suite::SnapshotBus::reset();
+        auto mapOf = [] (int drops) { arrangement::GenSettings g; g.drops = drops; return arrangement::generate (g); };
+        auto a = std::make_unique<OuroborosProcessor>();
+        auto b = std::make_unique<OuroborosProcessor>();   // stands in for a second suite plugin
+        a->setMap (mapOf (1));
+        b->setMap (mapOf (3));
+
+        const auto save = suite::SnapshotBus::send (suite::SnapshotAction::Capture, 1);
+        a->pollSnapshots(); b->pollSnapshots();
+        check (suite::SnapshotBus::acknowledgements (save) == 2 && a->hasSnapshot (1) && ! a->hasSnapshot (0), "Save B: both plugins store slot B");
+
+        a->setMap (mapOf (2));
+        b->setMap (mapOf (2));
+        const auto recall = suite::SnapshotBus::send (suite::SnapshotAction::Recall, 1);
+        a->pollSnapshots(); b->pollSnapshots();
+        check (a->getMap() == mapOf (1) && b->getMap() == mapOf (3) && suite::SnapshotBus::acknowledgements (recall) == 2,
+               "Recall B: each plugin goes back to its own saved settings");
+
+        const auto empty = suite::SnapshotBus::send (suite::SnapshotAction::Recall, 2);
+        a->pollSnapshots(); b->pollSnapshots();
+        check (suite::SnapshotBus::acknowledgements (empty) == 0 && a->getMap() == mapOf (1), "recalling an empty slot changes nothing");
+
+        // Snapshots travel with the project.
+        juce::MemoryBlock state;
+        a->getStateInformation (state);
+        auto c = std::make_unique<OuroborosProcessor>();
+        c->setStateInformation (state.getData(), (int) state.getSize());
+        check (c->hasSnapshot (1) && c->getMap() == mapOf (1), "slots are saved with the project");
+        c->setMap (mapOf (2));
+        check (c->recallSnapshot (1) && c->getMap() == mapOf (1), "... and recall after loading");
+
+        // A project saved before snapshots existed still loads.
+        juce::MemoryBlock legacy;
+        a->getPluginState (legacy);
+        auto d = std::make_unique<OuroborosProcessor>();
+        d->setStateInformation (legacy.getData(), (int) legacy.getSize());
+        check (d->getMap() == mapOf (1) && ! d->hasSnapshot (1), "old projects load as before");
+
+        // Commands sent before a plugin loads don't apply to it.
+        auto e = std::make_unique<OuroborosProcessor>();
+        e->pollSnapshots();
+        check (! e->hasSnapshot (1), "a plugin loaded later doesn't replay old commands");
+
+        suite::SnapshotBus::send (suite::SnapshotAction::Clear, 1);
+        a->pollSnapshots();
+        check (! a->hasSnapshot (1), "right-click clears a slot");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Plugin: broadcast, marking, state");
     {
         auto p = std::make_unique<OuroborosProcessor>();

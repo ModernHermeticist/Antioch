@@ -1,13 +1,14 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include <juce_dsp/juce_dsp.h>
 #include "Parameters.h"
 #include "SuiteDSP.h"
 #include "Spectrum.h"
 #include "Scenes.h"
 
-class VibrationProcessor : public juce::AudioProcessor
+class VibrationProcessor : public suite::SuiteProcessor
 {
 public:
     VibrationProcessor();
@@ -34,8 +35,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyPreset (int index);
 

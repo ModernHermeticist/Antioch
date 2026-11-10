@@ -78,6 +78,22 @@ private:
     juce::TextButton deleteButton { "Delete section" };
     juce::TextButton listenButton { "LISTEN" }, proposeButton { "Propose map" }, applyButton { "Apply" }, discardButton { "Discard" };
     juce::Label listenStatus;
+
+    // Whole-suite snapshots: click a slot to recall it (or pick an empty one), Save stores the
+    // current settings of every suite plugin there; right-click a slot to clear it.
+    struct SlotButton : juce::TextButton
+    {
+        bool rightClick = false;
+        void clicked (const juce::ModifierKeys& m) override { rightClick = m.isPopupMenu(); }
+    };
+    std::array<SlotButton, suite::SuiteProcessor::numSnapshotSlots> slotButtons;
+    juce::TextButton saveSnapshotButton { "Save" };
+    juce::Label snapshotStatus;
+    int currentSlot = 0;
+    uint32_t lastSnapshotSeq = 0;
+    juce::String lastSnapshotVerb;
+    void snapshotCommand (suite::SnapshotAction, int slot);
+    void refreshSnapshots();
     juce::TextButton arrangeButton { "Arrange..." };
     arrangement::GenSettings lastArrange;
     void showArrange();

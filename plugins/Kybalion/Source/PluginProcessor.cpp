@@ -3,7 +3,7 @@
 #include "HostInfo.h"
 
 KybalionProcessor::KybalionProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",     juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output",    juce::AudioChannelSet::stereo(), true)
                           .withInput  ("Sidechain", juce::AudioChannelSet::stereo(), false)),
@@ -227,7 +227,7 @@ juce::AudioProcessorEditor* KybalionProcessor::createEditor()
     return new KybalionEditor (*this);
 }
 
-void KybalionProcessor::getStateInformation (juce::MemoryBlock& destData)
+void KybalionProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     scenes.writeInto (state);
@@ -235,7 +235,7 @@ void KybalionProcessor::getStateInformation (juce::MemoryBlock& destData)
         copyXmlToBinary (*xml, destData);
 }
 
-void KybalionProcessor::setStateInformation (const void* data, int sizeInBytes)
+void KybalionProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

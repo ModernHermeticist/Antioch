@@ -350,6 +350,34 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         processor.listening.store (on);
     };
     proposeButton.onClick = [this] { propose(); };
+
+    for (int s = 0; s < (int) slotButtons.size(); ++s)
+    {
+        auto& b = slotButtons[(size_t) s];
+        b.setButtonText (suite::SuiteProcessor::slotName (s));
+        b.setTooltip ("Snapshot " + suite::SuiteProcessor::slotName (s) + ": click to recall every suite plugin's settings "
+                      "(or to choose this empty slot), right-click to clear");
+        b.setColour (juce::TextButton::buttonOnColourId, accent);
+        b.onClick = [this, s]
+        {
+            if (slotButtons[(size_t) s].rightClick)
+            {
+                snapshotCommand (suite::SnapshotAction::Clear, s);
+                return;
+            }
+            currentSlot = s;
+            if (processor.hasSnapshot (s))
+                snapshotCommand (suite::SnapshotAction::Recall, s);
+            refreshSnapshots();
+        };
+        addAndMakeVisible (b);
+    }
+    saveSnapshotButton.setTooltip ("Save the current settings of every suite plugin into the chosen slot");
+    saveSnapshotButton.onClick = [this] { snapshotCommand (suite::SnapshotAction::Capture, currentSlot); };
+    snapshotStatus.setFont (juce::FontOptions (12.0f));
+    snapshotStatus.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (saveSnapshotButton);
+    addAndMakeVisible (snapshotStatus);
     arrangeButton.onClick = [this] { showArrange(); };
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
@@ -413,6 +441,35 @@ void OuroborosEditor::showArrange()
     juce::CallOutBox::launchAsynchronously (std::move (panel), arrangeButton.getScreenBounds(), nullptr);
 }
 
+void OuroborosEditor::snapshotCommand (suite::SnapshotAction action, int slot)
+{
+    lastSnapshotSeq = suite::SnapshotBus::send (action, slot);
+    lastSnapshotVerb = action == suite::SnapshotAction::Capture ? "Saved" : action == suite::SnapshotAction::Recall ? "Recalled" : "Cleared";
+    lastSnapshotVerb << " " << suite::SuiteProcessor::slotName (slot);
+    processor.pollSnapshots();   // this plugin answers straight away
+    refreshSnapshots();
+}
+
+void OuroborosEditor::refreshSnapshots()
+{
+    for (int s = 0; s < (int) slotButtons.size(); ++s)
+    {
+        auto& b = slotButtons[(size_t) s];
+        const auto filled = processor.hasSnapshot (s);
+        b.setToggleState (s == currentSlot, juce::dontSendNotification);
+        b.setColour (juce::TextButton::buttonColourId, filled ? accent.withAlpha (0.35f) : Colours::panel);
+        b.setColour (juce::TextButton::textColourOffId, filled ? Colours::text : Colours::dimText);
+    }
+    saveSnapshotButton.setButtonText ("Save " + suite::SuiteProcessor::slotName (currentSlot));
+    if (lastSnapshotSeq != 0)
+    {
+        const auto n = suite::SnapshotBus::acknowledgements (lastSnapshotSeq);
+        snapshotStatus.setText (lastSnapshotVerb + " in " + juce::String (n) + (n == 1 ? " plugin" : " plugins"), juce::dontSendNotification);
+    }
+    else
+        snapshotStatus.setText ("Suite snapshots", juce::dontSendNotification);
+}
+
 void OuroborosEditor::propose()
 {
     const auto proposal = processor.proposeFromListening();
@@ -424,6 +481,7 @@ void OuroborosEditor::propose()
 
 void OuroborosEditor::timerCallback()
 {
+    refreshSnapshots();
     // Listen: when playback stops after a decent listen, propose a map automatically.
     const auto isPlaying = processor.playing.load();
     const auto heard = processor.barsHeard();
@@ -486,6 +544,11 @@ void OuroborosEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
     auto header = bounds.removeFromTop (48);
     broadcast.setBounds (header.removeFromRight (190).reduced (4, 8));
+    header.removeFromRight (12);
+    saveSnapshotButton.setBounds (header.removeFromRight (80).reduced (2, 8));
+    for (int s = (int) slotButtons.size() - 1; s >= 0; --s)
+        slotButtons[(size_t) s].setBounds (header.removeFromRight (38).reduced (2, 8));
+    snapshotStatus.setBounds (header.removeFromRight (170).reduced (4, 8));
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);

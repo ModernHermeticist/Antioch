@@ -2,7 +2,7 @@
 #include "PluginEditor.h"
 
 EmeraldTabletProcessor::EmeraldTabletProcessor()
-    : AudioProcessor (BusesProperties()
+    : SuiteProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "EmeraldTabletState", []
@@ -95,13 +95,13 @@ juce::AudioProcessorEditor* EmeraldTabletProcessor::createEditor()
     return new EmeraldTabletEditor (*this);
 }
 
-void EmeraldTabletProcessor::getStateInformation (juce::MemoryBlock& destData)
+void EmeraldTabletProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
 
-void EmeraldTabletProcessor::setStateInformation (const void* data, int sizeInBytes)
+void EmeraldTabletProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))

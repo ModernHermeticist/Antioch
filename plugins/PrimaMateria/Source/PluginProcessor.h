@@ -1,12 +1,13 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
 #include "FixBus.h"
 #include "Params.h"
 #include "SuiteDSP.h"
 #include "HostInfo.h"
 
-class PrimaMateriaProcessor : public juce::AudioProcessor
+class PrimaMateriaProcessor : public suite::SuiteProcessor
 {
 public:
     PrimaMateriaProcessor();
@@ -33,8 +34,8 @@ public:
     const juce::String getProgramName (int) override { return {}; }
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock& destData) override;
-    void setStateInformation (const void* data, int sizeInBytes) override;
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyRole (int index);
 
