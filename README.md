@@ -25,8 +25,8 @@ With the full suite loaded, here is everything that happens without automation c
 
 1. **Emerald Tablet** hears the key and hands it to **Correspondence**, which shares it
    with every plugin.
-2. **Ouroboros** listens to one play-through, proposes the song's sections, and tells the
-   suite where it is.
+2. **Ouroboros** listens to one play-through and proposes the song's sections (or drafts a
+   map from a length and a few choices with **Arrange**), then tells the suite where it is.
 3. **Cause & Effect** builds and drops on cue, **Kybalion** stops ducking in breakdowns,
    and **Antioch** throws at section ends.
 4. **Section scenes** move each plugin's key controls per section: more reverb and shimmer
@@ -39,7 +39,7 @@ With the full suite loaded, here is everything that happens without automation c
    including a generated melody (Melodia).
 8. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
    gain to hit it. Mentalism's **arrangement coach** checks the energy arc section by
-   section.
+   section, and its **Fix** buttons adjust the other plugins in one click.
 9. **Every drop after the first goes bigger**: more echo and Euphoria, louder impacts,
    longer swells and the lead up an octave (see *Bigger later drops*).
 10. **Solve et Coagula** makes room for the vocal in the music, only where and when it sings.
@@ -213,6 +213,21 @@ the arc:
 Problems appear there and at the top of the suggestions, for example *"Breakdown (bars
 65-96) is only 1.0 LU below the drop: the drop won't feel like a lift."*
 
+**Fix buttons.** Each problem has a **Fix** button. One click asks the plugins that can help
+to take a small step on their own knobs, so you can see what changed:
+
+| Problem | What Fix does |
+|---|---|
+| Breakdown too close to the drop | Prima Materia: breakdowns 2 dB quieter (on every track whose breakdown isn't muted) |
+| Breakdown far too quiet | Prima Materia: breakdowns 2 dB louder |
+| Build doesn't rise | Cause & Effect: +10% riser, noise and wash; Azoth: +10% swell and roll |
+| Intro too loud | Prima Materia: intro 2 dB quieter |
+| Later drop weaker | Prima Materia: Drop 2+ column on, 1.5 dB above the drop; Azoth: *Bigger later drops* +25% |
+
+The line above the chart says how many plugins applied it. **Undo last fix** puts their
+knobs back. The fixed sections are measured again the next time they play, so click Fix
+again if the coach still isn't happy.
+
 ![Mentalism arrangement](docs/mentalism_arrangement.png)
 
 ## Ouroboros: arrangement conductor
@@ -227,6 +242,12 @@ Map out your song once, and the rest of the suite follows it with no automation:
 | Breakdown | Nothing | Stops ducking (no kick) | Throws at its end |
 | Intro, Groove, Drop, Outro | Nothing | Ducks as usual | Throws at its end |
 
+- **Arrange…** builds a map for you: choose the length in bars (it shows the duration at
+  the current tempo), 1–3 drops, a DJ-friendly 32-bar or short 16-bar intro and outro,
+  and a long or short first breakdown. Every section is a whole number of 8-bar phrases
+  and the song comes out exactly the length you asked for (when it's too short for
+  everything, the groove and later breakdowns shrink first and drops keep their 32 bars).
+  The result shows as a preview to **Apply** or **Discard**.
 - **Start from a template:** classic uplifting (208 bars), two breakdowns (232), radio
   edit (88), or a short 16-bar loop for testing. Then edit it: drag section edges,
   double-click to split, and right-click to change a section's type or delete it.
@@ -244,7 +265,7 @@ kind of shared memory as the key. Each plugin then works out the section from it
 of FL's transport, so every reaction lands exactly on the bar line, whatever order FL
 processes the tracks in.
 
-## Section scenes (Antioch, Kybalion, Vibration)
+## Section scenes (Antioch, Kybalion, Vibration, Solve et Coagula)
 
 ![Antioch scenes](docs/antioch_scenes.png)
 
@@ -261,6 +282,7 @@ up to 1 bar.
 | Antioch | more reverb, decay, shimmer, echo and harmonics | a little more reverb and echo, brighter | less reverb and shimmer |
 | Kybalion | gate much shallower, darker | shorter, more filtered gate | deeper gate |
 | Vibration | less Euphoria, wider, more air | more drive and air | more Euphoria and width |
+| Solve et Coagula | shallower dips (the music is thin) | slightly deeper | deeper and wider dips |
 
 Scenes follow Ouroboros and are saved with the project. The section is checked once per
 audio block, so changes land within about 10 ms of the bar line.
@@ -438,6 +460,10 @@ without being turned up.
 - **Speed:** how fast dips open and close (fast, medium or slow).
 - **Mix:** scales all dips (0% = off).
 
+**Scenes** (second tab) move Depth, Sensitivity, Focus and Mix per section, like the
+other scene plugins: by default the dips are deeper in drops, where the music is dense,
+and shallower in breakdowns.
+
 With no sidechain, or a silent one, the music passes through bit-for-bit. The display shows
 the vocal's level per band (up) and the dip in the music (down).
 
@@ -549,10 +575,19 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Bigger later drops:** the Drop 2+ scene adds on top of the Drop scene only from the
   second drop; Azoth's later impacts are louder and swells longer; Prima Materia uses its
   Drop 2+ column; the song lead goes up an octave.
+- **Arrange:** generated maps are exact in length and built from 8-bar phrases, every
+  drop follows a build and keeps 32 bars, three drops fit in 288 bars, a 96-bar radio
+  edit works, and a song too short for three drops gets fewer.
+- **Fix buttons:** each coach problem carries its fix; Prima Materia lowers an unmuted
+  breakdown by 2 dB, leaves a muted one alone, applies each fix once, and undoes it; the
+  Drop 2+ column starts from the drop's settings; Cause & Effect and Azoth step their
+  build and later-drop controls; a plugin loaded later doesn't replay old fixes; the
+  fixed sections are re-measured.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
-  below the threshold is ignored; narrow focus leaves the vocal's weaker bands alone.
+  below the threshold is ignored; narrow focus leaves the vocal's weaker bands alone. With
+  scenes, a drop dips about 7 dB deeper than a breakdown.
 - **Arrangement coach:** a flat arrangement gets flagged (breakdown only 1.0 LU below the
   drop, build not rising); a good arc gets no complaints; a weaker second drop is
   flagged.
@@ -572,6 +607,7 @@ shared/                  code used by every plugin
   KeyBus.*               cross-plugin key broadcast
   SectionBus.*           cross-plugin arrangement broadcast + SectionFollower helper
   TargetBus.*            Mentalism's loudness target, for Lapis
+  FixBus.*               Mentalism's fix-it messages and the receiver the other plugins use
   Scenes.h, SceneUI.h    section scenes engine, ghost rings and scene editor panel
   Analysis.h             BS.1770 loudness, true peak, stereo and band meters
   Music.h                scales, note names, tempo divisions
