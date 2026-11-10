@@ -6,6 +6,7 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "Music.h"
+#include "SectionBus.h"
 #include <vector>
 
 namespace chords
@@ -333,6 +334,60 @@ namespace chords
                                    k % 4 == 0 ? 110 : 88 });
         }
         return notes;
+    }
+
+    //==============================================================================
+    // Full-song clips: one pattern per section type, following the Ouroboros map.
+
+    enum class SongPart { Chords, Bass, Arp };
+
+    /** Pattern choice per section type. 0 = none, otherwise (pattern enum value + 1). */
+    struct SongPatterns
+    {
+        std::array<int, (int) suite::SectionType::count> chords { 0, 0, 1, 4, 3, 0 };   // Intro..Outro
+        std::array<int, (int) suite::SectionType::count> bass   { 1, 2, 0, 0, 2, 1 };
+        std::array<int, (int) suite::SectionType::count> arp    { 0, 1, 0, 1, 1, 0 };
+    };
+
+    inline const juce::StringArray& songChoiceNames (SongPart part)
+    {
+        static const juce::StringArray chords { "None", "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
+        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain" };
+        static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce" };
+        return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : arp;
+    }
+
+    /** Song-length notes: each section plays its own pattern, restarting the progression at
+        the section start and never spilling into the next section. Assumes 4/4 bars. */
+    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part)
+    {
+        std::vector<Note> out;
+        const auto progressionQ = base.quartersPerChord * juce::jlimit (1, maxSlots, base.count);
+
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto type = (size_t) map.sections[(size_t) i].type;
+            const auto choice = part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type] : patterns.arp[type];
+            if (choice <= 0)
+                continue;
+
+            auto s = base;
+            std::vector<Note> cycle;
+            if (part == SongPart::Chords)    { s.chordPattern = (ChordPattern) (choice - 1); cycle = chordClip (s); }
+            else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }
+            else                             { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
+
+            const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
+            const auto endQ = (map.endBar (i) - 1) * 4.0;
+            for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
+                for (const auto& n : cycle)
+                {
+                    const auto start = offset + n.start;
+                    if (start >= endQ - 1.0e-9) continue;
+                    out.push_back ({ n.pitch, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                }
+        }
+        return out;
     }
 
     //==============================================================================

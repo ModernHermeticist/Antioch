@@ -27,6 +27,14 @@ namespace Params
 
     double quartersPerChord (int index);
 
+    /** Full-song pattern choices, per section type (0..5) and part. */
+    inline juce::String songId (chords::SongPart part, int sectionType)
+    {
+        static const char* names[] = { "song_chords_", "song_bass_", "song_arp_" };
+        return names[(int) part] + juce::String (sectionType);
+    }
+    chords::SongPatterns readSongPatterns (const juce::AudioProcessorValueTreeState&);
+
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
     /** Reads all parameters into a chords::Settings snapshot. */

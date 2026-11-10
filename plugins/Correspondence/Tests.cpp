@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "KeyBus.h"
+#include "SectionBus.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -194,6 +195,58 @@ int main (int argc, char** argv)
         set (*p, Params::broadcast, 0.0f);
         p->publishKey();
         check (! suite::KeyBus::read().valid, "switching broadcast off withdraws the key");
+    }
+
+    section ("Full-song clips follow the Ouroboros map");
+    {
+        // Groove bars 1-2, Breakdown 3-4, Build 5-6, Drop 7-8 (4/4: 8 quarters per section).
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Build };
+        map.sections[3] = { 7, suite::SectionType::Drop };
+
+        auto s = aMinor();               // Am F C G, 1 bar per chord
+        const chords::SongPatterns patterns;   // defaults
+        const auto chordsSong = chords::songClip (s, map, patterns, chords::SongPart::Chords);
+        const auto bassSong = chords::songClip (s, map, patterns, chords::SongPart::Bass);
+
+        auto countIn = [] (const std::vector<chords::Note>& v, double from, double to)
+        {
+            int n = 0;
+            for (auto& note : v) if (note.start >= from && note.start < to) ++n;
+            return n;
+        };
+        check (countIn (chordsSong, 0, 8) == 0 && countIn (chordsSong, 8, 16) > 0, "no chords in the groove, pads in the breakdown");
+        check (countIn (bassSong, 0, 8) > 0 && countIn (bassSong, 8, 24) == 0 && countIn (bassSong, 24, 32) > 0,
+               "bass in groove and drop, none in breakdown and build");
+
+        double latestEnd = 0.0;
+        bool crossesSection = false;
+        for (auto& n : chordsSong)
+        {
+            latestEnd = std::max (latestEnd, n.start + n.length);
+            if ((int) std::floor (n.start / 8.0) != (int) std::floor ((n.start + n.length - 1.0e-6) / 8.0)) crossesSection = true;
+        }
+        check (! crossesSection && latestEnd <= 32.0, "no note spills into the next section");
+
+        // The progression restarts at every section: the drop's first chord is Am (root A).
+        int dropFirstLowest = 128;
+        for (auto& n : chordsSong) if (std::abs (n.start - 24.0) < 1.0e-9) dropFirstLowest = std::min (dropFirstLowest, n.pitch);
+        check (dropFirstLowest % 12 == 9 || dropFirstLowest % 12 == 0 || dropFirstLowest % 12 == 4, "the drop starts on chord 1 (Am)");
+
+        // Through the plugin: drag/save works with a map, and is refused without one.
+        auto p = make();
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceSongTest");
+        suite::SectionBus::publish (map);
+        const auto file = p->exportClip ("Song Bass", dir);
+        juce::MidiFile midi;
+        juce::FileInputStream in (file);
+        check (file.existsAsFile() && midi.readFrom (in), "song bass clip written: " + file.getFileName());
+        suite::SectionBus::withdraw();
+        check (! p->exportClip ("Song Chords", dir).existsAsFile(), "without an Ouroboros map there's nothing to export");
+        dir.deleteRecursively();
     }
 
     section ("Adopting a key from Emerald Tablet");

@@ -53,6 +53,17 @@ namespace Params
         layout.add (std::make_unique<AudioParameterInt> (id (bassOctave), "Bass Octave", 1, 3, 2));
         layout.add (std::make_unique<AudioParameterChoice> (id (arpPattern), "Arp Pattern", arpPatternNames, 0));
         layout.add (std::make_unique<AudioParameterInt> (id (arpOctaves), "Arp Octaves", 1, 3, 2));
+        const chords::SongPatterns songDefaults;
+        for (int t = 0; t < (int) suite::SectionType::count; ++t)
+            for (auto part : { chords::SongPart::Chords, chords::SongPart::Bass, chords::SongPart::Arp })
+            {
+                const auto& defaults = part == chords::SongPart::Chords ? songDefaults.chords : part == chords::SongPart::Bass ? songDefaults.bass : songDefaults.arp;
+                const String partName = part == chords::SongPart::Chords ? "Chords" : part == chords::SongPart::Bass ? "Bass" : "Arp";
+                layout.add (std::make_unique<AudioParameterChoice> (id (songId (part, t)),
+                                                                    String ("Song ") + suite::sectionName ((suite::SectionType) t) + " " + partName,
+                                                                    chords::songChoiceNames (part), defaults[(size_t) t]));
+            }
+
         layout.add (std::make_unique<AudioParameterFloat> (id (preview), "Preview Volume", NormalisableRange<float> (0.0f, 1.0f), 0.5f,
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
                                                            {
@@ -83,5 +94,17 @@ namespace Params
         s.arpPattern = (chords::ArpPattern) choiceIndex (state, arpPattern);
         s.arpOctaves = choiceIndex (state, arpOctaves);
         return s;
+    }
+
+    chords::SongPatterns readSongPatterns (const AudioProcessorValueTreeState& state)
+    {
+        chords::SongPatterns p;
+        for (int t = 0; t < (int) suite::SectionType::count; ++t)
+        {
+            p.chords[(size_t) t] = choiceIndex (state, songId (chords::SongPart::Chords, t));
+            p.bass[(size_t) t]   = choiceIndex (state, songId (chords::SongPart::Bass, t));
+            p.arp[(size_t) t]    = choiceIndex (state, songId (chords::SongPart::Arp, t));
+        }
+        return p;
     }
 }

@@ -17,7 +17,7 @@ private:
     CorrespondenceProcessor& processor;
     juce::String kind;
     juce::Colour colour;
-    bool dragging = false;
+    bool dragging = false, unavailable = false;
 };
 
 /** Mini piano roll of the voiced progression, bass and current preview position. */
@@ -79,8 +79,9 @@ private:
     suite::ui::Toggle voiceLead, addBass;
     suite::ui::Knob registerOct, bassOctave, arpOctaves, previewVolume;
 
-    DragTile chordTile, bassTile, arpTile;
-    juce::TextButton playButton { "Play" }, saveButton { "Save MIDI..." };
+    DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile;
+    juce::TextButton playButton { "Play" }, saveButton { "Save MIDI..." }, songButton { "Song patterns..." };
+    void showSongPatterns();
     std::unique_ptr<juce::FileChooser> chooser;
 
     chords::Settings settings;

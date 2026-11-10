@@ -34,11 +34,13 @@ void DragTile::paint (juce::Graphics& g)
             g.fillEllipse (r.getX() + 12.0f + (float) col * 7.0f, r.getCentreY() - 9.0f + (float) row * 7.0f, 3.5f, 3.5f);
 
     g.setColour (Colours::text);
-    g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-    g.drawText (kind.toUpperCase(), r.withTrimmedLeft (26.0f).withTrimmedBottom (r.getHeight() * 0.35f), juce::Justification::centred);
-    g.setColour (Colours::dimText);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawFittedText (kind.toUpperCase(), r.withTrimmedLeft (26.0f).withTrimmedBottom (r.getHeight() * 0.4f).toNearestInt(),
+                      juce::Justification::centred, 1, 0.7f);
+    g.setColour (unavailable ? Colours::ember : Colours::dimText);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("drag into FL", r.withTrimmedLeft (26.0f).withTrimmedTop (r.getHeight() * 0.5f), juce::Justification::centred);
+    g.drawText (unavailable ? "needs Ouroboros" : "drag into FL", r.withTrimmedLeft (26.0f).withTrimmedTop (r.getHeight() * 0.5f),
+                juce::Justification::centred);
 }
 
 void DragTile::mouseDrag (const juce::MouseEvent& e)
@@ -46,9 +48,15 @@ void DragTile::mouseDrag (const juce::MouseEvent& e)
     if (dragging || e.getDistanceFromDragStart() < 5)
         return;
 
+    const auto file = processor.exportClip (kind, dragFolder());
+    unavailable = ! file.existsAsFile();   // song clips need an Ouroboros map
+    if (unavailable)
+    {
+        repaint();
+        return;
+    }
     dragging = true;
     repaint();
-    const auto file = processor.exportClip (kind, dragFolder());
     juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this,
                                                                 [safe = juce::Component::SafePointer<DragTile> (this)]
                                                                 {
@@ -197,7 +205,10 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       previewVolume (p.apvts, Params::preview, "Preview vol", Colours::text),
       chordTile (p, "Chords", accent),
       bassTile (p, "Bass", Colours::brass),
-      arpTile (p, "Arp", Colours::amethyst)
+      arpTile (p, "Arp", Colours::amethyst),
+      songChordTile (p, "Song Chords", accent),
+      songBassTile (p, "Song Bass", Colours::brass),
+      songArpTile (p, "Song Arp", Colours::amethyst)
 {
     setLookAndFeel (&lnf);
 
@@ -224,6 +235,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     }
     roll.onSlotClicked = [this] (int i) { auditionSlot (i, 1.6); };
 
+    songButton.onClick = [this] { showSongPatterns(); };
     playButton.setClickingTogglesState (false);
     playButton.onClick = [this] { togglePlay(); };
     saveButton.onClick = [this]
@@ -235,8 +247,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                               {
                                   const auto dir = fc.getResult();
                                   if (dir == juce::File()) return;
-                                  for (auto* kind : { "Chords", "Bass", "Arp" })
-                                      processor.exportClip (kind, dir);
+                                  for (auto* kind : { "Chords", "Bass", "Arp", "Song Chords", "Song Bass", "Song Arp" })
+                                      processor.exportClip (kind, dir);   // song clips are skipped without an Ouroboros map
                                   dir.revealToUser();
                               });
     };
@@ -245,7 +257,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                                                              &presetCaption, &presetBox, &roll, &voicing, &chordPattern,
                                                              &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
                                                              &bassOctave, &arpOctaves, &previewVolume, &chordTile, &bassTile,
-                                                             &arpTile, &playButton, &saveButton })
+                                                             &arpTile, &songChordTile, &songBassTile, &songArpTile,
+                                                             &playButton, &saveButton, &songButton })
         addAndMakeVisible (c);
 
     setSize (1060, 740);
@@ -258,6 +271,76 @@ CorrespondenceEditor::~CorrespondenceEditor()
     stopTimer();
     processor.preview.stop();
     setLookAndFeel (nullptr);
+}
+
+namespace
+{
+    /** Grid of pattern choices: one row per section type, columns for chords, bass and arp. */
+    class SongPatternGrid : public juce::Component
+    {
+    public:
+        explicit SongPatternGrid (juce::AudioProcessorValueTreeState& state)
+        {
+            for (int t = 0; t < (int) suite::SectionType::count; ++t)
+            {
+                auto label = std::make_unique<juce::Label> ("", suite::sectionName ((suite::SectionType) t));
+                label->setFont (juce::FontOptions (14.0f, juce::Font::bold));
+                addAndMakeVisible (*label);
+                labels.push_back (std::move (label));
+                for (auto part : { chords::SongPart::Chords, chords::SongPart::Bass, chords::SongPart::Arp })
+                {
+                    auto box = std::make_unique<juce::ComboBox>();
+                    box->addItemList (chords::songChoiceNames (part), 1);
+                    attachments.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+                        state, Params::songId (part, t), *box));
+                    addAndMakeVisible (*box);
+                    boxes.push_back (std::move (box));
+                }
+            }
+            hint.setText ("Each section of the Ouroboros map plays these patterns; the progression restarts at every section.",
+                          juce::dontSendNotification);
+            hint.setFont (juce::FontOptions (12.0f));
+            addAndMakeVisible (hint);
+            setSize (560, 330);
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.setColour (Colours::dimText);
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+            const auto w = (getWidth() - 120) / 3;
+            int x = 120;
+            for (auto* h : { "CHORDS", "BASS", "ARP" }) { g.drawText (h, x, 4, w, 18, juce::Justification::centred); x += w; }
+        }
+
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (6);
+            r.removeFromTop (20);
+            hint.setBounds (r.removeFromBottom (24));
+            const auto rowH = r.getHeight() / (int) labels.size();
+            for (size_t t = 0; t < labels.size(); ++t)
+            {
+                auto row = r.removeFromTop (rowH);
+                labels[t]->setBounds (row.removeFromLeft (114));
+                const auto w = row.getWidth() / 3;
+                for (size_t k = 0; k < 3; ++k)
+                    boxes[t * 3 + k]->setBounds (row.removeFromLeft (w).reduced (3, 4));
+            }
+        }
+
+    private:
+        std::vector<std::unique_ptr<juce::Label>> labels;
+        std::vector<std::unique_ptr<juce::ComboBox>> boxes;
+        std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
+        juce::Label hint;
+    };
+}
+
+void CorrespondenceEditor::showSongPatterns()
+{
+    auto grid = std::make_unique<SongPatternGrid> (processor.apvts);
+    juce::CallOutBox::launchAsynchronously (std::move (grid), songButton.getScreenBounds(), nullptr);
 }
 
 void CorrespondenceEditor::auditionSlot (int slot, double seconds)
@@ -342,7 +425,7 @@ void CorrespondenceEditor::paint (juce::Graphics& g)
     drawPanel (g, progressionArea, "Progression  (click a chord to hear it)", accent);
     drawPanel (g, voicingArea, "Voicing", accent);
     drawPanel (g, patternArea, "Rhythm", Colours::brass);
-    drawPanel (g, exportArea, "Drag into FL", Colours::amethyst);
+    drawPanel (g, exportArea, "Drag into FL  (loop / whole song)", Colours::amethyst);
 }
 
 void CorrespondenceEditor::resized()
@@ -384,7 +467,7 @@ void CorrespondenceEditor::resized()
     // ---- Bottom panels ----
     voicingArea = bottom.removeFromLeft (300);
     bottom.removeFromLeft (10);
-    exportArea = bottom.removeFromRight (330);
+    exportArea = bottom.removeFromRight (360);
     bottom.removeFromRight (10);
     patternArea = bottom;
 
@@ -400,19 +483,22 @@ void CorrespondenceEditor::resized()
     auto pa = inner (patternArea);
     auto paTop = pa.removeFromTop (pa.getHeight() / 2);
     layoutRow (paTop, { &chordPattern, &bassPattern, &arpPattern });
-    layoutRow (pa, { &bassOctave, &arpOctaves });
-    for (auto* knob : { &bassOctave, &arpOctaves })
+    layoutRow (pa, { &bassOctave, &arpOctaves, &previewVolume });
+    for (auto* knob : { &bassOctave, &arpOctaves, &previewVolume })
         knob->setBounds (knob->getBounds().withSizeKeepingCentre (knob->getWidth(), knob->getHeight() + 10));
 
     auto ex = inner (exportArea);
-    auto tiles = ex.removeFromTop (56);
-    const auto tileW = tiles.getWidth() / 3;
-    chordTile.setBounds (tiles.removeFromLeft (tileW).reduced (3, 0));
-    bassTile.setBounds (tiles.removeFromLeft (tileW).reduced (3, 0));
-    arpTile.setBounds (tiles.reduced (3, 0));
-    ex.removeFromTop (8);
-    auto buttons = ex.removeFromLeft (ex.getWidth() * 2 / 3);
-    playButton.setBounds (buttons.removeFromTop (buttons.getHeight() / 2).reduced (4, 6));
-    saveButton.setBounds (buttons.reduced (4, 6));
-    previewVolume.setBounds (ex);
+    const auto tileRow = (ex.getHeight() - 36) / 2;
+    auto placeTiles = [&] (juce::Rectangle<int> row, std::initializer_list<DragTile*> tiles)
+    {
+        const auto tileW = row.getWidth() / 3;
+        for (auto* t : tiles) t->setBounds (row.removeFromLeft (tileW).reduced (3, 2));
+    };
+    placeTiles (ex.removeFromTop (tileRow), { &chordTile, &bassTile, &arpTile });
+    placeTiles (ex.removeFromTop (tileRow), { &songChordTile, &songBassTile, &songArpTile });
+    auto buttons = ex.withTrimmedTop (4);
+    const auto bw = buttons.getWidth() / 3;
+    playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
+    saveButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
+    songButton.setBounds (buttons.reduced (3, 0));
 }

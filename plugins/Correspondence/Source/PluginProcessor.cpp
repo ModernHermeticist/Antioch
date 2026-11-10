@@ -112,7 +112,20 @@ void CorrespondenceProcessor::applyPreset (int index)
 juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
 {
     const auto s = Params::readSettings (apvts);
-    const auto notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s) : chords::chordClip (s);
+    std::vector<chords::Note> notes;
+    if (kind.startsWith ("Song "))
+    {
+        // Full-song clip following the Ouroboros map.
+        suite::SectionMap map;
+        if (! suite::SectionBus::read (map))
+            return {};
+        const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp : chords::SongPart::Chords;
+        notes = chords::songClip (s, map, Params::readSongPatterns (apvts), part);
+    }
+    else
+    {
+        notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s) : chords::chordClip (s);
+    }
 
     juce::String progression;
     for (int i = 0; i < s.count; ++i)
