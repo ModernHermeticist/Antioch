@@ -288,6 +288,42 @@ int main (int argc, char** argv)
         check (chords::songClip (s, map, patterns, chords::SongPart::Bass).front().pitch % 12 == 9, "'Same as the drop' keeps Am first");
     }
 
+    section ("Counter-melody");
+    {
+        auto s = aMinor();
+        const auto mel = chords::melody (s, {});
+        const auto counter = chords::counterMelody (mel, s);
+        check (counter.size() >= 4, "answers the lead (" + juce::String ((int) counter.size()) + " notes)");
+        bool inGaps = true, below = true, inKey = true, strongOnChord = true;
+        const auto& steps = suite::music::scales()[0].steps;
+        for (const auto& c : counter)
+        {
+            for (const auto& m : mel)
+                if (c.start < m.start + 1.0e-6 && m.start < c.start + c.length - 1.0e-6) inGaps = false;   // runs into the next lead note
+            int nearest = 0; double best = 1.0e9;
+            for (const auto& m : mel) if (m.start <= c.start && c.start - m.start < best) { best = c.start - m.start; nearest = m.pitch; }
+            below = below && c.pitch < nearest;
+            inKey = inKey && std::find (steps.begin(), steps.end(), ((c.pitch - 9) % 12 + 12) % 12) != steps.end();
+            const auto pcs = chords::chordTonesAt (s, c.start);
+            if (std::abs (std::fmod (c.start, 1.0)) < 1.0e-9)
+                strongOnChord = strongOnChord && std::find (pcs.begin(), pcs.end(), c.pitch % 12) != pcs.end();
+        }
+        check (inGaps, "between the lead's notes, never on or across one");
+        check (below && inKey && strongOnChord, "below the lead, in key, with chord tones on the beat");
+
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        chords::SongPatterns patterns;
+        const auto song = chords::songClip (s, map, patterns, chords::SongPart::Counter);
+        bool dropOnly = ! song.empty();
+        for (auto& n : song) dropOnly = dropOnly && n.start >= 16.0;
+        check (dropOnly, "in the song: wherever the full lead plays (the drop), not under the breakdown teaser");
+        patterns.counter = false;
+        check (chords::songClip (s, map, patterns, chords::SongPart::Counter).empty(), "and can be switched off");
+    }
+
     section ("Humanised exports");
     {
         auto s = aMinor();
@@ -405,7 +441,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 10, "a song folder with 9 clips (incl. the drop-2 harmony) and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 12, "a song folder with 11 clips (incl. counter-melody and drop-2 harmony) and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -413,8 +449,8 @@ int main (int argc, char** argv)
         juce::MidiFile midi;
         juce::FileInputStream in (all);
         const auto read = all.existsAsFile() && midi.readFrom (in);
-        check (read && midi.getNumTracks() == 6, "all parts: a section track plus Chords, Bass, Arp, Lead and Harmony (" + juce::String (midi.getNumTracks()) + " tracks)");
-        if (read && midi.getNumTracks() == 6)
+        check (read && midi.getNumTracks() == 7, "all parts: a section track plus Chords, Bass, Arp, Lead, Harmony and Counter (" + juce::String (midi.getNumTracks()) + " tracks)");
+        if (read && midi.getNumTracks() == 7)
         {
             juce::StringArray markers;
             for (auto* e : *midi.getTrack (0))
@@ -422,15 +458,15 @@ int main (int argc, char** argv)
                     markers.add (e->message.getTextFromTextMetaEvent() + "@" + juce::String (e->message.getTimeStamp() / 960.0, 0));
             check (markers.joinIntoString (" ") == "Groove@0 Drop@16 Breakdown@32 Drop 2@48", "sections as markers: " + markers.joinIntoString (" "));
             int notes = 0;
-            for (int t = 1; t < 6; ++t)
+            for (int t = 1; t < 7; ++t)
                 for (auto* e : *midi.getTrack (t)) notes += e->message.isNoteOn();
             check (notes > 50, "with the notes of every part (" + juce::String (notes) + ")");
         }
 
         suite::SectionBus::withdraw();
         const auto noMap = p->exportEverything (parent);
-        check (noMap != folder && noMap.findChildFiles (juce::File::findFiles, false, "*.mid").size() == 4,
-               "without Ouroboros: just the four loop clips, in a new folder");
+        check (noMap != folder && noMap.findChildFiles (juce::File::findFiles, false, "*.mid").size() == 5,
+               "without Ouroboros: just the five loop clips, in a new folder");
         parent.deleteRecursively();
     }
 

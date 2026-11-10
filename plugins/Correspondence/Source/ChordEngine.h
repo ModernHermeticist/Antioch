@@ -622,7 +622,50 @@ namespace chords
         return out;
     }
 
-    enum class SongPart { Chords, Bass, Arp, Lead, Harmony };
+    /** Counter-melody: short answers wherever the lead holds or rests for a beat or more (its
+        next note is at least a beat away), starting an 8th after the lead note, a fifth or so
+        below it. Each answer moves against the lead's last direction, puts chord
+        tones on the beat, and steps towards the lead's next note. Velocity 84 (softer). */
+    inline std::vector<Note> counterMelody (const std::vector<Note>& mel, const Settings& s)
+    {
+        using namespace detail;
+        std::vector<Note> out;
+        if (mel.size() < 2) return out;
+        double totalQ = 0.0;
+        for (const auto& n : mel) totalQ = std::max (totalQ, n.start + n.length);
+
+        for (size_t i = 0; i < mel.size(); ++i)
+        {
+            const auto& n = mel[i];
+            const auto gapStart = std::floor (n.start * 2.0 + 1.0e-9) / 2.0 + 0.5;   // the 8th after the lead note starts
+            const auto gapEnd = i + 1 < mel.size() ? mel[i + 1].start : totalQ;
+            const auto count = std::min (4, (int) std::floor ((gapEnd - gapStart) / 0.5 + 1.0e-9));
+            if (count < 1 || gapEnd - n.start < 1.0 - 1.0e-9) continue;
+
+            // Contrary motion: the lead went up into this note, so the answer comes down (and vice versa).
+            const auto leadDir = i > 0 ? (n.pitch > mel[i - 1].pitch ? 1 : n.pitch < mel[i - 1].pitch ? -1 : 0) : 1;
+            const auto dir = leadDir >= 0 ? -1 : 1;
+            const auto lo = n.pitch - 14, hi = n.pitch - 2;
+            auto pitch = nearestChordTone (n.pitch - 7, chordTonesAt (s, gapStart), lo, hi);
+            for (int k = 0; k < count; ++k)
+            {
+                const auto start = gapStart + 0.5 * k;
+                if (k > 0)
+                {
+                    pitch = scaleStepFrom (pitch, dir, s.root, s.scale);
+                    if (pitch < lo || pitch > hi) pitch = scaleStepFrom (pitch, -2 * dir, s.root, s.scale);
+                }
+                if (std::abs (std::fmod (start, 1.0)) < 1.0e-9)
+                    pitch = nearestChordTone (pitch, chordTonesAt (s, start), lo, hi);
+                const auto last = k == count - 1;
+                const auto length = last ? std::min (0.5, gapEnd - start) * 0.9 : 0.45;
+                out.push_back ({ pitch, start, length, 84 });
+            }
+        }
+        return out;
+    }
+
+    enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter };
 
     /** Pattern choice per section type. 0 = none, otherwise (pattern enum value + 1). */
     struct SongPatterns
@@ -635,6 +678,7 @@ namespace chords
         bool liftLaterDrops = true;   // the lead goes up an octave in the 2nd, 3rd... drop
         bool varyLaterDrops = true;   // ... and is embellished, with a harmony line (SongPart::Harmony)
         int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV
+        bool counter = true;          // a counter-melody wherever the full lead plays (SongPart::Counter)
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -682,6 +726,8 @@ namespace chords
             const auto varied = laterDrop && patterns.varyLaterDrops && choice == 1;
             if (part == SongPart::Harmony && ! varied)
                 continue;   // the harmony line only plays in later drops
+            if (part == SongPart::Counter && (choice != 1 || ! patterns.counter))
+                continue;   // the counter-melody answers the full lead only
 
             auto s = base;
             if (map.sections[(size_t) i].type == suite::SectionType::Breakdown && patterns.breakdownStart > 0)
@@ -696,6 +742,7 @@ namespace chords
                 if (choice == 2) cycle = teaser (cycle);
                 if (varied) cycle = embellish (cycle, s);
                 if (part == SongPart::Harmony) cycle = harmony (cycle, s);
+                if (part == SongPart::Counter) cycle = counterMelody (cycle, s);
             }
 
             const auto lift = (part == SongPart::Lead || part == SongPart::Harmony) && patterns.liftLaterDrops && laterDrop ? 12 : 0;

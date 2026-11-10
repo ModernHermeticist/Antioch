@@ -143,7 +143,7 @@ void RollView::paint (juce::Graphics& g)
     {
         const auto x = r.getX() + colW * (float) (n.start / quartersPerChord);
         const auto w = juce::jmax (3.0f, colW * (float) (n.length / quartersPerChord));
-        g.setColour (Colours::ember);
+        g.setColour (n.velocity == 84 ? Colours::amethyst : Colours::ember);   // counter-melody notes in violet
         g.fillRoundedRectangle (x, r.getBottom() - (float) (n.pitch - lo + 1) * rowH + 1.0f, w, juce::jmax (4.0f, rowH - 1.0f), 2.0f);
     }
 
@@ -338,6 +338,9 @@ namespace
             lift = std::make_unique<juce::ToggleButton> ("Lead up an octave in drop 2+");
             liftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songLift, *lift);
             addAndMakeVisible (*lift);
+            counter = std::make_unique<juce::ToggleButton> ("Counter-melody");
+            counterAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songCounter, *counter);
+            addAndMakeVisible (*counter);
             vary = std::make_unique<juce::ToggleButton> ("Vary the lead + harmony in drop 2+");
             varyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songVary, *vary);
             addAndMakeVisible (*vary);
@@ -348,7 +351,7 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (780, 360);
+            setSize (900, 360);
         }
 
         void paint (juce::Graphics& g) override
@@ -368,6 +371,7 @@ namespace
             {
                 auto toggles = r.removeFromBottom (28);
                 breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
+                counter->setBounds (toggles.removeFromRight (140));
                 lift->setBounds (toggles.removeFromLeft (toggles.getWidth() / 2));
                 vary->setBounds (toggles);
             }
@@ -387,8 +391,8 @@ namespace
         std::vector<std::unique_ptr<juce::ComboBox>> boxes;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
-        std::unique_ptr<juce::ToggleButton> lift, vary;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment;
+        std::unique_ptr<juce::ToggleButton> lift, vary, counter;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment;
         std::unique_ptr<juce::ComboBox> breakdownBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> breakdownAttachment;
     };
@@ -474,6 +478,8 @@ void CorrespondenceEditor::timerCallback()
         view.repaint();
     }
     melodyNotes = chords::melody (settings, processor.melodySettings());
+    if (processor.apvts.getRawParameterValue (Params::songCounter)->load() > 0.5f)
+        for (const auto& n : chords::counterMelody (melodyNotes, settings)) melodyNotes.push_back (n);
     roll.setData (voiced, bassNotes, settings.count, playingSlot, melodyNotes, settings.quartersPerChord);
     const auto motifSize = (int) processor.getMotif().size();
     newMelodyButton.setButtonText (motifSize > 0 ? "Forget motif (" + juce::String (motifSize) + " notes)"

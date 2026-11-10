@@ -181,17 +181,19 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
             return {};
         const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp
                         : kind.endsWith ("Lead") ? chords::SongPart::Lead : kind.endsWith ("Harmony") ? chords::SongPart::Harmony
+                        : kind.endsWith ("Counter") ? chords::SongPart::Counter
                         : chords::SongPart::Chords;
         auto patterns = Params::readSongPatterns (apvts);
         patterns.melody = melodySettings();
         notes = chords::songClip (s, map, patterns, part);
-        if (notes.empty() && part == chords::SongPart::Harmony)
+        if (notes.empty() && (part == chords::SongPart::Harmony || part == chords::SongPart::Counter))
             return {};   // the harmony line only exists when there's a later drop
     }
     else
     {
         notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s)
-              : kind == "Melody" ? chords::melody (s, melodySettings()) : chords::chordClip (s);
+              : kind == "Melody" ? chords::melody (s, melodySettings())
+              : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
 
     juce::String progression;
@@ -219,7 +221,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony" })
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
 
     suite::SectionMap map;
@@ -230,8 +232,9 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
         for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
                                           { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead },
-                                          { "Harmony", chords::SongPart::Harmony } })
-            if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part != chords::SongPart::Harmony)
+                                          { "Harmony", chords::SongPart::Harmony }, { "Counter", chords::SongPart::Counter } })
+            if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
+                                                                         || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });
 
         std::vector<std::pair<double, juce::String>> markers;

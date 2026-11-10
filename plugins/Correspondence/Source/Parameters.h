@@ -27,7 +27,8 @@ namespace Params
     inline const juce::String songLift     { "song_lift" };
     inline const juce::String songVary     { "song_vary" };   // later drops: embellished lead + harmony line
     inline const juce::String songBreakdown { "song_bdstart" }; // breakdown progression: same / start on VI / start on IV
-    inline const juce::String humanise     { "humanise" };    // exported MIDI: accents and small timing/velocity variation
+    inline const juce::String humanise     { "humanise" };
+    inline const juce::String songCounter  { "song_counter" };   // counter-melody wherever the full lead plays    // exported MIDI: accents and small timing/velocity variation
 
     inline juce::String slotDegree (int slot)  { return "slot" + juce::String (slot + 1) + "_deg"; }
     inline juce::String slotQuality (int slot) { return "slot" + juce::String (slot + 1) + "_qual"; }

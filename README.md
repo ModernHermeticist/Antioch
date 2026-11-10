@@ -561,6 +561,13 @@ piano roll and played along when you press **Play**:
   Lead column defaults to a sparser **Teaser** in breakdowns and the full **Melody** in
   drops.
 
+**Counter-melody** (shown in violet). Wherever the lead holds a note or rests for a beat
+or more, a second line answers it a fifth or so below: it moves against the lead's last
+direction, puts chord tones on the beat and steps towards the lead's next note, a little
+softer. It's written as the **Counter** clip and, wherever the full lead plays in the song,
+as SONG COUNTER, its own track in Export all. Switch it off under *Counter-melody* in Song
+patterns.
+
 **Your own motif.** Drag a MIDI clip (from FL's piano roll or a file) onto the *Voicing &
 Melody* panel. Melodia keeps its first two bars, one note per onset (the top note of any
 chord). The motif becomes the call of every phrase as you played it, fitted to the key and
@@ -761,6 +768,10 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   and sends D minor to the suite; Correspondence takes the key and the style's
   progression, Mentalism the loudness target, Vibration its suggested scenes; a plugin
   loaded later doesn't replay it.
+- **Counter-melody:** answers the lead between its notes (never on or across one), below
+  it, in key, with chord tones on the beat; in the song it plays with the full lead in the
+  drop, not under the breakdown teaser, and can be switched off; Export all gains the
+  Counter clip and track.
 - **Humanise:** off-beat bass notes are accented, timing moves by at most about 5 ms,
   the same clip always humanises the same way, and 0% gives the plain pattern.
 - **DJ check:** a pad in the intro is flagged with a fix; beat-led passes; no kick in the
