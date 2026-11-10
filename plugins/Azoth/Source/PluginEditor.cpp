@@ -18,7 +18,11 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       rollStart (p.apvts, AzothProcessor::rollStartId, "Roll starts"),
       gap (p.apvts, AzothProcessor::gapId, "Gap before drop"),
       follow (p.apvts, AzothProcessor::followId, "Follow Ouroboros", Colours::ember),
-      grooveCrash (p.apvts, AzothProcessor::grooveCrashId, "Crash into groove", accent)
+      grooveCrash (p.apvts, AzothProcessor::grooveCrashId, "Crash into groove", accent),
+      reverseOn (p.apvts, AzothProcessor::reverseOnId, "Reverse swells", Colours::amethyst),
+      reverseLevel (p.apvts, AzothProcessor::reverseLevelId, "Level", Colours::amethyst),
+      reverseTarget (p.apvts, AzothProcessor::reverseTargetId, "Swell into"),
+      reverseLength (p.apvts, AzothProcessor::reverseLengthId, "Length")
 {
     setLookAndFeel (&lnf);
     const char* names[] = { "Impact", "Crash", "Downlifter", "Snare" };
@@ -32,9 +36,15 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     status.setFont (juce::FontOptions (13.0f));
     next.setFont (juce::FontOptions (20.0f, juce::Font::bold));
     for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch,
-                                                             &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next })
+                                                             &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
+                                                             &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote })
         addAndMakeVisible (c);
-    setSize (980, 560);
+    reverseNote.setFont (juce::FontOptions (12.0f));
+    reverseNote.setJustificationType (juce::Justification::centredLeft);
+    reverseNote.setText ("Put Azoth on the vocal or lead track: it captures the first beat of each target section from "
+                         "this track's own audio and swells its reversed reverb into it. Adds 3 s of latency (FL compensates).",
+                         juce::dontSendNotification);
+    setSize (980, 700);
     timerCallback();
     startTimerHz (10);
 }
@@ -67,6 +77,7 @@ void AzothEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "AZOTH", "automatic transition FX", accent);
     drawPanel (g, elementArea, "Transitions");
     drawPanel (g, shapeArea, "Shape", accent);
+    drawPanel (g, reverseArea, "Reverse swells from this track", Colours::amethyst);
 }
 
 void AzothEditor::resized()
@@ -80,7 +91,16 @@ void AzothEditor::resized()
     bounds.removeFromTop (8);
     elementArea = bounds.removeFromTop (220);
     bounds.removeFromTop (12);
-    shapeArea = bounds;
+    shapeArea = bounds.removeFromTop (150);
+    bounds.removeFromTop (12);
+    reverseArea = bounds;
+
+    auto rv = reverseArea.reduced (10, 6).withTrimmedTop (14);
+    reverseOn.setBounds (rv.removeFromLeft (170).withSizeKeepingCentre (160, 30));
+    reverseLevel.setBounds (rv.removeFromLeft (120));
+    reverseTarget.setBounds (rv.removeFromLeft (170));
+    reverseLength.setBounds (rv.removeFromLeft (150));
+    reverseNote.setBounds (rv.reduced (8, 0));
 
     auto e = elementArea.reduced (10, 6).withTrimmedTop (14);
     auto buttons = e.removeFromBottom (34);

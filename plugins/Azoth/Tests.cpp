@@ -93,6 +93,56 @@ int main (int argc, char** argv)
         check (rmsBetween (audio, 12.02, 12.5) > 0.05f, "then the drop hits");
     }
 
+    section ("Reverse swells from the track's own audio");
+    {
+        // Groove bars 1-2 (0-4 s), Drop bars 3-4 (4-8 s); a single pluck on the drop's downbeat.
+        suite::SectionMap map;
+        map.totalBars = 4; map.count = 2;
+        map.sections[0] = { 1, T::Groove };
+        map.sections[1] = { 3, T::Drop };
+        suite::SectionBus::publish (map);
+
+        auto p = std::make_unique<AzothProcessor>();
+        set (*p, AzothProcessor::levelId, 0.0f);
+        for (auto* id : { &AzothProcessor::impactId, &AzothProcessor::crashId, &AzothProcessor::swellId })
+            set (*p, *id, 0.0f);
+        set (*p, AzothProcessor::reverseOnId, 1.0f);     // 1 bar swell into drops
+        prepare (*p);
+        check (p->getLatencySamples() == (int) (3.0 * sampleRate), "reports 3 s of latency (" + juce::String (p->getLatencySamples()) + " samples)");
+
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 9.0, pluck (330.0f, 4.0), &audio, &head);
+        p->setPlayHead (nullptr);
+
+        // Output is 3 s late: the pluck comes out at 7 s, the 1-bar (2 s) swell occupies 5-7 s.
+        check (peakBetween (audio, 6.95, 7.2) > 0.3f, "the track's own audio comes out 3 s later (pluck at 7 s)");
+        check (peakBetween (audio, 0.0, 4.95) < 1.0e-4f, "silence before the swell");
+        const auto early = rmsBetween (audio, 5.1, 5.6), late = rmsBetween (audio, 6.4, 6.95);
+        check (late > 0.001f && late > 2.0f * early, "a swell rises into the downbeat (" + juce::String (early, 5) + " -> " + juce::String (late, 5) + ")");
+        check (p->reverseSamplesPlayed() > (int64_t) (1.9 * sampleRate), "the whole 1-bar swell played");
+        if (outDir != juce::File()) writeWav (outDir.getChildFile ("azoth_reverse_swell.wav"), audio);
+
+        // With the lookahead on, the synth transitions move with the delayed audio.
+        auto q = std::make_unique<AzothProcessor>();
+        set (*q, AzothProcessor::levelId, 0.0f);
+        set (*q, AzothProcessor::reverseOnId, 1.0f);
+        set (*q, AzothProcessor::reverseLevelId, 0.0f);
+        set (*q, AzothProcessor::crashId, 0.0f);
+        set (*q, AzothProcessor::swellId, 0.0f);
+        prepare (*q);
+        FakePlayHead head2;
+        head2.bpm = 120.0;
+        q->setPlayHead (&head2);
+        render (*q, 8.0, {}, &audio, &head2);
+        q->setPlayHead (nullptr);
+        check (peakBetween (audio, 3.9, 6.95) < 1.0e-4f && peakBetween (audio, 7.0, 7.5) > 0.1f,
+               "the impact lands at 7 s, in line with the delayed audio");
+        suite::SectionBus::withdraw();
+    }
+
     section ("No surprises");
     {
         suite::SectionBus::publish (testMap());

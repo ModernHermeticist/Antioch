@@ -4,8 +4,9 @@
 #include "Voices.h"
 #include "SectionBus.h"
 #include "HostInfo.h"
+#include "ReverseSwell.h"
 
-class AzothProcessor : public juce::AudioProcessor
+class AzothProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     AzothProcessor();
@@ -38,7 +39,15 @@ public:
     // Parameters
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },
         impactId { "impact" }, crashId { "crash" }, swellId { "swell" }, downId { "downlifter" }, rollId { "roll" },
-        swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" };
+        swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
+        reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
+    static constexpr double lookaheadSeconds = 3.0;
+    static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }
+
+    /** Message thread: applies the Reverse swells switch to the reported latency (called on a timer). */
+    void updateLatency();
+    int getActiveLatency() const { return activeLatency.load(); }
+    int64_t reverseSamplesPlayed() const { return swell.playedSamples.load(); }
     static double swellQuarters (int i) { static const double q[] = { 1.0, 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 3, i)]; }
     static double gapQuarters (int i)   { static const double q[] = { 0.0, 0.5, 1.0 }; return q[juce::jlimit (0, 2, i)]; }
 
@@ -71,6 +80,15 @@ private:
     double previousPos = 0.0;
     double rollPos = -1.0e9;   // previous sample position, for snare grid crossings
     std::atomic<int> pendingAudition { 0 };
+
+    // Reverse swells: fixed lookahead (when on), dry delay, and the swell engine.
+    void timerCallback() override { updateLatency(); }
+    ReverseSwell swell;
+    std::array<std::vector<float>, 2> dryDelay;
+    int dryDelayPos = 0;
+    std::atomic<int> activeLatency { 0 };
+    int64_t inputIndex = 0;
+    double previousInputPos = -1.0e9;
     double sampleRate = 48000.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AzothProcessor)

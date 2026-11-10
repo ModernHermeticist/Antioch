@@ -28,6 +28,10 @@ namespace
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return "+" + String (roundToInt (v)) + " st"; })));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::gapId), "Gap Before Drop", StringArray { "None", "1/2 beat", "1 beat" }, 0));
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::grooveCrashId), "Crash Into Groove", true));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::reverseOnId), "Reverse Swells (3 s lookahead)", false));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::reverseLevelId), "Reverse Swell Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f, percent));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::reverseTargetId), "Reverse Swell Into", StringArray { "Drops", "Every section" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::reverseLengthId), "Reverse Swell Length", StringArray { "1/2 bar", "1 bar", "2 bars" }, 1));
         return l;
     }
 }
@@ -38,6 +42,18 @@ AzothProcessor::AzothProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AzothState", layout())
 {
+    startTimerHz (4);
+}
+
+void AzothProcessor::updateLatency()
+{
+    const auto on = apvts.getRawParameterValue (reverseOnId)->load() > 0.5f;
+    const auto wanted = on ? (int) std::round (lookaheadSeconds * sampleRate) : 0;
+    if (wanted != activeLatency.load())
+    {
+        activeLatency.store (wanted);
+        setLatencySamples (wanted);   // the host re-aligns this track
+    }
 }
 
 bool AzothProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -50,6 +66,14 @@ bool AzothProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 void AzothProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
+    const auto lookahead = (int) std::round (lookaheadSeconds * sampleRate);
+    swell.prepare (sampleRate, lookahead);
+    for (auto& d : dryDelay) d.assign ((size_t) lookahead, 0.0f);
+    dryDelayPos = 0;
+    inputIndex = 0;
+    previousInputPos = -1.0e9;
+    activeLatency.store (-1);   // force a refresh
+    updateLatency();
     const auto sr = (float) sampleRate;
     impact.prepare (sr);
     crash.prepare (sr);
@@ -90,11 +114,20 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     using T = suite::SectionType;
 
     const auto host = suite::HostInfo::read (getPlayHead());
+    const auto latency = juce::jmax (0, activeLatency.load());
     const auto haveMap = sections.refresh();
     mapAvailable.store (haveMap);
     const auto follow = value (followId) > 0.5f && haveMap && host.playing && host.hasPpq;
     const auto barQ = host.barQuarters();
     const auto qPerSample = host.quartersPerSample (sampleRate);
+    // With the lookahead on, what we output is `latency` samples behind what we receive,
+    // so the synth FX are generated for that earlier position.
+    const auto latencyQ = latency * qPerSample;
+    const auto reverseOn = latency > 0;
+    const auto reverseLevel = value (reverseLevelId);
+    const auto reverseEvery = (int) value (reverseTargetId) == 1;
+    const auto captureSamples = (int) std::round (1.0 / qPerSample);   // one beat of the section
+    const auto swellSamples = (int) std::round (reverseLengthQuarters ((int) value (reverseLengthId)) / qPerSample);
 
     // Sub elements land on the song's root (octave 1), from Correspondence/Emerald Tablet; A if unknown.
     const auto key = suite::KeyBus::read();
@@ -120,9 +153,9 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     // Status for the UI: what's next and when.
     if (follow)
     {
-        const auto now = sections.locate (host.ppq, barQ);
+        const auto now = sections.locate (host.ppq - latencyQ, barQ);
         nextType.store (now.valid && now.hasNext ? (int) now.next : -1);
-        barsToNext.store (now.valid ? (float) ((now.endQ - host.ppq) / barQ) : 0.0f);
+        barsToNext.store (now.valid ? (float) ((now.endQ - (host.ppq - latencyQ)) / barQ) : 0.0f);
     }
     else
     {
@@ -138,7 +171,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
         if (follow)
         {
-            const auto pos = host.ppq + qPerSample * n;
+            const auto pos = host.ppq + qPerSample * n - latencyQ;
             const auto sec = sections.locate (pos, barQ);
             const auto jumped = previousIndex >= 0 && (pos < previousPos - 1.0e-6 || pos > previousPos + 0.5);
 
@@ -200,9 +233,55 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         for (auto& s : snares) fx += s.process();
 
         fx *= level;
+
+        if (reverseOn)
+        {
+            // Remember the incoming audio, and start a swell one beat after a target section begins.
+            const auto inL = left[n], inR = right != nullptr ? right[n] : left[n];
+            swell.pushInput (inL, inR);
+            if (follow)
+            {
+                const auto inputPos = host.ppq + qPerSample * n;
+                if (inputPos < previousInputPos - 1.0e-6 || inputPos > previousInputPos + 0.5)
+                    swell.cancel();   // jumped: whatever was scheduled no longer lines up
+                const auto sec = sections.locate (inputPos, barQ);
+                const auto captureEnd = sec.startQ + 1.0;
+                if (sec.valid && sec.index > 0 && (reverseEvery || sec.type == T::Drop)
+                    && previousInputPos < captureEnd && inputPos >= captureEnd && inputPos - previousInputPos < 0.5 && ! swell.busy())
+                {
+                    const auto boundaryIndex = inputIndex - (int64_t) std::llround ((inputPos - sec.startQ) / qPerSample);
+                    swell.start (inputIndex, boundaryIndex, captureSamples, swellSamples, reverseLevel);
+                }
+                previousInputPos = inputPos;
+            }
+            else
+            {
+                swell.cancel();
+                previousInputPos = -1.0e9;
+            }
+
+            // The output runs `latency` samples behind: delayed dry audio plus the swell for that moment.
+            float sl, sr2;
+            swell.output (inputIndex - latency, sl, sr2);
+            ++inputIndex;
+            for (size_t c = 0; c < 2; ++c)
+            {
+                auto& d = dryDelay[c];
+                const auto delayed = d[(size_t) dryDelayPos];
+                d[(size_t) dryDelayPos] = c == 0 ? inL : inR;
+                if (c == 0) left[n] = delayed + sl;
+                else if (right != nullptr) right[n] = delayed + sr2;
+            }
+            dryDelayPos = (dryDelayPos + 1) % (int) dryDelay[0].size();
+            if (dryDelayPos >= latency) dryDelayPos = 0;   // the delay line is exactly `latency` long
+        }
+
         left[n] += fx;
         if (right != nullptr) right[n] += fx;
     }
+
+    if (reverseOn)
+        swell.renderStep (buffer.getNumSamples());   // render the next part of any pending swell
 }
 
 juce::AudioProcessorEditor* AzothProcessor::createEditor()
