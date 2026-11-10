@@ -50,6 +50,15 @@ public:
 
     void resetLearning() { resetRequested.store (true); }
 
+    /** Versions: when not following Mentalism, a radio edit aims at streaming, an extended mix at the club. */
+    bool applyVersion (int kind) override
+    {
+        if ((int) apvts.getRawParameterValue (targetId)->load() == followMentalism) return false;   // Mentalism decides
+        setParameterPlain (apvts, targetId, kind == suite::radioEdit ? 3.0f : 1.0f);
+        resetLearning();
+        return true;
+    }
+
     // For the UI
     std::atomic<float> gainDb { 0.0f }, gainReductionDb { 0.0f }, maxReductionDb { 0.0f };
     std::atomic<float> outShortTerm { -100.0f }, effectiveTarget { -8.0f }, effectiveCeiling { -0.3f };

@@ -88,6 +88,13 @@ public:
     /** Loudness gathered per section of the current Ouroboros map (any thread). */
     std::vector<coach::SectionStat> sectionStats() const;
 
+    /** Versions: a radio edit is mastered for streaming, an extended mix for the club. */
+    bool applyVersion (int kind) override
+    {
+        setParameterPlain (apvts, Params::loudnessTarget, kind == suite::radioEdit ? 2.0f : 0.0f);
+        return true;
+    }
+
     /** New song (Ouroboros): the loudness target for the style. */
     bool applySession (const suite::SessionStyle& style, int, int) override
     {

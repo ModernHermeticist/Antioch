@@ -95,6 +95,48 @@ public:
     }
     std::atomic<float> morphAmount { 0.0f };
 
+    /** Versions: a radio edit (about 3:30, short intro and breakdown, at most two drops) or an
+        extended mix (64 bars longer, DJ intro and outro) of the current map. */
+    bool applyVersion (int kind) override
+    {
+        const auto m = getMap();
+        int drops = 0;
+        for (int i = 0; i < m.count; ++i) drops += m.sections[(size_t) i].type == suite::SectionType::Drop;
+        arrangement::GenSettings g;
+        g.drops = juce::jlimit (1, 3, drops);
+        if (kind == suite::radioEdit)
+        {
+            g.drops = juce::jmin (2, g.drops);
+            g.totalBars = juce::jmax (64, (int) std::round (3.5 * bpm.load() / 4.0 / 8.0) * 8);
+            g.djIntro = false;
+            g.longBreakdown = false;
+        }
+        else
+        {
+            g.totalBars = m.totalBars + 64;
+            g.djIntro = true;
+            g.longBreakdown = true;
+        }
+        setMap (arrangement::generate (g));
+        return true;
+    }
+
+    /** Makes the versions in one go: A = the current song, B = radio edit, C = extended mix,
+        then back to A. Every suite plugin captures each slot in order. */
+    uint32_t makeVersions()
+    {
+        using suite::SnapshotAction;
+        suite::SnapshotBus::send (SnapshotAction::Capture, 0);
+        suite::SnapshotBus::send (SnapshotAction::ApplyVersion, suite::radioEdit);
+        suite::SnapshotBus::send (SnapshotAction::Capture, 1);
+        suite::SnapshotBus::send (SnapshotAction::Recall, 0);
+        suite::SnapshotBus::send (SnapshotAction::ApplyVersion, suite::extendedMix);
+        suite::SnapshotBus::send (SnapshotAction::Capture, 2);
+        const auto last = suite::SnapshotBus::send (SnapshotAction::Recall, 0);
+        pollSnapshots();
+        return last;
+    }
+
     /** New song: builds this style's map (Arrange), sets its key change, and asks the rest of
         the suite to set up (key, progression, loudness target, scenes). Returns the message's
         sequence number, for counting the plugins that answered. */

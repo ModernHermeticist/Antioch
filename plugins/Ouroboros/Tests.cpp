@@ -247,6 +247,57 @@ int main (int argc, char** argv)
         check (suite::SessionBus::read (seq, r) && r.style == 0 && r.root == 2 && r.scale == 0, "and asks the suite to set up D minor");
     }
 
+    section ("Recipes");
+    {
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AntiochRecipesTest");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests (folder);
+        suite::RecipeBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        juce::AudioProcessor::TrackProperties props;
+        props.name = juce::String ("Master");
+        p->updateTrackProperties (props);
+        const auto original = arrangement::fromTemplate (arrangement::templates()[1]);
+        p->setMap (original);
+        const auto save = suite::RecipeBus::send (suite::RecipeAction::Save, "My anthem");
+        p->pollRecipes();
+        check (suite::RecipeBus::acknowledgements (save) == 1 && suite::Recipes::list().contains ("My anthem"), "saves a named recipe");
+
+        auto q = std::make_unique<OuroborosProcessor>();   // another project, track named differently
+        props.name = juce::String ("Insert 1");
+        q->updateTrackProperties (props);
+        q->setMap (arrangement::fromTemplate (arrangement::templates()[2]));
+        const auto load = suite::RecipeBus::send (suite::RecipeAction::Load, "My anthem");
+        q->pollRecipes();
+        check (q->getMap() == original && suite::RecipeBus::acknowledgements (load) == 1,
+               "loads it in another project (the only Ouroboros in the recipe, so the track name doesn't have to match)");
+        const auto missing = suite::RecipeBus::send (suite::RecipeAction::Load, "No such recipe");
+        q->pollRecipes();
+        check (suite::RecipeBus::acknowledgements (missing) == 0 && q->getMap() == original, "an unknown recipe changes nothing");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests ({});
+    }
+
+    section ("Versions: radio edit and extended mix");
+    {
+        suite::SnapshotBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        const auto original = arrangement::fromTemplate (arrangement::templates()[1]);   // 232 bars, two drops
+        p->setMap (original);
+        p->makeVersions();
+        check (p->hasSnapshot (0) && p->hasSnapshot (1) && p->hasSnapshot (2) && p->getMap() == original, "A, B and C made, back on A");
+        p->recallSnapshot (1);
+        const auto radio = p->getMap();
+        p->recallSnapshot (2);
+        const auto extended = p->getMap();
+        std::cout << "    radio edit: " << arrangement::toString (radio) << "\n    extended: " << arrangement::toString (extended) << std::endl;
+        check (radio.totalBars < 140 && radio.totalBars >= 100 && radio.sections[0].type == suite::SectionType::Intro,
+               "B is a radio edit of about 3:30 (" + juce::String (radio.totalBars) + " bars)");
+        check (extended.totalBars == original.totalBars + 64, "C is an extended mix, 64 bars longer");
+        p->recallSnapshot (0);
+        check (p->getMap() == original, "A is the song as it was");
+    }
+
     section ("Suite overview");
     {
         using namespace suite;

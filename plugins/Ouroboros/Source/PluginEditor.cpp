@@ -243,6 +243,58 @@ void SuitePanel::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+RecipePanel::RecipePanel()
+{
+    names.setEditableText (true);
+    names.setTextWhenNothingSelected ("Recipe name (type a new one to save)");
+    const auto existing = suite::Recipes::list();
+    for (int i = 0; i < existing.size(); ++i) names.addItem (existing[i], i + 1);
+    caption.setText ("Every suite plugin saves or loads its own settings, matched by track name. "
+                     "Recipes live in " + suite::Recipes::folder().getFullPathName(), juce::dontSendNotification);
+    caption.setFont (juce::FontOptions (12.0f));
+    caption.setColour (juce::Label::textColourId, Colours::dimText);
+    caption.setJustificationType (juce::Justification::topLeft);
+    result.setFont (juce::FontOptions (13.0f));
+    result.setColour (juce::Label::textColourId, Colours::moss);
+    save.onClick = [this] { send (suite::RecipeAction::Save); };
+    load.onClick = [this] { send (suite::RecipeAction::Load); };
+    for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &caption, &result })
+        addAndMakeVisible (c);
+    setSize (460, 190);
+    startTimerHz (4);
+}
+
+void RecipePanel::send (suite::RecipeAction action)
+{
+    const auto name = names.getText().trim();
+    if (name.isEmpty()) { result.setText ("Type a name first", juce::dontSendNotification); return; }
+    sentSeq = suite::RecipeBus::send (action, name);
+    sentWhat = (action == suite::RecipeAction::Save ? "Saved '" : "Loaded '") + name + "' in ";
+    timerCallback();
+}
+
+void RecipePanel::timerCallback()
+{
+    if (sentSeq == 0) return;
+    const auto n = suite::RecipeBus::acknowledgements (sentSeq);
+    result.setText (sentWhat + juce::String (n) + (n == 1 ? " plugin" : " plugins"), juce::dontSendNotification);
+}
+
+void RecipePanel::paint (juce::Graphics& g) { g.fillAll (Colours::panel); }
+
+void RecipePanel::resized()
+{
+    auto r = getLocalBounds().reduced (12);
+    auto row = r.removeFromTop (30);
+    load.setBounds (row.removeFromRight (70).reduced (2, 0));
+    save.setBounds (row.removeFromRight (70).reduced (2, 0));
+    names.setBounds (row.withTrimmedRight (6));
+    r.removeFromTop (8);
+    result.setBounds (r.removeFromBottom (22));
+    caption.setBounds (r);
+}
+
+//==============================================================================
 SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
 {
     for (const auto& s : suite::sessionStyles()) style.addItem (s.name, style.getNumItems() + 1);
@@ -522,6 +574,16 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<SessionPanel> (processor), sessionButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (sessionButton);
+    recipesButton.setTooltip ("Save the whole suite's settings as a named recipe, or load one, in any project");
+    recipesButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<RecipePanel>(), recipesButton.getScreenBounds(), nullptr);
+    };
+    versionsButton.setTooltip ("Keeps this song in snapshot A and makes a radio edit in B and an extended mix in C "
+                               "(map and loudness target); then click the slots to compare");
+    versionsButton.onClick = [this] { versionsSeq = processor.makeVersions(); lastSnapshotSeq = versionsSeq; lastSnapshotVerb = "Made A/B/C (back on A)"; refreshSnapshots(); };
+    addAndMakeVisible (recipesButton);
+    addAndMakeVisible (versionsButton);
     suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");
     suiteButton.onClick = [this]
     {
@@ -753,7 +815,9 @@ void OuroborosEditor::resized()
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);
     dropGap.setBounds (n.removeFromRight (190).withTrimmedTop (-10));
-    sessionButton.setBounds (n.removeFromRight (140).withSizeKeepingCentre (130, 30));
+    sessionButton.setBounds (n.removeFromRight (122).withSizeKeepingCentre (116, 30));
+    versionsButton.setBounds (n.removeFromRight (132).withSizeKeepingCentre (126, 30));
+    recipesButton.setBounds (n.removeFromRight (106).withSizeKeepingCentre (100, 30));
     nowLabel.setBounds (n.removeFromLeft (n.getWidth() / 2));
     nextLabel.setBounds (n);
     bounds.removeFromTop (10);

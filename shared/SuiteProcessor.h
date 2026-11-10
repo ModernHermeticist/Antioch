@@ -13,11 +13,15 @@
 #include "Registry.h"
 #include "MorphBus.h"
 #include "Session.h"
+#include "Recipes.h"
 #include <array>
 
 namespace suite
 {
-    enum class SnapshotAction : uint8_t { Capture = 1, Recall = 2, Clear = 3 };
+    enum class SnapshotAction : uint8_t { Capture = 1, Recall = 2, Clear = 3, ApplyVersion = 4 };   // ApplyVersion: "slot" = version kind
+
+    /** Song versions made from the current one (Ouroboros "Versions"). */
+    enum SongVersion { radioEdit = 1, extendedMix = 2 };
 
     namespace SnapshotBus
     {
@@ -204,6 +208,7 @@ namespace suite
                     case SnapshotAction::Capture: captureSnapshot (slot); break;
                     case SnapshotAction::Recall:  handled = recallSnapshot (slot); break;
                     case SnapshotAction::Clear:   clearSnapshot (slot); break;
+                    case SnapshotAction::ApplyVersion: handled = applyVersion (slot); break;
                     default:                      handled = false; break;
                 }
                 if (handled)
@@ -214,6 +219,42 @@ namespace suite
 
         //==============================================================================
         // Session presets (Ouroboros' "New song"): each plugin applies its part.
+
+        /** Override to turn the current settings into a song version (radioEdit / extendedMix),
+            e.g. a shorter map or a streaming loudness target. Return true if anything changed. */
+        virtual bool applyVersion (int /*kind*/) { return false; }
+
+        /** Recipes: save or load this plugin's settings under a recipe name (message thread). */
+        void pollRecipes()
+        {
+            const auto latest = RecipeBus::latest();
+            for (auto seq = lastRecipeSeen + 1; seq <= latest && seq != 0; ++seq)
+            {
+                RecipeAction action {};
+                juce::String name;
+                if (! RecipeBus::read (seq, action, name)) continue;
+                if (action == RecipeAction::Save)
+                {
+                    juce::MemoryBlock own;
+                    getPluginState (own);
+                    const auto file = Recipes::fileFor (name, getName(), getTrackName());
+                    file.getParentDirectory().createDirectory();
+                    if (file.replaceWithData (own.getData(), own.getSize()))
+                        RecipeBus::acknowledge (seq);
+                }
+                else if (action == RecipeAction::Load)
+                {
+                    const auto file = Recipes::find (name, getName(), getTrackName());
+                    juce::MemoryBlock data;
+                    if (file.existsAsFile() && file.loadFileAsData (data) && data.getSize() > 0)
+                    {
+                        setPluginState (data.getData(), (int) data.getSize());
+                        RecipeBus::acknowledge (seq);
+                    }
+                }
+            }
+            lastRecipeSeen = latest;
+        }
 
         /** Override to apply a session style (message thread). Return true if anything changed. */
         virtual bool applySession (const SessionStyle&, int /*root*/, int /*scale*/) { return false; }
@@ -312,6 +353,7 @@ namespace suite
             {
                 owner.pollSnapshots();
                 owner.pollSession();
+                owner.pollRecipes();
                 if (++ticks % 5 == 1) owner.announce();
             }
             int ticks = 0;
@@ -327,6 +369,7 @@ namespace suite
         bool morphing = false;
         uint32_t lastSeen = SnapshotBus::latest();   // commands sent before this plugin loaded don't apply
         uint32_t lastSessionSeen = SessionBus::latest();
+        uint32_t lastRecipeSeen = RecipeBus::latest();
         Poller poller { *this };
         Morpher morpher { *this };
     };

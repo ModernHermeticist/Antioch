@@ -350,6 +350,15 @@ int main (int argc, char** argv)
                "sets the style's loudness target (streaming for a radio edit)");
     }
 
+    section ("Versions");
+    {
+        auto p = make();
+        p->applyVersion (suite::radioEdit);
+        const auto radio = (int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load();
+        p->applyVersion (suite::extendedMix);
+        check (radio == 2 && (int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == 0, "radio edit: streaming target; extended mix: club");
+    }
+
     section ("Fix history");
     {
         suite::FixBus::reset();

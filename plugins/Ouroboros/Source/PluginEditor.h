@@ -47,6 +47,24 @@ private:
 };
 
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
+/** Recipes: save the whole suite's settings under a name, or load a saved recipe. */
+class RecipePanel : public juce::Component, private juce::Timer
+{
+public:
+    RecipePanel();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    void timerCallback() override;
+    void send (suite::RecipeAction);
+    juce::ComboBox names;
+    juce::TextButton save { "Save" }, load { "Load" };
+    juce::Label caption, result;
+    uint32_t sentSeq = 0;
+    juce::String sentWhat;
+};
+
 /** New song: a style and a key set up the whole suite. */
 class SessionPanel : public juce::Component, private juce::Timer
 {
@@ -128,7 +146,8 @@ private:
     juce::String lastSnapshotVerb;
     void snapshotCommand (suite::SnapshotAction, int slot);
     void refreshSnapshots();
-    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." }, sessionButton { "New song..." };
+    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." }, sessionButton { "New song..." }, recipesButton { "Recipes..." }, versionsButton { "Make versions" };
+    uint32_t versionsSeq = 0;
     std::unique_ptr<juce::FileChooser> referenceChooser;
     double referenceBpm = 138.0;
     juce::String previewNote;
