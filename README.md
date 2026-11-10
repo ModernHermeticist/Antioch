@@ -34,9 +34,11 @@ With the full suite loaded, here is everything that happens without automation c
    them, a downlifter into breakdowns, and a snare roll through builds.
 6. **Prima Materia** on individual tracks mutes, filters and rides them per section, so
    one looped groove arranges itself.
-7. **Correspondence** exports full-song chord, bass and arp clips that follow the map.
+7. **Correspondence** exports full-song chord, bass, arp and lead clips that follow the map,
+   including a generated melody (Melodia).
 8. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
-   gain to hit it.
+   gain to hit it. Mentalism's **arrangement coach** checks the energy arc section by
+   section.
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
 
@@ -196,6 +198,19 @@ track (or its loudest section) and read the numbers:
 
 **Reset** starts a new measurement, for example after changing the mix.
 
+**Arrangement coach.** With Ouroboros running, Mentalism also measures loudness section
+by section, and the two halves of each build. The **Arrangement** tab charts it and checks
+the arc:
+- Is each breakdown 2–12 LU below the drop that follows?
+- Does each build rise by at least 1 LU?
+- Does every later drop hit at least as hard as the one before?
+- Does the intro leave headroom for the drop?
+
+Problems appear there and at the top of the suggestions, for example *"Breakdown (bars
+65-96) is only 1.0 LU below the drop: the drop won't feel like a lift."*
+
+![Mentalism arrangement](docs/mentalism_arrangement.png)
+
 ## Ouroboros: arrangement conductor
 
 ![Ouroboros](docs/ouroboros.png)
@@ -314,6 +329,14 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
 
+**Reverse swells from this track.** Put Azoth on a vocal or lead track and turn this on.
+It captures the first beat of each Drop (or of every section) from that track's own
+audio, reverses its reverb tail, and plays it so it swells up into the downbeat: the
+classic trance reverse-vocal swell, made automatically. To do that it has to hear the
+future, so it adds **3 seconds of latency**. FL compensates automatically, keeping the
+track in time with everything else. The synth transitions move with it, so they stay
+aligned.
+
 ## Prima Materia: section mixer
 
 ![Prima Materia](docs/prima_materia.png)
@@ -358,6 +381,21 @@ section plays. The defaults:
 
 The progression restarts at every section, and notes never spill into the next one. Song
 clips need Ouroboros to be running; without it the tile says so.
+
+### Melodia: lead melodies
+
+Correspondence also writes a lead melody over the progression, shown in orange in the
+piano roll and played along when you press **Play**:
+
+- **Style** sets the rhythm: driving 8ths, trance 3-3-2, anthem or syncopated.
+- Melodies come in **call and answer**: a 2-bar call, then the same rhythm and contour
+  re-fitted to the next chords.
+- Notes on the beat are always chord tones, with scale steps in between, and the melody
+  resolves to the last chord's root.
+- **New melody** rolls a new seed. The same seed always gives the same melody.
+- Drag the **MELODY** tile for one pass, or use **SONG LEAD**. In the song patterns, the
+  Lead column defaults to a sparser **Teaser** in breakdowns and the full **Melody** in
+  drops.
 
 ## How the key sharing works
 
@@ -454,6 +492,16 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   4 dB above the drop; instant vs gliding Morph; unchanged without a map.
 - **Full-song MIDI:** each section plays only its own parts, nothing spills over, the drop
   starts on chord 1, and export is refused without a map.
+- **Melodia:** every note is in key (or in the chord), notes on the beat are chord tones,
+  the answer repeats the call's rhythm, it stays within a singable range, it ends on the
+  last chord's root, and seeds are reproducible. The breakdown teaser is sparser than the
+  drop melody.
+- **Arrangement coach:** a flat arrangement gets flagged (breakdown only 1.0 LU below the
+  drop, build not rising); a good arc gets no complaints; a weaker second drop is
+  flagged.
+- **Reverse swells:** 3 s of latency is reported; the track's audio comes out exactly 3 s
+  later; the swell rises into the downbeat and plays in full; the impact stays aligned
+  with the delayed audio.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -478,11 +526,11 @@ plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
 plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
-plugins/Mentalism/       Analysis.h (BS.1770 loudness, true peak, stereo, bands), Advisor.h, tests
+plugins/Mentalism/       Advisor.h (suggestions), Coach.h (arrangement arc), tests
 plugins/Ouroboros/       Arrangement.h (section editing), Listen.h (section detection), timeline editor, tests
 plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop, tests
 plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
-plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), section-driven triggering, tests
+plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), ReverseSwell.h, section-driven triggering, tests
 plugins/PrimaMateria/    Params.h (per-section settings, role presets), section mixer, tests
 .github/workflows/       Windows/macOS/Linux CI builds of all eleven
 ```
