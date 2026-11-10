@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Four VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Six VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. All three share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -10,6 +10,8 @@ in **Correspondence**, and the others follow it.
 | **Cause & Effect**: build-up macro | The 6+ automation clips (filter, reverb, noise, riser, gate, width) you draw for every build |
 | **Correspondence**: key and chord engine | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
 | **Kybalion**: trance gate + smart ducking | Drawing gate shapes in Gross Beat or Peak Controller, and sidechain/LFO Tool setups |
+| **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
+| **Mentalism**: mix assistant | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong |
 
 ## Correspondence: key and chord engine
 
@@ -121,6 +123,52 @@ the last few bars.
 Put it on any insert. A typical setup: Rhythm on a pad or pluck bus, and Polarity
 (Tempo, *Bass (tight)*) on the bass.
 
+## Vibration: lead polish strip
+
+![Vibration](docs/vibration.png)
+
+Put it on a supersaw lead, pluck, pad or arp. Turn up **EUPHORIA**: one knob adds air,
+presence, saturation, multiband glue and width, and cuts mud, all at once. A line under
+the knob shows exactly what it's applying. Start from a preset (Supersaw lead, Pluck,
+Pad, Vocal chop, Arp, Clean), then fine-tune:
+
+- **Tone:** low cut, mud (320 Hz), presence (3.2 kHz) and air (10 kHz shelf).
+- **Saturation:** drive and mix. It runs at 2x oversampling so heavy drive stays clean
+  rather than aliasing.
+- **Multiband:** OTT-style, splitting into 3 bands at 250 Hz and 3 kHz. Loud parts are
+  pushed down and quiet parts lifted, with **Depth** as the mix and **Time** scaling the
+  speed.
+- **Width:** sides up to 200%, with everything below **Mono below** kept mono so the
+  lead's low end doesn't smear.
+- **Auto gain:** on by default. It matches the output level to the input, so you judge
+  the tone rather than the volume.
+- The spectrum shows input (grey) against output (gold).
+
+## Mentalism: mix assistant
+
+![Mentalism](docs/mentalism.png)
+
+Put it last on the master. It only measures and leaves the audio bit-identical. Play the
+track (or its loudest section) and read the numbers:
+
+- **Loudness:** momentary, short-term and gated integrated LUFS (ITU-R BS.1770 / EBU
+  R128), plus true peak with 4x oversampling. A gauge shows integrated loudness against
+  the target: Club master −8 LUFS, Loud club −6, Streaming −14, or **Match reference
+  track**.
+- **Stereo:** full-band correlation, correlation below 120 Hz (is the low end mono?),
+  and how much level the mix loses when summed to mono.
+- **Tonal balance:** 10 octave bands compared with a target. Bars show the whole song,
+  the line shows the last 3 seconds, and the shaded zone is ±3 dB. Only the shape is
+  compared, not the overall level. The built-in curves for uplifting and progressive /
+  tech trance are rough guides. **Load reference…** (WAV/AIFF/FLAC/Ogg/MP3) analyses a
+  track you like and uses it as the target instead. The reference is saved with your
+  project.
+- **Suggestions:** plain-language advice ordered by importance. For example: *"Low-mids
+  (250 Hz) is 5.0 dB above the target: classic mud: cut 200-400 Hz on pads, bass and
+  reverbs."*
+
+**Reset** starts a new measurement, for example after changing the mix.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -136,9 +184,10 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the four `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the six `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
-4. Load Antioch, Cause & Effect and Kybalion on mixer inserts, and Correspondence on any insert.
+4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
+   and Mentalism last on the master.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
    sidechain, then select that input in the plugin's wrapper settings.
 
@@ -153,7 +202,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -163,7 +212,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -181,6 +230,13 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Kybalion:** gate steps on the 16th grid, swing, stereo offset, filter, beat-grid
   ducking depth and recovery, nudge, Breakdown, the low-band split (lows ducked, highs
   untouched), and sidechain kick triggering.
+- **Vibration:** flat response at neutral settings, correctly reported latency, each EQ
+  band, the macro amounts, mono-below and width, multiband squeezing (34 dB down to
+  about 13 dB), and auto gain holding level within 1 dB under heavy drive.
+- **Mentalism:** an EBU-style −23 dBFS sine reads −23.0 LUFS, the relative gate works,
+  the true peak catches an inter-sample peak that sample-peak metering misses by 3 dB,
+  correlation, band detection, the advice rules, reference-track analysis and its
+  save/restore, and bit-identical pass-through.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -188,7 +244,8 @@ They also write example WAVs and UI snapshots to `test-output/`.
 
 ```
 shared/                  code used by every plugin
-  SuiteDSP.h             delay line, pitch shifter, resonator, filters, FDN reverb, oscillators
+  SuiteDSP.h             delay line, pitch shifter, resonator, filters, EQ, crossover, FDN reverb, oscillators
+  Spectrum.h             audio-thread tap and real-time spectrum display
   KeyBus.*               cross-plugin key broadcast (named shared memory)
   Music.h                scales, note names, tempo divisions
   HostInfo.h             tempo/position/time-signature snapshot from the host
@@ -198,7 +255,9 @@ plugins/Antioch/         Engines.h (echo, reverb, throw), processor, tabbed UI, 
 plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
 plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all four
+plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
+plugins/Mentalism/       Analysis.h (BS.1770 loudness, true peak, stereo, bands), Advisor.h, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all six
 ```
 
 ## Licence note

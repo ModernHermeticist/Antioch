@@ -160,7 +160,7 @@ namespace suite::ui
         if (area.getHeight() > 130) // match Knob's layout so captions line up in a row
             area = area.withSizeKeepingCentre (area.getWidth(), 130);
         caption.setBounds (area.removeFromTop (16));
-        box.setBounds (area.withSizeKeepingCentre (juce::jmin (area.getWidth() - 8, 140), 26));
+        box.setBounds (area.withSizeKeepingCentre (juce::jmin (area.getWidth() - 8, 220), 26));
     }
 
     //==============================================================================
