@@ -1,0 +1,113 @@
+#include "PluginEditor.h"
+
+using namespace suite::ui;
+
+namespace
+{
+    const juce::Colour accent = Colours::amethyst.interpolatedWith (Colours::verdigris, 0.3f);
+    using P = SolveEtCoagulaProcessor;
+}
+
+SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
+    : AudioProcessorEditor (p), processor (p),
+      depth (p.apvts, P::depthId, "Depth", Colours::ember),
+      sensitivity (p.apvts, P::sensitivityId, "Sensitivity", accent),
+      focus (p.apvts, P::focusId, "Focus", accent),
+      mix (p.apvts, P::mixId, "Mix", Colours::brass),
+      speed (p.apvts, P::speedId, "Speed")
+{
+    setLookAndFeel (&lnf);
+    status.setFont (juce::FontOptions (13.0f));
+    status.setJustificationType (juce::Justification::centredLeft);
+    for (auto* c : std::initializer_list<juce::Component*> { &depth, &sensitivity, &focus, &speed, &mix, &status })
+        addAndMakeVisible (c);
+    keyShown.fill (-100.0f);
+    setSize (860, 520);
+    timerCallback();
+    startTimerHz (30);
+}
+
+SolveEtCoagulaEditor::~SolveEtCoagulaEditor()
+{
+    stopTimer();
+    setLookAndFeel (nullptr);
+}
+
+void SolveEtCoagulaEditor::timerCallback()
+{
+    for (int b = 0; b < Unmasker::numBands; ++b)
+    {
+        cutShown[(size_t) b] = processor.unmasker.getCutDb (b);
+        keyShown[(size_t) b] = std::max (processor.unmasker.getKeyDb (b), keyShown[(size_t) b] - 1.5f);
+    }
+
+    juce::String text;
+    if (! processor.sidechainConnected.load())
+        text = "No vocal on the sidechain: in FL's mixer, route the vocal track to this one (sidechain only). Passing through untouched.";
+    else if (processor.vocalPresent.load())
+        text = "Vocal present: the music dips where the vocal lives.";
+    else
+        text = "Sidechain connected; waiting for the vocal.";
+    status.setColour (juce::Label::textColourId, processor.sidechainConnected.load() ? Colours::text : Colours::dimText);
+    status.setText (text, juce::dontSendNotification);
+    repaint (bandArea);
+}
+
+void SolveEtCoagulaEditor::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::background);
+    drawHeader (g, { 20, 12, 760, 32 }, "SOLVE ET COAGULA", "vocal unmasking", accent);
+    drawPanel (g, bandArea, "Bands  (vocal level up, music cut down)");
+    drawPanel (g, controlArea, "Controls", accent);
+
+    auto r = bandArea.reduced (16, 10).withTrimmedTop (18).toFloat();
+    auto labels = r.removeFromBottom (18);
+    const auto mid = r.getY() + r.getHeight() * 0.5f;
+    g.setColour (Colours::outline);
+    g.drawHorizontalLine ((int) mid, r.getX(), r.getRight());
+
+    const auto w = r.getWidth() / (float) Unmasker::numBands;
+    const auto depthDb = std::max (1.0f, processor.apvts.getRawParameterValue (P::depthId)->load());
+    for (int b = 0; b < Unmasker::numBands; ++b)
+    {
+        const auto x = r.getX() + w * (float) b;
+        auto col = juce::Rectangle<float> (x, r.getY(), w, r.getHeight()).reduced (w * 0.2f, 0.0f);
+
+        // Vocal level: -60 .. -10 dB fills the upper half.
+        const auto key = juce::jlimit (0.0f, 1.0f, (keyShown[(size_t) b] + 60.0f) / 50.0f);
+        const auto up = (mid - r.getY() - 4.0f) * key;
+        g.setColour (accent.withAlpha (0.55f));
+        g.fillRoundedRectangle (col.getX(), mid - 2.0f - up, col.getWidth(), up, 3.0f);
+
+        // Cut: 0 .. depth fills the lower half.
+        const auto cut = juce::jlimit (0.0f, 1.0f, -cutShown[(size_t) b] / depthDb);
+        const auto down = (r.getBottom() - mid - 22.0f) * cut;
+        g.setColour (Colours::ember);
+        g.fillRoundedRectangle (col.getX(), mid + 2.0f, col.getWidth(), down, 3.0f);
+        if (cutShown[(size_t) b] < -0.1f)
+        {
+            g.setColour (Colours::text);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText (juce::String (cutShown[(size_t) b], 1), juce::Rectangle<float> (x, mid + 4.0f + down, w, 14.0f), juce::Justification::centred);
+        }
+
+        const auto hz = Unmasker::centres[(size_t) b];
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (12.0f));
+        g.drawText (hz >= 1000.0f ? juce::String (hz / 1000.0f, hz < 2000.0f ? 1 : 1) + "k" : juce::String ((int) hz),
+                    juce::Rectangle<float> (x, labels.getY(), w, labels.getHeight()), juce::Justification::centred);
+    }
+}
+
+void SolveEtCoagulaEditor::resized()
+{
+    auto bounds = getLocalBounds().reduced (16);
+    bounds.removeFromTop (48);
+    bandArea = bounds.removeFromTop (230);
+    bounds.removeFromTop (12);
+    controlArea = bounds;
+
+    auto c = controlArea.reduced (12, 8).withTrimmedTop (14);
+    status.setBounds (c.removeFromBottom (36));
+    layoutRow (c, { &depth, &sensitivity, &focus, &speed, &mix });
+}
