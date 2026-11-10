@@ -20,6 +20,8 @@ namespace suite::SectionBus
             std::atomic<uint32_t> totalBars;
             std::atomic<int32_t> finalLift;
             std::atomic<int32_t> dropGap;
+            std::atomic<int32_t> intensity, liveType, livePrevType, liveIndex;
+            std::atomic<int64_t> liveStartMicroQ;   // live section start, in millionths of a quarter
             std::array<std::atomic<uint32_t>, SectionMap::maxSections> entries; // startBar << 8 | type
         };
 
@@ -34,7 +36,7 @@ namespace suite::SectionBus
             static Shared local {};
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v4", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v5", sizeof (Shared)));
                 return m != nullptr ? m : &local;
             }();
             return *s;
@@ -60,6 +62,11 @@ namespace suite::SectionBus
         s.totalBars.store ((uint32_t) map.totalBars, std::memory_order_relaxed);
         s.finalLift.store (map.finalLift, std::memory_order_relaxed);
         s.dropGap.store (map.dropGap, std::memory_order_relaxed);
+        s.intensity.store (map.intensity, std::memory_order_relaxed);
+        s.liveType.store (map.liveType, std::memory_order_relaxed);
+        s.livePrevType.store (map.livePrevType, std::memory_order_relaxed);
+        s.liveIndex.store (map.liveIndex, std::memory_order_relaxed);
+        s.liveStartMicroQ.store ((int64_t) std::llround (map.liveStartQ * 1.0e6), std::memory_order_relaxed);
         s.magicWord.store (magic, std::memory_order_relaxed);
         s.stamp.store (nowSeconds(), std::memory_order_relaxed);
 
@@ -89,6 +96,11 @@ namespace suite::SectionBus
             m.totalBars = (int) s.totalBars.load (std::memory_order_relaxed);
             m.finalLift = s.finalLift.load (std::memory_order_relaxed);
             m.dropGap = s.dropGap.load (std::memory_order_relaxed);
+            m.intensity = s.intensity.load (std::memory_order_relaxed);
+            m.liveType = s.liveType.load (std::memory_order_relaxed);
+            m.livePrevType = s.livePrevType.load (std::memory_order_relaxed);
+            m.liveIndex = s.liveIndex.load (std::memory_order_relaxed);
+            m.liveStartQ = (double) s.liveStartMicroQ.load (std::memory_order_relaxed) * 1.0e-6;
             for (int i = 0; i < m.count; ++i)
             {
                 const auto e = s.entries[(size_t) i].load (std::memory_order_relaxed);

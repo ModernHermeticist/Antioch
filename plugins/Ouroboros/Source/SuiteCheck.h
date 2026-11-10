@@ -21,7 +21,37 @@ namespace suitecheck
         return t.isEmpty() || t.contains ("master") || t.contains ("main");   // unknown names get the benefit of the doubt
     }
 
-    inline std::vector<Advice> check (const std::vector<suite::SuiteEntry>& entries)
+    /** Features that work against each other with this map. */
+    inline void collisions (const std::vector<suite::SuiteEntry>& entries, const suite::SectionMap& map, std::vector<Advice>& out)
+    {
+        using namespace suite;
+        bool vocal = false, fills = false;
+        for (const auto& e : entries)
+        {
+            if (e.plugin == "Prima Materia" && (int) e.metrics[0] == 6) vocal = true;
+            if (e.plugin == "Kybalion" && e.has (Status::fillsOn)) fills = true;
+        }
+        if (map.finalLift != 0 && vocal)
+            out.push_back ({ "The final drop goes up " + juce::String (map.finalLift) + (map.finalLift == 1 ? " semitone" : " semitones")
+                             + ", but a vocal track can't follow: pitch the vocal up in FL for that drop, or set the key change to None." });
+        if (map.dropGap == 3 && fills)
+            out.push_back ({ "Kick-only bar before drops and Kybalion fills both use that bar: the gated tracks are muted, so their fill won't be heard. "
+                             "Choose a shorter silence or switch the fills off." });
+        for (int i = 1; i < map.count; ++i)
+            if (map.sections[(size_t) i].type == SectionType::Drop)
+                for (int k = i - 1; k >= 0; --k)
+                    if (map.sections[(size_t) k].type == SectionType::Breakdown)
+                    {
+                        if (map.energyOf (i) <= map.energyOf (k))
+                            out.push_back ({ "The drop at bar " + juce::String (map.sections[(size_t) i].startBar)
+                                             + " is drawn no higher than the breakdown before it on the energy curve." });
+                        break;
+                    }
+        if (map.intensity < 30)
+            out.push_back ({ "Intensity is at " + juce::String (map.intensity) + "%: most of the suite's section moves are switched off." });
+    }
+
+    inline std::vector<Advice> check (const std::vector<suite::SuiteEntry>& entries, const suite::SectionMap* map = nullptr)
     {
         using namespace suite;
         std::vector<Advice> out;
@@ -55,6 +85,9 @@ namespace suitecheck
         }
         if (suiteKickUsed && ! kickShared)
             out.push_back ({ "A Kybalion ducks to the suite kick, but no kick is shared: turn on Share kick in a Kybalion on the kick track." });
+
+        if (map != nullptr)
+            collisions (entries, *map, out);
 
         if (out.empty())
             out.push_back ({ "Everything is set up.", false });

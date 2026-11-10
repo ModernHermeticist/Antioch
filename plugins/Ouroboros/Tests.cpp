@@ -271,6 +271,89 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Intensity, live mode, templates, notes");
+    {
+        suite::SectionBus::withdraw();
+        auto p = std::make_unique<OuroborosProcessor>();
+        set (*p, OuroborosProcessor::intensityId, 150.0f);
+        p->setMap (p->getMap());
+        suite::SectionMap shared;
+        check (suite::SectionBus::read (shared) && shared.intensity == 150 && std::abs (shared.intensityScale() - 1.5f) < 1.0e-6f,
+               "Intensity 150% is shared with the suite");
+
+        // Live: a G (drop) at bar 3.5 starts the drop on bar 5; a C before that stays the intro until then.
+        set (*p, OuroborosProcessor::liveId, 1.0f);
+        prepare (*p);
+        FakePlayHead head;
+        head.ppq = 2.0 * 4.0 + 2.0;   // bar 3, beat 3
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio (2, 512);
+        audio.clear();
+        juce::MidiBuffer midi;
+        midi.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100), 0);   // C: intro
+        p->processBlock (audio, midi);
+        midi.clear();
+        midi.addEvent (juce::MidiMessage::noteOn (1, 67, (juce::uint8) 100), 0);   // G: drop
+        p->processBlock (audio, midi);
+        p->setPlayHead (nullptr);
+        p->setMap (p->getMap());
+        check (suite::SectionBus::read (shared) && shared.liveType == 4 && shared.livePrevType == 0 && std::abs (shared.liveStartQ - 12.0) < 1.0e-6,
+               "live: the drop is queued for the next bar line (bar 4)");
+        suite::SectionFollower f;
+        f.refresh();
+        const auto before = f.locate (11.0, 4.0), after = f.locate (12.5, 4.0);
+        check (before.valid && before.type == suite::SectionType::Intro && before.hasNext && before.next == suite::SectionType::Drop
+                   && after.valid && after.type == suite::SectionType::Drop && after.index != before.index,
+               "followers: intro until the bar line, then the drop (a new section, so transitions fire)");
+        check (OuroborosProcessor::liveTypeForNote (65) == 3 && OuroborosProcessor::liveTypeForNote (61) == -1, "F plays the build; black keys do nothing");
+        check (std::abs (OuroborosProcessor::liveStartFor (15.5, 4.0) - 20.0) < 1.0e-9, "a note just before a bar line waits for the one after");
+        set (*p, OuroborosProcessor::liveId, 0.0f);
+        render (*p, 0.02, {});
+        p->setMap (p->getMap());
+        check (suite::SectionBus::read (shared) && ! shared.isLive(), "live off: back to the song map");
+
+        // Your own templates, with their energy curve.
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AntiochTemplatesTest");
+        folder.deleteRecursively();
+        auto m = arrangement::fromTemplate (arrangement::templates().front());
+        m.sections[2].energy = 40;
+        check (arrangement::saveUserTemplate (folder, "My anthem form", m), "saves a song map as a template");
+        const auto loaded = arrangement::loadUserTemplates (folder);
+        check (loaded.size() == 1 && loaded[0].first == "My anthem form" && loaded[0].second == m, "and loads it back, energy curve included");
+        folder.deleteRecursively();
+
+        // Session notes.
+        suite::FixBus::send (suite::Fix::RoughMix);
+        p->logActivity();
+        check (p->getNotes().joinIntoString (" ").contains ("rough mix"), "notes what the suite did (a rough mix)");
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getNotes().joinIntoString (" ").contains ("rough mix"), "and keeps the notes with the project");
+        suite::SectionBus::withdraw();
+    }
+
+    section ("Suite collisions");
+    {
+        using namespace suite;
+        SectionMap m = arrangement::fromTemplate (arrangement::templates()[1]);
+        m.finalLift = 1; m.dropGap = 3; m.intensity = 20;
+        m.sections[(size_t) m.lastDropIndex()].energy = 10;
+        std::vector<SuiteEntry> entries (2);
+        entries[0].plugin = "Prima Materia"; entries[0].track = "Vox"; entries[0].flags = Status::roleSet; entries[0].metrics = { 6.0f, 0, 0, 0 };
+        entries[1].plugin = "Kybalion"; entries[1].track = "Pads"; entries[1].flags = Status::fillsOn;
+        std::vector<suitecheck::Advice> out;
+        suitecheck::collisions (entries, m, out);
+        juce::StringArray texts;
+        for (auto& a : out) texts.add (a.text);
+        const auto all = texts.joinIntoString ("\n");
+        check (all.contains ("vocal track can't follow"), "warns that the vocal won't follow the key change");
+        check (all.contains ("their fill won't be heard"), "warns about a kick-only bar on top of fills");
+        check (all.contains ("drawn no higher than the breakdown"), "warns about a drop drawn below its breakdown");
+        check (all.contains ("Intensity is at 20%"), "warns that Intensity is nearly off");
+    }
+
     section ("Recipes");
     {
         const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AntiochRecipesTest");

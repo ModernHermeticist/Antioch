@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "FixBus.h"
 #include "Arrangement.h"
 #include "Listen.h"
 #include "SuiteDSP.h"
@@ -25,7 +26,7 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override  { return false; }
+    bool acceptsMidi() const override  { return true; }   // live mode: play sections from MIDI notes
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -77,11 +78,42 @@ public:
     std::atomic<double> ppq { 0.0 }, bpm { 138.0 }, barQuarters { 4.0 };
     std::atomic<bool> playing { false };
     std::thread referenceThread;
+    juce::CriticalSection notesLock;
+    juce::StringArray notes;
+    uint32_t seenFix = suite::FixBus::latest(), seenSnapshot = suite::SnapshotBus::latest(),
+             seenSession = suite::SessionBus::latest(), seenRecipe = suite::RecipeBus::latest();
     std::optional<suite::SectionMap> referenceResult;
     juce::String lastReferenceName;
     suite::SectionFollower morphFollower;
 
-    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" }, dropGapId { "dropgap" };
+    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" }, dropGapId { "dropgap" },
+                                     intensityId { "intensity" }, liveId { "live" };
+
+    /** Live mode: the note that plays each section type (C Intro, D Groove, E Breakdown, F Build, G Drop, A Outro). */
+    static int liveTypeForNote (int note)
+    {
+        switch (((note % 12) + 12) % 12) { case 0: return 0; case 2: return 1; case 4: return 2; case 5: return 3; case 7: return 4; case 9: return 5; default: return -1; }
+    }
+    /** Live mode: a section played at `ppq` starts on the next bar line (the one after, if that's under a fifth of a bar away). */
+    static double liveStartFor (double ppq, double barQ)
+    {
+        auto start = std::ceil (ppq / barQ - 1.0e-9) * barQ;
+        if (start - ppq < 0.2 * barQ && start - ppq > 1.0e-6) start += barQ;
+        return start;
+    }
+    std::atomic<int> liveType { -1 }, livePrevType { -1 }, liveIndex { 0 };
+
+    /** Session notes: what the suite's automation did in this project (newest last, saved with it). */
+    juce::StringArray getNotes() const { const juce::ScopedLock sl (notesLock); return notes; }
+    void addNote (const juce::String& text)
+    {
+        const juce::ScopedLock sl (notesLock);
+        notes.add (juce::Time::getCurrentTime().formatted ("%d %b %H:%M  ") + text);
+        while (notes.size() > 200) notes.remove (0);
+    }
+    /** Reads new fixes, snapshot commands, sessions and recipes from the suite and notes them. */
+    void logActivity();
+    std::atomic<double> liveStartQ { 0.0 };
     bool morphsWithSnapshots() const override { return false; }   // Ouroboros sends the morph
     /** How far the suite morphs into the final-drop snapshot at this position (0..1). */
     static float finalMorphAmount (const suite::SectionFollower::Position& pos, const suite::SectionMap& map, double ppq) noexcept
@@ -156,7 +188,7 @@ public:
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { publish(); }
+    void timerCallback() override { publish(); logActivity(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

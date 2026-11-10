@@ -45,6 +45,57 @@ namespace arrangement
         return m;
     }
 
+    //==============================================================================
+    // Your own templates: song maps (with their energy curve) saved as files.
+
+    inline juce::File userTemplateFolder()
+    {
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Templates");
+    }
+
+    inline juce::String toText (const SectionMap& m)
+    {
+        juce::StringArray parts { juce::String (m.totalBars) };
+        for (int i = 0; i < m.count; ++i)
+            parts.add (juce::String (m.sections[(size_t) i].startBar) + ":" + juce::String ((int) m.sections[(size_t) i].type) + ":"
+                       + juce::String (m.sections[(size_t) i].energy));
+        return parts.joinIntoString (" ");
+    }
+
+    inline SectionMap fromText (const juce::String& text)
+    {
+        SectionMap m;
+        const auto parts = juce::StringArray::fromTokens (text, " ", "");
+        if (parts.isEmpty()) return m;
+        m.totalBars = juce::jlimit (1, 1024, parts[0].getIntValue());
+        for (int i = 1; i < parts.size() && m.count < SectionMap::maxSections; ++i)
+        {
+            const auto f = juce::StringArray::fromTokens (parts[i], ":", "");
+            if (f.size() < 2) continue;
+            m.sections[(size_t) m.count++] = { juce::jmax (1, f[0].getIntValue()),
+                                               (SectionType) juce::jlimit (0, (int) SectionType::count - 1, f[1].getIntValue()),
+                                               f.size() > 2 ? juce::jlimit (-1, 100, f[2].getIntValue()) : -1 };
+        }
+        if (m.count > 0) m.sections[0].startBar = 1;
+        return m;
+    }
+
+    inline bool saveUserTemplate (const juce::File& folder, const juce::String& name, const SectionMap& m)
+    {
+        folder.createDirectory();
+        return folder.getChildFile (juce::File::createLegalFileName (name) + ".map").replaceWithText (toText (m));
+    }
+
+    inline std::vector<std::pair<juce::String, SectionMap>> loadUserTemplates (const juce::File& folder)
+    {
+        std::vector<std::pair<juce::String, SectionMap>> out;
+        for (const auto& f : folder.findChildFiles (juce::File::findFiles, false, "*.map"))
+            if (const auto m = fromText (f.loadFileAsString()); m.count > 0)
+                out.push_back ({ f.getFileNameWithoutExtension(), m });
+        std::sort (out.begin(), out.end(), [] (const auto& a, const auto& b) { return a.first < b.first; });
+        return out;
+    }
+
     /** Index of the section containing `bar`, or -1. */
     inline int sectionAt (const SectionMap& m, int bar)
     {

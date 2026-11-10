@@ -189,8 +189,12 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             }
         }
 
-        if (energyDb != 0.0f && target.levelDb > pm::offDb + 0.5f)
-            target.levelDb = juce::jlimit (pm::offDb + 1.0f, 6.0f, target.levelDb + energyDb);
+        if (follow && target.levelDb > pm::offDb + 0.5f)
+        {
+            // Ouroboros' Intensity scales this track's section moves; the energy curve adds to them.
+            const auto k = sections.getMap().intensityScale();
+            target.levelDb = juce::jlimit (pm::offDb + 1.0f, 6.0f, target.levelDb * k + energyDb * k);
+        }
 
         // Low-end manager: where a kick or bass plays, other roles leave the low end to them.
         if (managerCut > 0.0f)

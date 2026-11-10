@@ -77,7 +77,13 @@ namespace suite
             {
                 const auto mid = host.ppq + host.quartersPerSample (sampleRate) * numSamples * 0.5;
                 const auto pos = follower.locate (mid, host.barQuarters());
-                if (pos.valid) { type = (int) pos.type; laterDrop = pos.isLaterDrop(); energyScale = juce::jlimit (0.0f, 2.0f, pos.energyRatio); }
+                if (pos.valid)
+                {
+                    type = (int) pos.type;
+                    laterDrop = pos.isLaterDrop();
+                    // The energy curve, and Ouroboros' Intensity on top.
+                    energyScale = juce::jlimit (0.0f, 4.0f, pos.energyRatio * follower.getMap().intensityScale());
+                }
             }
             activeType.store (on ? type : -1);
             activeLaterDrop.store (on && laterDrop);

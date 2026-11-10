@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Music.h"
 #include "HostInfo.h"
 
 namespace
@@ -12,6 +13,10 @@ namespace
                                                              juce::StringArray { "1 bar", "4 bars", "8 bars", "16 bars" }, 2));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::liftId, 1 }, "Final Drop Key Change",
                                                              juce::StringArray { "None", "+1 semitone", "+2 semitones" }, 0));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { OuroborosProcessor::intensityId, 1 }, "Intensity",
+                                                            juce::NormalisableRange<float> (0.0f, 200.0f), 100.0f,
+                                                            juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + "%"; })));
+        l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::liveId, 1 }, "Live Mode", false));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::dropGapId, 1 }, "Before Drops",
                                                              juce::StringArray { "Per track", "1/2 beat silence", "1 beat silence", "Kick-only bar" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::finalSnapId, 1 }, "Final Drop Snapshot",
@@ -28,7 +33,7 @@ OuroborosProcessor::OuroborosProcessor()
 {
     map = arrangement::fromTemplate (arrangement::templates().front());
     publish();
-    startTimerHz (4);
+    startTimerHz (20);   // live sections must reach the suite well before the next bar line
 }
 
 OuroborosProcessor::~OuroborosProcessor()
@@ -58,7 +63,7 @@ void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
     lowEnv = 0.0f;
 }
 
-void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     // Audio passes through untouched; we watch the transport and (when listening) measure the mix.
     const auto host = suite::HostInfo::read (getPlayHead(), bpm.load());
@@ -67,6 +72,26 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     playing.store (host.playing);
     if (host.hasPpq)
         ppq.store (host.ppq);
+
+    // Live mode: a note picks the section that starts on the next bar line.
+    if (apvts.getRawParameterValue (liveId)->load() > 0.5f && host.hasPpq)
+    {
+        for (const auto meta : midi)
+        {
+            const auto msg = meta.getMessage();
+            if (! msg.isNoteOn()) continue;
+            const auto type = liveTypeForNote (msg.getNoteNumber());
+            if (type < 0) continue;
+            const auto at = host.ppq + host.quartersPerSample (sampleRate) * meta.samplePosition;
+            livePrevType.store (liveType.load() >= 0 ? liveType.load() : type);
+            liveType.store (type);
+            liveStartQ.store (liveStartFor (at, host.barQuarters()));
+            liveIndex.fetch_add (1);
+        }
+    }
+    else
+        liveType.store (-1);
+    midi.clear();   // the notes are for Ouroboros only
 
     // Final-drop snapshot: tell the suite how far to morph at this position (also while stopped,
     // so the plugins match wherever the playhead is).
@@ -217,6 +242,52 @@ std::optional<suite::SectionMap> OuroborosProcessor::takeReferenceProposal()
     return r;
 }
 
+void OuroborosProcessor::logActivity()
+{
+    static const char* fixNames[] = { "", "breakdowns quieter", "breakdowns louder", "more rise in the build", "intro quieter",
+                                      "bigger later drops", "rough mix", "DJ-friendly intro/outro", "tone matched to the reference", "masking carve" };
+    for (auto seq = seenFix + 1; seq <= suite::FixBus::latest() && seq != 0; ++seq)
+    {
+        suite::FixBus::Message m;
+        if (! suite::FixBus::read (seq, m)) continue;
+        const auto f = (int) m.fix;
+        addNote (m.undo ? juce::String ("Undid a fix")
+                        : juce::String ("Fix: ") + (f > 0 && f < (int) std::size (fixNames) ? fixNames[f] : "other"));
+    }
+    seenFix = suite::FixBus::latest();
+
+    static const char* snapshotVerbs[] = { "", "Saved snapshot", "Recalled snapshot", "Cleared snapshot" };
+    for (auto seq = seenSnapshot + 1; seq <= suite::SnapshotBus::latest() && seq != 0; ++seq)
+    {
+        suite::SnapshotAction action {};
+        int slot = 0;
+        if (! suite::SnapshotBus::read (seq, action, slot)) continue;
+        if (action == suite::SnapshotAction::ApplyVersion)
+            addNote (slot == suite::radioEdit ? "Made the radio edit" : "Made the extended mix");
+        else if ((int) action >= 1 && (int) action <= 3)
+            addNote (juce::String (snapshotVerbs[(int) action]) + " " + SuiteProcessor::slotName (slot));
+    }
+    seenSnapshot = suite::SnapshotBus::latest();
+
+    for (auto seq = seenSession + 1; seq <= suite::SessionBus::latest() && seq != 0; ++seq)
+    {
+        suite::SessionRequest r;
+        if (suite::SessionBus::read (seq, r) && juce::isPositiveAndBelow (r.style, (int) suite::sessionStyles().size()))
+            addNote (juce::String ("New song: ") + suite::sessionStyles()[(size_t) r.style].name + " in "
+                     + suite::music::noteNames()[juce::jlimit (0, 11, r.root)] + " " + suite::music::scales()[(size_t) juce::jlimit (0, 5, r.scale)].name);
+    }
+    seenSession = suite::SessionBus::latest();
+
+    for (auto seq = seenRecipe + 1; seq <= suite::RecipeBus::latest() && seq != 0; ++seq)
+    {
+        suite::RecipeAction a {};
+        juce::String name;
+        if (suite::RecipeBus::read (seq, a, name))
+            addNote ((a == suite::RecipeAction::Save ? "Saved recipe '" : "Loaded recipe '") + name + "'");
+    }
+    seenRecipe = suite::RecipeBus::latest();
+}
+
 void OuroborosProcessor::publish()
 {
     const auto on = apvts.getRawParameterValue (broadcastId)->load() > 0.5f;
@@ -225,6 +296,14 @@ void OuroborosProcessor::publish()
         auto m = getMap();
         m.finalLift = (int) apvts.getRawParameterValue (liftId)->load();   // the whole suite follows the key change
         m.dropGap = (int) apvts.getRawParameterValue (dropGapId)->load();   // Prima Materia on every track mutes before drops
+        m.intensity = juce::roundToInt (apvts.getRawParameterValue (intensityId)->load());
+        if (liveType.load() >= 0)
+        {
+            m.liveType = liveType.load();
+            m.livePrevType = livePrevType.load();
+            m.liveIndex = liveIndex.load();
+            m.liveStartQ = liveStartQ.load();
+        }
         suite::SectionBus::publish (m);
     }
     else if (wasBroadcasting)
@@ -253,6 +332,10 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     }
     state.removeChild (state.getChildWithName ("Arrangement"), nullptr);
     state.appendChild (arr, nullptr);
+    state.removeChild (state.getChildWithName ("Notes"), nullptr);
+    juce::ValueTree notesTree ("Notes");
+    notesTree.setProperty ("text", getNotes().joinIntoString ("\n"), nullptr);
+    state.appendChild (notesTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -264,6 +347,13 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         return;
 
     auto state = juce::ValueTree::fromXml (*xml);
+    if (const auto n = state.getChildWithName ("Notes"); n.isValid())
+    {
+        const juce::ScopedLock sl (notesLock);
+        notes = juce::StringArray::fromLines (n["text"].toString());
+        notes.removeEmptyStrings();
+        state.removeChild (n, nullptr);
+    }
     const auto arr = state.getChildWithName ("Arrangement");
     if (arr.isValid())
     {

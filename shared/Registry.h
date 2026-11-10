@@ -23,7 +23,8 @@ namespace suite
             kickSource         = 1u << 4,   // Kybalion: sharing its kick pattern
             roleSet            = 1u << 5,   // Prima Materia: a role preset is applied
             measuring          = 1u << 6,   // has a loudness reading (metric 1)
-            hasBands           = 1u << 7    // has a spectrum (bands, dB per octave band 31.5 Hz .. 16 kHz)
+            hasBands           = 1u << 7,   // has a spectrum (bands, dB per octave band 31.5 Hz .. 16 kHz)
+            fillsOn            = 1u << 8    // Kybalion: gate fills before drops
         };
     }
 

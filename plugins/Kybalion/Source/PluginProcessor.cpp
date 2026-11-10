@@ -237,6 +237,7 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     if (source == Params::Duck::Sidechain) s.flags |= suite::Status::sidechainWanted;
     if (sidechainConnected.load()) s.flags |= suite::Status::sidechainConnected;
     if (value (Params::follow) > 0.5f) s.flags |= suite::Status::followsOuroboros;
+    if ((int) value (Params::Fill::when) != Params::Fill::Off && value (Params::gateOn) > 0.5f) s.flags |= suite::Status::fillsOn;
     if (value (Params::Duck::shareKick) > 0.5f)
     {
         s.flags |= suite::Status::kickSource;

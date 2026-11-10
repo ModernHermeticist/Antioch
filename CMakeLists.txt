@@ -26,7 +26,12 @@ add_subdirectory(shared)
 # suite_add_plugin(<Target> CODE <4 chars> NAME <name> DESCRIPTION <text> CATEGORIES <...>
 #                  SOURCES <...> [TESTS <file>])
 function(suite_add_plugin target)
-    cmake_parse_arguments(ARG "" "CODE;NAME;DESCRIPTION;TESTS" "CATEGORIES;SOURCES" ${ARGN})
+    cmake_parse_arguments(ARG "MIDI_INPUT" "CODE;NAME;DESCRIPTION;TESTS" "CATEGORIES;SOURCES" ${ARGN})
+    if(ARG_MIDI_INPUT)
+        set(needs_midi TRUE)
+    else()
+        set(needs_midi FALSE)
+    endif()
 
     juce_add_plugin(${target}
         COMPANY_NAME            "ModernHermeticist"
@@ -37,7 +42,7 @@ function(suite_add_plugin target)
         FORMATS                 VST3 Standalone
         VST3_CATEGORIES         ${ARG_CATEGORIES}
         IS_SYNTH                FALSE
-        NEEDS_MIDI_INPUT        FALSE
+        NEEDS_MIDI_INPUT        ${needs_midi}
         NEEDS_MIDI_OUTPUT       FALSE
         IS_MIDI_EFFECT          FALSE
         EDITOR_WANTS_KEYBOARD_FOCUS FALSE

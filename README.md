@@ -318,6 +318,24 @@ compare whole versions of the song (mix, scenes, map and all). Each plugin keeps
 copies inside its own saved state, so snapshots travel with the FL project. Right-click a
 slot to clear it.
 
+**Perform.** **Intensity** (0–200%) scales every section move in the suite at once: the
+scenes, Prima Materia's levels and the energy curve, and Azoth's transitions. Automate it
+or ride it live. **Live mode** turns Ouroboros into an instrument: route a MIDI controller
+or a piano-roll clip to it and play the sections (C intro, D groove, E breakdown, F build,
+G drop, A outro). Each starts on the next bar line (a note just before a bar line waits for
+the one after), and the whole suite follows as if it were the song map: builds ramp over
+8 bars, transitions fire, scenes move.
+
+**Your own templates.** "Save the current map as a template…" at the bottom of the
+template list keeps the song map, energy curve included, as one of your templates
+("Mine: …") in every project.
+
+**Session notes.** The Suite panel also lists what the automation did in this project
+(fixes, undos, snapshots, versions, recipes, new songs), with times, saved with the
+project. It also warns about **collisions**: a key change the vocal can't follow, a
+kick-only bar on top of Kybalion fills, a drop drawn below its breakdown, Intensity
+nearly off.
+
 **Energy curve.** The brass line across the song map is the song's energy: each section
 sits at its type's usual level (drop 100%, build 60%, groove 55%, intro/outro 35%,
 breakdown 25%). Drag a section's line up or down (in 5% steps) and the suite follows:
@@ -821,6 +839,10 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Energy curve:** untouched sections have their type's energy; a drawn energy is
   shared and saved; followers see 70% as 0.7 of a drop's usual; a neutral Prima Materia
   plays a drop drawn at 75% 3 dB lower; Azoth gives a half-energy drop half the impact.
+- **Perform, templates, notes:** Intensity is shared; a G played mid-bar queues the drop
+  for the next bar line, the followers switch exactly there as a new section, black keys do
+  nothing, and switching Live off returns to the map; a template keeps its energy curve;
+  a rough mix is noted and the notes are saved; the four collision warnings fire.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

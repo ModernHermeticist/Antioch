@@ -249,7 +249,10 @@ void SuitePanel::refresh()
     entries = suite::Registry::list();
     std::sort (entries.begin(), entries.end(), [] (const auto& a, const auto& b)
                { return a.plugin != b.plugin ? a.plugin < b.plugin : a.track < b.track; });
-    advice = suitecheck::check (entries);
+    suite::SectionMap map;
+    const auto haveMap = suite::SectionBus::read (map);
+    advice = suitecheck::check (entries, haveMap ? &map : nullptr);
+    notes = processor != nullptr ? processor->getNotes() : juce::StringArray();
     repaint();
 }
 
@@ -282,6 +285,7 @@ void SuitePanel::paint (juce::Graphics& g)
     g.drawHorizontalLine (r.getY(), (float) r.getX(), (float) r.getRight());
     r.removeFromTop (8);
     g.setFont (juce::FontOptions (13.0f));
+    auto notesArea = r.removeFromBottom (juce::jmin (150, r.getHeight() / 2));
     for (const auto& a : advice)
     {
         auto row = r.removeFromTop (36);
@@ -291,6 +295,17 @@ void SuitePanel::paint (juce::Graphics& g)
         g.setColour (Colours::text);
         g.drawFittedText (a.text, row.withTrimmedLeft (14), juce::Justification::topLeft, 2, 0.9f);
     }
+
+    // Session notes: the newest automation steps in this project.
+    g.setColour (accent);
+    g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+    g.drawText ("SESSION NOTES", notesArea.removeFromTop (20), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    if (notes.isEmpty())
+        g.drawText ("Nothing yet: fixes, snapshots, versions, recipes and new songs are noted here.", notesArea.removeFromTop (18), juce::Justification::centredLeft);
+    for (int i = notes.size() - 1; i >= 0 && notesArea.getHeight() >= 16; --i)
+        g.drawText (notes[i], notesArea.removeFromTop (17), juce::Justification::centredLeft);
 }
 
 //==============================================================================
@@ -499,22 +514,53 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       lift (p.apvts, OuroborosProcessor::liftId, "Final drop key"),
       finalSnap (p.apvts, OuroborosProcessor::finalSnapId, "Final drop snapshot"),
       dropGap (p.apvts, OuroborosProcessor::dropGapId, "Before every drop"),
+      intensity (p.apvts, OuroborosProcessor::intensityId, "Intensity", Colours::brass),
+      live (p.apvts, OuroborosProcessor::liveId, "LIVE MODE", accent),
       timeline (p)
 {
     setLookAndFeel (&lnf);
 
     templateBox.setTextWhenNothingSelected ("Start from a template...");
-    for (size_t i = 0; i < arrangement::templates().size(); ++i)
-        templateBox.addItem (arrangement::templates()[i].name, (int) i + 1);
+    fillTemplates();
     templateBox.onChange = [this]
     {
-        if (templateBox.getSelectedId() > 0)
+        const auto id = templateBox.getSelectedId();
+        if (id <= 0) return;
+        const auto builtIn = (int) arrangement::templates().size();
+        if (id == 999)   // save the current map as one of your templates
         {
-            processor.setMap (arrangement::fromTemplate (arrangement::templates()[(size_t) templateBox.getSelectedId() - 1]));
-            timeline.selected = 0;
-            refreshSelection();
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            nameWindow = std::make_unique<juce::AlertWindow> ("Save as template", "Name for this song map (with its energy curve):", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My structure");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr)
+                {
+                    const auto name = nameWindow->getTextEditorContents ("name").trim();
+                    if (name.isNotEmpty() && arrangement::saveUserTemplate (arrangement::userTemplateFolder(), name, processor.getMap()))
+                        processor.addNote ("Saved the song map as template '" + name + "'");
+                    fillTemplates();
+                }
+                nameWindow.reset();
+            }));
+            return;
         }
+        if (id <= builtIn)
+            processor.setMap (arrangement::fromTemplate (arrangement::templates()[(size_t) id - 1]));
+        else if (id - builtIn - 1 < (int) userTemplates.size())
+            processor.setMap (userTemplates[(size_t) (id - builtIn - 1)].second);
+        timeline.selected = 0;
+        refreshSelection();
     };
+
+    liveHelp.setFont (juce::FontOptions (12.0f));
+    liveHelp.setColour (juce::Label::textColourId, Colours::dimText);
+    liveHelp.setText ("Live: send MIDI to Ouroboros and play the sections: C intro, D groove, E breakdown, F build, G drop, "
+                      "A outro. Each starts on the next bar and the whole suite follows.", juce::dontSendNotification);
+    for (auto* c : std::initializer_list<juce::Component*> { &intensity, &live, &liveHelp })
+        addAndMakeVisible (c);
 
     lengthCaption.setText ("Bars", juce::dontSendNotification);
     lengthCaption.setFont (juce::FontOptions (12.0f));
@@ -638,7 +684,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");
     suiteButton.onClick = [this]
     {
-        juce::CallOutBox::launchAsynchronously (std::make_unique<SuitePanel>(), suiteButton.getScreenBounds(), nullptr);
+        juce::CallOutBox::launchAsynchronously (std::make_unique<SuitePanel> (&processor), suiteButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (suiteButton);
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
@@ -659,7 +705,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
                                                              &selectionLabel, &legend, &broadcast, &snap, &lift, &finalSnap, &dropGap, &timeline, &deleteButton })
         addAndMakeVisible (c);
 
-    setSize (1060, 560);
+    setSize (1060, 640);
     refreshSelection();
     timerCallback();
     startTimerHz (20);
@@ -776,7 +822,9 @@ void OuroborosEditor::timerCallback()
     if (++suiteTicks % 10 == 0)
     {
         const auto entries = suite::Registry::list();
-        const auto advice = suitecheck::check (entries);
+        suite::SectionMap shared;
+        const auto haveShared = suite::SectionBus::read (shared);
+        const auto advice = suitecheck::check (entries, haveShared ? &shared : nullptr);
         const auto problems = (int) std::count_if (advice.begin(), advice.end(), [] (const auto& a) { return a.problem; });
         suiteButton.setButtonText ("Suite (" + juce::String ((int) entries.size()) + ")" + (problems > 0 ? juce::String (" !") : juce::String()));
         suiteButton.setColour (juce::TextButton::textColourOffId, problems > 0 ? Colours::ember : Colours::text);
@@ -847,6 +895,7 @@ void OuroborosEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "OUROBOROS", "arrangement conductor", accent);
     drawPanel (g, nowArea, "Now playing");
     drawPanel (g, songArea, "Song map  (drag edges or the energy line, double-click to split, right-click for options)", accent);
+    drawPanel (g, performArea, "Perform", Colours::brass);
     drawPanel (g, markArea, "Mark at playhead  (click while the song plays)", Colours::brass);
     drawPanel (g, selectArea, "Selected section", Colours::verdigris);
 }
@@ -924,5 +973,30 @@ void OuroborosEditor::resized()
         typeButtons[(size_t) t]->setBounds (juce::Rectangle<int> (sa.getX() + (t % 3) * tw, sa.getY() + (t / 3) * th, tw, th).reduced (2));
 
     bounds.removeFromTop (8);
+    performArea = bounds.removeFromTop (72);
+    {
+        auto pa = performArea.reduced (12, 4).withTrimmedTop (10);
+        intensity.setBounds (pa.removeFromLeft (180));
+        intensity.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
+        intensity.maxHeight = 52;
+        live.setBounds (pa.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+        liveHelp.setBounds (pa.reduced (10, 0));
+    }
     legend.setBounds (bounds);
+}
+
+void OuroborosEditor::fillTemplates()
+{
+    templateBox.clear (juce::dontSendNotification);
+    for (size_t i = 0; i < arrangement::templates().size(); ++i)
+        templateBox.addItem (arrangement::templates()[i].name, (int) i + 1);
+    userTemplates = arrangement::loadUserTemplates (arrangement::userTemplateFolder());
+    if (! userTemplates.empty())
+    {
+        templateBox.addSeparator();
+        for (size_t i = 0; i < userTemplates.size(); ++i)
+            templateBox.addItem ("Mine: " + userTemplates[i].first, (int) (arrangement::templates().size() + i + 1));
+    }
+    templateBox.addSeparator();
+    templateBox.addItem ("Save the current map as a template...", 999);
 }

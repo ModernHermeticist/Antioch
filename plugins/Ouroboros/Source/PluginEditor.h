@@ -39,14 +39,16 @@ private:
 class SuitePanel : public juce::Component, private juce::Timer
 {
 public:
-    SuitePanel() { refresh(); setSize (620, 440); startTimerHz (2); }
+    explicit SuitePanel (OuroborosProcessor* p = nullptr) : processor (p) { refresh(); setSize (660, 560); startTimerHz (2); }
     void paint (juce::Graphics&) override;
     void refresh();
 
 private:
     void timerCallback() override { refresh(); }
+    OuroborosProcessor* processor;
     std::vector<suite::SuiteEntry> entries;
     std::vector<suitecheck::Advice> advice;
+    juce::StringArray notes;
 };
 
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
@@ -123,6 +125,13 @@ private:
     suite::ui::LookAndFeel lnf;
 
     juce::ComboBox templateBox;
+    std::vector<std::pair<juce::String, suite::SectionMap>> userTemplates;
+    void fillTemplates();
+    std::unique_ptr<juce::AlertWindow> nameWindow;
+    suite::ui::Knob intensity;
+    suite::ui::Toggle live;
+    juce::Label liveHelp;
+    juce::Rectangle<int> performArea;
     juce::Slider lengthSlider { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
     juce::Label lengthCaption, nowLabel, nextLabel, selectionLabel, legend;
     suite::ui::Toggle broadcast;

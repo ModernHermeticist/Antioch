@@ -44,6 +44,12 @@ namespace suite
         int totalBars = 0;                     // song length; the last section ends after this bar
         int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
         int dropGap = 0;                       // before every drop: 0 = per track, 1 = 1/2 beat silence, 2 = 1 beat, 3 = kick-only bar
+        int intensity = 100;                   // Ouroboros' intensity: scales every plugin's section moves (percent, 0..200)
+        // Live mode (Ouroboros played from MIDI): the section is whatever was played last, from the bar it started on.
+        int liveType = -1, livePrevType = -1, liveIndex = 0;
+        double liveStartQ = 0.0;
+        bool isLive() const noexcept { return liveType >= 0; }
+        float intensityScale() const noexcept { return (float) intensity / 100.0f; }
         std::array<Section, maxSections> sections {};
 
         /** Energy of section `index` (0..1): drawn, or the type's default. */
@@ -69,7 +75,9 @@ namespace suite
 
         bool operator== (const SectionMap& o) const noexcept
         {
-            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap) return false;
+            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap || intensity != o.intensity
+                || liveType != o.liveType || livePrevType != o.livePrevType || liveIndex != o.liveIndex || std::abs (liveStartQ - o.liveStartQ) > 1.0e-9)
+                return false;
             for (int i = 0; i < count; ++i)
                 if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type
                     || sections[(size_t) i].energy != o.sections[(size_t) i].energy)
@@ -137,6 +145,22 @@ namespace suite
         Position locate (double ppq, double barQuarters) const noexcept
         {
             Position p;
+            if (available && map.isLive() && barQuarters > 0.0)
+            {
+                // Live: the section played last, from the bar it was played on (the one before, until then).
+                const auto current = ppq >= map.liveStartQ - 1.0e-9;
+                const auto type = current ? map.liveType : map.livePrevType;
+                if (type < 0) return p;
+                p.valid = true;
+                p.type = (SectionType) type;
+                p.index = 1000 + map.liveIndex - (current ? 0 : 1);
+                p.startQ = current ? map.liveStartQ : map.liveStartQ - 64.0 * barQuarters;
+                p.endQ = current ? map.liveStartQ + (p.type == SectionType::Build ? 8.0 : 256.0) * barQuarters : map.liveStartQ;
+                p.hasNext = ! current || p.type == SectionType::Build;
+                p.next = current ? SectionType::Drop : (SectionType) map.liveType;
+                p.energy = defaultEnergy (p.type);
+                return p;
+            }
             if (! available || map.count == 0 || barQuarters <= 0.0)
                 return p;
 
