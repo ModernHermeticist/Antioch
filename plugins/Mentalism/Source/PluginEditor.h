@@ -3,6 +3,21 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "Checklist.h"
+
+/** Pre-export checklist: pass / warn / fail for what Mentalism has measured. */
+class ChecklistPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit ChecklistPanel (MentalismProcessor& p) : processor (p) { refresh(); setSize (600, 380); startTimerHz (2); }
+    void paint (juce::Graphics&) override;
+
+private:
+    void timerCallback() override { refresh(); }
+    void refresh() { items = checklist::check (processor.report(), processor.clippedSamples.load()); repaint(); }
+    MentalismProcessor& processor;
+    std::vector<checklist::Item> items;
+};
 
 /** Fix history: every fix and rough mix sent from Mentalism, with Undo for each. */
 class FixHistoryPanel : public juce::Component, private juce::Timer
@@ -56,7 +71,7 @@ private:
     suite::ui::LookAndFeel lnf;
 
     suite::ui::Choice loudTarget, tonalTarget;
-    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" };
+    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" };
     juce::Label roughStatus;
     juce::Label referenceLabel;
     std::unique_ptr<juce::FileChooser> chooser;

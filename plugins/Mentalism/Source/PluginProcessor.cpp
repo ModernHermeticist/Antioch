@@ -103,6 +103,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         loudness.reset();
         truePeak.reset();
         bands.reset();
+        clippedSamples.store (0);
         for (auto& st : statsBySection) st.clear();
     }
 
@@ -152,6 +153,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
             }
         }
         truePeak.process (l[i], r[i]);
+        if (std::abs (l[i]) >= 0.9999f || std::abs (r[i]) >= 0.9999f) clippedSamples.fetch_add (1, std::memory_order_relaxed);
         stereo.process (l[i], r[i]);
         bands.process (l[i], r[i]);
         mono[(size_t) i] = 0.5f * (l[i] + r[i]);

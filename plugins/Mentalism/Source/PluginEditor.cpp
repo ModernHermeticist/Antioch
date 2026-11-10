@@ -16,6 +16,35 @@ namespace
 }
 
 //==============================================================================
+void ChecklistPanel::paint (juce::Graphics& g)
+{
+    using checklist::State;
+    g.fillAll (Colours::panel);
+    const auto ready = checklist::readyToExport (items);
+    g.setColour (ready ? Colours::moss : Colours::brass);
+    g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+    g.drawText (ready ? "READY TO EXPORT" : "BEFORE YOU EXPORT", 14, 8, getWidth() - 28, 22, juce::Justification::centredLeft);
+    int y = 40;
+    for (const auto& item : items)
+    {
+        const auto colour = item.state == State::Pass ? Colours::moss : item.state == State::Warn ? Colours::brass
+                          : item.state == State::Fail ? Colours::ember : Colours::dimText;
+        const auto mark = item.state == State::Pass ? juce::String::fromUTF8 ("\xe2\x9c\x93") : item.state == State::Unknown ? juce::String ("?")
+                        : item.state == State::Warn ? juce::String ("!") : juce::String::fromUTF8 ("\xe2\x9c\x97");
+        g.setColour (colour);
+        g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+        g.drawText (mark, 14, y, 20, 20, juce::Justification::centred);
+        g.setColour (Colours::text);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText (item.name, 40, y, 170, 20, juce::Justification::centredLeft);
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (13.0f));
+        g.drawFittedText (item.detail, 212, y, getWidth() - 226, 20, juce::Justification::centredLeft, 1, 0.8f);
+        y += 34;
+    }
+}
+
+//==============================================================================
 void FixHistoryPanel::refresh()
 {
     auto latest = processor.getFixHistory();
@@ -102,6 +131,12 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<FixHistoryPanel> (processor), historyButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (historyButton);
+    checklistButton.setTooltip ("Pass/fail list to check before rendering: loudness, true peak, clipping, mono, sections");
+    checklistButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<ChecklistPanel> (processor), checklistButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (checklistButton);
     roughStatus.setFont (juce::FontOptions (12.0f));
     roughStatus.setJustificationType (juce::Justification::centredRight);
     for (auto* c : std::initializer_list<juce::Component*> { &roughMixButton, &roughUndoButton, &roughStatus })
@@ -551,4 +586,5 @@ void MentalismEditor::resized()
     balanceTabs.setBounds (balanceArea.getRight() - 372, balanceArea.getY() + 6, 360, 28);
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);
+    checklistButton.setBounds (adviceArea.getRight() - 162, adviceArea.getY() + 6, 150, 26);
 }

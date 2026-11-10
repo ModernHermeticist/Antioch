@@ -265,6 +265,64 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Pre-export checklist");
+    {
+        using checklist::State;
+        MentalismProcessor::Report rep;
+        rep.measuredSeconds = 240.0f;
+        rep.targetLufs = -8.0f; rep.ceiling = -0.3f;
+        rep.measurement.integratedLufs = -8.4f; rep.measurement.truePeakDb = -0.6f;
+        rep.measurement.correlation = 0.6f; rep.measurement.lowCorrelation = 0.97f; rep.measurement.monoLossDb = 1.2f;
+        auto items = checklist::check (rep, 0);
+        bool allPass = true;
+        for (auto& i : items) allPass = allPass && i.state == State::Pass;
+        check (allPass && checklist::readyToExport (items), "a finished master passes every item");
+
+        auto stateOf = [] (const std::vector<checklist::Item>& list, const char* name)
+        {
+            for (auto& i : list) if (i.name == name) return i.state;
+            return State::Unknown;
+        };
+        rep.measurement.truePeakDb = 0.4f;
+        rep.measurement.lowCorrelation = 0.5f;
+        rep.measurement.integratedLufs = -11.5f;
+        items = checklist::check (rep, 37);
+        check (stateOf (items, "True peak") == State::Fail && stateOf (items, "Clipping") == State::Fail
+                   && stateOf (items, "Low end in mono") == State::Fail && stateOf (items, "Loudness") == State::Fail
+                   && ! checklist::readyToExport (items), "over the ceiling, clipped, wide bass and too quiet all fail");
+
+        // A breakdown that's nearly silent.
+        rep = {};
+        rep.measuredSeconds = 60.0f;
+        rep.measurement.integratedLufs = -8.0f; rep.targetLufs = -8.0f; rep.measurement.truePeakDb = -1.0f; rep.ceiling = -0.3f;
+        rep.arrangementAvailable = true;
+        rep.map.totalBars = 8; rep.map.count = 2;
+        rep.map.sections[0] = { 1, suite::SectionType::Drop };
+        rep.map.sections[1] = { 5, suite::SectionType::Breakdown };
+        rep.sections.resize (2);
+        auto setLufs = [] (coach::SectionStat& st, float lufs) { st.blocks = 20; st.power = 20.0 * std::pow (10.0, (lufs + 0.691) / 10.0); };
+        setLufs (rep.sections[0], -8.0f); setLufs (rep.sections[1], -52.0f);
+        rep.arrangement = coach::analyse (rep.map, rep.sections);
+        items = checklist::check (rep, 0);
+        juce::String detail;
+        for (auto& i : items) if (i.name == "No silent sections") detail = i.detail;
+        check (stateOf (items, "No silent sections") == State::Fail && detail.contains ("Breakdown (bars 5-8)"), "flags a silent breakdown: " + detail);
+
+        rep = {};
+        check (stateOf (checklist::check (rep, 0), "Measured the song") == State::Unknown && ! checklist::readyToExport (checklist::check (rep, 0)),
+               "nothing measured: not ready");
+
+        auto p = make();
+        render (*p, 0.2, [] (juce::AudioBuffer<float>& b, int64_t) { for (int i = 0; i < b.getNumSamples(); ++i) { b.setSample (0, i, i % 50 < 25 ? 1.0f : -1.0f); b.setSample (1, i, 0.0f); } });
+        check (p->clippedSamples.load() > 1000, "counts samples at full scale (" + juce::String (p->clippedSamples.load()) + ")");
+        if (outDir != juce::File())
+        {
+            render (*p, 3.0, sine (440.0f, -10.0f));
+            ChecklistPanel panel (*p);
+            snapshot (panel, outDir.getChildFile ("mentalism_checklist.png"));
+        }
+    }
+
     section ("Fix history");
     {
         suite::FixBus::reset();

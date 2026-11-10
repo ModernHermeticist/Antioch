@@ -88,6 +88,9 @@ public:
     /** Loudness gathered per section of the current Ouroboros map (any thread). */
     std::vector<coach::SectionStat> sectionStats() const;
 
+    /** Samples at full scale since the last Reset (for the pre-export checklist). */
+    std::atomic<int> clippedSamples { 0 };
+
     /** Fix history (fixes and rough mixes sent from here), newest last. */
     struct FixRecord { uint32_t seq = 0; suite::Fix fix = suite::Fix::None; juce::Time when; uint32_t undoSeq = 0; };
     uint32_t sendFix (suite::Fix fix)
