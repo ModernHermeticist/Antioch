@@ -31,6 +31,26 @@ private:
     int dragging = -1;
 };
 
+/** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
+class ArrangePanel : public juce::Component
+{
+public:
+    ArrangePanel (arrangement::GenSettings initial, double bpm, std::function<void (arrangement::GenSettings)> onGenerate);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    arrangement::GenSettings current() const;
+    void updateDuration();
+
+    double bpm;
+    std::function<void (arrangement::GenSettings)> generate;
+    juce::Slider bars { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+    juce::ComboBox drops, intro, breakdown;
+    juce::Label barsLabel, duration, dropsLabel, introLabel, breakdownLabel;
+    juce::TextButton go { "Generate" };
+};
+
 class OuroborosEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -58,6 +78,9 @@ private:
     juce::TextButton deleteButton { "Delete section" };
     juce::TextButton listenButton { "LISTEN" }, proposeButton { "Propose map" }, applyButton { "Apply" }, discardButton { "Discard" };
     juce::Label listenStatus;
+    juce::TextButton arrangeButton { "Arrange..." };
+    arrangement::GenSettings lastArrange;
+    void showArrange();
     bool wasPlaying = false;
     void propose();
 

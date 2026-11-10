@@ -1,6 +1,7 @@
 // Offline tests for Ouroboros and the SectionBus. Usage: OuroborosTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -37,6 +38,64 @@ int main (int argc, char** argv)
 
         check (arrangement::snapBar (36.4, 8) == 33 && arrangement::snapBar (37.5, 8) == 41 && arrangement::snapBar (36.4, 1) == 36,
                "snapping rounds to the 8-bar grid from bar 1");
+    }
+
+    section ("Arrange: generated maps");
+    {
+        auto valid = [] (const suite::SectionMap& m)
+        {
+            if (m.count < 1 || m.sections[0].startBar != 1) return false;
+            for (int i = 0; i < m.count; ++i)
+            {
+                const auto end = i + 1 < m.count ? m.sections[(size_t) i + 1].startBar : m.totalBars + 1;
+                if (end - m.sections[(size_t) i].startBar < 8 || (m.sections[(size_t) i].startBar - 1) % 8 != 0) return false;
+            }
+            return true;
+        };
+        auto countOf = [] (const suite::SectionMap& m, SectionType t) { int n = 0; for (int i = 0; i < m.count; ++i) n += m.sections[(size_t) i].type == t; return n; };
+        auto lengthOf = [] (const suite::SectionMap& m, int i) { return (i + 1 < m.count ? m.sections[(size_t) i + 1].startBar : m.totalBars + 1) - m.sections[(size_t) i].startBar; };
+
+        arrangement::GenSettings g;   // 208 bars, 2 drops, DJ intro, long breakdown
+        auto m = arrangement::generate (g);
+        std::cout << "    " << arrangement::toString (m) << std::endl;
+        check (m.totalBars == 208 && valid (m), "208 bars, every section a whole number of 8-bar phrases");
+        check (countOf (m, SectionType::Drop) == 2 && countOf (m, SectionType::Breakdown) == 2 && countOf (m, SectionType::Build) == 2,
+               "two drops, each with its own breakdown and build");
+        check (m.sections[0].type == SectionType::Intro && m.sections[(size_t) m.count - 1].type == SectionType::Outro, "starts with an intro, ends with an outro");
+        bool dropsFull = true, buildBeforeDrop = true;
+        for (int i = 0; i < m.count; ++i)
+            if (m.sections[(size_t) i].type == SectionType::Drop)
+            {
+                dropsFull = dropsFull && lengthOf (m, i) >= 32;
+                buildBeforeDrop = buildBeforeDrop && i > 0 && m.sections[(size_t) i - 1].type == SectionType::Build;
+            }
+        check (dropsFull, "drops keep their full 32 bars");
+        check (buildBeforeDrop, "every drop comes straight after a build");
+
+        g.drops = 3; g.totalBars = 288;
+        m = arrangement::generate (g);
+        std::cout << "    " << arrangement::toString (m) << std::endl;
+        check (m.totalBars == 288 && valid (m) && countOf (m, SectionType::Drop) == 3, "288 bars with three drops");
+
+        g.drops = 1; g.totalBars = 96; g.djIntro = false; g.longBreakdown = false;
+        m = arrangement::generate (g);
+        std::cout << "    " << arrangement::toString (m) << std::endl;
+        check (m.totalBars == 96 && valid (m) && countOf (m, SectionType::Drop) == 1, "a 96-bar radio edit with one drop");
+
+        g.drops = 3; g.totalBars = 64; g.djIntro = true; g.longBreakdown = true;
+        m = arrangement::generate (g);
+        std::cout << "    " << arrangement::toString (m) << std::endl;
+        check (m.totalBars == 64 && valid (m) && countOf (m, SectionType::Drop) >= 1 && countOf (m, SectionType::Drop) < 3,
+               "too short for three drops: fewer drops, still fits exactly");
+
+        g.drops = 2; g.totalBars = 203;
+        m = arrangement::generate (g);
+        check (m.totalBars == 200 && valid (m), "lengths round to whole phrases (203 -> 200)");
+
+        g.drops = 1; g.totalBars = 400;
+        m = arrangement::generate (g);
+        std::cout << "    " << arrangement::toString (m) << std::endl;
+        check (m.totalBars == 400 && valid (m), "a long song still fits exactly");
     }
 
     section ("SectionBus: publish, read, locate");
@@ -180,6 +239,9 @@ int main (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("ouroboros.png"));
         editor.reset();
+
+        ArrangePanel panel ({}, 138.0, {});
+        snapshot (panel, outDir.getChildFile ("ouroboros_arrange.png"));
     }
 
     return finish();

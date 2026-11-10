@@ -185,6 +185,80 @@ void Timeline::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 //==============================================================================
+ArrangePanel::ArrangePanel (arrangement::GenSettings initial, double tempo, std::function<void (arrangement::GenSettings)> onGenerate)
+    : bpm (tempo), generate (std::move (onGenerate))
+{
+    auto caption = [this] (juce::Label& l, const juce::String& text)
+    {
+        l.setText (text, juce::dontSendNotification);
+        l.setFont (juce::FontOptions (13.0f));
+        addAndMakeVisible (l);
+    };
+    caption (barsLabel, "Length (bars)");
+    caption (dropsLabel, "Drops");
+    caption (introLabel, "Intro and outro");
+    caption (breakdownLabel, "First breakdown");
+    duration.setFont (juce::FontOptions (12.0f));
+    duration.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (duration);
+
+    bars.setRange (32, 400, 8);
+    bars.setValue (initial.totalBars, juce::dontSendNotification);
+    bars.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 22);
+    bars.onValueChange = [this] { updateDuration(); };
+    drops.addItemList ({ "1", "2", "3" }, 1);
+    drops.setSelectedId (juce::jlimit (1, 3, initial.drops), juce::dontSendNotification);
+    intro.addItemList ({ "DJ-friendly (32 bars)", "Short (16 bars)" }, 1);
+    intro.setSelectedId (initial.djIntro ? 1 : 2, juce::dontSendNotification);
+    breakdown.addItemList ({ "Long (32 + 16-bar build)", "Short (16 + 8-bar build)" }, 1);
+    breakdown.setSelectedId (initial.longBreakdown ? 1 : 2, juce::dontSendNotification);
+    go.onClick = [this] { if (generate) generate (current()); };
+    for (auto* c : std::initializer_list<juce::Component*> { &bars, &drops, &intro, &breakdown, &go })
+        addAndMakeVisible (c);
+    updateDuration();
+    setSize (420, 230);
+}
+
+arrangement::GenSettings ArrangePanel::current() const
+{
+    arrangement::GenSettings g;
+    g.totalBars = (int) bars.getValue();
+    g.drops = drops.getSelectedId();
+    g.djIntro = intro.getSelectedId() == 1;
+    g.longBreakdown = breakdown.getSelectedId() == 1;
+    return g;
+}
+
+void ArrangePanel::updateDuration()
+{
+    const auto seconds = bars.getValue() * 4.0 * 60.0 / juce::jmax (40.0, bpm);
+    duration.setText (juce::String ((int) seconds / 60) + ":" + juce::String ((int) seconds % 60).paddedLeft ('0', 2)
+                          + " at " + juce::String (juce::roundToInt (bpm)) + " BPM", juce::dontSendNotification);
+}
+
+void ArrangePanel::paint (juce::Graphics& g)
+{
+    g.fillAll (suite::ui::Colours::panel);
+}
+
+void ArrangePanel::resized()
+{
+    auto r = getLocalBounds().reduced (12);
+    auto row = [&r] { auto x = r.removeFromTop (30); r.removeFromTop (6); return x; };
+    auto a = row();
+    barsLabel.setBounds (a.removeFromLeft (130));
+    bars.setBounds (a);
+    duration.setBounds (row().withTrimmedLeft (130).withHeight (18));
+    for (auto [label, box] : { std::pair<juce::Label*, juce::ComboBox*> { &dropsLabel, &drops }, { &introLabel, &intro }, { &breakdownLabel, &breakdown } })
+    {
+        auto x = row();
+        label->setBounds (x.removeFromLeft (130));
+        box->setBounds (x);
+    }
+    go.setBounds (r.removeFromRight (120));
+}
+
+//==============================================================================
 OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     : AudioProcessorEditor (p), processor (p),
       broadcast (p.apvts, OuroborosProcessor::broadcastId, "Broadcast to suite", accent),
@@ -206,7 +280,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         }
     };
 
-    lengthCaption.setText ("Length (bars)", juce::dontSendNotification);
+    lengthCaption.setText ("Bars", juce::dontSendNotification);
     lengthCaption.setFont (juce::FontOptions (12.0f));
     lengthCaption.setJustificationType (juce::Justification::centredRight);
     lengthSlider.setRange (8, 1024, 1);
@@ -276,6 +350,8 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         processor.listening.store (on);
     };
     proposeButton.onClick = [this] { propose(); };
+    arrangeButton.onClick = [this] { showArrange(); };
+    arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
     {
         if (timeline.preview.has_value()) processor.setMap (*timeline.preview);
@@ -286,7 +362,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     discardButton.onClick = [this] { timeline.preview.reset(); };
     listenStatus.setFont (juce::FontOptions (12.0f));
     listenStatus.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &listenButton, &proposeButton, &applyButton, &discardButton, &listenStatus })
+    for (auto* c : std::initializer_list<juce::Component*> { &listenButton, &proposeButton, &applyButton, &discardButton, &listenStatus, &arrangeButton })
         addAndMakeVisible (c);
 
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
@@ -318,6 +394,23 @@ void OuroborosEditor::refreshSelection()
     for (int t = 0; t < numTypes; ++t)
         typeButtons[(size_t) t]->setToggleState ((int) s.type == t, juce::dontSendNotification);
     deleteButton.setEnabled (m.count > 1);
+}
+
+void OuroborosEditor::showArrange()
+{
+    {
+        const auto m = processor.getMap();
+        if (m.totalBars >= 32) lastArrange.totalBars = m.totalBars;
+    }
+    juce::Component::SafePointer<OuroborosEditor> safe (this);
+    auto panel = std::make_unique<ArrangePanel> (lastArrange, processor.bpm.load(), [safe] (arrangement::GenSettings g)
+    {
+        if (safe == nullptr) return;
+        safe->lastArrange = g;
+        safe->timeline.preview = arrangement::generate (g);
+        safe->timeline.repaint();
+    });
+    juce::CallOutBox::launchAsynchronously (std::move (panel), arrangeButton.getScreenBounds(), nullptr);
 }
 
 void OuroborosEditor::propose()
@@ -403,11 +496,12 @@ void OuroborosEditor::resized()
     songArea = bounds.removeFromTop (210);
     auto s = songArea.reduced (12, 6).withTrimmedTop (16);
     auto bar = s.removeFromTop (30);
-    templateBox.setBounds (bar.removeFromLeft (260).reduced (0, 2));
-    lengthSlider.setBounds (bar.removeFromRight (130).reduced (0, 2));
-    lengthCaption.setBounds (bar.removeFromRight (130));
+    templateBox.setBounds (bar.removeFromLeft (210).reduced (0, 2));
+    arrangeButton.setBounds (bar.removeFromLeft (100).reduced (4, 2));
+    lengthSlider.setBounds (bar.removeFromRight (120).reduced (0, 2));
+    lengthCaption.setBounds (bar.removeFromRight (50));
     bar.removeFromLeft (12);
-    listenButton.setBounds (bar.removeFromLeft (90).reduced (0, 2));
+    listenButton.setBounds (bar.removeFromLeft (80).reduced (0, 2));
     proposeButton.setBounds (bar.removeFromLeft (110).reduced (4, 2));
     auto actions = bar.removeFromRight (170);
     applyButton.setBounds (actions.removeFromLeft (80).reduced (2));

@@ -7,6 +7,8 @@
 #include "SectionBus.h"
 #include <juce_core/juce_core.h>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 namespace arrangement
 {
@@ -124,5 +126,101 @@ namespace arrangement
         for (int i = 0; i < m.count; ++i)
             parts.add (juce::String (m.sections[(size_t) i].startBar) + ":" + suite::sectionName (m.sections[(size_t) i].type));
         return parts.joinIntoString (" ") + " /" + juce::String (m.totalBars);
+    }
+
+    //==============================================================================
+    // Arrange: build a map from a few choices, on 8-bar phrases.
+
+    struct GenSettings
+    {
+        int totalBars = 208;        // rounded to 8-bar phrases
+        int drops = 2;              // 1..3
+        bool djIntro = true;        // 32-bar intro and outro (else 16)
+        bool longBreakdown = true;  // 32-bar first breakdown + 16-bar build (else 16 + 8)
+    };
+
+    inline SectionMap generate (GenSettings g)
+    {
+        using T = SectionType;
+        constexpr int phrase = 8;
+        g.drops = juce::jlimit (1, 3, g.drops);
+        const auto target = juce::jlimit (1, 128, (int) std::round (g.totalBars / (double) phrase));
+
+        struct Part { T type; int len, floor; int growRank; int shrinkRank; };   // lengths in phrases; lower rank = changed first
+        std::vector<Part> parts;
+        const auto edge = g.djIntro ? 4 : 2;
+        const auto bd = g.longBreakdown ? 4 : 2, build = g.longBreakdown ? 2 : 1;
+        parts.push_back ({ T::Intro, edge, 1, 4, 2 });
+        parts.push_back ({ T::Groove, 4, 1, 1, 0 });
+        for (int d = 0; d < g.drops; ++d)
+        {
+            parts.push_back ({ T::Breakdown, d == 0 ? bd : std::max (1, bd / 2), 1, d == 0 ? 2 : 6, d == 0 ? 3 : 1 });
+            parts.push_back ({ T::Build, build, 1, 5, 5 });
+            parts.push_back ({ T::Drop, 4, 1, d == g.drops - 1 ? 0 : 3, 4 });
+        }
+        parts.push_back ({ T::Outro, edge, 1, 4, 2 });
+
+        auto sum = [&] { int n = 0; for (auto& p : parts) n += p.len; return n; };
+
+        // Too long: shrink groove, later breakdowns, intro/outro, first breakdown, drops, builds (in that
+        // order), one phrase at a time. Pass 1 keeps drops at 32 bars and the rest at 16; pass 2 allows
+        // 16-bar drops and 8-bar sections; pass 3 lets drops go down to 8 bars.
+        for (int pass = 0; pass < 3; ++pass)
+            for (int rank = 0; rank <= 5 && sum() > target; ++rank)
+            {
+                bool changed = true;
+                while (sum() > target && changed)
+                {
+                    changed = false;
+                    for (auto it = parts.rbegin(); it != parts.rend() && sum() > target; ++it)   // later parts first
+                    {
+                        const auto floor = it->type == T::Drop ? (pass == 0 ? 4 : pass == 1 ? 2 : 1) : (pass == 0 ? 2 : 1);
+                        if (it->shrinkRank == rank && it->len > floor) { --it->len; changed = true; }
+                    }
+                }
+            }
+        // Still too long for this many sections: drop a breakdown/build/drop group (never the last drop).
+        while (sum() > target && g.drops > 1)
+        {
+            --g.drops;
+            parts.erase (parts.begin() + 2, parts.begin() + 5);
+        }
+        while (sum() > target && parts.size() > 1)
+        {
+            // Tiny songs: lose the outro, then the intro, then the groove.
+            auto it = std::find_if (parts.begin(), parts.end(), [] (const Part& p) { return p.type == T::Outro; });
+            if (it == parts.end()) it = std::find_if (parts.begin(), parts.end(), [] (const Part& p) { return p.type == T::Intro || p.type == T::Groove; });
+            if (it == parts.end()) break;
+            parts.erase (it);
+        }
+
+        // Too short: grow by phrase, round-robin over the growable parts in rank order.
+        while (sum() < target)
+        {
+            bool grew = false;
+            for (int rank = 0; rank <= 9 && sum() < target; ++rank)
+                for (auto& p : parts)
+                {
+                    const auto cap = p.type == T::Drop || p.type == T::Groove ? 8 : p.type == T::Build ? 4 : 6;
+                    if (p.growRank == rank && sum() < target && p.len < cap) { ++p.len; grew = true; }
+                }
+            if (! grew)   // everything at its longest: the last drop takes the rest
+            {
+                for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+                    if (it->type == T::Drop) { it->len += target - sum(); break; }
+                break;
+            }
+        }
+
+        SectionMap m;
+        int bar = 1;
+        for (const auto& p : parts)
+        {
+            if (m.count >= SectionMap::maxSections) break;
+            m.sections[(size_t) m.count++] = { bar, p.type };
+            bar += p.len * phrase;
+        }
+        m.totalBars = bar - 1;
+        return m;
     }
 }
