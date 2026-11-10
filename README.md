@@ -222,6 +222,13 @@ track (or its loudest section) and read the numbers:
 
 **Reset** starts a new measurement, for example after changing the mix.
 
+**Export checklist** (Suggestions panel) is the last look before rendering: the song has
+been measured, loudness is within 1 LU of the target, true peak is under the ceiling, no
+samples clipped, the low end holds up in mono, the mix survives a mono sum, no section is
+silent by mistake, and the coach is happy with the energy arc. Each item shows pass,
+warning or fail, with *Ready to export* when everything passes. Press Reset and play the
+whole song through first.
+
 **Arrangement coach.** With Ouroboros running, Mentalism also measures loudness section
 by section, and the two halves of each build. The **Arrangement** tab charts it and checks
 the arc:
@@ -245,7 +252,9 @@ to take a small step on their own knobs, so you can see what changed:
 | Later drop weaker | Prima Materia: Drop 2+ column on, 1.5 dB above the drop; Azoth: *Bigger later drops* +25% |
 
 The line above the chart says how many plugins applied it. **Undo last fix** puts their
-knobs back. The fixed sections are measured again the next time they play, so click Fix
+knobs back, and **History** (in the header) lists every fix and rough mix so far with an
+Undo for each. Undoing an older fix only puts back parameters that nothing has changed
+since, so a later fix or your own tweak is never overwritten. The fixed sections are measured again the next time they play, so click Fix
 again if the coach still isn't happy.
 
 ![Mentalism arrangement](docs/mentalism_arrangement.png)
@@ -285,6 +294,20 @@ plugin in the project, change things, choose B and save again, then click A and 
 compare whole versions of the song (mix, scenes, map and all). Each plugin keeps its own
 copies inside its own saved state, so snapshots travel with the FL project. Right-click a
 slot to clear it.
+
+**Final drop snapshot.** Pick a slot under *Final drop snapshot* and the whole suite morphs
+into it for the last drop: every plugin's knobs glide from your settings to the
+snapshot's across the build before it, and stay there to the end (switches and choices
+change at the drop). Move the playhead back before the build and your own settings
+return. So: set up the song, save the bigger final-drop version into B, go back to A, and
+choose B here. While a morph is under way the plugins drive their own knobs, so tweak
+them with the playhead before that build; a project saved mid-morph still reloads with
+your settings.
+
+**Copy a reference's structure.** *Reference…* asks for the reference track's tempo (the
+project's or a preset) and an audio file. Ouroboros measures it bar by bar in the
+background, finds the bar grid from the first kick, and proposes its sections as a preview
+to Apply or Discard, just like Listen.
 
 **Suite overview.** The **Suite** button lists every suite plugin that's loaded and on
 which track, and checks the setup. It flags a Kybalion set to sidechain with nothing
@@ -686,6 +709,16 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Build risers:** silent before the build, rising through it, starting on the song's
   root, sweeping away from it, and stopping at the drop; the track riser pitches the
   track's own audio up an octave.
+- **Final drop snapshot:** the morph amount is 0 in the first drop and breakdown, 0.5
+  half-way through the build into the last drop and 1 from that drop to the end; a plugin
+  reaches half-way, then exactly the snapshot, switches wait for the drop, the user's
+  values come back, and a project saved mid-morph reloads with them.
+- **Reference structure:** a synthetic 104-bar song written to a file with 0.37 s of
+  leading silence gives exactly the same map as Listen hearing it play.
+- **Fix history:** two fixes undone in either order; an older fix doesn't overwrite a
+  parameter changed since; each fix can only be undone once.
+- **Export checklist:** a finished master passes; over the ceiling, clipped, wide bass and
+  too quiet all fail; a silent breakdown is named; nothing measured means not ready.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
@@ -715,6 +748,7 @@ shared/                  code used by every plugin
   SuiteProcessor.h       base class of every plugin: snapshots, registry, track name
   Registry.*             which suite plugins are loaded, on which track, with status
   KickBus.h/.cpp         the shared kick pattern (KickLearner) for Suite kick ducking
+  MorphBus.*             Ouroboros' final-drop snapshot morph amount
   Scenes.h, SceneUI.h    section scenes engine, ghost rings and scene editor panel
   Analysis.h             BS.1770 loudness, true peak, stereo and band meters
   Music.h                scales, note names, tempo divisions
@@ -726,7 +760,7 @@ plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
 plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
-plugins/Mentalism/       Advisor.h (suggestions), Coach.h (arrangement arc), tests
+plugins/Mentalism/       Advisor.h (suggestions), Coach.h (arrangement arc), Checklist.h (pre-export), tests
 plugins/Ouroboros/       Arrangement.h (editing, Arrange), Listen.h (section detection), SuiteCheck.h, timeline editor, tests
 plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop, tests
 plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
