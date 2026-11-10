@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "TestUtils.h"
 #include "Registry.h"
+#include "KickBus.h"
 #include "FixBus.h"
 
 using namespace suite::test;
@@ -261,6 +262,71 @@ int main (int argc, char** argv)
         check (rmsBetween (bar, 2.1, 3.9) < 0.01f * rmsBetween (bar, 4.2, 5.0), "per track: a 1-bar gap");
         const auto none = run (roleIndex ("Pads"), 0);
         check (rmsBetween (none, 3.55, 3.95) > 0.1f, "'Per track' with no gap: plays through");
+    }
+
+    section ("Expression: drop entrances, breath, call and response, pump, gain staging");
+    {
+        // 120 BPM (2 s bars, 0.5 s beats).
+        auto run = [] (int role, std::vector<std::pair<int, T>> sections, int totalBars, int entrance, std::function<void (PrimaMateriaProcessor&)> setup,
+                       float hz = 440.0f, double seconds = 8.0)
+        {
+            suite::SectionMap m;
+            m.totalBars = totalBars; m.dropEntrance = entrance;
+            for (auto& [bar, type] : sections) m.sections[(size_t) m.count++] = { bar, type };
+            auto p = make (role);
+            set (*p, pm::morphId, 0.0f);
+            if (setup) setup (*p);
+            suite::SectionBus::publish (m);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> a;
+            render (*p, seconds, tone (hz), &a, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return a;
+        };
+        const std::vector<std::pair<int, T>> grooveDrop { { 1, T::Groove }, { 3, T::Drop } };
+        const auto kick = run (roleIndex ("Kick"), grooveDrop, 4, 1, {}), bass = run (roleIndex ("Bass"), grooveDrop, 4, 1, {}),
+                   lead = run (roleIndex ("Lead"), grooveDrop, 4, 1, {});
+        check (rmsBetween (kick, 4.05, 4.45) > 0.1f, "staggered drop: the kick comes in on beat 1");
+        check (rmsBetween (bass, 4.05, 4.45) < 0.01f && rmsBetween (bass, 4.55, 4.95) > 0.1f, "... the bass on beat 2");
+        check (rmsBetween (lead, 4.55, 4.95) < 0.01f && rmsBetween (lead, 5.05, 5.45) > 0.1f, "... and the rest on beat 3");
+        const auto open = run (roleIndex ("Lead"), grooveDrop, 4, 2, {}, 6000.0f);
+        check (rmsBetween (open, 4.02, 4.3) < 0.3f * rmsBetween (open, 6.0, 7.0), "filter opening: the drop starts dark and opens over the bar");
+
+        const std::vector<std::pair<int, T>> longBreakdown { { 1, T::Breakdown } };
+        const auto breath = run (0, longBreakdown, 8, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::breathId, 1.0f); }, 440.0f, 14.0);
+        const auto swell = juce::Decibels::gainToDecibels (rmsBetween (breath, 3.6, 4.4) / rmsBetween (breath, 11.6, 12.4));
+        check (swell > 2.5f && swell < 3.5f, "breath: an 8-bar swell, 3 dB from peak to trough (" + juce::String (swell, 2) + " dB)");
+
+        const auto call = run (0, longBreakdown, 8, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::answerId, (float) pm::answerCall); });
+        const auto response = run (0, longBreakdown, 8, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::answerId, (float) pm::answerResponse); });
+        const auto callTurn = juce::Decibels::gainToDecibels (rmsBetween (call, 1.0, 3.5) / rmsBetween (call, 5.0, 7.5));
+        const auto responseTurn = juce::Decibels::gainToDecibels (rmsBetween (response, 5.0, 7.5) / rmsBetween (response, 1.0, 3.5));
+        check (std::abs (callTurn - 5.0f) < 0.3f && std::abs (responseTurn - 5.0f) < 0.3f, "call and response: they take turns every 2 bars (5 dB)");
+
+        suite::KickPatternSet kp;
+        kp.valid = true;
+        auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
+        any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
+        suite::KickBus::publish (kp);
+        const auto pumped = run (0, grooveDrop, 4, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::pumpId, 1.0f); });
+        suite::KickBus::withdraw();
+        const auto duck = juce::Decibels::gainToDecibels (rmsBetween (pumped, 5.01, 5.06) / rmsBetween (pumped, 5.4, 5.48));
+        check (duck < -5.0f, "pump: ducks right after each shared kick (" + juce::String (duck, 1) + " dB)");
+
+        suite::FixBus::reset();
+        auto staged = make (0);
+        set (*staged, pm::followId, 0.0f);
+        FakePlayHead head;
+        staged->setPlayHead (&head);
+        render (*staged, 1.0, tone (440.0f), nullptr, &head);   // 0.5 amplitude sine: -9 dBFS RMS
+        staged->setPlayHead (nullptr);
+        check (std::abs (staged->inputLevelDb() + 9.03f) < 0.2f, "gain staging measures the input (" + juce::String (staged->inputLevelDb(), 1) + " dBFS RMS)");
+        suite::FixBus::send (suite::Fix::GainStage);
+        staged->fixes->poll();
+        check (std::abs (staged->apvts.getRawParameterValue (pm::inputGainId)->load() + 8.97f) < 0.2f, "and sets Input gain to bring it to -18 dBFS");
     }
 
     section ("Energy curve");

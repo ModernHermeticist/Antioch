@@ -516,6 +516,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       dropGap (p.apvts, OuroborosProcessor::dropGapId, "Before every drop"),
       intensity (p.apvts, OuroborosProcessor::intensityId, "Intensity", Colours::brass),
       live (p.apvts, OuroborosProcessor::liveId, "LIVE MODE", accent),
+      entrance (p.apvts, OuroborosProcessor::entranceId, "Drop entrance"),
       timeline (p)
 {
     setLookAndFeel (&lnf);
@@ -559,7 +560,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     liveHelp.setColour (juce::Label::textColourId, Colours::dimText);
     liveHelp.setText ("Live: send MIDI to Ouroboros and play the sections: C intro, D groove, E breakdown, F build, G drop, "
                       "A outro. Each starts on the next bar and the whole suite follows.", juce::dontSendNotification);
-    for (auto* c : std::initializer_list<juce::Component*> { &intensity, &live, &liveHelp })
+    for (auto* c : std::initializer_list<juce::Component*> { &intensity, &entrance, &live, &liveHelp })
         addAndMakeVisible (c);
 
     lengthCaption.setText ("Bars", juce::dontSendNotification);
@@ -979,6 +980,7 @@ void OuroborosEditor::resized()
         intensity.setBounds (pa.removeFromLeft (180));
         intensity.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
         intensity.maxHeight = 52;
+        entrance.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
         live.setBounds (pa.removeFromLeft (150).withSizeKeepingCentre (140, 30));
         liveHelp.setBounds (pa.reduced (10, 0));
     }

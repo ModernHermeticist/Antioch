@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "FixBus.h"
 
 using namespace suite::ui;
 
@@ -41,12 +42,31 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     trim->slider.setTooltip ("Track level after everything else. Mentalism's Rough mix sets it for the track's role.");
     addAndMakeVisible (*trim);
 
+    breath = std::make_unique<Knob> (p.apvts, pm::breathId, "Breath", accent);
+    pump = std::make_unique<Knob> (p.apvts, pm::pumpId, "Pump", Colours::ember);
+    inputGain = std::make_unique<Knob> (p.apvts, pm::inputGainId, "Input gain", Colours::text);
+    answer = std::make_unique<Choice> (p.apvts, pm::answerId, "Call / response");
+    for (auto* k : { breath.get(), pump.get(), inputGain.get() })
+    {
+        k->maxHeight = 46;
+        addAndMakeVisible (*k);
+    }
+    addAndMakeVisible (*answer);
+    breath->slider.setTooltip ("A slow 8-bar swell in breakdowns and drops, so long chords feel alive");
+    pump->slider.setTooltip ("Ducks this track to the kick pattern a Kybalion shares (Share kick), no routing needed");
+    gainStageButton.setTooltip ("Sets every Prima Materia's Input gain so each track arrives at -18 dBFS RMS (play the song first); undo in Mentalism's History");
+    gainStageButton.onClick = [] { suite::FixBus::send (suite::Fix::GainStage); };
+    addAndMakeVisible (gainStageButton);
+    inputLabel.setFont (juce::FontOptions (12.0f));
+    inputLabel.setColour (juce::Label::textColourId, Colours::dimText);
+    addAndMakeVisible (inputLabel);
+
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     lowManager.setTooltip ("Where a kick or bass track is playing, this track leaves the low end to them (an automatic low cut for its role)");
     for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &status })
         addAndMakeVisible (c);
 
-    setSize (1120, 600);
+    setSize (1120, 670);
     timerCallback();
     startTimerHz (15);
 }
@@ -92,6 +112,9 @@ void PrimaMateriaEditor::timerCallback()
     if (lufs > -70.0f)
         text << "   |   Drop loudness " << juce::String (lufs, 1) << " LUFS";
     status.setText (text, juce::dontSendNotification);
+
+    const auto in = processor.inputLevelDb();
+    inputLabel.setText (in > -80.0f ? "Input " + juce::String (in, 1) + " dBFS RMS" : juce::String ("Input: play to measure"), juce::dontSendNotification);
 
     // The role (also set automatically from the track's name).
     const auto role = processor.getRole();
@@ -144,6 +167,18 @@ void PrimaMateriaEditor::resized()
     gap.setBounds (controls.removeFromLeft (150));
 
 
+    {
+        auto row = bounds.removeFromTop (62);
+        breath->setBounds (row.removeFromLeft (150));
+        pump->setBounds (row.removeFromLeft (150));
+        answer->setBounds (row.removeFromLeft (180));
+        row.removeFromLeft (20);
+        inputGain->setBounds (row.removeFromLeft (150));
+        inputLabel.setBounds (row.removeFromLeft (180));
+        gainStageButton.setBounds (row.removeFromLeft (190).withSizeKeepingCentre (180, 30));
+        for (auto* k : { breath.get(), pump.get(), inputGain.get() })
+            k->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
+    }
     status.setBounds (bounds.removeFromBottom (30));
     bounds.removeFromBottom (6);
     gridArea = bounds;

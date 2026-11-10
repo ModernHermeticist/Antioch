@@ -45,6 +45,7 @@ namespace suite
         int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
         int dropGap = 0;                       // before every drop: 0 = per track, 1 = 1/2 beat silence, 2 = 1 beat, 3 = kick-only bar
         int intensity = 100;                   // Ouroboros' intensity: scales every plugin's section moves (percent, 0..200)
+        int dropEntrance = 0;                  // how drops arrive: 0 = slam, 1 = staggered (kick, bass, then the rest), 2 = filter opening
         // Live mode (Ouroboros played from MIDI): the section is whatever was played last, from the bar it started on.
         int liveType = -1, livePrevType = -1, liveIndex = 0;
         double liveStartQ = 0.0;
@@ -75,7 +76,7 @@ namespace suite
 
         bool operator== (const SectionMap& o) const noexcept
         {
-            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap || intensity != o.intensity
+            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap || intensity != o.intensity || dropEntrance != o.dropEntrance
                 || liveType != o.liveType || livePrevType != o.livePrevType || liveIndex != o.liveIndex || std::abs (liveStartQ - o.liveStartQ) > 1.0e-9)
                 return false;
             for (int i = 0; i < count; ++i)

@@ -87,7 +87,7 @@ public:
     suite::SectionFollower morphFollower;
 
     static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" }, dropGapId { "dropgap" },
-                                     intensityId { "intensity" }, liveId { "live" };
+                                     intensityId { "intensity" }, liveId { "live" }, entranceId { "entrance" };
 
     /** Live mode: the note that plays each section type (C Intro, D Groove, E Breakdown, F Build, G Drop, A Outro). */
     static int liveTypeForNote (int note)

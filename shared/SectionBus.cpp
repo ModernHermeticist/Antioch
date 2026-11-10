@@ -20,7 +20,7 @@ namespace suite::SectionBus
             std::atomic<uint32_t> totalBars;
             std::atomic<int32_t> finalLift;
             std::atomic<int32_t> dropGap;
-            std::atomic<int32_t> intensity, liveType, livePrevType, liveIndex;
+            std::atomic<int32_t> intensity, liveType, livePrevType, liveIndex, dropEntrance;
             std::atomic<int64_t> liveStartMicroQ;   // live section start, in millionths of a quarter
             std::array<std::atomic<uint32_t>, SectionMap::maxSections> entries; // startBar << 8 | type
         };
@@ -36,7 +36,7 @@ namespace suite::SectionBus
             static Shared local {};
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v5", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v6", sizeof (Shared)));
                 return m != nullptr ? m : &local;
             }();
             return *s;
@@ -63,6 +63,7 @@ namespace suite::SectionBus
         s.finalLift.store (map.finalLift, std::memory_order_relaxed);
         s.dropGap.store (map.dropGap, std::memory_order_relaxed);
         s.intensity.store (map.intensity, std::memory_order_relaxed);
+        s.dropEntrance.store (map.dropEntrance, std::memory_order_relaxed);
         s.liveType.store (map.liveType, std::memory_order_relaxed);
         s.livePrevType.store (map.livePrevType, std::memory_order_relaxed);
         s.liveIndex.store (map.liveIndex, std::memory_order_relaxed);
@@ -97,6 +98,7 @@ namespace suite::SectionBus
             m.finalLift = s.finalLift.load (std::memory_order_relaxed);
             m.dropGap = s.dropGap.load (std::memory_order_relaxed);
             m.intensity = s.intensity.load (std::memory_order_relaxed);
+            m.dropEntrance = s.dropEntrance.load (std::memory_order_relaxed);
             m.liveType = s.liveType.load (std::memory_order_relaxed);
             m.livePrevType = s.livePrevType.load (std::memory_order_relaxed);
             m.liveIndex = s.liveIndex.load (std::memory_order_relaxed);

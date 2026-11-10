@@ -17,6 +17,8 @@ namespace
                                                             juce::NormalisableRange<float> (0.0f, 200.0f), 100.0f,
                                                             juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + "%"; })));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::liveId, 1 }, "Live Mode", false));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::entranceId, 1 }, "Drop Entrance",
+                                                             juce::StringArray { "Slam", "Staggered", "Filter opening" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::dropGapId, 1 }, "Before Drops",
                                                              juce::StringArray { "Per track", "1/2 beat silence", "1 beat silence", "Kick-only bar" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::finalSnapId, 1 }, "Final Drop Snapshot",
@@ -245,7 +247,7 @@ std::optional<suite::SectionMap> OuroborosProcessor::takeReferenceProposal()
 void OuroborosProcessor::logActivity()
 {
     static const char* fixNames[] = { "", "breakdowns quieter", "breakdowns louder", "more rise in the build", "intro quieter",
-                                      "bigger later drops", "rough mix", "DJ-friendly intro/outro", "tone matched to the reference", "masking carve" };
+                                      "bigger later drops", "rough mix", "DJ-friendly intro/outro", "tone matched to the reference", "masking carve", "gain staging" };
     for (auto seq = seenFix + 1; seq <= suite::FixBus::latest() && seq != 0; ++seq)
     {
         suite::FixBus::Message m;
@@ -297,6 +299,7 @@ void OuroborosProcessor::publish()
         m.finalLift = (int) apvts.getRawParameterValue (liftId)->load();   // the whole suite follows the key change
         m.dropGap = (int) apvts.getRawParameterValue (dropGapId)->load();   // Prima Materia on every track mutes before drops
         m.intensity = juce::roundToInt (apvts.getRawParameterValue (intensityId)->load());
+        m.dropEntrance = (int) apvts.getRawParameterValue (entranceId)->load();
         if (liveType.load() >= 0)
         {
             m.liveType = liveType.load();

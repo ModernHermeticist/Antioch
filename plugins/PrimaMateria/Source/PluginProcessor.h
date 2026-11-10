@@ -8,6 +8,7 @@
 #include "HostInfo.h"
 #include "Analysis.h"
 #include "Registry.h"
+#include "KickBus.h"
 #include <optional>
 
 class PrimaMateriaProcessor : public suite::SuiteProcessor
@@ -58,6 +59,20 @@ public:
     uint32_t soundingMask() const;
     void refreshLowOwners();
 
+    /** Gain staging: this track's input level (RMS dBFS while playing, before Input Gain), and the
+        input gain that puts it at -18 dBFS. */
+    float inputLevelDb() const
+    {
+        const auto n = inputCount.load();
+        return n > 0 ? juce::Decibels::gainToDecibels ((float) std::sqrt (inputPower.load() / (double) n), -100.0f) : -100.0f;
+    }
+    std::optional<float> gainStageTarget() const
+    {
+        const auto level = inputLevelDb();
+        if (level <= -80.0f) return std::nullopt;
+        return juce::jlimit (-24.0f, 24.0f, -18.0f - level);
+    }
+
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
@@ -71,7 +86,10 @@ private:
 
     suite::SectionFollower sections;
     analysis::LoudnessMeter loudness;
-    analysis::BandAnalyzer spectrum;   // the track's spectrum in the drops, for the masking map
+    analysis::BandAnalyzer spectrum;
+    std::atomic<double> inputPower { 0.0 };
+    std::atomic<int64_t> inputCount { 0 };
+    float pumpGain = 1.0f;   // the track's spectrum in the drops, for the masking map
     std::array<suite::Biquad, 2> carve;
     int carveBandNow = -1; float carveDepthNow = 0.0f;
     juce::SmoothedValue<float> trimGain;

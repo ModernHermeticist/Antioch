@@ -22,7 +22,10 @@ private:
     suite::ui::Choice morph, gap;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;
-    std::unique_ptr<suite::ui::Knob> trim;
+    std::unique_ptr<suite::ui::Knob> trim, breath, pump, inputGain;
+    std::unique_ptr<suite::ui::Choice> answer;
+    juce::TextButton gainStageButton { "Gain-stage all tracks" };
+    juce::Label inputLabel;
     juce::Rectangle<int> gridArea;
     std::array<juce::Rectangle<int>, pm::numColumns> columns;
     int shownType = -2;

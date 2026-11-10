@@ -130,6 +130,7 @@ private:
     std::unique_ptr<juce::AlertWindow> nameWindow;
     suite::ui::Knob intensity;
     suite::ui::Toggle live;
+    suite::ui::Choice entrance;
     juce::Label liveHelp;
     juce::Rectangle<int> performArea;
     juce::Slider lengthSlider { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };

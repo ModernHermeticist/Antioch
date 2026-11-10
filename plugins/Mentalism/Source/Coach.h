@@ -141,6 +141,7 @@ namespace coach
             case suite::Fix::DjIntroOutro:     return "Prima Materia: pads, leads and vocals out of the intro and outro";
             case suite::Fix::ReferenceTone:    return "Lapis: low and high tone moved towards the reference";
             case suite::Fix::Carve:            return "Prima Materia: a dip carved in the less important track";
+            case suite::Fix::GainStage:        return "Prima Materia: every track's input set to -18 dBFS RMS";
             case suite::Fix::None:
             default:                           return {};
         }

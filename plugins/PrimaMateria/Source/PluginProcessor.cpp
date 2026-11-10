@@ -51,6 +51,11 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                     if (! muted (level ((int) t))) changes.push_back ({ pm::levelId ((int) t), pm::offDb });
                 return changes;
             }
+            case suite::Fix::GainStage:
+            {
+                if (const auto g = gainStageTarget()) return { { pm::inputGainId, *g } };
+                return {};
+            }
             case suite::Fix::Carve:
             {
                 if ((data & 0xfffu) != (getInstanceId() & 0xfffu)) return {};   // meant for another track
@@ -145,6 +150,16 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     int typeNow = -1;
     bool rampNow = false, gapNow = false, laterNow = false;
     const auto isKick = getRole() == 1;   // a kick-only bar before drops spares the kick
+    const auto role = getRole();
+    const auto breath = apvts.getRawParameterValue (pm::breathId)->load();
+    const auto answer = (int) apvts.getRawParameterValue (pm::answerId)->load();
+    const auto pump = apvts.getRawParameterValue (pm::pumpId)->load();
+    const auto inputGain = juce::Decibels::decibelsToGain (apvts.getRawParameterValue (pm::inputGainId)->load());
+    const auto entrance = sections.getMap().dropEntrance;
+    const auto kickPattern = pump > 0.0f ? suite::KickBus::read() : suite::KickPatternSet {};
+    const auto msPerQ = 60000.0 / host.bpm;
+    const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.001f * 3.0f * sr));   // 3 ms smoothing
+    double blockPower = 0.0;
     const auto managerCut = apvts.getRawParameterValue (pm::lowManagerId)->load() > 0.5f ? pm::lowEndCut (getRole()) : 0.0f;
     const auto owners = lowOwners.load();
     float cutNow = 0.0f;
@@ -155,6 +170,16 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         bool inGap = false, laterThis = false;
         int typeThis = -1;
         float energyDb = 0.0f;
+        double posHere = host.ppq + qPerSample * n;
+
+        // Gain staging: measure, then apply Input Gain before everything else.
+        if (host.playing)
+        {
+            const auto l0 = left[n], r0 = right != nullptr ? right[n] : left[n];
+            blockPower += 0.5 * ((double) l0 * l0 + (double) r0 * r0);
+        }
+        left[n] *= inputGain;
+        if (right != nullptr) right[n] *= inputGain;
 
         if (follow)
         {
@@ -186,6 +211,29 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 const auto thisGap = juce::jmax (trackGap, suiteGap);
                 inGap = thisGap > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - thisGap && sec.endQ - sec.startQ > thisGap;
                 gapNow = gapNow || inGap;
+
+                // Expression ------------------------------------------------------------
+                const auto intoQ = pos - sec.startQ;
+                // Drop entrance: staggered (kick, bass a beat later, the rest after two) or filter opening.
+                if (sec.type == T::Drop && intoQ >= 0.0 && intoQ < barQ)
+                {
+                    if (entrance == 1)
+                    {
+                        const auto waitQ = role == 1 ? 0.0 : role == 2 ? 1.0 : 2.0;
+                        if (intoQ < waitQ) { inGap = true; gapNow = true; }
+                    }
+                    else if (entrance == 2 && role != 1 && role != 2)
+                        target.highCut = std::min (target.highCut, 400.0f * std::pow (50.0f, (float) (intoQ / barQ)));
+                }
+                // Breath: a slow 8-bar swell in breakdowns and drops.
+                if (breath > 0.0f && (sec.type == T::Breakdown || sec.type == T::Drop) && target.levelDb > pm::offDb + 0.5f)
+                    target.levelDb += 1.5f * breath * (float) std::sin (juce::MathConstants<double>::twoPi * intoQ / (8.0 * barQ));
+                // Call and response: in breakdowns, the call leads bars 1-2 of every 4, the response bars 3-4.
+                if (answer != pm::answerOff && sec.type == T::Breakdown && target.levelDb > pm::offDb + 0.5f)
+                {
+                    const auto secondHalf = ((int64_t) std::floor (intoQ / (2.0 * barQ))) % 2 == 1;
+                    if ((answer == pm::answerCall) == secondHalf) target.levelDb -= 5.0f;
+                }
             }
         }
 
@@ -226,7 +274,18 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             const auto lp = highCut[c].lowpass (useLow ? hp : x);
             return (useHigh ? lp : (useLow ? hp : x)) * gain;
         };
-        const auto t = trimGain.getNextValue();
+        // Pump: duck to the suite's shared kick pattern (no routing).
+        float pumpTarget = 1.0f;
+        if (pump > 0.0f && kickPattern.valid && host.playing)
+        {
+            auto phase = std::fmod (posHere, barQ);
+            if (phase < 0.0) phase += barQ;
+            const auto ms = kickPattern.msSinceHit (typeThis, phase, barQ, msPerQ);
+            if (ms < 1.0e8f) pumpTarget = 1.0f - pump * 0.6f * std::exp (-ms / 110.0f);
+        }
+        pumpGain += (pumpTarget < pumpGain ? 0.5f : pumpRelease) * (pumpTarget - pumpGain);
+
+        const auto t = trimGain.getNextValue() * pumpGain;
         left[n] = processChannel (left[n], 0) * t;
         if (right != nullptr) right[n] = processChannel (right[n], 1) * t;
         if (carving)
@@ -248,6 +307,11 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     gapping.store (gapNow);
     nowLevelDb.store (levelDb);
     nowLowCut.store (std::exp2 (lowLog));
+    if (blockPower > 0.0)
+    {
+        inputPower.store (inputPower.load() + blockPower);
+        inputCount.fetch_add (buffer.getNumSamples());
+    }
     managerCutNow.store (cutNow);
     nowHighCut.store (std::exp2 (highLog));
 }

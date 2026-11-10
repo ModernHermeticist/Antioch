@@ -550,6 +550,22 @@ does this while no role has been chosen, so renaming a track later never overrid
 choice. This needs FL to pass the mixer track's name to the plugin. If it doesn't, the
 Suite overview shows "(track name unknown)" and you pick roles by hand.
 
+**Expression** (second row):
+- **Breath:** a slow 8-bar swell (up to 3 dB peak to trough) in breakdowns and drops, so
+  long chords feel alive.
+- **Call / response:** set one track to Call and another to Response; in breakdowns they
+  take turns leading every 2 bars (the other sits 5 dB back), like two instruments
+  talking.
+- **Pump:** ducks this track to the kick pattern a Kybalion shares (Share kick), up to
+  about 8 dB, recovering over ~110 ms, with no routing and no Kybalion on the track.
+- **Input gain** and **Gain-stage all tracks:** every Prima Materia measures what arrives
+  at its input; the button sets each one's Input gain so every track hits -18 dBFS RMS
+  before processing. Undo it in Mentalism's History.
+
+**Drop entrance** (Ouroboros, Perform row) decides how every drop arrives: **Slam** (all
+at once), **Staggered** (kick on beat 1, bass on beat 2, everything else on beat 3), or
+**Filter opening** (everything but kick and bass opens from dark over the first bar).
+
 **Low-end manager** (on by default). Below about 120 Hz, the kick and bass own the mix.
 Each Prima Materia shares which sections its track plays in, and wherever a Kick or Bass
 track is playing, every other role gets an automatic low cut: pads and FX at 150 Hz, lead
@@ -843,6 +859,10 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   for the next bar line, the followers switch exactly there as a new section, black keys do
   nothing, and switching Live off returns to the map; a template keeps its energy curve;
   a rough mix is noted and the notes are saved; the four collision warnings fire.
+- **Expression:** a staggered drop brings in kick, bass and the rest on beats 1, 2 and 3;
+  filter opening starts the drop dark; breath swells 3 dB over 8 bars; call and response
+  take turns by 5 dB; pump ducks 5+ dB after each shared kick; gain staging measures a
+  -9 dBFS input and sets -9 dB of input gain.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

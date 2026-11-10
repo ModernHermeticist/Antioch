@@ -17,7 +17,9 @@ namespace pm
     inline juce::String lowCutId (int t)  { return "lc_" + juce::String (t); }
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
     inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" },
-                              carveBandId { "carve_band" }, carveDepthId { "carve_depth" };   // masking fix: a dip in one octave band   // role: 0 = not set, k + 1 = roles()[k]
+                              carveBandId { "carve_band" }, carveDepthId { "carve_depth" },   // masking fix: a dip in one octave band
+                              breathId { "breath" }, answerId { "answer" }, pumpId { "pump" }, inputGainId { "input_gain" };
+    enum Answer { answerOff = 0, answerCall, answerResponse };   // role: 0 = not set, k + 1 = roles()[k]
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
 
     inline double morphQuarters (int i) { static const double q[] = { 0.0, 0.25, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
@@ -117,6 +119,12 @@ namespace pm
             l.add (std::make_unique<AudioParameterChoice> (id (roleId), "Track Role", roleNames, 0));
         }
         l.add (std::make_unique<AudioParameterBool> (id (lowManagerId), "Low-End Manager", true));
+        auto percent = Attr().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; });
+        l.add (std::make_unique<AudioParameterFloat> (id (breathId), "Breath", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+        l.add (std::make_unique<AudioParameterChoice> (id (answerId), "Call and Response", StringArray { "Off", "Call", "Response" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (id (pumpId), "Pump (Suite Kick)", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+        l.add (std::make_unique<AudioParameterFloat> (id (inputGainId), "Input Gain", NormalisableRange<float> (-24.0f, 24.0f), 0.0f,
+                                                      Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));
         {
             StringArray bands { "Off" };
             for (auto hz : analysis::bandCentres()) bands.add (hz >= 1000.0f ? String (hz / 1000.0f, hz < 10000.0f ? 0 : 0) + " kHz" : String (roundToInt (hz)) + " Hz");
