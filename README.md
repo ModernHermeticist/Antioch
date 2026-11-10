@@ -225,7 +225,9 @@ track (or its loudest section) and read the numbers:
 **Export checklist** (Suggestions panel) is the last look before rendering: the song has
 been measured, loudness is within 1 LU of the target, true peak is under the ceiling, no
 samples clipped, the low end holds up in mono, the mix survives a mono sum, no section is
-silent by mistake, and the coach is happy with the energy arc. Each item shows pass,
+silent by mistake, the coach is happy with the energy arc, and the intro and outro are
+DJ-friendly (a kick in the intro, no pads, leads or vocals in either; it checks the Prima
+Materia tracks, and its **Fix** button takes the melodic parts out, undoable in History). Each item shows pass,
 warning or fail, with *Ready to export* when everything passes. Press Reset and play the
 whole song through first.
 
@@ -271,6 +273,13 @@ Map out your song once, and the rest of the suite follows it with no automation:
 | Breakdown | Nothing | Stops ducking (no kick) | Throws at its end |
 | Intro, Groove, Drop, Outro | Nothing | Ducks as usual | Throws at its end |
 
+- **New song…** sets up the whole suite for a fresh track in one go. Pick a style
+  (Uplifting anthem, Uplifting radio edit, Tech trance, Progressive / melodic, Emotional /
+  vocal) and a key. Ouroboros builds the style's map (e.g. 240 bars, two drops, key up
+  for the last drop), Correspondence takes the key and a matching progression and
+  broadcasts it, Mentalism sets the loudness target, and Antioch, Kybalion, Vibration and
+  Solve et Coagula turn on their suggested scenes. FL's tempo can't be set from a plugin,
+  so the panel tells you which tempo to set.
 - **Arrange…** builds a map for you: choose the length in bars (it shows the duration at
   the current tempo), 1–3 drops, a DJ-friendly 32-bar or short 16-bar intro and outro,
   and a long or short first breakdown. Every section is a whole number of 8-bar phrases
@@ -528,6 +537,10 @@ change (C to G walks C, B, A, G).
 The progression restarts at every section, and notes never spill into the next one. Song
 clips need Ouroboros to be running; without it the tile says so.
 
+**Humanise** (Rhythm panel, default 30%) gives every exported clip beat accents, lighter
+off-beat accents and small repeatable velocity and timing variation (up to about 5 ms).
+At 0% you get the plain pattern; the preview isn't affected.
+
 **Export all…** writes a new song folder (named with the key, tempo and time) holding every
 clip, plus *"<key> - all parts.mid"*: one MIDI file with the song's chords, bass, arp and
 lead on separate tracks and the sections as markers. Drag it into FL to get the whole song
@@ -744,6 +757,14 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Low-end manager:** with a bass track that plays in drops, a pad's 60 Hz drops 20 dB
   in the drop (16 dB more than its 1 kHz) but not in the breakdown; nothing changes with
   the manager off or no kick/bass loaded; a Bass track reports playing in drops only.
+- **New song:** Uplifting anthem builds a 240-bar map with two drops and the key change,
+  and sends D minor to the suite; Correspondence takes the key and the style's
+  progression, Mentalism the loudness target, Vibration its suggested scenes; a plugin
+  loaded later doesn't replay it.
+- **Humanise:** off-beat bass notes are accented, timing moves by at most about 5 ms,
+  the same clip always humanises the same way, and 0% gives the plain pattern.
+- **DJ check:** a pad in the intro is flagged with a fix; beat-led passes; no kick in the
+  intro is flagged; the fix takes the pads out of the intro and outro and leaves the kick.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
@@ -774,6 +795,7 @@ shared/                  code used by every plugin
   Registry.*             which suite plugins are loaded, on which track, with status
   KickBus.h/.cpp         the shared kick pattern (KickLearner) for Suite kick ducking
   MorphBus.*             Ouroboros' final-drop snapshot morph amount
+  Session.h, SessionBus  New song styles and the message that sets up the suite
   Scenes.h, SceneUI.h    section scenes engine, ghost rings and scene editor panel
   Analysis.h             BS.1770 loudness, true peak, stereo and band meters
   Music.h                scales, note names, tempo divisions
