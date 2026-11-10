@@ -464,7 +464,10 @@ readout shows the values in use.
 
 - **Ramp through builds:** a Build glides from the previous section's settings to its own
   across the build, for example a pad's low cut sweeping up, or a bass fading back in thin.
-- **Gap before drop** mutes the track for the last half or whole beat before each Drop.
+- **Gap before drop** mutes the track for the last half beat, beat or bar before each Drop.
+- **Before every drop** in Ouroboros does it for every track at once: half a beat or a
+  beat of silence, or a **kick-only bar** where everything except the Kick role drops out
+  for the bar before each drop.
 - **Morph** sets how quickly it moves from section to section.
 - **Track role presets** set up the usual trance moves in one click:
 
@@ -507,6 +510,12 @@ section plays. The defaults:
 | Build | 16th gate | none | up |
 | Drop | 3-3-2 pluck stabs | rolling | up |
 | Outro | none | offbeat | none |
+
+**Breakdown progression** (Song patterns) makes breakdowns start the progression on VI
+(the default) or IV, for every part, so the drop's return to i lands harder: Am F C G
+becomes F C G Am in the breakdown. The **Walking** bass pattern rolls on each root and
+steps through the scale to the next chord's root in the last two 16ths before each
+change (C to G walks C, B, A, G).
 
 The progression restarts at every section, and notes never spill into the next one. Song
 clips need Ouroboros to be running; without it the tile says so.
@@ -719,6 +728,11 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   parameter changed since; each fix can only be undone once.
 - **Export checklist:** a finished master passes; over the ceiling, clipped, wide bass and
   too quiet all fail; a silent breakdown is named; nothing measured means not ready.
+- **Walking bass and breakdowns:** A to F walks A, G, F; C to G walks B, A into G; every
+  note is in key; a breakdown starts on F (VI) and the drop on Am; "Start on IV" puts Dm
+  first.
+- **Before every drop:** a kick-only bar silences the pads for the bar while the kick
+  plays on; a beat of silence stops everything; a per-track 1-bar gap works.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal
