@@ -512,7 +512,20 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
   sweeping up one or two octaves while a filter opens. The **track riser** pitches this
   track's own audio up to an octave across the build and fades it in, the classic
   "everything lifts" effect.
-- **Play** buttons audition each sound.
+- **Into the drop** plays with this track's own audio just before each drop: **Tape stop**
+  slows it to a halt over the last ½, 1 or 2 beats (pitch falling with it, and silence
+  through any gap), or **Stutter** loops the moment before in 1/8s, then 1/16s, then 1/32s.
+  Everything is back at full speed on the downbeat.
+- **Build shape:** *Smooth* rises evenly; *Stepped* moves the risers and build filter up in
+  four distinct stages; *Late surge* holds back and saves most of the rise (and the roll's
+  speed-ups) for the end.
+- **Build filter** high-passes this track's audio across the build (up to about 1 kHz at
+  100%), so it thins out as the tension rises and opens fully on the drop.
+- **Your samples…** swaps the synthesised impact, crash or downlifter for your own WAV,
+  AIFF or FLAC (mixed to mono, up to 20 s). The knobs still set their level, bigger later
+  drops and the energy curve still apply, and the files are remembered with the project.
+  Choose *Back to the synthesised…* to return to the in-key sounds.
+- **Play** buttons audition each sound (your sample if you've loaded one).
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
 
@@ -841,6 +854,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   Off plays the pattern through.
 - **Varied later drops:** the second drop's lead gains passing notes (all in key) and a
   climax note, and the harmony is a diatonic third under it, only in later drops.
+- **Into the drop:** a 440 Hz track plays normally, slows to about 110 Hz in the last half
+  beat with tape stop and is back at 440 Hz on the drop; with a 1-beat gap the stop comes
+  first, then silence; stutter repeats the same 1/8 slice exactly.
+- **Build shape and filter:** the stepped riser holds its first stage, late surge gives 21
+  roll hits instead of 30, and the build filter takes a 100 Hz track from 0.3 to 0.006 at the
+  end of the build and back to 0.3 on the drop.
+- **Your samples:** a 44.1 kHz WAV plays at its own pitch on the drop instead of the sub
+  boom, stops when it ends, is remembered with the project and can be cleared; a missing
+  file is refused.
 - **Build risers:** silent before the build, rising through it, starting on the song's
   root, sweeping away from it, and stopping at the drop; the track riser pitches the
   track's own audio up an octave.

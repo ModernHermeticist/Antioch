@@ -42,7 +42,26 @@ public:
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },
         impactId { "impact" }, crashId { "crash" }, swellId { "swell" }, downId { "downlifter" }, rollId { "roll" },
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
-        laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
+        laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" },
+        dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" };
+    enum DropFx { dfOff, dfTapeStop, dfStutter };
+    enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
+    static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }
+    /** Build progress (0..1) bent by the Build shape: smooth, in four stages, or saving most of the rise for the end.
+        (The snare roll already moves in stages, so Stepped leaves it alone.) */
+    static float shapeProgress (int shape, float p)
+    {
+        if (p < 0.0f) return p;
+        if (shape == bsStepped) return juce::jmin (1.0f, (std::floor (p * 4.0f) + 1.0f) / 4.0f);   // four stages, each a step up
+        if (shape == bsLateSurge) return p * p;
+        return p;
+    }
+
+    /** Your own samples in place of the synthesised impact, crash and downlifter (message thread). */
+    enum SampleSlot { slotImpact, slotCrash, slotDown, numSampleSlots };
+    bool loadSample (int slot, const juce::File&);
+    void clearSample (int slot);
+    juce::String sampleName (int slot) const;
     static constexpr double lookaheadSeconds = 3.0;
     static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }
 
@@ -66,6 +85,7 @@ public:
     std::atomic<float> lastRise { -1.0f };   // riser progress, for tests and the UI
     std::atomic<int> nextType { -1 };
     std::atomic<float> barsToNext { 0.0f };
+    std::atomic<int> dropFxRuns { 0 };   // tape stops / stutters played
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
@@ -76,6 +96,20 @@ private:
     azoth::Crash crash;
     azoth::Downlifter downlifter;
     std::array<azoth::Snare, 3> snares;
+    std::array<azoth::SamplePlayer, numSampleSlots> samplePlayers;
+    std::vector<std::shared_ptr<const azoth::Sample>> sampleKeep;   // never freed on the audio thread
+    std::array<juce::String, numSampleSlots> samplePaths;
+
+    // Drop entrance FX on this track's audio: a short history to replay from.
+    std::array<std::vector<float>, 2> history;
+    int historyPos = 0;
+    double tapeRead = 0.0;
+    int64_t stutterCount = 0;
+    int stutterStart = 0;
+    bool dropFxActive = false;
+    std::array<suite::Svf, 2> buildFilter;
+    float buildFilterHz = 0.0f;
+    int buildFilterCounter = 0;
     azoth::Riser riser;
     std::array<suite::PitchShifter, 2> trackShift;   // the track's own audio, pitched up through builds
     float trackRiseMix = 0.0f;

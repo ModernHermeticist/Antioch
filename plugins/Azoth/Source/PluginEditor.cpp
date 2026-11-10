@@ -26,7 +26,11 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       trackRiser (p.apvts, AzothProcessor::trackRiserId, "Track riser", sectionColour (suite::SectionType::Build)),
       riserRange (p.apvts, AzothProcessor::riserRangeId, "Riser range"),
       reverseTarget (p.apvts, AzothProcessor::reverseTargetId, "Swell into"),
-      reverseLength (p.apvts, AzothProcessor::reverseLengthId, "Length")
+      reverseLength (p.apvts, AzothProcessor::reverseLengthId, "Length"),
+      dropFx (p.apvts, AzothProcessor::dropFxId, "Into the drop"),
+      dropFxLen (p.apvts, AzothProcessor::dropFxLenId, "Length"),
+      buildShape (p.apvts, AzothProcessor::buildShapeId, "Build shape"),
+      buildFilter (p.apvts, AzothProcessor::buildFilterId, "Build filter", sectionColour (suite::SectionType::Build))
 {
     setLookAndFeel (&lnf);
     const char* names[] = { "Impact", "Crash", "Downlifter", "Snare" };
@@ -42,7 +46,8 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch, &laterDrops,
                                                              &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
-                                                             &riser, &trackRiser, &riserRange, &riserNote })
+                                                             &riser, &trackRiser, &riserRange, &riserNote,
+                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
     reverseNote.setJustificationType (juce::Justification::centredLeft);
@@ -54,7 +59,11 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     riserNote.setText ("Across each Build: a tonal riser on the song's root and fifth sweeping up, and the track riser, "
                        "this track's own audio pitched up to an octave and faded in. Both stop for the gap before the drop.",
                        juce::dontSendNotification);
-    setSize (980, 840);
+    samplesNote.setFont (juce::FontOptions (12.0f));
+    samplesNote.setJustificationType (juce::Justification::centredLeft);
+    samplesButton.onClick = [this] { showSamplesMenu(); };
+    updateSamplesNote();
+    setSize (980, 980);
     timerCallback();
     startTimerHz (10);
 }
@@ -63,6 +72,40 @@ AzothEditor::~AzothEditor()
 {
     stopTimer();
     setLookAndFeel (nullptr);
+}
+
+void AzothEditor::updateSamplesNote()
+{
+    const char* names[] = { "Impact", "Crash", "Downlifter" };
+    juce::StringArray mine;
+    for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
+        if (processor.sampleName (i).isNotEmpty()) mine.add (juce::String (names[i]) + ": " + processor.sampleName (i));
+    samplesNote.setText ((mine.isEmpty() ? juce::String ("Synthesised impact, crash and downlifter (in key).") : mine.joinIntoString (", "))
+                         + "\nTape stop / stutter replay this track's own audio before each drop; the build filter thins it out across the build.",
+                         juce::dontSendNotification);
+}
+
+void AzothEditor::showSamplesMenu()
+{
+    const char* names[] = { "impact", "crash", "downlifter" };
+    juce::PopupMenu m;
+    for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
+        m.addItem (i + 1, juce::String ("Use my own ") + names[i] + " sample...");
+    m.addSeparator();
+    for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
+        m.addItem (100 + i, juce::String ("Back to the synthesised ") + names[i], processor.sampleName (i).isNotEmpty());
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&samplesButton), [this] (int id)
+    {
+        if (id >= 100) { processor.clearSample (id - 100); updateSamplesNote(); return; }
+        if (id <= 0) return;
+        const auto slot = id - 1;
+        chooser = std::make_unique<juce::FileChooser> ("Choose a sample", juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.ogg");
+        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this, slot] (const juce::FileChooser& fc)
+        {
+            if (fc.getResult().existsAsFile()) processor.loadSample (slot, fc.getResult());
+            updateSamplesNote();
+        });
+    });
 }
 
 void AzothEditor::timerCallback()
@@ -89,6 +132,7 @@ void AzothEditor::paint (juce::Graphics& g)
     drawPanel (g, shapeArea, "Shape", accent);
     drawPanel (g, riserArea, "Build risers", sectionColour (suite::SectionType::Build));
     drawPanel (g, reverseArea, "Reverse swells from this track", Colours::amethyst);
+    drawPanel (g, entranceArea, "Into the drop, build shape and your samples", sectionColour (suite::SectionType::Drop));
 }
 
 void AzothEditor::resized()
@@ -106,7 +150,17 @@ void AzothEditor::resized()
     bounds.removeFromTop (12);
     riserArea = bounds.removeFromTop (130);
     bounds.removeFromTop (12);
+    entranceArea = bounds.removeFromTop (130);
+    bounds.removeFromTop (12);
     reverseArea = bounds;
+
+    auto en = entranceArea.reduced (10, 6).withTrimmedTop (14);
+    dropFx.setBounds (en.removeFromLeft (150));
+    dropFxLen.setBounds (en.removeFromLeft (130));
+    buildShape.setBounds (en.removeFromLeft (150));
+    buildFilter.setBounds (en.removeFromLeft (110));
+    samplesButton.setBounds (en.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+    samplesNote.setBounds (en.reduced (8, 0));
 
     auto ri = riserArea.reduced (10, 6).withTrimmedTop (14);
     riser.setBounds (ri.removeFromLeft (120));

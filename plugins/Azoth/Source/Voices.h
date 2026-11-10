@@ -5,6 +5,9 @@
 // and filters, so it's light and always in tune with the song's key.
 
 #include "SuiteDSP.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <atomic>
+#include <memory>
 
 namespace azoth
 {
@@ -153,5 +156,50 @@ namespace azoth
         std::array<suite::SawOsc, 5> saws;
         suite::Svf filter;
         int counter = 0;
+    };
+
+    //==============================================================================
+    /** One of your own samples (mono), with the rate it was recorded at. */
+    struct Sample
+    {
+        juce::AudioBuffer<float> mono;
+        double rate = 48000.0;
+        juce::String path;
+    };
+
+    /** Plays a user sample in place of a synthesised voice. The message thread hands over a
+        new sample with setSample(); the audio thread picks it up on the next trigger. The
+        processor keeps every sample it ever handed over alive, so nothing is freed here. */
+    class SamplePlayer
+    {
+    public:
+        void prepare (float sampleRate) { hostRate = sampleRate; active = false; }
+        void setSample (std::shared_ptr<const Sample> s) { std::atomic_store (&pending, std::move (s)); }
+        bool loaded() const { return std::atomic_load (&pending) != nullptr; }
+        void trigger (float level)
+        {
+            current = std::atomic_load (&pending);
+            active = current != nullptr && level > 0.0f && current->mono.getNumSamples() > 1;
+            if (! active) return;
+            pos = 0.0;
+            gain = level;
+            step = current->rate / juce::jmax (1.0f, hostRate);
+        }
+        float process() noexcept
+        {
+            if (! active) return 0.0f;
+            const auto i = (int) pos;
+            const auto n = current->mono.getNumSamples();
+            if (i + 1 >= n) { active = false; return 0.0f; }
+            const auto* d = current->mono.getReadPointer (0);
+            const auto f = (float) (pos - i);
+            pos += step;
+            return (d[i] + f * (d[i + 1] - d[i])) * gain;
+        }
+    private:
+        std::shared_ptr<const Sample> pending, current;
+        float hostRate = 48000.0f, gain = 0.0f;
+        double pos = 0.0, step = 1.0;
+        bool active = false;
     };
 }

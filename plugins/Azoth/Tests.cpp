@@ -41,6 +41,36 @@ namespace
         }
         return (float) (2.0 * std::sqrt (s * s + c * c) / (s1 - s0));
     }
+
+    std::unique_ptr<AzothProcessor> quiet()
+    {
+        auto p = make();
+        for (const auto& id : { AzothProcessor::impactId, AzothProcessor::crashId, AzothProcessor::swellId, AzothProcessor::downId,
+                                AzothProcessor::rollId, AzothProcessor::riserId })
+            set (*p, id, 0.0f);
+        set (*p, AzothProcessor::grooveCrashId, 0.0f);
+        return p;
+    }
+
+    InputFn sine (float hz, float level = 0.3f)
+    {
+        return [hz, level] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = level * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate);
+                for (int c = 0; c < b.getNumChannels(); ++c) b.setSample (c, i, v);
+            }
+        };
+    }
+
+    float peakFrequency (const juce::AudioBuffer<float>& a, float lo, float hi, double t0, double t1)
+    {
+        float best = 0.0f, hz = lo;
+        for (float f = lo; f <= hi; f += 1.0f)
+            if (const auto l = bandLevel (a, f, t0, t1); l > best) { best = l; hz = f; }
+        return hz;
+    }
 }
 
 int main (int argc, char** argv)
@@ -272,6 +302,138 @@ int main (int argc, char** argv)
         suite::FixBus::send (suite::Fix::LaterDropBigger);
         p->fixes->poll();
         check (std::abs (v (AzothProcessor::laterDropsId) - later - 0.25f) < 0.01f, "a weaker later drop gets 'Bigger later drops' turned up");
+    }
+
+    section ("Into the drop: tape stop and stutter");
+    {
+        suite::SectionBus::publish (testMap());
+        FakePlayHead head;
+        head.bpm = 120.0;
+        juce::AudioBuffer<float> audio;
+
+        auto p = quiet();
+        set (*p, AzothProcessor::dropFxId, (float) AzothProcessor::dfTapeStop);   // 1 beat: 11.5-12 s
+        p->setPlayHead (&head);
+        render (*p, 12.6, sine (440.0f), &audio, &head);
+        p->setPlayHead (nullptr);
+        check (std::abs (bandLevel (audio, 440.0f, 11.0, 11.4) - 0.3f) < 0.01f, "the track plays normally until the last beat");
+        const auto slowed = peakFrequency (audio, 60.0f, 500.0f, 11.75, 11.9);
+        check (slowed < 250.0f && rmsBetween (audio, 11.75, 11.9) > 0.05f, "then slows down like a stopping tape (" + juce::String (slowed, 0) + " Hz in the last half beat)");
+        check (std::abs (bandLevel (audio, 440.0f, 12.1, 12.5) - 0.3f) < 0.01f && p->dropFxRuns.load() == 1, "and comes back at full speed on the drop");
+
+        head.ppq = 0.0;
+        auto q = quiet();
+        set (*q, AzothProcessor::dropFxId, (float) AzothProcessor::dfTapeStop);
+        set (*q, AzothProcessor::gapId, 2.0f);   // 1 beat gap: the stop runs 11.0-11.5 s, then silence
+        q->setPlayHead (&head);
+        render (*q, 12.6, sine (440.0f), &audio, &head);
+        q->setPlayHead (nullptr);
+        check (peakBetween (audio, 11.52, 11.98) < 1.0e-6f && rmsBetween (audio, 11.2, 11.3) > 0.05f, "with a gap, the tape stops before it and stays stopped");
+
+        head.ppq = 0.0;
+        auto r = quiet();
+        set (*r, AzothProcessor::dropFxId, (float) AzothProcessor::dfStutter);
+        set (*r, AzothProcessor::dropFxLenId, 2.0f);   // 2 beats: 11-12 s, 1/8 slices (0.25 s) for the first beat
+        r->setPlayHead (&head);
+        auto chirp = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * (200.0 + 40.0 * t) * t);
+                for (int c = 0; c < b.getNumChannels(); ++c) b.setSample (c, i, v);
+            }
+        };
+        render (*r, 12.6, chirp, &audio, &head);
+        r->setPlayHead (nullptr);
+        float diff = 0.0f;
+        const auto slice = (int) (0.25 * sampleRate);
+        for (int i = (int) (11.02 * sampleRate); i < (int) (11.2 * sampleRate); ++i)
+            diff = std::max (diff, std::abs (audio.getSample (0, i) - audio.getSample (0, i + slice)));
+        check (diff < 1.0e-4f && rmsBetween (audio, 11.02, 11.2) > 0.1f, "stutter repeats the same 1/8 slice (max difference " + juce::String (diff, 6) + ")");
+    }
+
+    section ("Build shape and build filter");
+    {
+        suite::SectionBus::publish (testMap());
+        FakePlayHead head;
+        head.bpm = 120.0;
+        juce::AudioBuffer<float> audio;
+        auto riserPitches = [&] (int shape)
+        {
+            auto p = quiet();
+            set (*p, AzothProcessor::riserId, 1.0f);
+            set (*p, AzothProcessor::buildShapeId, (float) shape);
+            head.ppq = 0.0;
+            p->setPlayHead (&head);
+            render (*p, 10.0, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            return std::make_pair (peakFrequency (audio, 200.0f, 330.0f, 8.1, 8.45), peakFrequency (audio, 200.0f, 330.0f, 8.55, 8.9));
+        };
+        const auto smooth = riserPitches (AzothProcessor::bsSmooth), stepped = riserPitches (AzothProcessor::bsStepped);
+        check (smooth.second > smooth.first + 5.0f, "smooth: the riser glides up (" + juce::String (smooth.first, 0) + " -> " + juce::String (smooth.second, 0) + " Hz)");
+        check (std::abs (stepped.second - stepped.first) < 4.0f && stepped.first > smooth.first + 8.0f,
+               "stepped: it jumps straight to its first stage and holds it (" + juce::String (stepped.first, 0) + " / " + juce::String (stepped.second, 0) + " Hz)");
+
+        auto p = quiet();
+        set (*p, AzothProcessor::rollId, 0.6f);
+        set (*p, AzothProcessor::buildShapeId, (float) AzothProcessor::bsLateSurge);
+        head.ppq = 0.0;
+        p->setPlayHead (&head);
+        render (*p, 12.5, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        check (p->snareHits.load() < 26, "late surge keeps the roll slow for longer and speeds up only at the end: " + juce::String (p->snareHits.load()) + " hits (smooth: 30)");
+
+        auto f = quiet();
+        set (*f, AzothProcessor::buildFilterId, 1.0f);
+        head.ppq = 0.0;
+        f->setPlayHead (&head);
+        render (*f, 12.8, sine (100.0f), &audio, &head);
+        f->setPlayHead (nullptr);
+        const auto before = bandLevel (audio, 100.0f, 6.0, 7.0), late = bandLevel (audio, 100.0f, 11.5, 11.9), after = bandLevel (audio, 100.0f, 12.3, 12.7);
+        check (std::abs (before - 0.3f) < 0.01f && late < 0.2f * before && after > 0.9f * before,
+               "the build filter thins the track out across the build and opens on the drop (" + juce::String (before, 3) + " -> "
+                   + juce::String (late, 3) + " -> " + juce::String (after, 3) + ")");
+    }
+
+    section ("Your own samples");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AzothSamples");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        const auto wav = dir.getChildFile ("my impact.wav");
+        {
+            juce::AudioBuffer<float> b (1, 22050);   // 0.5 s of 1 kHz at 44.1 kHz (played back at 48 kHz)
+            for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (0, i, 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * i / 44100.0));
+            juce::WavAudioFormat format;
+            std::unique_ptr<juce::AudioFormatWriter> writer (format.createWriterFor (new juce::FileOutputStream (wav), 44100.0, 1, 24, {}, 0));
+            writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+        }
+
+        suite::SectionBus::publish (testMap());
+        auto p = quiet();
+        set (*p, AzothProcessor::impactId, 1.0f);
+        check (p->loadSample (AzothProcessor::slotImpact, wav) && p->sampleName (AzothProcessor::slotImpact) == "my impact", "loads a WAV as the impact");
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 12.6, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        const auto mine = bandLevel (audio, 1000.0f, 12.05, 12.4), sub = bandLevel (audio, 55.0f, 12.05, 12.4);
+        check (mine > 0.4f && sub < 0.02f, "the drop plays your sample, at its own pitch, instead of the sub boom (" + juce::String (mine, 3) + " at 1 kHz, "
+                   + juce::String (sub, 3) + " at 55 Hz)");
+        check (rmsBetween (audio, 12.55, 12.6) < 1.0e-4f, "and stops when the sample ends");
+
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->sampleName (AzothProcessor::slotImpact) == "my impact", "the sample is remembered with the project");
+        q->clearSample (AzothProcessor::slotImpact);
+        check (q->sampleName (AzothProcessor::slotImpact).isEmpty(), "and can go back to the synthesised one");
+        check (! p->loadSample (AzothProcessor::slotCrash, dir.getChildFile ("missing.wav")), "a missing file is refused");
+        dir.deleteRecursively();
     }
 
     section ("No surprises");

@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include "KeyBus.h"
 #include "Music.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 
 namespace
 {
@@ -36,8 +37,14 @@ namespace
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::reverseLevelId), "Reverse Swell Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f, percent));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::reverseTargetId), "Reverse Swell Into", StringArray { "Drops", "Every section" }, 0));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::reverseLengthId), "Reverse Swell Length", StringArray { "1/2 bar", "1 bar", "2 bars" }, 1));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::dropFxId), "Drop Entrance FX", StringArray { "Off", "Tape stop", "Stutter" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::dropFxLenId), "Drop Entrance FX Length", StringArray { "1/2 beat", "1 beat", "2 beats" }, 1));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::buildShapeId), "Build Shape", StringArray { "Smooth", "Stepped", "Late surge" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::buildFilterId), "Build Filter", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
         return l;
     }
+
+    const juce::Identifier sampleProperty (int slot) { return juce::Identifier ("sample" + juce::String (slot)); }
 }
 
 AzothProcessor::AzothProcessor()
@@ -92,6 +99,13 @@ void AzothProcessor::prepareToPlay (double newSampleRate, int)
     crash.prepare (sr);
     downlifter.prepare (sr);
     for (auto& s : snares) s.prepare (sr);
+    for (auto& s : samplePlayers) s.prepare (sr);
+    for (auto& h : history) h.assign ((size_t) (4.0 * sampleRate) + 1, 0.0f);
+    historyPos = 0;
+    dropFxActive = false;
+    for (auto& f : buildFilter) f.reset();
+    buildFilterHz = 0.0f;
+    buildFilterCounter = 0;
     riser.prepare (sr);
     for (auto& t : trackShift) t.prepare (sampleRate, 0.06f);
     trackRiseMix = 0.0f;
@@ -107,18 +121,22 @@ void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType p
     {
         // Second and later drops hit harder (up to +50% at full "Bigger later drops").
         const auto boost = laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f;
-        impact.trigger (rootHz, value (impactId) * boost);
-        crash.trigger (value (crashId) * boost, value (toneId));
+        if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId) * boost);
+        else impact.trigger (rootHz, value (impactId) * boost);
+        if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (value (crashId) * boost);
+        else crash.trigger (value (crashId) * boost, value (toneId));
         lastImpactLevel.store (value (impactId) * boost);
     }
     else if (type == T::Breakdown)
     {
         const auto twoBars = (float) (2.0 * barQ * 60.0 / bpm);
-        downlifter.trigger (twoBars, rootHz * 4.0f, value (downId));
+        if (samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (value (downId));
+        else downlifter.trigger (twoBars, rootHz * 4.0f, value (downId));
     }
     else if (type == T::Groove && previous == T::Intro && value (grooveCrashId) > 0.5f)
     {
-        crash.trigger (0.6f * value (crashId), value (toneId));
+        if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (0.6f * value (crashId));
+        else crash.trigger (0.6f * value (crashId), value (toneId));
     }
     else
     {
@@ -162,13 +180,21 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto riserLevel = value (riserId), trackRiser = value (trackRiserId);
     const auto riserRange = (int) value (riserRangeId) == 1 ? 24.0f : 12.0f;
     const auto riserRootHz = rootHz * 4.0f;   // octave 3
+    const auto dropFx = (int) value (dropFxId);
+    const auto dropFxQ = dropFxQuarters ((int) value (dropFxLenId));
+    const auto buildShape = (int) value (buildShapeId);
+    const auto buildFilterAmount = value (buildFilterId);
+    const auto beatSamples = 1.0 / juce::jmax (1.0e-9, qPerSample);
 
     // Auditions from the UI play immediately.
     if (const auto a = pendingAudition.exchange (0))
     {
-        if (a & aImpact) impact.trigger (rootHz, juce::jmax (0.5f, value (impactId)));
-        if (a & aCrash)  crash.trigger (juce::jmax (0.5f, value (crashId)), value (toneId));
-        if (a & aDown)   downlifter.trigger ((float) (2.0 * barQ * 60.0 / host.bpm), rootHz * 4.0f, juce::jmax (0.5f, value (downId)));
+        if (a & aImpact) { if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (juce::jmax (0.5f, value (impactId)));
+                           else impact.trigger (rootHz, juce::jmax (0.5f, value (impactId))); }
+        if (a & aCrash)  { if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (juce::jmax (0.5f, value (crashId)));
+                           else crash.trigger (juce::jmax (0.5f, value (crashId)), value (toneId)); }
+        if ((a & aDown) && samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (juce::jmax (0.5f, value (downId)));
+        else if (a & aDown) downlifter.trigger ((float) (2.0 * barQ * 60.0 / host.bpm), rootHz * 4.0f, juce::jmax (0.5f, value (downId)));
         if (a & aSnare)  snares[0].trigger (juce::jmax (0.5f, rollLevel), 1.0f);
     }
 
@@ -192,6 +218,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         float fx = 0.0f;
         float rise = -1.0f;   // progress through this build's riser, or -1
         float riseKey = 1.0f; // final-drop key change: the riser aims for the key of the drop it leads into
+        float dropP = -1.0f;  // progress through the drop entrance FX, or -1
+        bool dropSilent = false;
 
         if (follow)
         {
@@ -224,7 +252,16 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                                       : rollStart == 1 ? 0.5 * (sec.startQ + sec.endQ)
                                                        : juce::jmax (sec.startQ, sec.endQ - 4.0 * barQ);
                     if (pos >= startQ && pos < end)
-                        rise = (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ));
+                        rise = shapeProgress (buildShape, (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ)));
+                }
+
+                // Drop entrance: tape stop or stutter on this track's audio just before the drop.
+                if (dropFx != dfOff && sec.hasNext && sec.next == T::Drop)
+                {
+                    if (pos >= end - dropFxQ && pos < end)
+                        dropP = (float) ((pos - (end - dropFxQ)) / dropFxQ);
+                    else if (dropFx == dfTapeStop && pos >= end && pos < sec.endQ)
+                        dropSilent = true;   // the tape has stopped: silence through the gap
                 }
 
                 // Snare roll through the Build, accelerating in steps and rising in pitch.
@@ -235,7 +272,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                                                        : juce::jmax (sec.startQ, sec.endQ - 4.0 * barQ);
                     if (pos >= startQ && pos < end)
                     {
-                        const auto p = (pos - startQ) / juce::jmax (1.0e-6, end - startQ);
+                        const auto p = (double) shapeProgress (buildShape == bsStepped ? bsSmooth : buildShape,
+                                                               (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ)));
                         const auto rate = p < 0.25 ? 1.0 : p < 0.5 ? 0.5 : p < 0.75 ? 0.25 : 0.125;
                         // A hit whenever playback crosses a grid line at the current rate.
                         const auto crossed = rollPrevPos < pos && pos - rollPrevPos < 0.5
@@ -274,6 +312,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         fx += (impact.process() + crash.process() + downlifter.process()) * energyGain;
+        for (auto& sp : samplePlayers) fx += sp.process() * energyGain;
         fx += riser.process (rise, riserRootHz * riseKey, riserRange, riserLevel) * riseGain;
         for (auto& s : snares) fx += s.process() * riseGain;
 
@@ -339,6 +378,80 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
 
+        // Build filter: this track's audio thins out (high-pass up to 1 kHz) across the build.
+        {
+            if (buildFilterCounter-- <= 0)
+            {
+                buildFilterCounter = 32;
+                buildFilterHz = rise >= 0.0f ? 20.0f * std::pow (50.0f, buildFilterAmount * rise) : 0.0f;
+                if (buildFilterHz > 21.0f)
+                    for (auto& f : buildFilter) f.set (buildFilterHz, 0.7f, sr);
+                else
+                    for (auto& f : buildFilter) f.reset();
+            }
+            if (buildFilterHz > 21.0f)
+            {
+                left[n] = buildFilter[0].highpass (left[n]);
+                if (right != nullptr) right[n] = buildFilter[1].highpass (right[n]);
+            }
+        }
+
+        // Drop entrance FX, replaying this track's recent audio.
+        {
+            const auto size = (int) history[0].size();
+            history[0][(size_t) historyPos] = left[n];
+            history[1][(size_t) historyPos] = right != nullptr ? right[n] : left[n];
+            if (dropP >= 0.0f)
+            {
+                if (! dropFxActive)
+                {
+                    dropFxActive = true;
+                    tapeRead = historyPos;
+                    stutterStart = historyPos;
+                    stutterCount = 0;
+                    dropFxRuns.fetch_add (1);
+                }
+                float outL = 0.0f, outR = 0.0f;
+                if (dropFx == dfTapeStop)
+                {
+                    // The tape slows to a halt: read speed falls from 1 to 0, pitch with it.
+                    const auto i0 = (int) tapeRead, i1 = (i0 + 1) % size;
+                    const auto f = (float) (tapeRead - i0);
+                    const auto fade = juce::jmin (1.0f, (1.0f - dropP) * 20.0f);
+                    outL = (history[0][(size_t) i0] + f * (history[0][(size_t) i1] - history[0][(size_t) i0])) * fade;
+                    outR = (history[1][(size_t) i0] + f * (history[1][(size_t) i1] - history[1][(size_t) i0])) * fade;
+                    tapeRead += 1.0 - dropP;
+                    if (tapeRead >= size) tapeRead -= size;
+                }
+                else
+                {
+                    // Stutter: loop the moment before, in 1/8 notes, then 1/16, then 1/32.
+                    const auto slice = juce::jmax (64, (int) (beatSamples * (dropP < 0.5f ? 0.5 : dropP < 0.75f ? 0.25 : 0.125)));
+                    const auto k = (int) (stutterCount % slice);
+                    const auto idx = ((stutterStart - slice + 1 + k) % size + size) % size;
+                    const auto env = juce::jmin (1.0f, (float) k / 64.0f, (float) (slice - k) / 64.0f);
+                    outL = history[0][(size_t) idx] * env;
+                    outR = history[1][(size_t) idx] * env;
+                    ++stutterCount;
+                }
+                left[n] = outL;
+                if (right != nullptr) right[n] = outR;
+            }
+            else
+            {
+                if (dropSilent)
+                {
+                    left[n] = 0.0f;
+                    if (right != nullptr) right[n] = 0.0f;
+                }
+                else
+                {
+                    dropFxActive = false;
+                }
+            }
+            historyPos = (historyPos + 1) % size;
+        }
+
         left[n] += fx;
         if (right != nullptr) right[n] += fx;
         lastRise.store (rise);
@@ -363,7 +476,54 @@ void AzothProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
+        {
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            for (int slot = 0; slot < numSampleSlots; ++slot)
+            {
+                const auto path = apvts.state[sampleProperty (slot)].toString();
+                if (path.isNotEmpty()) loadSample (slot, juce::File (path));
+                else clearSample (slot);
+            }
+        }
+}
+
+bool AzothProcessor::loadSample (int slot, const juce::File& file)
+{
+    if (! juce::isPositiveAndBelow (slot, (int) numSampleSlots)) return false;
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+    if (reader == nullptr || reader->lengthInSamples < 2) return false;
+
+    auto sample = std::make_shared<azoth::Sample>();
+    const auto length = (int) juce::jmin<juce::int64> (reader->lengthInSamples, (juce::int64) (20.0 * reader->sampleRate));
+    juce::AudioBuffer<float> raw ((int) juce::jmax (1u, reader->numChannels), length);
+    reader->read (&raw, 0, length, 0, true, true);
+    sample->mono.setSize (1, length);
+    sample->mono.clear();
+    for (int c = 0; c < raw.getNumChannels(); ++c)
+        sample->mono.addFrom (0, 0, raw, c, 0, length, 1.0f / (float) raw.getNumChannels());
+    sample->rate = reader->sampleRate;
+    sample->path = file.getFullPathName();
+
+    sampleKeep.push_back (sample);
+    samplePlayers[(size_t) slot].setSample (sample);
+    samplePaths[(size_t) slot] = sample->path;
+    apvts.state.setProperty (sampleProperty (slot), sample->path, nullptr);
+    return true;
+}
+
+void AzothProcessor::clearSample (int slot)
+{
+    if (! juce::isPositiveAndBelow (slot, (int) numSampleSlots)) return;
+    samplePlayers[(size_t) slot].setSample (nullptr);
+    samplePaths[(size_t) slot].clear();
+    apvts.state.removeProperty (sampleProperty (slot), nullptr);
+}
+
+juce::String AzothProcessor::sampleName (int slot) const
+{
+    return juce::isPositiveAndBelow (slot, (int) numSampleSlots) ? juce::File (samplePaths[(size_t) slot]).getFileNameWithoutExtension() : juce::String();
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

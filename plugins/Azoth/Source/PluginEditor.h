@@ -27,7 +27,14 @@ private:
     juce::Label reverseNote;
     std::array<juce::TextButton, 4> auditions;
     juce::Label status, next;
-    juce::Rectangle<int> elementArea, shapeArea, riserArea, reverseArea;
+    suite::ui::Choice dropFx, dropFxLen, buildShape;
+    suite::ui::Knob buildFilter;
+    juce::TextButton samplesButton { "Your samples..." };
+    juce::Label samplesNote;
+    std::unique_ptr<juce::FileChooser> chooser;
+    void showSamplesMenu();
+    void updateSamplesNote();
+    juce::Rectangle<int> elementArea, shapeArea, riserArea, reverseArea, entranceArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AzothEditor)
 };
