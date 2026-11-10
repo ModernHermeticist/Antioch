@@ -71,14 +71,20 @@ void DragTile::mouseUp (const juce::MouseEvent&)
 }
 
 //==============================================================================
-void RollView::setData (std::vector<std::vector<int>> chordsIn, std::vector<int> bassIn, int countIn, int highlightIn)
+void RollView::setData (std::vector<std::vector<int>> chordsIn, std::vector<int> bassIn, int countIn, int highlightIn,
+                        std::vector<chords::Note> melodyIn, double quartersPerChordIn)
 {
-    if (chordsIn == voiced && bassIn == bass && countIn == count && highlightIn == highlight)
+    auto sameMelody = melodyIn.size() == melodyNotes.size();
+    for (size_t i = 0; sameMelody && i < melodyIn.size(); ++i)
+        sameMelody = melodyIn[i].pitch == melodyNotes[i].pitch && std::abs (melodyIn[i].start - melodyNotes[i].start) < 1.0e-9;
+    if (chordsIn == voiced && bassIn == bass && countIn == count && highlightIn == highlight && sameMelody)
         return;
     voiced = std::move (chordsIn);
     bass = std::move (bassIn);
     count = countIn;
     highlight = highlightIn;
+    melodyNotes = std::move (melodyIn);
+    quartersPerChord = quartersPerChordIn;
     repaint();
 }
 
@@ -91,6 +97,7 @@ void RollView::paint (juce::Graphics& g)
     int lo = 127, hi = 0;
     for (const auto& c : voiced) for (auto p : c) { lo = std::min (lo, p); hi = std::max (hi, p); }
     for (auto p : bass) { lo = std::min (lo, p); hi = std::max (hi, p); }
+    for (auto& n : melodyNotes) { lo = std::min (lo, n.pitch); hi = std::max (hi, n.pitch); }
     if (lo > hi) return;
     lo -= 2; hi += 2;
 
@@ -129,6 +136,15 @@ void RollView::paint (juce::Graphics& g)
             g.setColour (Colours::brass.withAlpha (0.8f));
             g.fillRoundedRectangle (x + 4.0f, r.getBottom() - (float) (p - lo + 1) * rowH + 1.0f, colW - 8.0f, juce::jmax (5.0f, rowH - 1.0f), 2.0f);
         }
+    }
+
+    // Melody (Melodia) drawn over the chords.
+    for (const auto& n : melodyNotes)
+    {
+        const auto x = r.getX() + colW * (float) (n.start / quartersPerChord);
+        const auto w = juce::jmax (3.0f, colW * (float) (n.length / quartersPerChord));
+        g.setColour (Colours::ember);
+        g.fillRoundedRectangle (x, r.getBottom() - (float) (n.pitch - lo + 1) * rowH + 1.0f, w, juce::jmax (4.0f, rowH - 1.0f), 2.0f);
     }
 
     g.setColour (Colours::outline);
@@ -208,7 +224,10 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       arpTile (p, "Arp", Colours::amethyst),
       songChordTile (p, "Song Chords", accent),
       songBassTile (p, "Song Bass", Colours::brass),
-      songArpTile (p, "Song Arp", Colours::amethyst)
+      songArpTile (p, "Song Arp", Colours::amethyst),
+      melodyTile (p, "Melody", Colours::ember),
+      songLeadTile (p, "Song Lead", Colours::ember),
+      melodyStyle (p.apvts, Params::melodyStyle, "Melody")
 {
     setLookAndFeel (&lnf);
 
@@ -236,6 +255,16 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     roll.onSlotClicked = [this] (int i) { auditionSlot (i, 1.6); };
 
     songButton.onClick = [this] { showSongPatterns(); };
+    newMelodyButton.onClick = [this]
+    {
+        if (auto* seed = processor.apvts.getParameter (Params::melodySeed))
+        {
+            const auto next = juce::Random::getSystemRandom().nextInt (999) + 1;
+            seed->beginChangeGesture();
+            seed->setValueNotifyingHost (seed->convertTo0to1 ((float) next));
+            seed->endChangeGesture();
+        }
+    };
     playButton.setClickingTogglesState (false);
     playButton.onClick = [this] { togglePlay(); };
     saveButton.onClick = [this]
@@ -247,7 +276,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                               {
                                   const auto dir = fc.getResult();
                                   if (dir == juce::File()) return;
-                                  for (auto* kind : { "Chords", "Bass", "Arp", "Song Chords", "Song Bass", "Song Arp" })
+                                  for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead" })
                                       processor.exportClip (kind, dir);   // song clips are skipped without an Ouroboros map
                                   dir.revealToUser();
                               });
@@ -258,10 +287,11 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                                                              &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
                                                              &bassOctave, &arpOctaves, &previewVolume, &chordTile, &bassTile,
                                                              &arpTile, &songChordTile, &songBassTile, &songArpTile,
+                                                             &melodyTile, &songLeadTile, &melodyStyle, &newMelodyButton,
                                                              &playButton, &saveButton, &songButton })
         addAndMakeVisible (c);
 
-    setSize (1060, 740);
+    setSize (1160, 740);
     timerCallback();
     startTimerHz (30);
 }
@@ -287,7 +317,7 @@ namespace
                 label->setFont (juce::FontOptions (14.0f, juce::Font::bold));
                 addAndMakeVisible (*label);
                 labels.push_back (std::move (label));
-                for (auto part : { chords::SongPart::Chords, chords::SongPart::Bass, chords::SongPart::Arp })
+                for (auto part : { chords::SongPart::Chords, chords::SongPart::Bass, chords::SongPart::Arp, chords::SongPart::Lead })
                 {
                     auto box = std::make_unique<juce::ComboBox>();
                     box->addItemList (chords::songChoiceNames (part), 1);
@@ -301,16 +331,16 @@ namespace
                           juce::dontSendNotification);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (560, 330);
+            setSize (680, 330);
         }
 
         void paint (juce::Graphics& g) override
         {
             g.setColour (Colours::dimText);
             g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-            const auto w = (getWidth() - 120) / 3;
+            const auto w = (getWidth() - 120) / 4;
             int x = 120;
-            for (auto* h : { "CHORDS", "BASS", "ARP" }) { g.drawText (h, x, 4, w, 18, juce::Justification::centred); x += w; }
+            for (auto* h : { "CHORDS", "BASS", "ARP", "LEAD" }) { g.drawText (h, x, 4, w, 18, juce::Justification::centred); x += w; }
         }
 
         void resized() override
@@ -323,9 +353,9 @@ namespace
             {
                 auto row = r.removeFromTop (rowH);
                 labels[t]->setBounds (row.removeFromLeft (114));
-                const auto w = row.getWidth() / 3;
-                for (size_t k = 0; k < 3; ++k)
-                    boxes[t * 3 + k]->setBounds (row.removeFromLeft (w).reduced (3, 4));
+                const auto w = row.getWidth() / 4;
+                for (size_t k = 0; k < 4; ++k)
+                    boxes[t * 4 + k]->setBounds (row.removeFromLeft (w).reduced (3, 4));
             }
         }
 
@@ -361,6 +391,7 @@ void CorrespondenceEditor::togglePlay()
     {
         playStart = juce::Time::getMillisecondCounterHiRes();
         playingSlot = -1;
+        nextMelodyNote = 0;
     }
     else
     {
@@ -377,6 +408,13 @@ void CorrespondenceEditor::timerCallback()
     const auto now = juce::Time::getMillisecondCounterHiRes();
     if (playing)
     {
+        // The melody plays along with the progression.
+        const auto quarterMs = 60000.0 / processor.currentBpm.load();
+        const auto elapsedQ = (now - playStart) / quarterMs;
+        const auto lead = chords::melody (settings, Params::readMelody (processor.apvts));
+        while (nextMelodyNote < lead.size() && lead[nextMelodyNote].start <= elapsedQ)
+            processor.preview.playLead (lead[nextMelodyNote++].pitch);
+
         const auto chordMs = settings.quartersPerChord * 60000.0 / processor.currentBpm.load();
         const auto slot = (int) ((now - playStart) / chordMs);
         if (slot >= settings.count)
@@ -408,7 +446,9 @@ void CorrespondenceEditor::timerCallback()
         view.quality.setEnabled (view.active);
         view.repaint();
     }
-    roll.setData (voiced, bassNotes, settings.count, playingSlot);
+    melodyNotes = chords::melody (settings, Params::readMelody (processor.apvts));
+    roll.setData (voiced, bassNotes, settings.count, playingSlot, melodyNotes, settings.quartersPerChord);
+    newMelodyButton.setButtonText ("New melody (#" + juce::String ((int) processor.apvts.getRawParameterValue (Params::melodySeed)->load()) + ")");
 
     const auto broadcasting = processor.apvts.getRawParameterValue (Params::broadcast)->load() > 0.5f;
     broadcastStatus.setColour (juce::Label::textColourId, broadcasting ? accent : Colours::dimText);
@@ -423,7 +463,7 @@ void CorrespondenceEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "CORRESPONDENCE", "key & chord engine", accent);
     drawPanel (g, keyArea, "Key");
     drawPanel (g, progressionArea, "Progression  (click a chord to hear it)", accent);
-    drawPanel (g, voicingArea, "Voicing", accent);
+    drawPanel (g, voicingArea, "Voicing & melody", accent);
     drawPanel (g, patternArea, "Rhythm", Colours::brass);
     drawPanel (g, exportArea, "Drag into FL  (loop / whole song)", Colours::amethyst);
 }
@@ -465,9 +505,9 @@ void CorrespondenceEditor::resized()
     roll.setBounds (pr.reduced (4, 0));
 
     // ---- Bottom panels ----
-    voicingArea = bottom.removeFromLeft (300);
+    voicingArea = bottom.removeFromLeft (330);
     bottom.removeFromLeft (10);
-    exportArea = bottom.removeFromRight (360);
+    exportArea = bottom.removeFromRight (440);
     bottom.removeFromRight (10);
     patternArea = bottom;
 
@@ -475,10 +515,11 @@ void CorrespondenceEditor::resized()
 
     auto v = inner (voicingArea);
     auto vTop = v.removeFromTop (v.getHeight() / 2);
-    voicing.setBounds (vTop.removeFromLeft (vTop.getWidth() / 2));
-    registerOct.setBounds (vTop);
-    voiceLead.setBounds (v.removeFromLeft (v.getWidth() / 2).withSizeKeepingCentre (130, 28));
-    addBass.setBounds (v.withSizeKeepingCentre (130, 28));
+    layoutRow (vTop, { &voicing, &registerOct, &melodyStyle });
+    const auto third = v.getWidth() / 3;
+    voiceLead.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
+    addBass.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
+    newMelodyButton.setBounds (v.withSizeKeepingCentre (third - 6, 28));
 
     auto pa = inner (patternArea);
     auto paTop = pa.removeFromTop (pa.getHeight() / 2);
@@ -491,11 +532,11 @@ void CorrespondenceEditor::resized()
     const auto tileRow = (ex.getHeight() - 36) / 2;
     auto placeTiles = [&] (juce::Rectangle<int> row, std::initializer_list<DragTile*> tiles)
     {
-        const auto tileW = row.getWidth() / 3;
-        for (auto* t : tiles) t->setBounds (row.removeFromLeft (tileW).reduced (3, 2));
+        const auto tileW = row.getWidth() / (int) tiles.size();
+        for (auto* t : tiles) t->setBounds (row.removeFromLeft (tileW).reduced (2, 2));
     };
-    placeTiles (ex.removeFromTop (tileRow), { &chordTile, &bassTile, &arpTile });
-    placeTiles (ex.removeFromTop (tileRow), { &songChordTile, &songBassTile, &songArpTile });
+    placeTiles (ex.removeFromTop (tileRow), { &chordTile, &bassTile, &arpTile, &melodyTile });
+    placeTiles (ex.removeFromTop (tileRow), { &songChordTile, &songBassTile, &songArpTile, &songLeadTile });
     auto buttons = ex.withTrimmedTop (4);
     const auto bw = buttons.getWidth() / 3;
     playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));

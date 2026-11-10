@@ -119,12 +119,14 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
         suite::SectionMap map;
         if (! suite::SectionBus::read (map))
             return {};
-        const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp : chords::SongPart::Chords;
+        const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp
+                        : kind.endsWith ("Lead") ? chords::SongPart::Lead : chords::SongPart::Chords;
         notes = chords::songClip (s, map, Params::readSongPatterns (apvts), part);
     }
     else
     {
-        notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s) : chords::chordClip (s);
+        notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s)
+              : kind == "Melody" ? chords::melody (s, Params::readMelody (apvts)) : chords::chordClip (s);
     }
 
     juce::String progression;

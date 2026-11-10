@@ -337,9 +337,159 @@ namespace chords
     }
 
     //==============================================================================
+    // Melodia: seeded trance lead melodies over the progression.
+
+    enum class MelodyStyle { Driving, ThreeThreeTwo, Anthem, Syncopated };
+
+    inline const juce::StringArray& melodyStyleNames()
+    {
+        static const juce::StringArray n { "Driving 8ths", "Trance 3-3-2", "Anthem", "Syncopated" };
+        return n;
+    }
+
+    struct MelodySettings
+    {
+        MelodyStyle style = MelodyStyle::ThreeThreeTwo;
+        int seed = 7;
+        int octave = 5;   // the melody sits around this octave
+    };
+
+    namespace detail
+    {
+        struct Hit { int step, length; };   // 16th-note grid within a 2-bar (32-step) phrase
+
+        inline const std::vector<Hit>& rhythm (MelodyStyle style)
+        {
+            static const std::vector<Hit> driving   { { 0, 2 }, { 2, 2 }, { 4, 2 }, { 6, 2 }, { 8, 2 }, { 10, 2 }, { 12, 4 },
+                                                      { 16, 2 }, { 18, 2 }, { 20, 2 }, { 22, 2 }, { 24, 6 }, { 30, 2 } };
+            static const std::vector<Hit> threeTwo  { { 0, 3 }, { 3, 3 }, { 6, 2 }, { 8, 3 }, { 11, 3 }, { 14, 2 },
+                                                      { 16, 3 }, { 19, 3 }, { 22, 2 }, { 24, 8 } };
+            static const std::vector<Hit> anthem    { { 0, 4 }, { 4, 2 }, { 6, 2 }, { 8, 6 }, { 14, 2 },
+                                                      { 16, 4 }, { 20, 4 }, { 24, 8 } };
+            static const std::vector<Hit> syncopate { { 0, 2 }, { 3, 3 }, { 6, 4 }, { 10, 2 }, { 12, 3 }, { 15, 1 },
+                                                      { 16, 2 }, { 18, 1 }, { 19, 3 }, { 22, 2 }, { 24, 8 } };
+            switch (style)
+            {
+                case MelodyStyle::Driving:       return driving;
+                case MelodyStyle::ThreeThreeTwo: return threeTwo;
+                case MelodyStyle::Anthem:        return anthem;
+                case MelodyStyle::Syncopated:    return syncopate;
+            }
+            return threeTwo;
+        }
+
+        inline bool inScale (int pitch, int root, int scale)
+        {
+            const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, scale)].steps;
+            const auto pc = ((pitch - root) % 12 + 12) % 12;
+            return std::find (steps.begin(), steps.end(), pc) != steps.end();
+        }
+
+        /** Moves `steps` scale degrees from `pitch` (which should be in the scale). */
+        inline int scaleStepFrom (int pitch, int steps, int root, int scale)
+        {
+            auto p = pitch;
+            const auto dir = steps > 0 ? 1 : -1;
+            for (int i = 0; i < std::abs (steps); ++i)
+            {
+                p += dir;
+                while (! inScale (p, root, scale)) p += dir;
+            }
+            return p;
+        }
+
+        inline int nearestChordTone (int pitch, const std::vector<int>& pcs, int lo, int hi)
+        {
+            int best = pitch, bestDist = 1000;
+            for (int p = lo; p <= hi; ++p)
+                if (std::find (pcs.begin(), pcs.end(), ((p % 12) + 12) % 12) != pcs.end() && std::abs (p - pitch) < bestDist)
+                {
+                    best = p;
+                    bestDist = std::abs (p - pitch);
+                }
+            return best;
+        }
+    }
+
+    /** Chord tones (pitch classes) of the chord sounding at quarter `q`. */
+    inline std::vector<int> chordTonesAt (const Settings& s, double q)
+    {
+        const auto count = juce::jlimit (1, maxSlots, s.count);
+        const auto slot = juce::jlimit (0, count - 1, (int) std::floor (std::fmod (q, s.quartersPerChord * count) / s.quartersPerChord));
+        const auto c = buildChord (s, s.slots[(size_t) slot]);
+        std::vector<int> pcs;
+        for (auto iv : c.intervals) pcs.push_back ((s.root + c.root + iv) % 12);
+        return pcs;
+    }
+
+    /** One pass of the progression as a lead melody: a 2-bar "call" and a matching "answer"
+        (same rhythm and contour, re-fitted to the chords), chord tones on the beats, steps in
+        between, ending on the root of the last chord. Deterministic for a given seed. */
+    inline std::vector<Note> melody (const Settings& s, const MelodySettings& m)
+    {
+        using namespace detail;
+        std::vector<Note> out;
+        const auto totalQ = s.quartersPerChord * juce::jlimit (1, maxSlots, s.count);
+        const auto centre = 12 * (m.octave + 1) + s.root + 4;
+        const auto lo = centre - 9, hi = centre + 10;
+        const auto& hits = rhythm (m.style);
+        juce::Random rng ((juce::int64) m.seed * 7919 + 13);
+
+        // The call: a contour of scale-step moves between hits, chosen once.
+        std::vector<int> contour;
+        int direction = rng.nextBool() ? 1 : -1;
+        for (size_t i = 0; i < hits.size(); ++i)
+        {
+            if (rng.nextFloat() < 0.3f) direction = -direction;
+            const auto size = rng.nextFloat() < 0.75f ? 1 : 2 + rng.nextInt (2);   // mostly steps, some leaps
+            contour.push_back (direction * size);
+        }
+
+        auto previous = nearestChordTone (centre, chordTonesAt (s, 0.0), lo, hi);
+        for (double phrase = 0.0; phrase < totalQ - 1.0e-9; phrase += 8.0)
+        {
+            for (size_t i = 0; i < hits.size(); ++i)
+            {
+                const auto start = phrase + hits[i].step * 0.25;
+                if (start >= totalQ - 1.0e-9) break;
+                const auto length = std::min (hits[i].length * 0.25 * 0.9, totalQ - start);
+                const auto strong = hits[i].step % 4 == 0;
+
+                const auto firstNote = out.empty();
+                auto pitch = firstNote ? previous : scaleStepFrom (previous, contour[i], s.root, s.scale);
+                if (pitch < lo || pitch > hi) pitch = scaleStepFrom (previous, -contour[i], s.root, s.scale);   // bounce off the edges
+                if (strong) pitch = nearestChordTone (pitch, chordTonesAt (s, start), lo, hi);
+
+                out.push_back ({ pitch, start, length, strong ? 110 : 92 });
+                previous = pitch;
+            }
+        }
+
+        // Resolve: the last note lands on the root of the last chord and rings to the end.
+        if (! out.empty())
+        {
+            auto& last = out.back();
+            const auto lastChord = buildChord (s, s.slots[(size_t) juce::jlimit (0, maxSlots - 1, s.count - 1)]);
+            const auto rootPc = (s.root + lastChord.root) % 12;
+            last.pitch = nearestChordTone (last.pitch, { rootPc }, lo, hi);
+            last.length = totalQ - last.start - 0.02;
+        }
+        return out;
+    }
+
+    /** The call half of every 2-bar answer pair: a sparser "teaser" for breakdowns. */
+    inline std::vector<Note> teaser (const std::vector<Note>& melodyNotes)
+    {
+        std::vector<Note> out;
+        for (const auto& n : melodyNotes)
+            if (std::fmod (n.start, 8.0) < 4.0) out.push_back (n);
+        return out;
+    }
+
+    //==============================================================================
     // Full-song clips: one pattern per section type, following the Ouroboros map.
 
-    enum class SongPart { Chords, Bass, Arp };
+    enum class SongPart { Chords, Bass, Arp, Lead };
 
     /** Pattern choice per section type. 0 = none, otherwise (pattern enum value + 1). */
     struct SongPatterns
@@ -347,6 +497,8 @@ namespace chords
         std::array<int, (int) suite::SectionType::count> chords { 0, 0, 1, 4, 3, 0 };   // Intro..Outro
         std::array<int, (int) suite::SectionType::count> bass   { 1, 2, 0, 0, 2, 1 };
         std::array<int, (int) suite::SectionType::count> arp    { 0, 1, 0, 1, 1, 0 };
+        std::array<int, (int) suite::SectionType::count> lead   { 0, 0, 2, 0, 1, 0 };   // 1 = melody, 2 = teaser
+        MelodySettings melody;
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -354,7 +506,8 @@ namespace chords
         static const juce::StringArray chords { "None", "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
         static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain" };
         static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce" };
-        return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : arp;
+        static const juce::StringArray lead   { "None", "Melody", "Teaser" };
+        return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : part == SongPart::Arp ? arp : lead;
     }
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
@@ -367,7 +520,8 @@ namespace chords
         for (int i = 0; i < map.count; ++i)
         {
             const auto type = (size_t) map.sections[(size_t) i].type;
-            const auto choice = part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type] : patterns.arp[type];
+            const auto choice = part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type]
+                              : part == SongPart::Arp ? patterns.arp[type] : patterns.lead[type];
             if (choice <= 0)
                 continue;
 
@@ -375,7 +529,8 @@ namespace chords
             std::vector<Note> cycle;
             if (part == SongPart::Chords)    { s.chordPattern = (ChordPattern) (choice - 1); cycle = chordClip (s); }
             else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }
-            else                             { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
+            else if (part == SongPart::Arp)  { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
+            else                             { cycle = melody (s, patterns.melody); if (choice == 2) cycle = teaser (cycle); }
 
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;

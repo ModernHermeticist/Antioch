@@ -249,6 +249,65 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Melodia");
+    {
+        auto s = aMinor();   // Am F C G, 1 bar each
+        chords::MelodySettings m;
+        const auto mel = chords::melody (s, m);
+        check (mel.size() > 10, "writes a melody (" + juce::String ((int) mel.size()) + " notes over 4 bars)");
+
+        bool fits = true, strongOnChord = true;
+        int lo = 128, hi = 0;
+        for (const auto& n : mel)
+        {
+            const auto pcs = chords::chordTonesAt (s, n.start);
+            const auto inChord = std::find (pcs.begin(), pcs.end(), n.pitch % 12) != pcs.end();
+            const auto& steps = suite::music::scales()[0].steps;
+            const auto inScale = std::find (steps.begin(), steps.end(), ((n.pitch - 9) % 12 + 12) % 12) != steps.end();
+            if (! inScale && ! inChord) fits = false;
+            if (std::abs (std::fmod (n.start, 1.0)) < 1.0e-9 && ! inChord) strongOnChord = false;
+            lo = std::min (lo, n.pitch); hi = std::max (hi, n.pitch);
+        }
+        check (fits, "every note is in the key (or the chord under it)");
+        check (strongOnChord, "notes on the beat are chord tones");
+        check (hi - lo <= 19, "stays within a singable range (" + juce::String (hi - lo) + " semitones)");
+        check (mel.back().pitch % 12 == 7 && mel.back().start + mel.back().length > 15.9, "ends on the root of the last chord (G), held to the end");
+
+        // The answer (bars 3-4) repeats the call's rhythm (bars 1-2).
+        std::vector<double> call, answer;
+        for (const auto& n : mel) { if (n.start < 8.0) call.push_back (n.start); else answer.push_back (n.start - 8.0); }
+        bool sameRhythm = call.size() == answer.size();
+        for (size_t i = 0; sameRhythm && i < call.size(); ++i) sameRhythm = std::abs (call[i] - answer[i]) < 1.0e-9;
+        check (sameRhythm, "the answer repeats the call's rhythm");
+
+        auto again = chords::melody (s, m);
+        bool same = again.size() == mel.size();
+        for (size_t i = 0; same && i < mel.size(); ++i) same = again[i].pitch == mel[i].pitch;
+        check (same, "the same seed gives the same melody");
+        m.seed = 8;
+        const auto other = chords::melody (s, m);
+        bool differs = other.size() != mel.size();
+        for (size_t i = 0; ! differs && i < mel.size(); ++i) differs = other[i].pitch != mel[i].pitch;
+        check (differs, "a new seed gives a new melody");
+
+        // Song lead: teaser in the breakdown, full melody in the drop.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        const chords::SongPatterns patterns;
+        const auto lead = chords::songClip (s, map, patterns, chords::SongPart::Lead);
+        int inBreakdown = 0, inDrop = 0;
+        for (auto& n : lead) (n.start < 16.0 ? inBreakdown : inDrop)++;
+        check (inBreakdown > 0 && inBreakdown < inDrop, "breakdown teases (" + juce::String (inBreakdown) + " notes), drop plays it all ("
+                                                             + juce::String (inDrop) + ")");
+
+        auto p = make();
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceMelodyTest");
+        check (p->exportClip ("Melody", dir).existsAsFile(), "Melody tile exports a MIDI file");
+        dir.deleteRecursively();
+    }
+
     section ("Adopting a key from Emerald Tablet");
     {
         auto p = make();

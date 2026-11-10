@@ -21,6 +21,9 @@ namespace Params
     inline const juce::String arpPattern   { "arppat" };
     inline const juce::String arpOctaves   { "arpoct" };
     inline const juce::String preview      { "preview" };
+    inline const juce::String melodyStyle  { "mel_style" };
+    inline const juce::String melodySeed   { "mel_seed" };
+    inline const juce::String melodyOctave { "mel_octave" };
 
     inline juce::String slotDegree (int slot)  { return "slot" + juce::String (slot + 1) + "_deg"; }
     inline juce::String slotQuality (int slot) { return "slot" + juce::String (slot + 1) + "_qual"; }
@@ -30,10 +33,11 @@ namespace Params
     /** Full-song pattern choices, per section type (0..5) and part. */
     inline juce::String songId (chords::SongPart part, int sectionType)
     {
-        static const char* names[] = { "song_chords_", "song_bass_", "song_arp_" };
+        static const char* names[] = { "song_chords_", "song_bass_", "song_arp_", "song_lead_" };
         return names[(int) part] + juce::String (sectionType);
     }
     chords::SongPatterns readSongPatterns (const juce::AudioProcessorValueTreeState&);
+    chords::MelodySettings readMelody (const juce::AudioProcessorValueTreeState&);
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 

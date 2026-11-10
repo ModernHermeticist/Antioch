@@ -24,7 +24,8 @@ private:
 class RollView : public juce::Component
 {
 public:
-    void setData (std::vector<std::vector<int>> chordsIn, std::vector<int> bassIn, int countIn, int highlightIn);
+    void setData (std::vector<std::vector<int>> chordsIn, std::vector<int> bassIn, int countIn, int highlightIn,
+                  std::vector<chords::Note> melodyIn = {}, double quartersPerChordIn = 4.0);
     void paint (juce::Graphics&) override;
     std::function<void (int)> onSlotClicked;
     void mouseDown (const juce::MouseEvent&) override;
@@ -32,6 +33,8 @@ public:
 private:
     std::vector<std::vector<int>> voiced;
     std::vector<int> bass;
+    std::vector<chords::Note> melodyNotes;
+    double quartersPerChord = 4.0;
     int count = 4, highlight = -1;
 };
 
@@ -79,7 +82,11 @@ private:
     suite::ui::Toggle voiceLead, addBass;
     suite::ui::Knob registerOct, bassOctave, arpOctaves, previewVolume;
 
-    DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile;
+    DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile, melodyTile, songLeadTile;
+    suite::ui::Choice melodyStyle;
+    juce::TextButton newMelodyButton { "New melody" };
+    std::vector<chords::Note> melodyNotes;
+    size_t nextMelodyNote = 0;
     juce::TextButton playButton { "Play" }, saveButton { "Save MIDI..." }, songButton { "Song patterns..." };
     void showSongPatterns();
     std::unique_ptr<juce::FileChooser> chooser;

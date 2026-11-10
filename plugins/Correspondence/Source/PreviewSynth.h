@@ -20,6 +20,9 @@ public:
 
     void stop() { push ({ Command::AllOff, 0 }); }
 
+    /** Message thread: play a melody note, releasing the previous melody note (chords keep ringing). */
+    void playLead (int pitch) { push ({ Command::LeadOn, pitch }); }
+
     void prepare (double sampleRate)
     {
         sr = (float) sampleRate;
@@ -56,10 +59,10 @@ public:
     }
 
 private:
-    struct Command { enum Type { NoteOn, AllOff } type; int note; };
+    struct Command { enum Type { NoteOn, AllOff, LeadOn } type; int note; };
     struct Voice
     {
-        bool active = false, releasing = false;
+        bool active = false, releasing = false, lead = false;
         float env = 0.0f, phase1 = 0.0f, phase2 = 0.0f, inc1 = 0.0f, inc2 = 0.0f;
     };
 
@@ -87,6 +90,9 @@ private:
             for (auto& v : voices) v.releasing = true;
             return;
         }
+        if (c.type == Command::LeadOn)
+            for (auto& v : voices)
+                if (v.lead) v.releasing = true;
 
         for (auto& v : voices)
             if (! v.active || (v.releasing && v.env < 0.05f))
@@ -94,6 +100,7 @@ private:
                 const auto hz = 440.0f * std::exp2 ((float) (c.note - 69) / 12.0f);
                 v = {};
                 v.active = true;
+                v.lead = c.type == Command::LeadOn;
                 v.inc1 = twoPi * hz / sr;
                 v.inc2 = twoPi * hz * 1.004f / sr;
                 return;
