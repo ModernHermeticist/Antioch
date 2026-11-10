@@ -196,6 +196,26 @@ int main (int argc, char** argv)
         check (! suite::KeyBus::read().valid, "switching broadcast off withdraws the key");
     }
 
+    section ("Adopting a key from Emerald Tablet");
+    {
+        auto p = make();
+        suite::KeyBus::suggest (7, 1);   // G major detected
+        p->publishKey();
+        check ((int) p->apvts.getRawParameterValue (Params::rootNote)->load() == 7
+                   && (int) p->apvts.getRawParameterValue (Params::scale)->load() == 1, "adopts a new detected key (G major)");
+
+        set (*p, Params::acceptDetected, 0.0f);
+        suite::KeyBus::suggest (2, 0);   // D minor detected, but accepting is off
+        p->publishKey();
+        check ((int) p->apvts.getRawParameterValue (Params::rootNote)->load() == 7, "ignores suggestions when Accept detected is off");
+
+        suite::KeyBus::suggest (4, 0);
+        auto q = make();                 // a project loading after the suggestion was made
+        q->publishKey();
+        check ((int) q->apvts.getRawParameterValue (Params::rootNote)->load() == 9, "a freshly loaded project keeps its own key");
+        suite::KeyBus::withdraw();
+    }
+
     section ("Audio: pass-through and preview");
     {
         auto p = make();

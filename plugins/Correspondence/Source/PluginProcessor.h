@@ -46,11 +46,13 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     PreviewSynth preview;
     std::atomic<double> currentBpm { 138.0 };
+    std::atomic<bool> adoptedDetectedKey { false };   // the current key came from Emerald Tablet
 
 private:
     void timerCallback() override { publishKey(); }
 
     bool wasBroadcasting = false;
+    uint32_t lastSuggestion = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceProcessor)
 };

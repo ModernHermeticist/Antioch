@@ -9,6 +9,8 @@ CorrespondenceProcessor::CorrespondenceProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CorrespondenceState", Params::createLayout())
 {
+    // Ignore suggestions made before we loaded (loading a project shouldn't change its key).
+    lastSuggestion = suite::KeyBus::readSuggestion().sequence;
     publishKey();
     startTimerHz (4);
 }
@@ -49,6 +51,24 @@ void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
 void CorrespondenceProcessor::publishKey()
 {
+    // Adopt a key detected by Emerald Tablet, if allowed.
+    const auto suggestion = suite::KeyBus::readSuggestion();
+    if (suggestion.valid && suggestion.sequence != lastSuggestion)
+    {
+        lastSuggestion = suggestion.sequence;
+        if (apvts.getRawParameterValue (Params::acceptDetected)->load() > 0.5f)
+        {
+            for (auto [id, v] : { std::pair<juce::String, int> { Params::rootNote, suggestion.root }, { Params::scale, suggestion.scale } })
+                if (auto* p = apvts.getParameter (id))
+                {
+                    p->beginChangeGesture();
+                    p->setValueNotifyingHost (p->convertTo0to1 ((float) v));
+                    p->endChangeGesture();
+                }
+            adoptedDetectedKey.store (true);
+        }
+    }
+
     const auto on = apvts.getRawParameterValue (Params::broadcast)->load() > 0.5f;
     if (on)
     {

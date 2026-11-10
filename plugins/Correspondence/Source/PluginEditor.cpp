@@ -184,6 +184,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       perChord (p.apvts, Params::perChord, "Length per chord"),
       count (p.apvts, Params::count, "Chords", accent),
       broadcast (p.apvts, Params::broadcast, "Broadcast key", accent),
+      acceptDetected (p.apvts, Params::acceptDetected, "Accept detected", Colours::moss),
       voicing (p.apvts, Params::voicing, "Voicing"),
       chordPattern (p.apvts, Params::chordPattern, "Chord rhythm"),
       bassPattern (p.apvts, Params::bassPattern, "Bass rhythm"),
@@ -240,7 +241,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                               });
     };
 
-    for (auto* c : std::initializer_list<juce::Component*> { &root, &scale, &perChord, &count, &broadcast, &broadcastStatus,
+    for (auto* c : std::initializer_list<juce::Component*> { &root, &scale, &perChord, &count, &broadcast, &acceptDetected, &broadcastStatus,
                                                              &presetCaption, &presetBox, &roll, &voicing, &chordPattern,
                                                              &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
                                                              &bassOctave, &arpOctaves, &previewVolume, &chordTile, &bassTile,
@@ -328,7 +329,7 @@ void CorrespondenceEditor::timerCallback()
 
     const auto broadcasting = processor.apvts.getRawParameterValue (Params::broadcast)->load() > 0.5f;
     broadcastStatus.setColour (juce::Label::textColourId, broadcasting ? accent : Colours::dimText);
-    broadcastStatus.setText (broadcasting ? "Antioch and Cause & Effect follow " + suite::music::keyName (settings.root, settings.scale)
+    broadcastStatus.setText (broadcasting ? juce::String (processor.adoptedDetectedKey.load() ? "Detected key. " : "") + "Suite follows " + suite::music::keyName (settings.root, settings.scale)
                                           : "Not broadcasting: other plugins use their own key",
                              juce::dontSendNotification);
 }
@@ -366,7 +367,9 @@ void CorrespondenceEditor::resized()
     count.setBounds (k.removeFromLeft (cell - 20));
     perChord.setBounds (k.removeFromLeft (cell));
     auto bc = k;
-    broadcast.setBounds (bc.removeFromTop (bc.getHeight() / 2).withSizeKeepingCentre (150, 28).translated (0, 8));
+    auto toggles = bc.removeFromTop (bc.getHeight() / 2).translated (0, 8);
+    broadcast.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2).reduced (3, 4));
+    acceptDetected.setBounds (toggles.reduced (3, 4));
     broadcastStatus.setBounds (bc.reduced (4, 0));
 
     // ---- Progression: slots on top, piano roll below ----

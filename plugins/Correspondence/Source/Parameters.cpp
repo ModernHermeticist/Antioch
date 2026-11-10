@@ -30,6 +30,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (rootNote), "Key", suite::music::noteNames(), 9));
         layout.add (std::make_unique<AudioParameterChoice> (id (scale), "Scale", suite::music::scaleNames(), 0));
         layout.add (std::make_unique<AudioParameterBool> (id (broadcast), "Broadcast Key", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (acceptDetected), "Accept Detected Key", true));
         layout.add (std::make_unique<AudioParameterInt> (id (count), "Chords", 2, chords::maxSlots, 4));
         layout.add (std::make_unique<AudioParameterChoice> (id (perChord), "Length per Chord", perChordNames, 1));
 

@@ -8,6 +8,7 @@ namespace Params
     inline const juce::String rootNote     { "root" };
     inline const juce::String scale        { "scale" };
     inline const juce::String broadcast    { "broadcast" };
+    inline const juce::String acceptDetected { "acceptdetected" };   // adopt keys suggested by Emerald Tablet
     inline const juce::String count        { "count" };
     inline const juce::String perChord     { "perchord" };
     inline const juce::String voicing      { "voicing" };

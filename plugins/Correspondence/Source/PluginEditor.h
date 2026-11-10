@@ -68,7 +68,7 @@ private:
 
     suite::ui::Choice root, scale, perChord;
     suite::ui::Knob count;
-    suite::ui::Toggle broadcast;
+    suite::ui::Toggle broadcast, acceptDetected;
     juce::Label broadcastStatus, presetCaption;
     juce::ComboBox presetBox;
 
