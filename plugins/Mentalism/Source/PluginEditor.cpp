@@ -218,15 +218,31 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
                               });
     };
 
+    mySoundButton.setTooltip ("Choose a few of your finished tracks: their average loudness, ceiling and tonal balance "
+                              "become the 'My sound' targets, in every project");
+    mySoundButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> ("Choose your finished tracks", juce::File::getSpecialLocation (juce::File::userMusicDirectory),
+                                                       "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
+                                  | juce::FileBrowserComponent::canSelectMultipleItems,
+                              [this] (const juce::FileChooser& fc)
+                              {
+                                  if (fc.getResults().isEmpty()) return;
+                                  processor.learnMySound (fc.getResults());
+                                  setParameterFromEditor (Params::loudnessTarget, (float) advisor::mySoundIndex);
+                                  setParameterFromEditor (Params::tonalTarget, (float) advisor::mySoundTonalIndex);
+                              });
+    };
     referenceLabel.setFont (juce::FontOptions (12.0f));
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs, &matchButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs, &matchButton, &mySoundButton })
         addAndMakeVisible (c);
     balanceTabs.setComponentID ("tabs");
     balanceTabs.onChange = [this] (int i)
     {
-        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton, &mySoundButton })
             c->setVisible (i == 0);
         undoFixButton.setVisible (i == 1 || i == 2);
         fixStatus.setVisible (i == 1 || i == 2);
@@ -264,6 +280,16 @@ MentalismEditor::~MentalismEditor()
 {
     stopTimer();
     setLookAndFeel (nullptr);
+}
+
+void MentalismEditor::setParameterFromEditor (const juce::String& id, float plainValue)
+{
+    if (auto* p = processor.apvts.getParameter (id))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (p->convertTo0to1 (plainValue));
+        p->endChangeGesture();
+    }
 }
 
 void MentalismEditor::sendFix (int row)
@@ -362,6 +388,11 @@ void MentalismEditor::timerCallback()
                                           + juce::String (ref.truePeakDb, 1) + " dBTP)"
                                         : "No reference loaded",
                             juce::dontSendNotification);
+    {
+        const auto mine = processor.getMySound();
+        mySoundButton.setButtonText (processor.isLearningMySound() ? "Learning..." : mine.valid ? "My sound: " + juce::String (mine.tracks) + " tracks"
+                                                                                               : juce::String ("Learn my sound..."));
+    }
     repaint();
 }
 
@@ -679,7 +710,8 @@ void MentalismEditor::resized()
     auto controls = b.removeFromTop (54);
     tonalTarget.setBounds (controls.removeFromLeft (220));
     loadButton.setBounds (controls.removeFromLeft (150).withTrimmedTop (18).reduced (4, 2));
-    matchButton.setBounds (controls.removeFromLeft (230).withTrimmedTop (18).reduced (4, 2));
+    matchButton.setBounds (controls.removeFromLeft (200).withTrimmedTop (18).reduced (4, 2));
+    mySoundButton.setBounds (controls.removeFromLeft (150).withTrimmedTop (18).reduced (4, 2));
     referenceLabel.setBounds (controls.withTrimmedTop (18).withTrimmedLeft (8));
     b.removeFromTop (6);
     balanceContent = b;

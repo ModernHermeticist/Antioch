@@ -19,10 +19,11 @@ namespace advisor
             { "Loud club (-6 LUFS)",    -6.0f, -0.3f },
             { "Streaming (-14 LUFS)",  -14.0f, -1.0f },
             { "Match reference track",   0.0f, -0.3f },   // lufs taken from the reference
+            { "My sound (your tracks)",  0.0f, -0.3f },   // learned from your finished tracks
         };
         return t;
     }
-    constexpr int matchReferenceIndex = 3;
+    constexpr int matchReferenceIndex = 3, mySoundIndex = 4;
 
     struct TonalTarget { const char* name; Bands curve; };
 
@@ -35,10 +36,11 @@ namespace advisor
             { "Uplifting trance (guide)",       { -4.0f, 1.5f, 1.5f, -1.5f, -3.5f, -5.0f, -6.5f, -8.5f, -11.0f, -17.0f } },
             { "Progressive / tech (guide)",     { -3.0f, 2.5f, 1.5f, -2.0f, -4.0f, -5.5f, -7.0f, -9.0f, -11.5f, -18.0f } },
             { "Reference track",                {} },
+            { "My sound (your tracks)",         {} },
         };
         return t;
     }
-    constexpr int referenceTonalIndex = 2;
+    constexpr int referenceTonalIndex = 2, mySoundTonalIndex = 3;
 
     /** Removes the overall level so only the shape is compared (mean of 63 Hz..8 kHz = 0). */
     inline Bands normalise (const Bands& b)

@@ -525,6 +525,42 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("My sound (from your tracks)");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("MentalismMySound");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        juce::Array<juce::File> tracks;
+        for (const auto [name, db] : { std::pair<const char*, float> { "one.wav", -10.0f }, { "two.wav", -14.0f } })
+        {
+            juce::AudioBuffer<float> b (2, (int) (sampleRate * 6.0));
+            b.clear();
+            sine (1000.0f, db) (b, 0);
+            const auto f = dir.getChildFile (name);
+            writeWav (f, b);
+            tracks.add (f);
+        }
+        const auto mine = MentalismProcessor::analyseMySound (tracks);
+        check (mine.valid && mine.tracks == 2 && std::abs (mine.lufs + 12.0f) < 0.3f,
+               "learns from two tracks: their average loudness (" + juce::String (mine.lufs, 2) + " LUFS)");
+        const auto back = MySound::fromText (mine.toText());
+        check (back.valid && back.tracks == 2 && std::abs (back.lufs - mine.lufs) < 0.01f && std::abs (back.bands[5] - mine.bands[5]) < 0.01f,
+               "and keeps it as a file for every project");
+
+        auto p = make();
+        set (*p, Params::loudnessTarget, (float) advisor::mySoundIndex);
+        set (*p, Params::tonalTarget, (float) advisor::mySoundTonalIndex);
+        p->setMySound ({});
+        auto r = p->report();
+        check (std::abs (r.targetLufs + 8.0f) < 0.01f && ! r.tonalAvailable, "before learning: the club target, and no tonal target yet");
+        p->setMySound (mine);
+        r = p->report();
+        check (std::abs (r.targetLufs - mine.lufs) < 0.01f && r.targetName.contains ("your sound") && r.tonalAvailable
+                   && std::abs (r.ceiling - mine.ceiling()) < 0.01f,
+               "'My sound' targets your loudness, ceiling and tonal balance (" + r.targetName + ")");
+        dir.deleteRecursively();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

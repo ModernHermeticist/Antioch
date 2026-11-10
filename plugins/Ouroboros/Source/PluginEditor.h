@@ -94,7 +94,8 @@ private:
 class ArrangePanel : public juce::Component
 {
 public:
-    ArrangePanel (arrangement::GenSettings initial, double bpm, std::function<void (arrangement::GenSettings)> onGenerate);
+    ArrangePanel (arrangement::GenSettings initial, double bpm, std::function<void (arrangement::GenSettings)> onGenerate,
+                  std::function<void (int totalBars)> onLikeMine = {});
     void paint (juce::Graphics&) override;
     void resized() override;
 
@@ -104,6 +105,8 @@ private:
 
     double bpm;
     std::function<void (arrangement::GenSettings)> generate;
+    std::function<void (int)> likeMine;
+    juce::TextButton likeMineButton { "Like my songs" };
     juce::Slider bars { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
     juce::ComboBox drops, intro, breakdown;
     juce::Label barsLabel, duration, dropsLabel, introLabel, breakdownLabel;
@@ -132,8 +135,10 @@ private:
     std::unique_ptr<juce::AlertWindow> nameWindow;
     suite::ui::Knob intensity;
     suite::ui::Toggle live;
-    suite::ui::Choice entrance;
+    suite::ui::Choice entrance, ride;
     juce::Label liveHelp;
+    std::unique_ptr<juce::FileChooser> markerChooser;
+    void exportMarkers();
     juce::Rectangle<int> performArea;
     juce::Slider lengthSlider { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
     juce::Label lengthCaption, nowLabel, nextLabel, selectionLabel, legend;

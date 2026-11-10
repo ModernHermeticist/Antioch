@@ -6,6 +6,7 @@
 #include "Parameters.h"
 #include "Spectrum.h"
 #include "Coach.h"
+#include "MySound.h"
 #include "HostInfo.h"
 #include <thread>
 
@@ -53,6 +54,14 @@ public:
 
     /** Clears integrated loudness, true peak and long-term balance (applied on the next block). */
     void resetMeasurements() { resetRequested.store (true); autoPasses.store (0); }
+
+    /** My sound: learns a loudness and tonal target from your finished tracks (in the
+        background), saved for every project. */
+    void learnMySound (const juce::Array<juce::File>& tracks);
+    static MySound analyseMySound (const juce::Array<juce::File>& tracks, const std::atomic<bool>* cancel = nullptr);
+    bool isLearningMySound() const { return learningMySound.load(); }
+    MySound getMySound() const { const juce::ScopedLock sl (referenceLock); return mySound; }
+    void setMySound (const MySound& m) { const juce::ScopedLock sl (referenceLock); mySound = m; }
 
     /** Starts analysing a reference track in the background. */
     void loadReference (const juce::File&);
@@ -189,6 +198,9 @@ private:
     std::thread loader;
     mutable juce::CriticalSection referenceLock;
     ReferenceProfile reference;
+    MySound mySound;
+    std::atomic<bool> learningMySound { false };
+    std::thread mySoundLoader;
     std::vector<float> mono;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MentalismProcessor)

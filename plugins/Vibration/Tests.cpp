@@ -225,6 +225,62 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Print scenes to FL automation");
+    {
+        suite::SectionMap map;   // 120 BPM: Groove 0-4 s, Drop 4-8 s
+        map.totalBars = 4; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Drop };
+        auto p = makeNeutral();   // (withdraws any map, so publish after)
+        suite::SectionBus::publish (map);
+        set (*p, suite::SceneEngine::enabledId, 1.0f);
+        p->scenes.clearAll();
+        p->scenes.setOffset ((int) suite::SectionType::Drop, VibrationProcessor::sEuphoria, 0.3f);
+        auto* euphoria = p->apvts.getParameter (Params::euphoria);
+        const auto base = euphoria->getValue();
+        FakePlayHead head;
+        head.bpm = 120.0;
+        head.playing = false;
+        p->setPlayHead (&head);
+        render (*p, 0.05, {}, nullptr, &head);
+
+        p->scenes.armPrint();
+        p->scenes.printTick();
+        check (p->scenes.getPrintState() == suite::SceneEngine::PrintState::Armed, "armed: waits for playback");
+        head.playing = true;
+        render (*p, 2.0, {}, nullptr, &head);
+        p->scenes.printTick();
+        check (p->scenes.getPrintState() == suite::SceneEngine::PrintState::Printing && std::abs (euphoria->getValue() - base) < 1.0e-3f,
+               "printing: the groove leaves the knob where it was");
+        render (*p, 4.0, {}, nullptr, &head);
+        p->scenes.printTick();
+        check (std::abs (euphoria->getValue() - (base + 0.3f)) < 0.01f && std::abs (p->scenes.getEffective (VibrationProcessor::sEuphoria) - euphoria->getValue()) < 1.0e-4f,
+               "in the drop the knob itself moves (so FL records it), and what plays is the same value (" + juce::String (base, 3) + " -> "
+                   + juce::String (euphoria->getValue(), 3) + ", effective " + juce::String (p->scenes.getEffective (VibrationProcessor::sEuphoria), 3)
+                   + ", type " + juce::String (p->scenes.getActiveType()) + ")");
+        head.playing = false;
+        render (*p, 0.1, {}, nullptr, &head);
+        p->scenes.printTick();
+        render (*p, 0.5, {}, nullptr, &head);
+        check (p->scenes.getPrintState() == suite::SceneEngine::PrintState::Idle && p->scenes.getPrintsDone() == 1
+                   && p->apvts.getRawParameterValue (suite::SceneEngine::enabledId)->load() < 0.5f
+                   && std::abs (p->scenes.getEffective (VibrationProcessor::sEuphoria) - euphoria->getValue()) < 1.0e-4f,
+               "stopping finishes it: scenes switch off and the knob (now automated) is what plays");
+
+        auto q = makeNeutral();
+        suite::SectionBus::publish (map);
+        set (*q, suite::SceneEngine::enabledId, 1.0f);
+        const auto qBase = q->apvts.getParameter (Params::euphoria)->getValue();
+        q->scenes.armPrint();
+        q->apvts.getParameter (Params::euphoria)->setValueNotifyingHost (0.9f);
+        q->scenes.cancelPrint();
+        check (q->scenes.getPrintState() == suite::SceneEngine::PrintState::Idle && std::abs (q->apvts.getParameter (Params::euphoria)->getValue() - qBase) < 1.0e-4f
+                   && q->apvts.getRawParameterValue (suite::SceneEngine::enabledId)->load() > 0.5f,
+               "cancel puts the knobs back and keeps scenes on");
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+    }
+
     section ("Final-drop snapshot morph");
     {
         suite::MorphBus::withdraw();

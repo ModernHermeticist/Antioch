@@ -75,6 +75,8 @@ namespace Params
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; })));
         layout.add (std::make_unique<AudioParameterBool> (id (songCounter), "Counter-Melody", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songPhrase), "Phrase Variation", true));
+        layout.add (std::make_unique<AudioParameterChoice> (id (leadExpression), "Lead Expression",
+                                                            StringArray { "Plain lead", "Glide", "Glide + scoops (bend 2)", "Glide + scoops (bend 12)" }, 2));
         layout.add (std::make_unique<AudioParameterChoice> (id (groove), "Groove", StringArray { "Straight", "Trance shuffle", "Hard shuffle" }, 0));
         layout.add (std::make_unique<AudioParameterBool> (id (accentCC), "Accents as CC 74", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (songBreakdown), "Breakdown Progression",

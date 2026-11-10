@@ -462,9 +462,14 @@ void SessionPanel::resized()
 }
 
 //==============================================================================
-ArrangePanel::ArrangePanel (arrangement::GenSettings initial, double tempo, std::function<void (arrangement::GenSettings)> onGenerate)
-    : bpm (tempo), generate (std::move (onGenerate))
+ArrangePanel::ArrangePanel (arrangement::GenSettings initial, double tempo, std::function<void (arrangement::GenSettings)> onGenerate,
+                            std::function<void (int)> onLikeMine)
+    : bpm (tempo), generate (std::move (onGenerate)), likeMine (std::move (onLikeMine))
 {
+    likeMineButton.setTooltip ("Your usual structure (learned from the maps you saved as templates), at this length");
+    likeMineButton.onClick = [this] { if (likeMine) likeMine ((int) bars.getValue()); };
+    likeMineButton.setEnabled (likeMine != nullptr && OuroborosProcessor::learnArrangementDna().valid);
+    addAndMakeVisible (likeMineButton);
     auto caption = [this] (juce::Label& l, const juce::String& text)
     {
         l.setText (text, juce::dontSendNotification);
@@ -533,6 +538,7 @@ void ArrangePanel::resized()
         box->setBounds (x);
     }
     go.setBounds (r.removeFromRight (120));
+    likeMineButton.setBounds (r.removeFromLeft (130));
 }
 
 //==============================================================================
@@ -546,6 +552,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       intensity (p.apvts, OuroborosProcessor::intensityId, "Intensity", Colours::brass),
       live (p.apvts, OuroborosProcessor::liveId, "LIVE MODE", accent),
       entrance (p.apvts, OuroborosProcessor::entranceId, "Drop entrance"),
+      ride (p.apvts, OuroborosProcessor::rideId, "Intensity ride"),
       timeline (p)
 {
     setLookAndFeel (&lnf);
@@ -557,6 +564,20 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         const auto id = templateBox.getSelectedId();
         if (id <= 0) return;
         const auto builtIn = (int) arrangement::templates().size();
+        if (id == 998) { templateBox.setSelectedId (0, juce::dontSendNotification); exportMarkers(); return; }
+        if (id == 997)   // your usual structure, learned from your templates
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            const auto dna = OuroborosProcessor::learnArrangementDna();
+            if (dna.valid)
+            {
+                processor.setMap (arrangement::generateLike (dna));
+                processor.addNote ("Laid out your usual structure (from " + juce::String (dna.songs) + " of your songs)");
+            }
+            timeline.selected = 0;
+            refreshSelection();
+            return;
+        }
         if (id == 999)   // save the current map as one of your templates
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -589,7 +610,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     liveHelp.setColour (juce::Label::textColourId, Colours::dimText);
     liveHelp.setText ("Live: send MIDI to Ouroboros and play the sections: C intro, D groove, E breakdown, F build, G drop, "
                       "A outro. Each starts on the next bar and the whole suite follows.", juce::dontSendNotification);
-    for (auto* c : std::initializer_list<juce::Component*> { &intensity, &entrance, &live, &liveHelp })
+    for (auto* c : std::initializer_list<juce::Component*> { &intensity, &entrance, &ride, &live, &liveHelp })
         addAndMakeVisible (c);
 
     lengthCaption.setText ("Bars", juce::dontSendNotification);
@@ -774,6 +795,11 @@ void OuroborosEditor::showArrange()
         if (safe == nullptr) return;
         safe->lastArrange = g;
         safe->timeline.preview = arrangement::generate (g);
+        safe->timeline.repaint();
+    }, [safe] (int totalBars)
+    {
+        if (safe == nullptr) return;
+        safe->timeline.preview = arrangement::generateLike (OuroborosProcessor::learnArrangementDna(), totalBars);
         safe->timeline.repaint();
     });
     juce::CallOutBox::launchAsynchronously (std::move (panel), arrangeButton.getScreenBounds(), nullptr);
@@ -1010,6 +1036,7 @@ void OuroborosEditor::resized()
         intensity.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
         intensity.maxHeight = 52;
         entrance.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
+        ride.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
         live.setBounds (pa.removeFromLeft (150).withSizeKeepingCentre (140, 30));
         liveHelp.setBounds (pa.reduced (10, 0));
     }
@@ -1029,5 +1056,25 @@ void OuroborosEditor::fillTemplates()
             templateBox.addItem ("Mine: " + userTemplates[i].first, (int) (arrangement::templates().size() + i + 1));
     }
     templateBox.addSeparator();
+    const auto dna = OuroborosProcessor::learnArrangementDna();
+    templateBox.addItem (dna.valid ? "Like my songs (your usual structure, from " + juce::String (dna.songs) + " songs)"
+                                   : juce::String ("Like my songs (save 2+ maps as templates first)"), 997);
+    templateBox.setItemEnabled (997, dna.valid);
     templateBox.addItem ("Save the current map as a template...", 999);
+    templateBox.addItem ("Export section markers for FL (MIDI + cue sheet)...", 998);
+}
+
+void OuroborosEditor::exportMarkers()
+{
+    markerChooser = std::make_unique<juce::FileChooser> ("Save section markers",
+                                                         juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Song sections.mid"),
+                                                         "*.mid");
+    markerChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+                                [this] (const juce::FileChooser& fc)
+    {
+        const auto f = fc.getResult();
+        if (f == juce::File()) return;
+        processor.addNote (processor.exportMarkers (f) ? "Exported section markers to " + f.withFileExtension ("mid").getFileName() + " (and a .txt cue sheet)"
+                                                       : juce::String ("Couldn't export the markers"));
+    });
 }

@@ -270,11 +270,13 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
 
     directory.createDirectory();
     file.deleteFile();
+    const auto shaped = chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
+                                          apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
+    const auto cc = apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0;
+    const auto isLead = kind == "Melody" || kind == "Song Lead";   // the lead line: glides and scoops
     if (auto stream = file.createOutputStream())
-        chords::toMidiFile (chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
-                                              apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode()),
-                            currentBpm.load(), "Correspondence " + kind,
-                            apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0).writeTo (*stream);
+        (isLead ? chords::toLeadMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc, leadExpression())
+                : chords::toMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc)).writeTo (*stream);
     return file;
 }
 
@@ -351,7 +353,10 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         const auto amount = apvts.getRawParameterValue (Params::humanise)->load();
         const auto swing = Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load());
         for (auto& [name, notes] : parts)
+        {
             notes = chords::humanise (chords::applyGroove (notes, swing), amount, ("Song " + name).hashCode());
+            if (name == "Lead") notes = chords::expressLead (notes, leadExpression()).notes;   // glides (scoops are in the Song Lead clip)
+        }
         const auto file = folder.getChildFile (juce::File::createLegalFileName (key + " - all parts.mid"));
         if (auto stream = file.createOutputStream())
             chords::toMultiTrackMidi (parts, bpm, markers, apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0).writeTo (*stream);

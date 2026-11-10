@@ -7,6 +7,7 @@
 
 using namespace suite::test;
 using suite::SectionType;
+using T = suite::SectionType;
 
 int main (int argc, char** argv)
 {
@@ -361,6 +362,64 @@ int main (int argc, char** argv)
         check (all.contains ("their fill won't be heard"), "warns about a kick-only bar on top of fills");
         check (all.contains ("drawn no higher than the breakdown"), "warns about a drop drawn below its breakdown");
         check (all.contains ("Intensity is at 20%"), "warns that Intensity is nearly off");
+    }
+
+    section ("Intensity ride, arrangement DNA and section markers");
+    {
+        auto p = std::make_unique<OuroborosProcessor>();
+        p->prepareToPlay (48000.0, 512);
+        auto sendCC = [&] (int cc, int value)
+        {
+            juce::AudioBuffer<float> buffer (2, 64);
+            buffer.clear();
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::controllerEvent (1, cc, value), 0);
+            p->processBlock (buffer, midi);
+            p->applyRide();
+            return p->apvts.getRawParameterValue (OuroborosProcessor::intensityId)->load();
+        };
+        check (std::abs (sendCC (1, 20) - 100.0f) < 0.01f, "ride off: the mod wheel doesn't touch Intensity");
+        set (*p, OuroborosProcessor::rideId, 1.0f);   // mod wheel
+        check (std::abs (sendCC (1, 0)) < 0.5f && std::abs (sendCC (1, 64) - 100.0f) < 0.5f && std::abs (sendCC (1, 127) - 200.0f) < 0.5f,
+               "the mod wheel rides Intensity: 0 -> 0%, centre -> 100%, top -> 200%");
+        check (std::abs (sendCC (11, 0) - 200.0f) < 0.5f, "other controllers are ignored");
+
+        // Arrangement DNA: two songs share a structure, one doesn't.
+        auto map = [] (std::vector<std::pair<int, suite::SectionType>> secs, int total, int dropEnergy = -1)
+        {
+            suite::SectionMap m;
+            m.totalBars = total;
+            for (const auto& [bar, type] : secs) m.sections[(size_t) m.count++] = { bar, type, type == T::Drop ? dropEnergy : -1 };
+            return m;
+        };
+        const std::vector<suite::SectionMap> mine {
+            map ({ { 1, T::Intro }, { 17, T::Breakdown }, { 49, T::Build }, { 57, T::Drop }, { 89, T::Outro } }, 104, 90),
+            map ({ { 1, T::Intro }, { 17, T::Breakdown }, { 41, T::Build }, { 49, T::Drop }, { 81, T::Outro } }, 96, 90),
+            map ({ { 1, T::Intro }, { 33, T::Drop } }, 64) };
+        const auto dna = arrangement::learnDna (mine);
+        check (dna.valid && dna.songs == 2 && dna.structure.size() == 5 && dna.structure[1] == T::Breakdown,
+               "learns your usual structure (intro, breakdown, build, drop, outro: 2 of 3 songs)");
+        const auto like = arrangement::generateLike (dna, 160);
+        bool phrases = like.totalBars == 160 && like.count == 5;
+        for (int i = 0; phrases && i < like.count; ++i) phrases = (like.endBar (i) - like.sections[(size_t) i].startBar) % 8 == 0;
+        check (phrases && like.sections[3].type == T::Drop && like.sections[3].energy == 90,
+               "lays it out at 160 bars in whole phrases, with your usual drop energy (" + arrangement::toString (like) + ")");
+        check (arrangement::generateLike (dna).totalBars == 104, "or at your usual length");
+        check (! arrangement::learnDna ({ mine[0] }).valid, "needs at least two songs");
+
+        // Section markers.
+        p->setMap (like);
+        const auto midi = arrangement::markerMidi (like, 120.0);
+        juce::StringArray markers;
+        for (auto* e : *midi.getTrack (0))
+            if (e->message.isTextMetaEvent() && e->message.getMetaEventType() == 6)
+                markers.add (e->message.getTextFromTextMetaEvent() + "@" + juce::String ((int) (e->message.getTimeStamp() / 960.0 / 4.0) + 1));
+        check (markers.size() == 5 && markers[0] == "Intro@1" && markers[1].startsWith ("Breakdown@"), "a MIDI marker at every section: " + markers.joinIntoString (" "));
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosMarkers");
+        dir.deleteRecursively();
+        check (p->exportMarkers (dir.getChildFile ("Song sections.mid")) && dir.getChildFile ("Song sections.txt").loadFileAsString().contains ("Bar    1  0:00  Intro"),
+               "exported with a cue sheet (bars and times)");
+        dir.deleteRecursively();
     }
 
     section ("Recipes");

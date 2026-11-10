@@ -257,6 +257,11 @@ Materia tracks, and its **Fix** button takes the melodic parts out, undoable in 
 warning or fail, with *Ready to export* when everything passes. Press Reset and play the
 whole song through first.
 
+**My sound.** **Learn my sound…** (Tonal Balance tab) takes a few of your own finished
+tracks and averages their loudness, true peak and tonal balance. Choose **My sound** as the
+loudness target and the tonal target, in any project, to mix towards your own records
+instead of a genre guide. Lapis follows the loudness and ceiling when it follows Mentalism.
+
 **Arc match.** Where you've drawn a section's energy on Ouroboros' curve, the coach holds
 the song to it: relative to the first drop, each drawn section should sit 12 LU lower per
 100% of energy (a breakdown drawn at 40% belongs 7.2 LU under the drop). More than 3 LU
@@ -363,9 +368,24 @@ G drop, A outro). Each starts on the next bar line (a note just before a bar lin
 the one after), and the whole suite follows as if it were the song map: builds ramp over
 8 bars, transitions fire, scenes move.
 
+**Intensity ride** puts Intensity on a controller: the mod wheel (CC 1), breath (CC 2),
+expression (CC 11) or CC 16, routed to Ouroboros. The bottom of the wheel is 0%, the middle
+100% and the top 200%. With FL's automation recording on, your ride is recorded as an
+Intensity automation clip.
+
 **Your own templates.** "Save the current map as a template…" at the bottom of the
 template list keeps the song map, energy curve included, as one of your templates
 ("Mine: …") in every project.
+
+**Like my songs** (template list, and a button in Arrange…) uses your **arrangement DNA**:
+once you've saved two or more maps as templates, Ouroboros takes your most common order of
+sections, the typical length of each and any energy you usually draw, and lays that out
+at your usual length (or at the length in Arrange…), in whole 8-bar phrases.
+
+**Export section markers for FL** (template list) saves a MIDI file with a marker at every
+section ("Intro", "Breakdown", "Drop 2"...) plus a .txt cue sheet with bars and times.
+Import the MIDI file into FL to bring the markers in. If your FL version doesn't import
+markers from MIDI, the cue sheet lists every bar number and time for adding markers by hand.
 
 **Session notes.** The Suite panel also lists what the automation did in this project
 (fixes, undos, snapshots, versions, recipes, new songs), with times, saved with the
@@ -445,6 +465,13 @@ up to 1 bar.
 
 Scenes follow Ouroboros and are saved with the project. The section is checked once per
 audio block, so changes land within about 10 ms of the bar line.
+
+**Print to FL automation** turns the invisible scene moves into automation clips you can
+see and edit. Turn on FL's automation recording, click **Print to FL automation** on the
+Scenes tab, and play the song: as it plays, the plugin moves its own knobs to the values the
+scenes give, and FL records them. Stop playback and the print finishes: scenes switch off,
+and FL's clips now do the moving. Clicking the button again before you play cancels it and
+puts the knobs back.
 
 ### Bigger later drops
 
@@ -681,6 +708,13 @@ change. Both are saved with the project.
 16ths of every exported clip (by 15% or 30% of a 16th). **Accents as CC 74** (on by
 default) also writes each note's accent as a CC 74 value just before it, so a synth's
 filter cutoff can follow the groove: map CC 74 to cutoff in your synth.
+
+**Lead expression** (Song patterns): exported leads (MELODY and SONG LEAD) can carry
+**glide** and **scoops**. Glide makes a note run into the next on leaps of a minor third or
+more, so a mono synth in legato or portamento mode slides between them. Scoops bend the
+first note of each phrase up into its pitch from 2 semitones below, over a 1/16, as pitch
+bend. Choose the bend range your synth uses (2 or 12 semitones) so the scoop is the right
+size, or *Plain lead* for neither. The lead track in the all-parts file gets the glides.
 
 **Phrase turnarounds** (Song patterns, on by default): in the last bar of every 8-bar
 phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp lifts an
@@ -940,6 +974,21 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   it, in key, with chord tones on the beat; in the song it plays with the full lead in the
   drop, not under the breakdown teaser, and can be switched off; Export all gains the
   Counter clip and track.
+- **Intensity ride:** off by default; on the mod wheel, 0 / 64 / 127 give 0 / 100 / 200%;
+  other controllers are ignored.
+- **Arrangement DNA:** from three maps (two sharing intro-breakdown-build-drop-outro), it
+  learns that structure, lays it out at 160 bars in whole phrases with your usual drop
+  energy, or at your usual length; one map isn't enough.
+- **Section markers:** a marker at every section (Intro@1, Breakdown@25, ...), exported with
+  a cue sheet.
+- **Lead glide and scoops:** scoops only on phrase starts; the leap glides, the step doesn't;
+  the bend goes from 2 semitones down back to centre within a 1/16 (smaller with a 12-semitone
+  range); MELODY exports carry it by default, never chords.
+- **Print scenes to FL automation:** armed until playback; the groove leaves the knob alone;
+  in the drop the knob itself moves and is what plays; stopping switches scenes off; cancel
+  restores the knobs.
+- **My sound:** two tracks at -10 and -14 LUFS give a -12 LUFS target, kept as a file; before
+  learning, the club target; after, your loudness, ceiling and tonal balance.
 - **Phrase turnarounds:** in a 16-bar drop only bar 8 changes: 3 bass notes and 16 arp
   notes an octave up; bar 16 is left alone.
 - **Signature:** *Save as my signature* stores a recipe; New song from it sends the

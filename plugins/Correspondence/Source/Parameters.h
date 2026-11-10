@@ -29,7 +29,8 @@ namespace Params
     inline const juce::String songBreakdown { "song_bdstart" }; // breakdown progression: same / start on VI / start on IV
     inline const juce::String humanise     { "humanise" };
     inline const juce::String songCounter  { "song_counter" };
-    inline const juce::String songPhrase   { "song_phrase" };    // turnarounds at the end of every 8-bar phrase   // counter-melody wherever the full lead plays
+    inline const juce::String songPhrase   { "song_phrase" };
+    inline const juce::String leadExpression { "lead_expr" };    // exported leads: off / glide / glide + scoops (bend 2 or 12)    // turnarounds at the end of every 8-bar phrase   // counter-melody wherever the full lead plays
     inline const juce::String groove       { "groove" };         // exported MIDI feel: straight / trance shuffle / hard shuffle
     inline const juce::String accentCC     { "accent_cc" };      // write accents as CC 74 too
     inline float grooveSwing (int index) { static const float s[] = { 0.0f, 0.15f, 0.3f }; return s[juce::jlimit (0, 2, index)]; }    // exported MIDI: accents and small timing/velocity variation

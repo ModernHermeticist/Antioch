@@ -4,6 +4,7 @@
 #include "SuiteProcessor.h"
 #include "Parameters.h"
 #include "PreviewSynth.h"
+#include "Glide.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -55,6 +56,16 @@ public:
     /** Export all: a song folder inside `parent` with every clip, plus "<song> - all parts.mid"
         (song parts on separate tracks, sections as markers) when Ouroboros has a map. Returns the folder. */
     juce::File exportEverything (const juce::File& parent) const;
+    /** Glide and scoops for exported leads, from the Lead expression setting. */
+    chords::LeadExpression leadExpression() const
+    {
+        const auto i = (int) apvts.getRawParameterValue (Params::leadExpression)->load();
+        chords::LeadExpression x;
+        x.glide = i >= 1;
+        x.scoops = i >= 2;
+        x.bendRange = i == 3 ? 12 : 2;
+        return x;
+    }
 
     int learnMotif (const juce::File&);
 

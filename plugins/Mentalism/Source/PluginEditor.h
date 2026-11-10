@@ -75,6 +75,7 @@ private:
     suite::Fix lastFix = suite::Fix::None;
     int fixStatusTicks = 0;
     void sendFix (int row);
+    void setParameterFromEditor (const juce::String& id, float plainValue);
     void layoutFixButtons();
     void updateFixStatus();
 
@@ -83,7 +84,7 @@ private:
 
     suite::ui::Choice loudTarget, tonalTarget;
     juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" },
-                     matchButton { "Match reference" };
+                     matchButton { "Match reference" }, mySoundButton { "Learn my sound..." };
     uint32_t matchSeq = 0;
     juce::TextButton finishButton { "Finish the song" };
     std::unique_ptr<suite::ui::Toggle> autoCoach;

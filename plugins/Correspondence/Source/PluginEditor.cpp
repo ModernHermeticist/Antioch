@@ -354,6 +354,12 @@ namespace
             grooveBox->setTooltip ("The feel of the exported MIDI; Kybalion's gate swings with it too");
             grooveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::groove, *grooveBox);
             addAndMakeVisible (*grooveBox);
+            leadBox = std::make_unique<juce::ComboBox>();
+            leadBox->addItemList (state.getParameter (Params::leadExpression)->getAllValueStrings(), 1);
+            leadBox->setTooltip ("Exported leads: glide on leaps (set your synth to legato / portamento) and pitch-bend scoops "
+                                 "into each phrase (set its bend range to match)");
+            leadAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::leadExpression, *leadBox);
+            addAndMakeVisible (*leadBox);
             accent = std::make_unique<juce::ToggleButton> ("Accents as CC 74");
             accent->setTooltip ("Each note's accent is also written as CC 74, so a synth's filter can open on the accents");
             accentAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::accentCC, *accent);
@@ -375,7 +381,7 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (1060, 400);
+            setSize (1200, 400);
         }
 
         void paint (juce::Graphics& g) override
@@ -397,6 +403,7 @@ namespace
                 grooveBox->setBounds (extras.removeFromLeft (160).reduced (2));
                 accent->setBounds (extras.removeFromLeft (170));
                 phrase->setBounds (extras.removeFromLeft (160));
+                leadBox->setBounds (extras.removeFromLeft (200).reduced (2));
                 artist.setBounds (extras.removeFromRight (200).reduced (2));
                 title.setBounds (extras.removeFromRight (260).reduced (2));
             }
@@ -424,6 +431,8 @@ namespace
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
         std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase;
+        std::unique_ptr<juce::ComboBox> leadBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> leadAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;
         std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox;
         std::unique_ptr<juce::ToggleButton> accent;

@@ -80,6 +80,15 @@ namespace suite::ui
                 rows.push_back (std::move (row));
             }
 
+            print.setTooltip ("Writes the scene moves into this plugin's knobs as the song plays, so FL records them as automation "
+                              "clips (turn on FL's automation recording first). Scenes switch off when you stop.");
+            print.onClick = [this]
+            {
+                if (engine.getPrintState() == SceneEngine::PrintState::Idle) engine.armPrint();
+                else engine.cancelPrint();
+                timerCallback();
+            };
+            addAndMakeVisible (print);
             suggested.onClick = [this] { engine.applySuggested(); selectType (selected); };
             clear.onClick = [this] { engine.clearAll(); selectType (selected); };
             for (auto* c : std::initializer_list<juce::Component*> { &enabled, &morph, &suggested, &clear, &status, &hint })
@@ -125,7 +134,11 @@ namespace suite::ui
             for (auto& b : typeButtons) b->setBounds (types.removeFromLeft (w).reduced (2));
             r.removeFromTop (10);
 
-            hint.setBounds (r.removeFromBottom (34));
+            {
+                auto bottom = r.removeFromBottom (34);
+                print.setBounds (bottom.removeFromRight (230).reduced (2, 2));
+                hint.setBounds (bottom);
+            }
             const auto rowH = juce::jmin (30, r.getHeight() / juce::jmax (1, (int) rows.size()));
             for (auto& row : rows)
             {
@@ -138,6 +151,11 @@ namespace suite::ui
     private:
         void timerCallback() override
         {
+            const auto ps = engine.getPrintState();
+            print.setButtonText (ps == SceneEngine::PrintState::Armed ? "Armed: press play (click to cancel)"
+                                 : ps == SceneEngine::PrintState::Printing ? "Printing... stop to finish"
+                                 : engine.getPrintsDone() > 0 ? "Printed. Print again" : "Print to FL automation");
+            print.setColour (juce::TextButton::buttonColourId, ps == SceneEngine::PrintState::Idle ? Colours::panel : Colours::ember.withAlpha (0.6f));
             const auto active = engine.getActiveType();
             status.setColour (juce::Label::textColourId, active >= 0 ? sectionColour ((SectionType) active) : Colours::dimText);
             status.setText (active >= 0 ? juce::String ("Now: ") + sectionName ((SectionType) active) + (engine.isInLaterDrop() ? " 2+" : "")
@@ -151,7 +169,7 @@ namespace suite::ui
         SceneEngine& engine;
         Toggle enabled;
         Choice morph;
-        juce::TextButton suggested { "Suggested" }, clear { "Clear all" };
+        juce::TextButton suggested { "Suggested" }, clear { "Clear all" }, print { "Print to FL automation" };
         juce::Label status, hint;
         std::vector<std::unique_ptr<juce::TextButton>> typeButtons;
         std::vector<std::unique_ptr<Row>> rows;

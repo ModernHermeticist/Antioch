@@ -67,6 +67,7 @@ namespace suite
 
         void beginBlock (const HostInfo& host, double sampleRate, int numSamples) noexcept
         {
+            hostPlaying.store (host.playing, std::memory_order_relaxed);
             const auto haveMap = follower.refresh();
             const auto on = enabled != nullptr && enabled->load() > 0.5f;
 
@@ -119,7 +120,72 @@ namespace suite
         /** Normalised value in use: the knob's current value plus the current (gliding) offset. */
         float getEffective (int i) const noexcept
         {
-            return juce::jlimit (0.0f, 1.0f, params[(size_t) i]->getValue() + current[(size_t) i].load (std::memory_order_relaxed));
+            const auto base = usePrintBase.load (std::memory_order_relaxed) ? printBase[(size_t) i].load (std::memory_order_relaxed)
+                                                                            : params[(size_t) i]->getValue();
+            return juce::jlimit (0.0f, 1.0f, base + current[(size_t) i].load (std::memory_order_relaxed));
+        }
+
+        //==============================================================================
+        // Print to automation (message thread): arm, press play in the host with its
+        // automation recording on, and the scene moves are written into the plugin's own
+        // parameters as the song plays, so the host records them as automation clips. When
+        // playback stops, scenes switch off (the recorded clips now do the moving).
+
+        enum class PrintState { Idle, Armed, Printing };
+        PrintState getPrintState() const noexcept { return (PrintState) printState.load(); }
+        int getPrintsDone() const noexcept { return printsDone.load(); }
+
+        void armPrint()
+        {
+            if (apvts == nullptr || count == 0 || getPrintState() != PrintState::Idle) return;
+            for (int i = 0; i < count; ++i)
+            {
+                printBase[(size_t) i].store (params[(size_t) i]->getValue());
+                params[(size_t) i]->beginChangeGesture();
+            }
+            usePrintBase.store (true);
+            printState.store ((int) PrintState::Armed);
+            if (printTimer == nullptr) printTimer = std::make_unique<PrintTimer> (*this);
+            printTimer->startTimerHz (30);
+        }
+
+        void cancelPrint()
+        {
+            if (getPrintState() == PrintState::Idle) return;
+            for (int i = 0; i < count; ++i)
+            {
+                params[(size_t) i]->setValueNotifyingHost (printBase[(size_t) i].load());
+                params[(size_t) i]->endChangeGesture();
+            }
+            endPrint();
+        }
+
+        /** The print's work, 30 times a second (tests call it directly). */
+        void printTick()
+        {
+            const auto state = getPrintState();
+            if (state == PrintState::Armed && hostPlaying.load())
+                printState.store ((int) PrintState::Printing);
+            if (getPrintState() != PrintState::Printing) return;
+            if (! hostPlaying.load())
+            {
+                for (int i = 0; i < count; ++i) params[(size_t) i]->endChangeGesture();
+                if (auto* on = apvts->getParameter (enabledId))
+                {
+                    on->beginChangeGesture();
+                    on->setValueNotifyingHost (0.0f);   // the recorded automation takes over
+                    on->endChangeGesture();
+                }
+                printsDone.fetch_add (1);
+                endPrint();
+                return;
+            }
+            for (int i = 0; i < count; ++i)
+            {
+                const auto v = juce::jlimit (0.0f, 1.0f, printBase[(size_t) i].load() + current[(size_t) i].load());
+                if (std::abs (v - params[(size_t) i]->getValue()) > 1.0e-4f)
+                    params[(size_t) i]->setValueNotifyingHost (v);
+            }
         }
         int getActiveType() const noexcept { return activeType.load(); }
         bool isInLaterDrop() const noexcept { return activeLaterDrop.load(); }
@@ -186,6 +252,23 @@ namespace suite
         }
 
     private:
+        struct PrintTimer : juce::Timer
+        {
+            explicit PrintTimer (SceneEngine& e) : engine (e) {}
+            void timerCallback() override { engine.printTick(); }
+            SceneEngine& engine;
+        };
+        void endPrint()
+        {
+            usePrintBase.store (false);
+            printState.store ((int) PrintState::Idle);
+            if (printTimer != nullptr) printTimer->stopTimer();
+        }
+        std::array<std::atomic<float>, maxParams> printBase {};
+        std::atomic<bool> usePrintBase { false }, hostPlaying { false };
+        std::atomic<int> printState { 0 }, printsDone { 0 };
+        std::unique_ptr<PrintTimer> printTimer;
+
         juce::AudioProcessorValueTreeState* apvts = nullptr;
         int count = 0;
         std::array<juce::String, maxParams> ids, labels;

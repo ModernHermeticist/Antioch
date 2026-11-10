@@ -57,6 +57,7 @@ MentalismProcessor::MentalismProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "MentalismState", Params::createLayout())
 {
+    mySound = MySound::load (MySound::file());
     timerCallback();
     startTimerHz (4);
 }
@@ -189,6 +190,36 @@ MentalismProcessor::~MentalismProcessor()
     cancelLoad.store (true);
     if (loader.joinable())
         loader.join();
+    if (mySoundLoader.joinable())
+        mySoundLoader.join();
+}
+
+MySound MentalismProcessor::analyseMySound (const juce::Array<juce::File>& tracks, const std::atomic<bool>* cancel)
+{
+    std::vector<ReferenceProfile> profiles;
+    for (const auto& f : tracks)
+    {
+        if (cancel != nullptr && cancel->load()) break;
+        profiles.push_back (ReferenceProfile::analyse (f, cancel));
+    }
+    return MySound::average (profiles);
+}
+
+void MentalismProcessor::learnMySound (const juce::Array<juce::File>& tracks)
+{
+    if (learningMySound.load()) return;
+    if (mySoundLoader.joinable()) mySoundLoader.join();
+    learningMySound.store (true);
+    mySoundLoader = std::thread ([this, tracks]
+    {
+        const auto m = analyseMySound (tracks, &cancelLoad);
+        if (m.valid)
+        {
+            m.save (MySound::file());
+            setMySound (m);
+        }
+        learningMySound.store (false);
+    });
 }
 
 bool MentalismProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -350,7 +381,15 @@ MentalismProcessor::Report MentalismProcessor::report() const
 
     const auto& lt = advisor::loudnessTargets()[(size_t) juce::jlimit (0, (int) advisor::loudnessTargets().size() - 1, loudIndex)];
     rep.ceiling = lt.ceilingDbtp;
-    if (loudIndex == advisor::matchReferenceIndex && ref.valid)
+    const auto mine = getMySound();
+    if (loudIndex == advisor::mySoundIndex)
+    {
+        rep.targetLufs = mine.valid ? mine.lufs : advisor::loudnessTargets()[0].lufs;
+        rep.ceiling = mine.valid ? mine.ceiling() : rep.ceiling;
+        rep.targetName = mine.valid ? "your sound (" + juce::String (mine.lufs, 1) + " LUFS, from " + juce::String (mine.tracks) + " tracks)"
+                                    : juce::String ("the club target (learn your sound from your tracks first)");
+    }
+    else if (loudIndex == advisor::matchReferenceIndex && ref.valid)
     {
         rep.targetLufs = ref.lufs;
         rep.targetName = "the reference (" + juce::String (ref.lufs, 1) + " LUFS)";
@@ -363,7 +402,12 @@ MentalismProcessor::Report MentalismProcessor::report() const
     }
 
     advisor::Bands target {};
-    if (tonalIndex == advisor::referenceTonalIndex)
+    if (tonalIndex == advisor::mySoundTonalIndex)
+    {
+        rep.tonalAvailable = mine.valid;
+        target = mine.bands;
+    }
+    else if (tonalIndex == advisor::referenceTonalIndex)
     {
         rep.tonalAvailable = ref.valid;
         target = ref.bands;

@@ -17,6 +17,8 @@ namespace
                                                             juce::NormalisableRange<float> (0.0f, 200.0f), 100.0f,
                                                             juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + "%"; })));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::liveId, 1 }, "Live Mode", false));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::rideId, 1 }, "Intensity Ride",
+                                                              juce::StringArray { "Off", "Mod wheel (CC 1)", "Breath (CC 2)", "Expression (CC 11)", "CC 16" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::entranceId, 1 }, "Drop Entrance",
                                                              juce::StringArray { "Slam", "Staggered", "Filter opening" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::dropGapId, 1 }, "Before Drops",
@@ -93,6 +95,13 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
     else
         liveType.store (-1);
+    // Intensity ride: the chosen controller moves Intensity (applied on the message thread).
+    if (const auto cc = rideController ((int) apvts.getRawParameterValue (rideId)->load()); cc > 0)
+        for (const auto meta : midi)
+        {
+            const auto msg = meta.getMessage();
+            if (msg.isControllerOfType (cc)) pendingRide.store (msg.getControllerValue());
+        }
     midi.clear();   // the notes are for Ouroboros only
 
     // Final-drop snapshot: tell the suite how far to morph at this position (also while stopped,
@@ -288,6 +297,25 @@ void OuroborosProcessor::logActivity()
             addNote ((a == suite::RecipeAction::Save ? "Saved recipe '" : "Loaded recipe '") + name + "'");
     }
     seenRecipe = suite::RecipeBus::latest();
+}
+
+void OuroborosProcessor::applyRide()
+{
+    const auto v = pendingRide.exchange (-1);
+    if (v >= 0) setParameterPlain (apvts, intensityId, rideIntensity (v));
+}
+
+bool OuroborosProcessor::exportMarkers (const juce::File& midiFile) const
+{
+    const auto m = getMap();
+    if (m.count == 0) return false;
+    const auto file = midiFile.withFileExtension ("mid");
+    file.getParentDirectory().createDirectory();
+    file.deleteFile();
+    bool ok = false;
+    if (auto stream = file.createOutputStream())
+        ok = arrangement::markerMidi (m, bpm.load(), barQuarters.load()).writeTo (*stream);
+    return ok && file.withFileExtension ("txt").replaceWithText (arrangement::cueSheet (m, bpm.load(), barQuarters.load()));
 }
 
 void OuroborosProcessor::publish()

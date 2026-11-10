@@ -646,6 +646,47 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Lead glide and scoops");
+    {
+        // A phrase at 0, a rest, a new phrase at 2 with a leap (C5 -> E5) then a step.
+        const std::vector<chords::Note> line { { 72, 0.0, 0.5, 100 }, { 72, 2.0, 1.0, 100 }, { 76, 3.0, 0.5, 100 }, { 77, 3.5, 0.5, 100 } };
+        chords::LeadExpression x;
+        const auto e = chords::expressLead (line, x);
+        check (e.scoop[0] == 2 && e.scoop[1] == 2 && e.scoop[2] == 0 && e.scoop[3] == 0, "scoops into the first note of each phrase only");
+        check (e.notes[1].start + e.notes[1].length > 3.0 && std::abs (e.notes[2].length - 0.5) < 1e-9,
+               "the leap glides (C runs into E), the step doesn't");
+        const auto midi = chords::toLeadMidiFile (line, 138.0, "Lead", 0, x);
+        std::vector<std::pair<double, int>> wheel;
+        for (auto* ev : *midi.getTrack (0))
+            if (ev->message.isPitchWheel()) wheel.push_back ({ ev->message.getTimeStamp() / 960.0, ev->message.getPitchWheelValue() });
+        check (wheel.size() == 18 && wheel.front().second < 100 && wheel[8].second == 8192 && wheel.back().second == 8192,
+               "pitch bend: from 2 semitones below (bend range 2) back to centre within a 1/16 (" + juce::String ((int) wheel.size()) + " events)");
+        x.bendRange = 12;
+        const auto wide = chords::toLeadMidiFile (line, 138.0, "Lead", 0, x);
+        int first = -1;
+        for (auto* ev : *wide.getTrack (0)) if (ev->message.isPitchWheel() && first < 0) first = ev->message.getPitchWheelValue();
+        check (std::abs (first - (8192 - 1365)) < 3, "with a 12-semitone bend range the same scoop is a smaller wheel move (" + juce::String (first) + ")");
+
+        auto p = make();
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceLead");
+        dir.deleteRecursively();
+        auto bends = [&] (const juce::File& f)
+        {
+            juce::MidiFile m;
+            juce::FileInputStream in (f);
+            int n = 0;
+            if (m.readFrom (in)) for (auto* ev : *m.getTrack (0)) n += ev->message.isPitchWheel();
+            return n;
+        };
+        const auto withScoops = bends (p->exportClip ("Melody", dir));
+        set (*p, Params::leadExpression, 0.0f);
+        const auto plain = bends (p->exportClip ("Melody", dir.getChildFile ("plain")));
+        const auto chordsClip = bends (p->exportClip ("Chords", dir));
+        check (withScoops > 0 && plain == 0 && chordsClip == 0, "the exported MELODY carries scoops by default (" + juce::String (withScoops)
+                   + " bend events); none when plain, and never on chords");
+        dir.deleteRecursively();
+    }
+
     section ("Phrase turnarounds");
     {
         auto s = aMinor();
