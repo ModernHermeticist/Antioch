@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "PluginEditor.h"
+#include "SectionBus.h"
 
 using namespace suite::test;
 
@@ -164,6 +166,63 @@ int main (int argc, char** argv)
         const auto narrowCut = changeDb (*narrow, 2500.0, key);
         check (wideCut < narrowCut - 2.0f && narrowCut > -1.0f, "narrow focus leaves the weaker band alone (wide "
                    + juce::String (wideCut, 1) + " dB, narrow " + juce::String (narrowCut, 1) + " dB)");
+    }
+
+    section ("Section scenes");
+    {
+        suite::SectionMap map;   // Breakdown bars 1-4, Drop bars 5-8
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        const auto key = sine (1000.0, 0.1f);
+
+        auto cutIn = [&] (double ppq)
+        {
+            auto p = make (true);
+            FakePlayHead head;
+            head.ppq = ppq;
+            p->setPlayHead (&head);
+            const auto db = changeDb (*p, 1000.0, key);
+            p->setPlayHead (nullptr);
+            return db;
+        };
+        const auto inBreakdown = cutIn (2.0), inDrop = cutIn (18.0);
+        check (inDrop < inBreakdown - 3.0f, "dips deeper in the drop (" + juce::String (inDrop, 1) + " dB) than in the breakdown ("
+                                                + juce::String (inBreakdown, 1) + " dB)");
+
+        auto off = make (true);
+        set (*off, suite::SceneEngine::enabledId, 0.0f);
+        FakePlayHead head;
+        head.ppq = 18.0;
+        off->setPlayHead (&head);
+        auto plainDrop = changeDb (*off, 1000.0, key);
+        off->setPlayHead (nullptr);
+        auto none = make (true);
+        const auto noMap = changeDb (*none, 1000.0, key);
+        check (std::abs (plainDrop - noMap) < 0.2f, "scenes off: the knobs alone decide (" + juce::String (plainDrop, 1) + " dB)");
+
+        auto a = make (true);
+        a->scenes.setOffset ((int) suite::SectionType::Drop, P::sDepth, 0.4f);
+        juce::MemoryBlock state;
+        a->getStateInformation (state);
+        auto b = make (true);
+        b->setStateInformation (state.getData(), (int) state.getSize());
+        check (std::abs (b->scenes.getOffset ((int) suite::SectionType::Drop, P::sDepth) - 0.4f) < 1.0e-3f, "scenes are saved with the project");
+
+        if (outDir != juce::File())
+        {
+            auto q = make (true);
+            head.ppq = 18.0;
+            q->setPlayHead (&head);
+            run (*q, 0.3, noise(), key);
+            std::unique_ptr<juce::AudioProcessorEditor> editor (q->createEditor());
+            if (auto* tabs = dynamic_cast<suite::ui::TabBar*> (editor->findChildWithID ("tabs"))) tabs->setSelected (1);
+            snapshot (*editor, outDir.getChildFile ("solveetcoagula_scenes.png"));
+            editor.reset();
+            q->setPlayHead (nullptr);
+        }
+        suite::SectionBus::withdraw();
     }
 
     section ("Layouts and state");

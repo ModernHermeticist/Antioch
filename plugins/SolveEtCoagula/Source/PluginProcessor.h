@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Unmasker.h"
+#include "Scenes.h"
 
 class SolveEtCoagulaProcessor : public juce::AudioProcessor
 {
@@ -40,6 +41,8 @@ public:
     static float thresholdFor (float sensitivityPercent) { return -30.0f - 0.3f * sensitivityPercent; }
 
     Unmasker unmasker;
+    suite::SceneEngine scenes;
+    enum SceneSlot { sDepth, sSensitivity, sFocus, sMix };
     std::atomic<bool> sidechainConnected { false }, vocalPresent { false };
     juce::AudioProcessorValueTreeState apvts;
 

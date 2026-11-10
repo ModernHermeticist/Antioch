@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "HostInfo.h"
 
 namespace
 {
@@ -18,6 +19,7 @@ namespace
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return v < 9.0f ? String ("Narrow") : v > 18.0f ? String ("Wide") : String (roundToInt (v)) + " dB"; })));
         l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::speedId, 1 }, "Speed", StringArray { "Fast", "Medium", "Slow" }, 1));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { P::mixId, 1 }, "Mix", NormalisableRange<float> (0.0f, 100.0f), 100.0f, percent));
+        suite::SceneEngine::addParameters (l);
         return l;
     }
 }
@@ -29,6 +31,12 @@ SolveEtCoagulaProcessor::SolveEtCoagulaProcessor()
                           .withInput  ("Sidechain", juce::AudioChannelSet::stereo(), false)),
       apvts (*this, nullptr, "SolveEtCoagulaState", layout())
 {
+    // Section scenes: dense drops need more room for the vocal, sparse breakdowns less.
+    using T = suite::SectionType;
+    scenes.setup (apvts,
+                  { { depthId, "Depth" }, { sensitivityId, "Sensitivity" }, { focusId, "Focus" }, { mixId, "Mix" } },
+                  { { T::Breakdown, sDepth, -0.25f }, { T::Build, sDepth, 0.1f }, { T::Drop, sDepth, 0.2f },
+                    { T::Drop, sFocus, 0.15f }, { T::count, sDepth, 0.05f } });   // Drop 2+
 }
 
 bool SolveEtCoagulaProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -51,6 +59,7 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     unmasker.prepare (sampleRate);
+    scenes.prepare();
 }
 
 void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -59,13 +68,14 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
 
     static const float attack[] = { 3.0f, 10.0f, 25.0f }, release[] = { 60.0f, 150.0f, 350.0f };
     const auto speed = juce::jlimit (0, 2, (int) value (speedId));
+    scenes.beginBlock (suite::HostInfo::read (getPlayHead()), sampleRate, buffer.getNumSamples());
     Unmasker::Settings s;
-    s.depthDb = value (depthId);
-    s.thresholdDb = thresholdFor (value (sensitivityId));
-    s.focusDb = value (focusId);
+    s.depthDb = scenes.plain (sDepth);
+    s.thresholdDb = thresholdFor (scenes.plain (sSensitivity));
+    s.focusDb = scenes.plain (sFocus);
     s.attackMs = attack[speed];
     s.releaseMs = release[speed];
-    s.mix = value (mixId) * 0.01f;
+    s.mix = scenes.plain (sMix) * 0.01f;
     unmasker.update (s);
 
     auto mainBus = getBusBuffer (buffer, false, 0);
@@ -94,14 +104,16 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         left[n] = l;
         if (right != nullptr) right[n] = r;
     }
-    vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > thresholdFor (value (sensitivityId)));
+    vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > s.thresholdDb);
 }
 
 juce::AudioProcessorEditor* SolveEtCoagulaProcessor::createEditor() { return new SolveEtCoagulaEditor (*this); }
 
 void SolveEtCoagulaProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    scenes.writeInto (state);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -109,7 +121,11 @@ void SolveEtCoagulaProcessor::setStateInformation (const void* data, int sizeInB
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            scenes.readFrom (state);
+            apvts.replaceState (state);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new SolveEtCoagulaProcessor(); }

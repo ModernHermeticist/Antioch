@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SceneUI.h"
 
 class SolveEtCoagulaEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -21,6 +22,8 @@ private:
     suite::ui::Knob depth, sensitivity, focus, mix;
     suite::ui::Choice speed;
     juce::Label status;
+    suite::ui::TabBar viewTabs;
+    std::unique_ptr<suite::ui::ScenePanel> scenePanel;
     juce::Rectangle<int> bandArea, controlArea;
     std::array<float, Unmasker::numBands> cutShown {}, keyShown {};
 

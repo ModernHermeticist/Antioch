@@ -14,7 +14,8 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
       sensitivity (p.apvts, P::sensitivityId, "Sensitivity", accent),
       focus (p.apvts, P::focusId, "Focus", accent),
       mix (p.apvts, P::mixId, "Mix", Colours::brass),
-      speed (p.apvts, P::speedId, "Speed")
+      speed (p.apvts, P::speedId, "Speed"),
+      viewTabs ({ "BANDS", "SCENES" }, { accent, Colours::ember })
 {
     setLookAndFeel (&lnf);
     status.setFont (juce::FontOptions (13.0f));
@@ -22,7 +23,12 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &depth, &sensitivity, &focus, &speed, &mix, &status })
         addAndMakeVisible (c);
     keyShown.fill (-100.0f);
-    setSize (860, 520);
+    scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
+    addChildComponent (*scenePanel);
+    addAndMakeVisible (viewTabs);
+    viewTabs.setComponentID ("tabs");
+    viewTabs.onChange = [this] (int i) { scenePanel->setVisible (i == 1); repaint(); };
+    setSize (860, 620);
     timerCallback();
     startTimerHz (30);
 }
@@ -50,6 +56,7 @@ void SolveEtCoagulaEditor::timerCallback()
         text = "Sidechain connected; waiting for the vocal.";
     status.setColour (juce::Label::textColourId, processor.sidechainConnected.load() ? Colours::text : Colours::dimText);
     status.setText (text, juce::dontSendNotification);
+    suite::ui::updateSceneGhosts (*this, processor.scenes);
     repaint (bandArea);
 }
 
@@ -57,8 +64,10 @@ void SolveEtCoagulaEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
     drawHeader (g, { 20, 12, 760, 32 }, "SOLVE ET COAGULA", "vocal unmasking", accent);
-    drawPanel (g, bandArea, "Bands  (vocal level up, music cut down)");
     drawPanel (g, controlArea, "Controls", accent);
+    if (viewTabs.getSelected() == 1)
+        return;   // the scene panel draws itself
+    drawPanel (g, bandArea, "Bands  (vocal level up, music cut down)");
 
     auto r = bandArea.reduced (16, 10).withTrimmedTop (18).toFloat();
     auto labels = r.removeFromBottom (18);
@@ -103,7 +112,9 @@ void SolveEtCoagulaEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
     bounds.removeFromTop (48);
-    bandArea = bounds.removeFromTop (230);
+    viewTabs.setBounds (bounds.removeFromTop (30).removeFromRight (300).withTrimmedBottom (4));
+    bandArea = bounds.removeFromTop (300);
+    scenePanel->setBounds (bandArea);
     bounds.removeFromTop (12);
     controlArea = bounds;
 
