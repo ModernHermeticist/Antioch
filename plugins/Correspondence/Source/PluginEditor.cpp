@@ -340,9 +340,14 @@ namespace
             vary = std::make_unique<juce::ToggleButton> ("Vary the lead + harmony in drop 2+");
             varyAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songVary, *vary);
             addAndMakeVisible (*vary);
+            breakdownBox = std::make_unique<juce::ComboBox>();
+            breakdownBox->addItemList (state.getParameter (Params::songBreakdown)->getAllValueStrings(), 1);
+            breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder");
+            breakdownAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::songBreakdown, *breakdownBox);
+            addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (680, 360);
+            setSize (780, 360);
         }
 
         void paint (juce::Graphics& g) override
@@ -361,6 +366,7 @@ namespace
             hint.setBounds (r.removeFromBottom (24));
             {
                 auto toggles = r.removeFromBottom (28);
+                breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
                 lift->setBounds (toggles.removeFromLeft (toggles.getWidth() / 2));
                 vary->setBounds (toggles);
             }
@@ -382,6 +388,8 @@ namespace
         juce::Label hint;
         std::unique_ptr<juce::ToggleButton> lift, vary;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment;
+        std::unique_ptr<juce::ComboBox> breakdownBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> breakdownAttachment;
     };
 }
 

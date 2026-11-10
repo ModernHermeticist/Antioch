@@ -8,6 +8,7 @@
 #include "Music.h"
 #include "SectionBus.h"
 #include <vector>
+#include <algorithm>
 
 namespace chords
 {
@@ -16,7 +17,7 @@ namespace chords
     enum class Quality { Auto, Major, Minor, Sus2, Sus4, Seventh, Add9, Power };
     enum class Voicing { Close, Open, Wide };
     enum class ChordPattern { Sustain, OffbeatStabs, Pluck332, Gate16 };
-    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain };
+    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain, Walking };
     enum class ArpPattern { Up, Down, UpDown, Bounce };
 
     inline const juce::StringArray& qualityNames()
@@ -281,11 +282,35 @@ namespace chords
         std::vector<Note> notes;
         const auto L = s.quartersPerChord;
 
-        for (int i = 0; i < juce::jlimit (1, maxSlots, s.count); ++i)
+        const auto count = juce::jlimit (1, maxSlots, s.count);
+        const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, s.scale)].steps;
+        auto inKey = [&] (int p) { return std::find (steps.begin(), steps.end(), ((p - s.root) % 12 + 12) % 12) != steps.end(); };
+        auto scaleStep = [&] (int p, int dir) { do p += dir; while (! inKey (p)); return p; };
+
+        for (int i = 0; i < count; ++i)
         {
             const auto pitch = 12 * (s.bassOctave + 1) + chordRootPitchClass (s, i);
             const auto base = (double) i * L;
             auto emit = [&] (double t, double len, bool) { notes.push_back ({ pitch, base + t, len, 110 }); };
+
+            if (s.bassPattern == BassPattern::Walking)
+            {
+                // Rolling 16ths, but the last two before the change walk through the scale to the next root.
+                auto next = 12 * (s.bassOctave + 1) + chordRootPitchClass (s, (i + 1) % count);
+                if (next - pitch > 6) next -= 12;
+                if (pitch - next > 6) next += 12;
+                const auto dir = next > pitch ? 1 : next < pitch ? -1 : 0;
+                const auto approach = dir != 0 ? scaleStep (next, -dir) : pitch;                       // one step before the target
+                const auto passing = dir != 0 && std::abs (approach - pitch) > 2 ? scaleStep (approach, -dir) : pitch;
+                forEachHit (L, [&] (double t, double len, bool)
+                {
+                    const auto lastBeat = t >= L - 1.0 - 1.0e-9;
+                    const auto step = (int) std::lround ((t - std::floor (t)) * 4.0);
+                    const auto p = lastBeat && step == 3 ? approach : lastBeat && step == 2 ? passing : pitch;
+                    notes.push_back ({ p, base + t, len, lastBeat && step >= 2 ? 100 : 110 });
+                }, { 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15 }, 0.2);
+                continue;
+            }
 
             switch (s.bassPattern)
             {
@@ -293,6 +318,7 @@ namespace chords
                 case BassPattern::Rolling:   forEachHit (L, emit, { 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15 }, 0.2); break;
                 case BassPattern::Galloping: forEachHit (L, emit, { 2, 3, 6, 7, 10, 11, 14, 15 }, 0.2); break;
                 case BassPattern::Sustain:   emit (0.0, L - 0.02, true); break;
+                case BassPattern::Walking:   break;   // handled above
             }
         }
         return notes;
@@ -608,15 +634,31 @@ namespace chords
         MelodySettings melody;
         bool liftLaterDrops = true;   // the lead goes up an octave in the 2nd, 3rd... drop
         bool varyLaterDrops = true;   // ... and is embellished, with a harmony line (SongPart::Harmony)
+        int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
     {
         static const juce::StringArray chords { "None", "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
-        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain" };
+        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain", "Walking" };
         static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce" };
         static const juce::StringArray lead   { "None", "Melody", "Teaser" };
         return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : part == SongPart::Arp ? arp : lead;
+    }
+
+    /** The progression starting on `degree`: rotated to the first slot on that degree, or with
+        that degree replacing the first chord if it isn't in the progression. */
+    inline Settings startingOn (Settings s, int degree)
+    {
+        const auto n = juce::jlimit (1, maxSlots, s.count);
+        for (int k = 0; k < n; ++k)
+            if (s.slots[(size_t) k].degree == degree)
+            {
+                std::rotate (s.slots.begin(), s.slots.begin() + k, s.slots.begin() + n);
+                return s;
+            }
+        s.slots[0] = { degree, Quality::Auto };
+        return s;
     }
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
@@ -642,6 +684,8 @@ namespace chords
                 continue;   // the harmony line only plays in later drops
 
             auto s = base;
+            if (map.sections[(size_t) i].type == suite::SectionType::Breakdown && patterns.breakdownStart > 0)
+                s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
             std::vector<Note> cycle;
             if (part == SongPart::Chords)    { s.chordPattern = (ChordPattern) (choice - 1); cycle = chordClip (s); }
             else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }

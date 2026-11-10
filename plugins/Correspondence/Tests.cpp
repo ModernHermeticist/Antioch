@@ -249,6 +249,45 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Walking bass and breakdown re-harmonisation");
+    {
+        auto s = aMinor();   // Am F C G, 1 bar each, bass in octave 2
+        s.bassPattern = chords::BassPattern::Walking;
+        const auto bass = chords::bassClip (s);
+        // Bar 1 (A) walking to F: the last two 16ths step down through the scale, ending a step above F.
+        auto at = [&bass] (double t) { for (auto& n : bass) if (std::abs (n.start - t) < 1.0e-6) return n.pitch; return -1; };
+        const auto a = at (0.25), passing = at (3.5), approach = at (3.75), f = at (4.25);
+        check (a % 12 == 9 && f % 12 == 5, "rolls on each chord's root (A, then F)");
+        check (approach == f + 2 && passing == a, "walks A, G, F (a step from A, so no extra passing note) (" + juce::String (passing) + ", " + juce::String (approach)
+                   + " -> " + juce::String (f) + ")");
+        const auto& steps = suite::music::scales()[0].steps;
+        bool inKey = true;
+        for (auto& n : bass) inKey = inKey && std::find (steps.begin(), steps.end(), ((n.pitch - 9) % 12 + 12) % 12) != steps.end();
+        check (inKey, "every walking note is in the key");
+        // G (bar 4) back to A for the loop: the approach note is a step below A, i.e. G itself.
+        check (at (15.75) == at (15.25) && at (15.25) % 12 == 7, "G to A is a single step: it just leads in on G");
+        // C (bar 3) to G: a fourth down, so it walks C, B... A, then G.
+        check (at (11.5) % 12 == 11 && at (11.75) % 12 == 9 && at (12.25) % 12 == 7, "C walks down B, A into G");
+
+        // Breakdowns start on VI (F): Am F C G becomes F C G Am there.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        chords::SongPatterns patterns;
+        patterns.chords[(size_t) suite::SectionType::Breakdown] = 1;   // sustained pads
+        patterns.bass[(size_t) suite::SectionType::Breakdown] = 1;     // offbeat bass, so we can see its roots
+        const auto bd = chords::songClip (s, map, patterns, chords::SongPart::Bass);
+        int firstBreakdown = -1, firstDrop = -1;
+        for (auto& n : bd) { if (n.start < 16.0 && firstBreakdown < 0) firstBreakdown = n.pitch; if (n.start >= 16.0 && firstDrop < 0) firstDrop = n.pitch; }
+        check (firstBreakdown % 12 == 5 && firstDrop % 12 == 9, "the breakdown starts on F (VI), the drop on Am");
+        patterns.breakdownStart = 2;
+        const auto iv = chords::songClip (s, map, patterns, chords::SongPart::Bass);
+        check (! iv.empty() && iv.front().pitch % 12 == 2, "'Start on IV' puts Dm (not in the progression) first");
+        patterns.breakdownStart = 0;
+        check (chords::songClip (s, map, patterns, chords::SongPart::Bass).front().pitch % 12 == 9, "'Same as the drop' keeps Am first");
+    }
+
     section ("Final-drop key change");
     {
         auto s = aMinor();
