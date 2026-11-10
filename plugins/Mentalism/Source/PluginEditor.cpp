@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "SceneUI.h"
 
 using namespace suite::ui;
 
@@ -38,8 +39,15 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     referenceLabel.setFont (juce::FontOptions (12.0f));
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel })
+    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs })
         addAndMakeVisible (c);
+    balanceTabs.setComponentID ("tabs");
+    balanceTabs.onChange = [this] (int i)
+    {
+        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel })
+            c->setVisible (i == 0);
+        repaint();
+    };
 
     setSize (1040, 720);
     timerCallback();
@@ -71,12 +79,16 @@ void MentalismEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "MENTALISM", "mix assistant", accent);
     drawPanel (g, loudArea, "Loudness", accent);
     drawPanel (g, stereoArea, "Stereo", Colours::amethyst);
-    drawPanel (g, balanceArea, "Tonal balance vs target  (bars = whole song, line = last 3 s)", Colours::brass);
+    const auto arrangementTab = balanceTabs.getSelected() == 1;
+    drawPanel (g, balanceArea, arrangementTab ? "Arrangement: loudness per section (Ouroboros)"
+                                              : "Tonal balance vs target  (bars = whole song, line = last 3 s)",
+               arrangementTab ? Colours::ember : Colours::brass);
     drawPanel (g, adviceArea, "Suggestions", Colours::ember);
 
     paintLoudness (g, loudContent);
     paintStereo (g, stereoContent);
-    paintBalance (g, balanceContent);
+    if (arrangementTab) paintArrangement (g, arrangementContent);
+    else                paintBalance (g, balanceContent);
     paintAdvice (g, adviceContent);
 }
 
@@ -233,6 +245,66 @@ void MentalismEditor::paintBalance (juce::Graphics& g, juce::Rectangle<int> area
                 juce::Justification::topRight);
 }
 
+void MentalismEditor::paintArrangement (juce::Graphics& g, juce::Rectangle<int> area)
+{
+    if (! rep.arrangementAvailable || rep.map.count == 0)
+    {
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (14.0f));
+        g.drawText ("Load Ouroboros and play the song to see loudness per section", area, juce::Justification::centred);
+        return;
+    }
+
+    auto notes = area.removeFromBottom (juce::jmin (88, area.getHeight() / 3));
+    const auto chart = area.toFloat();
+    g.setColour (Colours::background);
+    g.fillRoundedRectangle (chart, 6.0f);
+
+    // Loudest heard section sets the scale: bars show -24 LU .. 0 LU relative to it.
+    float top = -100.0f;
+    for (int i = 0; i < rep.map.count; ++i) if (rep.sections[(size_t) i].heard()) top = std::max (top, rep.sections[(size_t) i].lufs());
+    const auto total = (float) juce::jmax (1, rep.map.totalBars);
+    for (int i = 0; i < rep.map.count; ++i)
+    {
+        const auto& sec = rep.map.sections[(size_t) i];
+        const auto x0 = chart.getX() + chart.getWidth() * (float) (sec.startBar - 1) / total;
+        const auto x1 = chart.getX() + chart.getWidth() * (float) (rep.map.endBar (i) - 1) / total;
+        const auto colour = suite::ui::sectionColour (sec.type);
+        const auto& st = rep.sections[(size_t) i];
+        auto column = juce::Rectangle<float>::leftTopRightBottom (x0, chart.getY(), x1, chart.getBottom()).reduced (2.0f, 4.0f);
+
+        if (st.heard())
+        {
+            const auto rel = juce::jlimit (0.0f, 1.0f, (st.lufs() - (top - 24.0f)) / 24.0f);
+            g.setColour (colour.withAlpha (0.55f));
+            g.fillRoundedRectangle (column.withTop (column.getBottom() - column.getHeight() * 0.85f * rel), 3.0f);
+            g.setColour (Colours::text);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText (juce::String (st.lufs(), 1), column.withHeight (16.0f).translated (0.0f, 2.0f), juce::Justification::centred);
+        }
+        else
+        {
+            g.setColour (colour.withAlpha (0.12f));
+            g.fillRoundedRectangle (column, 3.0f);
+        }
+        g.setColour (colour);
+        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+        g.drawFittedText (juce::String (suite::sectionName (sec.type)).toUpperCase(), column.removeFromBottom (14.0f).toNearestInt(),
+                          juce::Justification::centred, 1, 0.5f);
+    }
+
+    g.setFont (juce::FontOptions (12.5f));
+    for (int i = 0; i < juce::jmin (4, rep.arrangement.notes.size()); ++i)
+    {
+        auto row = notes.removeFromTop (21);
+        const auto problem = i < rep.arrangement.problems;
+        g.setColour (problem ? Colours::ember : Colours::moss);
+        g.fillEllipse ((float) row.getX() + 2.0f, (float) row.getCentreY() - 3.0f, 6.0f, 6.0f);
+        g.setColour (Colours::text);
+        g.drawFittedText (rep.arrangement.notes[i], row.withTrimmedLeft (14), juce::Justification::centredLeft, 1, 0.8f);
+    }
+}
+
 void MentalismEditor::paintAdvice (juce::Graphics& g, juce::Rectangle<int> area)
 {
     g.setFont (juce::FontOptions (13.0f));
@@ -275,6 +347,8 @@ void MentalismEditor::resized()
     referenceLabel.setBounds (controls.withTrimmedTop (18).withTrimmedLeft (8));
     b.removeFromTop (6);
     balanceContent = b;
+    arrangementContent = balanceArea.reduced (12, 6).withTrimmedTop (60);
+    balanceTabs.setBounds (balanceArea.getRight() - 372, balanceArea.getY() + 6, 360, 28);
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);
 }

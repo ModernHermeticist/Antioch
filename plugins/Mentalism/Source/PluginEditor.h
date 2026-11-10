@@ -19,6 +19,9 @@ private:
     void paintStereo (juce::Graphics&, juce::Rectangle<int>);
     void paintBalance (juce::Graphics&, juce::Rectangle<int>);
     void paintAdvice (juce::Graphics&, juce::Rectangle<int>);
+    void paintArrangement (juce::Graphics&, juce::Rectangle<int>);
+    suite::ui::TabBar balanceTabs { { "TONAL BALANCE", "ARRANGEMENT" }, { suite::ui::Colours::brass, suite::ui::Colours::ember } };
+    juce::Rectangle<int> arrangementContent;
 
     MentalismProcessor& processor;
     suite::ui::LookAndFeel lnf;

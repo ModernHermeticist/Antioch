@@ -84,8 +84,9 @@ bool MentalismProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
     return in == out;
 }
 
-void MentalismProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+void MentalismProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 {
+    sampleRate = newSampleRate;
     loudness.prepare (sampleRate);
     truePeak.reset();
     stereo.prepare (sampleRate);
@@ -102,7 +103,19 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         loudness.reset();
         truePeak.reset();
         bands.reset();
+        for (auto& st : statsBySection) st.clear();
     }
+
+    // Arrangement coach: attribute each 400 ms loudness reading to the section it falls in.
+    const auto host = suite::HostInfo::read (getPlayHead());
+    const auto haveMap = sections.refresh();
+    if (haveMap && sections.getMap() != statsMap)
+    {
+        statsMap = sections.getMap();          // a different arrangement: start over
+        for (auto& st : statsBySection) st.clear();
+    }
+    const auto followSections = haveMap && host.playing && host.hasPpq;
+    const auto qPerSample = host.quartersPerSample (sampleRate);
 
     // Measure only: the audio passes through untouched.
     const auto n = buffer.getNumSamples();
@@ -113,6 +126,31 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     for (int i = 0; i < n; ++i)
     {
         loudness.process (l[i], r[i]);
+        if (loudness.subBlockCount() != lastSubBlock)
+        {
+            lastSubBlock = loudness.subBlockCount();
+            const auto power = loudness.lastMomentaryPower;
+            if (followSections && analysis::powerToLufs (power) > -70.0f)
+            {
+                const auto pos = host.ppq + qPerSample * i;
+                const auto sec = sections.locate (pos, host.barQuarters());
+                const auto windowQ = 0.4 * host.bpm / 60.0;   // the reading covers the last 400 ms
+                if (sec.valid && pos - windowQ >= sec.startQ - 1.0e-9)   // skip readings that straddle the section start
+                {
+                    auto& st = statsBySection[(size_t) sec.index];
+                    st.power.store (st.power.load() + power);
+                    st.blocks.store (st.blocks.load() + 1);
+                    if (sec.type == suite::SectionType::Build)
+                    {
+                        const auto firstHalf = sec.progress (pos) < 0.5;
+                        auto& sum = firstHalf ? st.first : st.second;
+                        auto& count = firstHalf ? st.firstBlocks : st.secondBlocks;
+                        sum.store (sum.load() + power);
+                        count.store (count.load() + 1);
+                    }
+                }
+            }
+        }
         truePeak.process (l[i], r[i]);
         stereo.process (l[i], r[i]);
         bands.process (l[i], r[i]);
@@ -137,6 +175,21 @@ void MentalismProcessor::loadReference (const juce::File& file)
             setReference (profile);
         loading.store (false);
     });
+}
+
+std::vector<coach::SectionStat> MentalismProcessor::sectionStats() const
+{
+    std::vector<coach::SectionStat> out;
+    for (const auto& a : statsBySection)
+    {
+        coach::SectionStat st;
+        st.power = a.power.load();
+        st.blocks = a.blocks.load();
+        st.firstHalf = a.first.load(); st.firstBlocks = a.firstBlocks.load();
+        st.secondHalf = a.second.load(); st.secondBlocks = a.secondBlocks.load();
+        out.push_back (st);
+    }
+    return out;
 }
 
 ReferenceProfile MentalismProcessor::getReference() const
@@ -206,6 +259,19 @@ MentalismProcessor::Report MentalismProcessor::report() const
     rep.momentary = loudness.momentary.load();
     rep.shortTerm = loudness.shortTerm.load();
     rep.advice = advisor::suggestions (m, rep.targetLufs, rep.ceiling, rep.targetName);
+
+    // Arrangement coach (needs Ouroboros).
+    rep.arrangementAvailable = suite::SectionBus::read (rep.map);
+    if (rep.arrangementAvailable)
+    {
+        rep.sections = sectionStats();
+        rep.arrangement = coach::analyse (rep.map, rep.sections);
+        if (rep.arrangement.problems > 0)
+        {
+            rep.advice.insert (0, "Arrangement: " + rep.arrangement.notes[0]);
+            while (rep.advice.size() > 6) rep.advice.remove (rep.advice.size() - 1);
+        }
+    }
     return rep;
 }
 

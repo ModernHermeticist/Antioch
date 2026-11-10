@@ -109,6 +109,8 @@ namespace analysis
             subSum = 0.0; subCount = 0;
 
             const auto m = meanOfLast (4);
+            lastMomentaryPower = m;
+            ++subBlocks;
             momentary.store (powerToLufs (m));
             if (subsFilled >= 30)
                 shortTerm.store (powerToLufs (meanOfLast (30)));
@@ -152,6 +154,11 @@ namespace analysis
 
         std::atomic<float> momentary { -100.0f }, shortTerm { -100.0f };
 
+        /** Audio thread: counts completed 100 ms sub-blocks, so callers can act on each new
+            momentary (400 ms) measurement; lastMomentaryPower is its mean square. */
+        uint32_t subBlockCount() const noexcept { return subBlocks; }
+        double lastMomentaryPower = 0.0;
+
     private:
         double meanOfLast (int n) const noexcept
         {
@@ -166,6 +173,7 @@ namespace analysis
         std::array<std::atomic<uint32_t>, histogramBins> histogram {};
         double subSum = 0.0;
         int subCount = 0, subBlockLength = 4800, subIndex = 0, subsFilled = 0;
+        uint32_t subBlocks = 0;
     };
 
     //==============================================================================

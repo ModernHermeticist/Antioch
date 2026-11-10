@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "SectionBus.h"
+#include "SuiteUI.h"
 
 using namespace suite::test;
 
@@ -167,6 +169,70 @@ int main (int argc, char** argv)
         file.deleteFile();
     }
 
+    section ("Arrangement coach");
+    {
+        // 120 BPM, 2 s per bar: Groove 1-2, Breakdown 3-4, Build 5-6, Drop 7-8.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Build };
+        map.sections[3] = { 7, suite::SectionType::Drop };
+
+        auto playSong = [&] (std::function<float (double)> levelDb)
+        {
+            suite::SectionBus::publish (map);
+            auto p = make();
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            render (*p, 16.0, [levelDb] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto v = juce::Decibels::decibelsToGain (levelDb (t)) * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * t);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, nullptr, &head);
+            p->setPlayHead (nullptr);
+            return p->report();
+        };
+
+        // A flat, unexciting arrangement: breakdown barely below the drop, build doesn't grow.
+        const auto bad = playSong ([] (double t) { return t < 4.0 ? -14.0f : t < 8.0 ? -15.0f : t < 12.0 ? -15.0f : -14.0f; });
+        check (bad.arrangementAvailable && bad.sections[1].heard() && std::abs (bad.sections[1].lufs() + 15.0f) < 0.5f,
+               "measures each section (breakdown " + juce::String (bad.sections[1].lufs(), 1) + " LUFS)");
+        const auto badText = bad.arrangement.notes.joinIntoString ("\n");
+        std::cout << "    " << badText.replace ("\n", "\n    ") << std::endl;
+        check (badText.contains ("only 1.0 LU below the drop"), "flags a breakdown that's too loud");
+        check (badText.contains ("Build (bars 5-6) only rises"), "flags a build that doesn't grow");
+        check (bad.advice[0].startsWith ("Arrangement:"), "the top problem joins the main suggestions");
+
+        // A good arc: deep breakdown, rising build, loud drop.
+        const auto good = playSong ([] (double t)
+        {
+            if (t < 4.0) return -16.0f;
+            if (t < 8.0) return -22.0f;
+            if (t < 12.0) return -22.0f + 8.0f * (float) ((t - 8.0) / 4.0);
+            return -12.0f;
+        });
+        check (good.arrangement.problems == 0, "a good arc gets no complaints (" + good.arrangement.notes.joinIntoString (" | ") + ")");
+
+        // Second drop weaker than the first.
+        suite::SectionMap twoDrops;
+        twoDrops.totalBars = 8; twoDrops.count = 3;
+        twoDrops.sections[0] = { 1, suite::SectionType::Drop };
+        twoDrops.sections[1] = { 4, suite::SectionType::Breakdown };
+        twoDrops.sections[2] = { 6, suite::SectionType::Drop };
+        std::vector<coach::SectionStat> stats (3);
+        auto setLufs = [] (coach::SectionStat& st, float lufs) { st.blocks = 20; st.power = 20.0 * std::pow (10.0, (lufs + 0.691) / 10.0); };
+        setLufs (stats[0], -9.0f); setLufs (stats[1], -16.0f); setLufs (stats[2], -11.0f);
+        const auto r = coach::analyse (twoDrops, stats);
+        check (r.notes.joinIntoString (" ").contains ("Drop 2 (bars 6-8) is 2.0 LU quieter than drop 1"), "flags a weaker second drop");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Pass-through");
     {
         auto p = make();
@@ -200,6 +266,36 @@ int main (int argc, char** argv)
         });
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("mentalism.png"));
+        // Arrangement view, with a map and a played arrangement.
+        {
+            suite::SectionMap map;
+            map.totalBars = 8; map.count = 4;
+            map.sections[0] = { 1, suite::SectionType::Groove };
+            map.sections[1] = { 3, suite::SectionType::Breakdown };
+            map.sections[2] = { 5, suite::SectionType::Build };
+            map.sections[3] = { 7, suite::SectionType::Drop };
+            suite::SectionBus::publish (map);
+            auto q = make();
+            FakePlayHead head;
+            head.bpm = 120.0;
+            q->setPlayHead (&head);
+            render (*q, 16.0, [] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto db = t < 4.0 ? -16.0f : t < 8.0 ? -17.0f : t < 12.0 ? -20.0f + 6.0f * (float) ((t - 8.0) / 4.0) : -12.0f;
+                    const auto v = juce::Decibels::decibelsToGain (db) * (float) std::sin (juce::MathConstants<double>::twoPi * 500.0 * t);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, nullptr, &head);
+            q->setPlayHead (nullptr);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (q->createEditor());
+            if (auto* tabs = dynamic_cast<suite::ui::TabBar*> (ed->findChildWithID ("tabs"))) tabs->setSelected (1);
+            snapshot (*ed, outDir.getChildFile ("mentalism_arrangement.png"));
+            ed.reset();
+            suite::SectionBus::withdraw();
+        }
         editor.reset();
     }
 

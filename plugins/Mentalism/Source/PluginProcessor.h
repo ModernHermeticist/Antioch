@@ -4,6 +4,8 @@
 #include "Advisor.h"
 #include "Parameters.h"
 #include "Spectrum.h"
+#include "Coach.h"
+#include "HostInfo.h"
 #include <thread>
 
 /** The analysed shape and loudness of a reference track. */
@@ -65,6 +67,10 @@ public:
         juce::String targetName;
         advisor::Bands shortDiff {}, longDiff {};
         bool tonalAvailable = false;     // false when "Reference" is chosen but none is loaded
+        bool arrangementAvailable = false;
+        suite::SectionMap map;
+        std::vector<coach::SectionStat> sections;
+        coach::Result arrangement;
         float measuredSeconds = 0.0f;
         juce::StringArray advice;
     };
@@ -78,8 +84,23 @@ public:
     analysis::StereoMeter stereo;
     analysis::BandAnalyzer bands;
 
+    /** Loudness gathered per section of the current Ouroboros map (any thread). */
+    std::vector<coach::SectionStat> sectionStats() const;
+
 private:
     void timerCallback() override;
+
+    struct AtomicStat
+    {
+        std::atomic<double> power { 0.0 }, first { 0.0 }, second { 0.0 };
+        std::atomic<int> blocks { 0 }, firstBlocks { 0 }, secondBlocks { 0 };
+        void clear() { power = 0.0; first = 0.0; second = 0.0; blocks = 0; firstBlocks = 0; secondBlocks = 0; }
+    };
+    std::array<AtomicStat, suite::SectionMap::maxSections> statsBySection;
+    suite::SectionFollower sections;
+    suite::SectionMap statsMap;      // audio thread: the map the stats belong to
+    uint32_t lastSubBlock = 0;
+    double sampleRate = 48000.0;
 
     std::atomic<bool> resetRequested { false }, loading { false }, cancelLoad { false };
     std::thread loader;
