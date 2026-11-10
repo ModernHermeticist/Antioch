@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Nine VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Eleven VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. All three share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -15,6 +15,8 @@ in **Correspondence**, and the others follow it.
 | **Ouroboros**: arrangement conductor | Automation clips that switch builds, ducking and throws on and off across the song |
 | **Lapis**: master finisher | Riding the master limiter until the drop is loud enough, and checking true peak |
 | **Emerald Tablet**: key detector | Working out the key of a track, loop or acapella by ear |
+| **Azoth**: automatic transition FX | Placing impacts, crashes, swells, downlifters and snare rolls at every transition |
+| **Prima Materia**: section mixer | Muting, filtering and riding individual tracks section by section with automation |
 
 ## How much runs on its own
 
@@ -28,7 +30,12 @@ With the full suite loaded, here is everything that happens without automation c
    and **Antioch** throws at section ends.
 4. **Section scenes** move each plugin's key controls per section: more reverb and shimmer
    in breakdowns, more Euphoria and width in drops, and so on.
-5. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
+5. **Azoth** plays the transition FX on cue: impact and crash into drops, a swell before
+   them, a downlifter into breakdowns, and a snare roll through builds.
+6. **Prima Materia** on individual tracks mutes, filters and rides them per section, so
+   one looped groove arranges itself.
+7. **Correspondence** exports full-song chord, bass and arp clips that follow the map.
+8. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
    gain to hit it.
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
@@ -286,6 +293,72 @@ When the result has been confident and stable for 8 seconds, it **sends the key*
 It detects major and minor; modes such as Dorian are reported as their nearest major or
 minor key.
 
+## Azoth: automatic transition FX
+
+![Azoth](docs/azoth.png)
+
+Put Azoth on its own mixer track, or on any track: the track's audio passes through and the
+FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
+
+| Moment | What plays |
+|---|---|
+| Into a **Drop** | an **impact** (a sub boom tuned to the song's root, from Correspondence or Emerald Tablet) plus a **crash**, with a **swell** of rising, opening noise leading in |
+| Into a **Breakdown** | a **downlifter** (falling filtered noise) with a sub drop from the root |
+| Across a **Build** | a **snare roll** that speeds up in steps (1/4 → 1/8 → 1/16 → 1/32), gets louder and rises up to 12 semitones |
+| Into a **Groove** after the intro | a lighter crash (optional) |
+
+- **Gap before drop** silences the roll and swell for the last half or whole beat.
+- **Roll starts** sets whether the roll covers the whole build, its second half, or just
+  the last 4 bars. **Tone** sets how bright the crash is.
+- **Play** buttons audition each sound.
+- Jumping the playhead into the middle of a section never fires its transition. Everything
+  is synthesised (no samples), so it stays in key.
+
+## Prima Materia: section mixer
+
+![Prima Materia](docs/prima_materia.png)
+
+Put Prima Materia on individual tracks. For each section type you set a **level** (or Off),
+a **low cut** and a **high cut**. The column for the section that's playing lights up, and a
+readout shows the values in use.
+
+- **Ramp through builds:** a Build glides from the previous section's settings to its own
+  across the build, for example a pad's low cut sweeping up, or a bass fading back in thin.
+- **Gap before drop** mutes the track for the last half or whole beat before each Drop.
+- **Morph** sets how quickly it moves from section to section.
+- **Track role presets** set up the usual trance moves in one click:
+
+| Role | What it does |
+|---|---|
+| Kick | out in breakdowns and builds |
+| Bass | out in the breakdown; fades back in thin (low cut) through the build; gap before the drop |
+| Hats & percussion | out in breakdowns, quieter in intro and build |
+| Pads & chords | up in the breakdown; low cut sweeping up through the build; tucked under the drop |
+| Lead | teased (filtered) in the breakdown, rises through the build, full in the drop |
+| Vocal | in for groove, breakdown and build; a little under the drop |
+| Atmos & FX | up in the breakdown, down in the drop |
+
+With these on each track, you can loop one full 8-bar groove across the whole song and the
+arrangement happens by itself.
+
+## Correspondence: full-song MIDI
+
+The second row of drag tiles (**SONG CHORDS**, **SONG BASS**, **SONG ARP**) exports clips the
+length of the whole song that follow the Ouroboros map. **Song patterns…** sets what each
+section plays. The defaults:
+
+| Section | Chords | Bass | Arp |
+|---|---|---|---|
+| Intro | none | offbeat | none |
+| Groove | none | rolling | up |
+| Breakdown | sustained pads | none | none |
+| Build | 16th gate | none | up |
+| Drop | 3-3-2 pluck stabs | rolling | up |
+| Outro | none | offbeat | none |
+
+The progression restarts at every section, and notes never spill into the next one. Song
+clips need Ouroboros to be running; without it the tile says so.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -301,12 +374,12 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the nine `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the eleven `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
 4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
    and Mentalism last on the master,
-   Ouroboros on any insert, Lapis on the master before Mentalism, and Emerald Tablet wherever
-   you want the key detected.
+   Ouroboros on any insert, Lapis on the master before Mentalism, Emerald Tablet wherever
+   you want the key detected, Azoth on its own track, and Prima Materia on individual tracks.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
    sidechain, then select that input in the plugin's wrapper settings.
 
@@ -321,7 +394,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3 Azoth_VST3 PrimaMateria_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -331,7 +404,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests AzothTests PrimaMateriaTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -372,6 +445,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   correctly; it sends only when confident; it broadcasts alone without Correspondence and
   never overrides it. Correspondence's tests check that it adopts suggestions and that
   projects keep their key.
+- **Azoth:** nothing plays at the song start; a downlifter at the breakdown; exactly 30 roll
+  hits across a 2-bar build (2 + 4 + 8 + 16), or 26 with a 1-beat gap; the swell rises;
+  the impact lands on the root (A1 when the key is A minor); no FX when the playhead
+  jumps into a section; the track's audio passes through.
+- **Prima Materia:** the kick role is silent in the breakdown and build and back for the
+  drop; the bass role fades in thin through the build with a gap; the pads' breakdown sits
+  4 dB above the drop; instant vs gliding Morph; unchanged without a map.
+- **Full-song MIDI:** each section plays only its own parts, nothing spills over, the drop
+  starts on chord 1, and export is refused without a map.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -400,7 +482,9 @@ plugins/Mentalism/       Analysis.h (BS.1770 loudness, true peak, stereo, bands)
 plugins/Ouroboros/       Arrangement.h (section editing), Listen.h (section detection), timeline editor, tests
 plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop, tests
 plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
-.github/workflows/       Windows/macOS/Linux CI builds of all nine
+plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), section-driven triggering, tests
+plugins/PrimaMateria/    Params.h (per-section settings, role presets), section mixer, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all eleven
 ```
 
 ## Licence note
