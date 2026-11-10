@@ -54,6 +54,12 @@ public:
     std::atomic<int> currentSection { -1 };      // SectionType from Ouroboros, -1 if none
     std::atomic<bool> autoBreakdown { false };   // ducking paused because of the section
 
+    /** The kick on the sidechain (whenever one is connected): length and pitch. */
+    KickAnalyser kick;
+    /** Sets duck hold and release from the measured kick. False until a few kicks were heard. */
+    bool fitToKick();
+    static constexpr int kicksNeeded = 3;
+
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     void setParam (const juce::String& id, float plainValue);

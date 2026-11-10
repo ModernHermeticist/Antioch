@@ -208,6 +208,65 @@ int main (int argc, char** argv)
         check (peakBetween (out, 0.91, 0.93) < 0.15f, "ducks again on the second kick");
     }
 
+    section ("Fit to kick");
+    {
+        // A synthetic trance kick at 138 BPM: a pitch sweep down to `bodyHz`, ringing ~200 ms to -30 dB.
+        auto kickRun = [] (double bodyHz)
+        {
+            auto p = std::make_unique<KybalionProcessor>();
+            set (*p, Params::gateOn, 0.0f);   // beat-grid ducking: the kick is analysed whenever it's connected
+            p->enableAllBuses();
+            p->setRateAndBufferSizeDetails (sampleRate, blockSize);
+            p->prepareToPlay (sampleRate, blockSize);
+            const auto channels = p->getTotalNumInputChannels();
+            juce::AudioBuffer<float> block (channels, blockSize);
+            juce::MidiBuffer midi;
+            const auto beat = 60.0 / 138.0;
+            double phase = 0.0;
+            const auto total = (int) (3.0 * sampleRate);
+            for (int pos = 0; pos < total; pos += blockSize)
+            {
+                const auto n = std::min (blockSize, total - pos);
+                block.setSize (channels, n, false, false, true);
+                block.clear();
+                for (int i = 0; i < n; ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto k = std::fmod (t, beat);
+                    if (k < 1.0 / sampleRate) phase = 0.0;
+                    const auto hz = bodyHz + 95.0 * std::exp (-k / 0.008);
+                    phase += juce::MathConstants<double>::twoPi * hz / sampleRate;
+                    const auto v = (float) (0.9 * std::sin (phase) * std::exp (-k / 0.06));
+                    if (channels >= 4) { block.setSample (2, i, v); block.setSample (3, i, v); }
+                }
+                p->processBlock (block, midi);
+            }
+            return p;
+        };
+
+        auto p = kickRun (55.0);
+        check (p->kick.hits() >= 5, "hears the kicks (" + juce::String (p->kick.hits()) + ")");
+        const auto len = p->kick.lengthMs(), hz = p->kick.pitchHz();
+        check (len > 160.0f && len < 260.0f, "measures the kick's length (" + juce::String (len, 0) + " ms, expected about 200)");
+        check (hz > 53.0f && hz < 60.0f, "measures the body pitch (" + juce::String (hz, 1) + " Hz, expected 55-57)");
+
+        check (p->fitToKick(), "Fit to kick applies");
+        const auto hold = p->apvts.getRawParameterValue (Params::Duck::hold)->load();
+        const auto release = p->apvts.getRawParameterValue (Params::Duck::release)->load();
+        check (std::abs (hold - 0.15f * len) < 2.0f && std::abs (release - 0.85f * len) < 3.0f,
+               "hold and release follow the kick (" + juce::String (hold, 0) + " / " + juce::String (release, 0) + " ms)");
+
+        const auto inTune = describeKickTuning (hz, 9);
+        check (inTune.contains ("in tune with the root"), "an A kick in A minor is in tune: " + inTune);
+        const auto off = describeKickTuning (61.7f, 9);
+        check (off.contains ("2.0 st above the root (A)") && off.contains ("tune the kick down 2.0 st"), "a B kick in A is flagged: " + off);
+        check (describeKickTuning (82.4f, 9).contains ("on the fifth"), "an E kick in A is on the fifth");
+
+        auto none = std::make_unique<KybalionProcessor>();
+        none->prepareToPlay (sampleRate, blockSize);
+        check (! none->fitToKick(), "no sidechain, no kicks: nothing changes");
+    }
+
     section ("Ouroboros: no ducking in breakdowns and builds");
     {
         suite::SectionMap map;   // Groove 1-2, Breakdown 3-4, Drop 5-6 (120 BPM: 2 s per bar)

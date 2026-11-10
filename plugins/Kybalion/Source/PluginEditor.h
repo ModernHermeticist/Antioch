@@ -74,6 +74,7 @@ private:
     suite::ui::Knob nudge, duckDepth, duckAttack, hold, duckRelease, curve, split, threshold;
     suite::ui::Toggle breakdown;
     juce::Label sourceStatus;
+    juce::TextButton fitButton { "Fit to kick" };
 
     std::unique_ptr<suite::ui::ScenePanel> scenePanel;
     juce::Rectangle<int> masterArea;

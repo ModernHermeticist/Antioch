@@ -47,6 +47,7 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
     scenes.prepare();
     ducker.prepare (sampleRate);
     scTrigger.prepare (sampleRate);
+    kick.prepare (sampleRate);
     outGain.reset (sampleRate, 0.03);
     outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (value (Params::output)));
     position = 0.0;
@@ -136,10 +137,15 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
         // Time since the last duck trigger: from the beat grid, or from detected kicks.
         float ms;
+        float sc = 0.0f;
+        if (scActive)
+        {
+            sc = scBuffer.getSample (0, n);
+            if (scBuffer.getNumChannels() > 1) sc = 0.5f * (sc + scBuffer.getSample (1, n));
+            kick.process (sc, threshold);
+        }
         if (useSidechain)
         {
-            auto sc = scBuffer.getSample (0, n);
-            if (scBuffer.getNumChannels() > 1) sc = 0.5f * (sc + scBuffer.getSample (1, n));
             ms = scTrigger.process (sc, threshold);
         }
         else
@@ -177,6 +183,17 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     duckMs.store (lastMs);
     currentSection.store (haveSections ? sectionNow : -1);
     autoBreakdown.store (pausedNow);
+}
+
+bool KybalionProcessor::fitToKick()
+{
+    if (kick.hits() < kicksNeeded)
+        return false;
+    // Hold through the kick's punch, then recover as its tail dies away.
+    const auto length = kick.lengthMs();
+    setParam (Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * length));
+    setParam (Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * length));
+    return true;
 }
 
 void KybalionProcessor::setParam (const juce::String& id, float plainValue)

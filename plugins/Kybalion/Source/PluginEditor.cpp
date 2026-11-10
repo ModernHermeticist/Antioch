@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "KeyBus.h"
 
 using namespace suite::ui;
 
@@ -198,6 +199,9 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
         presetBox.addItem (Params::Duck::presets()[i].name, (int) i + 1);
     presetBox.onChange = [this] { if (presetBox.getSelectedId() > 0) processor.applyDuckPreset (presetBox.getSelectedId() - 1); };
 
+    fitButton.setTooltip ("Set Hold and Release from the kick on the sidechain, so the duck recovers as the kick's tail dies away");
+    fitButton.onClick = [this] { processor.fitToKick(); };
+    duckPanel.addAndMakeVisible (fitButton);
     sourceStatus.setFont (juce::FontOptions (12.0f));
     sourceStatus.setJustificationType (juce::Justification::centredLeft);
 
@@ -248,14 +252,27 @@ void KybalionEditor::timerCallback()
 
     const auto wantsSidechain = (int) processor.apvts.getRawParameterValue (Params::Duck::source)->load() == Params::Duck::Sidechain;
     const auto connected = processor.sidechainConnected.load();
-    threshold.setEnabled (wantsSidechain);
+    threshold.setEnabled (wantsSidechain || connected);
+    const auto heard = connected && processor.kick.hits() >= KybalionProcessor::kicksNeeded;
+    fitButton.setEnabled (heard);
     duckRate.setEnabled (! wantsSidechain);
     nudge.setEnabled (! wantsSidechain);
     sourceStatus.setColour (juce::Label::textColourId, wantsSidechain && ! connected ? Colours::ember : Colours::dimText);
-    sourceStatus.setText (! wantsSidechain ? "Ducks on the beat grid: no routing needed"
-                          : connected ? "Ducking from the sidechain input"
-                                      : "No sidechain routed: using the beat grid",
-                          juce::dontSendNotification);
+    if (heard)
+    {
+        const auto key = suite::KeyBus::read();
+        sourceStatus.setColour (juce::Label::textColourId, Colours::text);
+        sourceStatus.setText ("Kick: " + juce::String (juce::roundToInt (processor.kick.lengthMs())) + " ms, "
+                                  + describeKickTuning (processor.kick.pitchHz(), key.valid ? key.root : -1),
+                              juce::dontSendNotification);
+        sourceStatus.setTooltip (sourceStatus.getText());
+    }
+    else
+        sourceStatus.setText (! wantsSidechain ? (connected ? "Ducks on the beat grid; play to analyse the kick on the sidechain"
+                                                            : "Ducks on the beat grid: no routing needed")
+                              : connected ? "Ducking from the sidechain input"
+                                          : "No sidechain routed: using the beat grid",
+                              juce::dontSendNotification);
 }
 
 void KybalionEditor::paint (juce::Graphics& g)
@@ -322,6 +339,7 @@ void KybalionEditor::resized()
         auto bar = top.removeFromTop (30);
         breakdown.setBounds (bar.removeFromRight (130).reduced (2));
         presetBox.setBounds (bar.removeFromRight (200).reduced (2));
+        fitButton.setBounds (bar.removeFromRight (110).reduced (2));
         sourceStatus.setBounds (bar);
         top.removeFromTop (8);
         duckView.setBounds (top);
