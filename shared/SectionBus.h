@@ -35,6 +35,7 @@ namespace suite
         int count = 0;
         int totalBars = 0;                     // song length; the last section ends after this bar
         int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
+        int dropGap = 0;                       // before every drop: 0 = per track, 1 = 1/2 beat silence, 2 = 1 beat, 3 = kick-only bar
         std::array<Section, maxSections> sections {};
 
         /** Index of the last Drop, or -1. */
@@ -53,7 +54,7 @@ namespace suite
 
         bool operator== (const SectionMap& o) const noexcept
         {
-            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift) return false;
+            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap) return false;
             for (int i = 0; i < count; ++i)
                 if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type)
                     return false;

@@ -19,7 +19,13 @@ namespace pm
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
 
     inline double morphQuarters (int i) { static const double q[] = { 0.0, 0.25, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
-    inline double gapQuarters (int i)   { static const double q[] = { 0.0, 0.5, 1.0 }; return q[juce::jlimit (0, 2, i)]; }
+    inline double gapQuarters (int i)   { static const double q[] = { 0.0, 0.5, 1.0, 4.0 }; return q[juce::jlimit (0, 3, i)]; }
+    /** Ouroboros' suite-wide "Before drops": quarters of silence (a kick-only bar spares the Kick role). */
+    inline double suiteGapQuarters (int dropGap, double barQ, bool isKick)
+    {
+        if (dropGap == 3) return isKick ? 0.0 : barQ;
+        return dropGap == 1 ? 0.5 : dropGap == 2 ? 1.0 : 0.0;
+    }
 
     struct Setting { float levelDb = 0.0f, lowCut = lowCutOff, highCut = highCutOff; };
 
@@ -105,7 +111,7 @@ namespace pm
         l.add (std::make_unique<AudioParameterBool> (id (laterOnId), "Separate Settings for Drop 2+", false));
         l.add (std::make_unique<AudioParameterChoice> (id (morphId), "Morph", StringArray { "Instant", "1/4 beat", "1 beat", "1 bar" }, 1));
         l.add (std::make_unique<AudioParameterBool> (id (rampId), "Ramp Through Builds", true));
-        l.add (std::make_unique<AudioParameterChoice> (id (gapId), "Gap Before Drop", StringArray { "None", "1/2 beat", "1 beat" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (id (gapId), "Gap Before Drop", StringArray { "None", "1/2 beat", "1 beat", "1 bar" }, 0));
         return l;
     }
 }

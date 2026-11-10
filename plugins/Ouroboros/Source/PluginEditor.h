@@ -86,7 +86,7 @@ private:
     juce::Slider lengthSlider { juce::Slider::IncDecButtons, juce::Slider::TextBoxLeft };
     juce::Label lengthCaption, nowLabel, nextLabel, selectionLabel, legend;
     suite::ui::Toggle broadcast;
-    suite::ui::Choice snap, lift, finalSnap;
+    suite::ui::Choice snap, lift, finalSnap, dropGap;
     Timeline timeline;
 
     std::vector<std::unique_ptr<juce::TextButton>> markButtons, typeButtons;

@@ -111,6 +111,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
     int typeNow = -1;
     bool rampNow = false, gapNow = false, laterNow = false;
+    const auto isKick = getRole() == 1;   // a kick-only bar before drops spares the kick
 
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
@@ -140,7 +141,10 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                     rampNow = true;
                 }
 
-                inGap = gapQ > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - gapQ;
+                const auto suiteGap = pm::suiteGapQuarters (sections.getMap().dropGap, barQ, isKick);
+                const auto trackGap = juce::jmin (gapQ, barQ);
+                const auto thisGap = juce::jmax (trackGap, suiteGap);
+                inGap = thisGap > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - thisGap && sec.endQ - sec.startQ > thisGap;
                 gapNow = gapNow || inGap;
             }
         }

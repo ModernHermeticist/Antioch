@@ -12,6 +12,8 @@ namespace
                                                              juce::StringArray { "1 bar", "4 bars", "8 bars", "16 bars" }, 2));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::liftId, 1 }, "Final Drop Key Change",
                                                              juce::StringArray { "None", "+1 semitone", "+2 semitones" }, 0));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::dropGapId, 1 }, "Before Drops",
+                                                             juce::StringArray { "Per track", "1/2 beat silence", "1 beat silence", "Kick-only bar" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::finalSnapId, 1 }, "Final Drop Snapshot",
                                                              juce::StringArray { "None", "A", "B", "C", "D" }, 0));
         return l;
@@ -222,6 +224,7 @@ void OuroborosProcessor::publish()
     {
         auto m = getMap();
         m.finalLift = (int) apvts.getRawParameterValue (liftId)->load();   // the whole suite follows the key change
+        m.dropGap = (int) apvts.getRawParameterValue (dropGapId)->load();   // Prima Materia on every track mutes before drops
         suite::SectionBus::publish (m);
     }
     else if (wasBroadcasting)

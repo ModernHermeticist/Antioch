@@ -81,7 +81,7 @@ public:
     juce::String lastReferenceName;
     suite::SectionFollower morphFollower;
 
-    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" };
+    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" }, dropGapId { "dropgap" };
     bool morphsWithSnapshots() const override { return false; }   // Ouroboros sends the morph
     /** How far the suite morphs into the final-drop snapshot at this position (0..1). */
     static float finalMorphAmount (const suite::SectionFollower::Position& pos, const suite::SectionMap& map, double ppq) noexcept

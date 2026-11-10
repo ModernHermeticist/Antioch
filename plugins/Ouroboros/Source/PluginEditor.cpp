@@ -322,6 +322,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       snap (p.apvts, OuroborosProcessor::snapId, "Snap"),
       lift (p.apvts, OuroborosProcessor::liftId, "Final drop key"),
       finalSnap (p.apvts, OuroborosProcessor::finalSnapId, "Final drop snapshot"),
+      dropGap (p.apvts, OuroborosProcessor::dropGapId, "Before every drop"),
       timeline (p)
 {
     setLookAndFeel (&lnf);
@@ -463,7 +464,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         addAndMakeVisible (c);
 
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
-                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &finalSnap, &timeline, &deleteButton })
+                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &finalSnap, &dropGap, &timeline, &deleteButton })
         addAndMakeVisible (c);
 
     setSize (1060, 560);
@@ -672,6 +673,7 @@ void OuroborosEditor::resized()
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);
+    dropGap.setBounds (n.removeFromRight (190).withTrimmedTop (-10));
     nowLabel.setBounds (n.removeFromLeft (n.getWidth() / 2));
     nextLabel.setBounds (n);
     bounds.removeFromTop (10);

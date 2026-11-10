@@ -197,6 +197,40 @@ int main (int argc, char** argv)
         check (late->fixes->appliedCount() == 0, "a plugin loaded later doesn't replay old fixes");
     }
 
+    section ("Before every drop (from Ouroboros)");
+    {
+        // 120 BPM: Groove bars 1-2 (0-4 s), Drop bars 3-4 (4-8 s).
+        auto run = [] (int role, int dropGap, int trackGap = 0)
+        {
+            suite::SectionMap m;
+            m.totalBars = 4; m.count = 2; m.dropGap = dropGap;
+            m.sections[0] = { 1, T::Groove };
+            m.sections[1] = { 3, T::Drop };
+            auto p = make (role);
+            set (*p, pm::gapId, (float) trackGap);
+            set (*p, pm::morphId, 0.0f);
+            suite::SectionBus::publish (m);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> a;
+            render (*p, 6.0, tone (440.0f), &a, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return a;
+        };
+        const auto pad = run (roleIndex ("Pads"), 3), kick = run (roleIndex ("Kick"), 3);
+        check (rmsBetween (pad, 2.1, 3.9) < 0.01f * rmsBetween (pad, 0.5, 1.5) && rmsBetween (pad, 4.2, 5.0) > 0.1f,
+               "kick-only bar: the pads drop out for the whole bar before the drop, then return");
+        check (rmsBetween (kick, 2.1, 3.9) > 0.9f * rmsBetween (kick, 0.5, 1.5), "... and the kick keeps playing");
+        const auto beat = run (roleIndex ("Kick"), 2);
+        check (rmsBetween (beat, 3.55, 3.95) < 0.01f && rmsBetween (beat, 2.5, 3.4) > 0.1f, "1 beat of silence: everything, the kick too");
+        const auto bar = run (roleIndex ("Lead"), 0, 3);
+        check (rmsBetween (bar, 2.1, 3.9) < 0.01f * rmsBetween (bar, 4.2, 5.0), "per track: a 1-bar gap");
+        const auto none = run (roleIndex ("Pads"), 0);
+        check (rmsBetween (none, 3.55, 3.95) > 0.1f, "'Per track' with no gap: plays through");
+    }
+
     section ("Auto-role from the track name");
     {
         const std::pair<const char*, const char*> names[] = { { "Kick", "Kick" }, { "Sub Bass", "Bass" }, { "HH open", "Hats" },

@@ -19,6 +19,7 @@ namespace suite::SectionBus
             std::atomic<uint32_t> count;
             std::atomic<uint32_t> totalBars;
             std::atomic<int32_t> finalLift;
+            std::atomic<int32_t> dropGap;
             std::array<std::atomic<uint32_t>, SectionMap::maxSections> entries; // startBar << 8 | type
         };
 
@@ -33,7 +34,7 @@ namespace suite::SectionBus
             static Shared local {};
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v2", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v3", sizeof (Shared)));
                 return m != nullptr ? m : &local;
             }();
             return *s;
@@ -54,6 +55,7 @@ namespace suite::SectionBus
         s.count.store ((uint32_t) n, std::memory_order_relaxed);
         s.totalBars.store ((uint32_t) map.totalBars, std::memory_order_relaxed);
         s.finalLift.store (map.finalLift, std::memory_order_relaxed);
+        s.dropGap.store (map.dropGap, std::memory_order_relaxed);
         s.magicWord.store (magic, std::memory_order_relaxed);
         s.stamp.store (nowSeconds(), std::memory_order_relaxed);
 
@@ -82,6 +84,7 @@ namespace suite::SectionBus
             m.count = (int) std::min<uint32_t> (s.count.load (std::memory_order_relaxed), SectionMap::maxSections);
             m.totalBars = (int) s.totalBars.load (std::memory_order_relaxed);
             m.finalLift = s.finalLift.load (std::memory_order_relaxed);
+            m.dropGap = s.dropGap.load (std::memory_order_relaxed);
             for (int i = 0; i < m.count; ++i)
             {
                 const auto e = s.entries[(size_t) i].load (std::memory_order_relaxed);
