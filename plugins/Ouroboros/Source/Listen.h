@@ -19,6 +19,8 @@
 // It's a proposal for the user to check, not a final answer.
 
 #include "Arrangement.h"
+#include "SuiteDSP.h"
+#include <juce_audio_basics/juce_audio_basics.h>
 #include <algorithm>
 #include <numeric>
 #include <vector>
@@ -172,6 +174,76 @@ namespace listen
         }
         if (out.count > 0)
             out.sections[0].startBar = 1;
+        return out;
+    }
+
+    //==============================================================================
+    /** A reference song (decoded audio) measured bar by bar, as Listen would hear it, at
+        `bpm` in 4/4. The bar grid starts at the first kick (wrapped back to the song start),
+        so a kickless intro still lines up. */
+    inline std::vector<BarFeature> analyseAudio (const juce::AudioBuffer<float>& audio, double sampleRate, double bpm)
+    {
+        std::vector<BarFeature> out;
+        const auto n = audio.getNumSamples();
+        if (n == 0 || sampleRate <= 0.0 || bpm <= 0.0) return out;
+        const auto* l = audio.getReadPointer (0);
+        const auto* r = audio.getNumChannels() > 1 ? audio.getReadPointer (1) : l;
+        const auto sr = (float) sampleRate;
+
+        suite::Svf low, high, onsetLow;
+        low.set (100.0f, 0.707f, sr);
+        high.set (6000.0f, 0.707f, sr);
+        onsetLow.set (100.0f, 0.707f, sr);
+        const auto attack = 1.0f - std::exp (-1.0f / (0.002f * sr)), release = 1.0f - std::exp (-1.0f / (0.04f * sr));
+
+        // Downbeat: the first strong low-end attack.
+        float peak = 0.0f;
+        for (int i = 0; i < n; i += 4) peak = std::max (peak, std::abs (onsetLow.lowpass (0.5f * (l[i] + r[i]))));
+        onsetLow.reset();
+        double offset = 0.0;
+        for (int i = 0; i < n; ++i)
+            if (std::abs (onsetLow.lowpass (0.5f * (l[i] + r[i]))) > 0.5f * peak) { offset = (double) i / sampleRate; break; }
+        const auto barSeconds = 4.0 * 60.0 / bpm;
+        offset = std::fmod (offset, barSeconds);
+        offset = std::max (0.0, offset - 0.01);   // just before the attack
+
+        float env = 0.0f;
+        int currentBar = -1, count = 0;
+        double flux = 0.0, hi = 0.0, full = 0.0;
+        auto flush = [&]
+        {
+            if (currentBar < 0 || count == 0) return;
+            if ((int) out.size() <= currentBar) out.resize ((size_t) currentBar + 1);
+            auto& f = out[(size_t) currentBar];
+            f.heard = true;
+            f.kickFlux = (float) flux;
+            f.highDb = 10.0f * std::log10 ((float) (hi / count) + 1.0e-12f);
+            f.fullDb = 10.0f * std::log10 ((float) (full / count) + 1.0e-12f);
+        };
+        for (int i = 0; i < n; ++i)
+        {
+            const auto t = (double) i / sampleRate - offset;
+            const auto bar = t < 0.0 ? -1 : (int) std::floor (t / barSeconds);
+            const auto mono = 0.5f * (l[i] + r[i]);
+            const auto lo = std::abs (low.lowpass (mono));
+            const auto h = high.highpass (mono);
+            const auto before = env;
+            env += (lo > env ? attack : release) * (lo - env);
+            if (bar != currentBar)
+            {
+                flush();
+                currentBar = bar; count = 0; flux = hi = full = 0.0;
+            }
+            if (bar < 0) continue;
+            flux += std::max (0.0f, env - before);
+            hi += h * h;
+            full += mono * mono;
+            ++count;
+        }
+        flush();
+        // Ignore a final partial bar shorter than half a bar.
+        if (! out.empty() && n / sampleRate - offset - (double) (out.size() - 1) * barSeconds < 0.5 * barSeconds)
+            out.pop_back();
         return out;
     }
 }

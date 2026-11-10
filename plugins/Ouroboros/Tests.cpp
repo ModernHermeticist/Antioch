@@ -381,6 +381,31 @@ int main (int argc, char** argv)
         p->clearListening();
         render (*p, 0.05, {});
         check (p->barsHeard() == 0 && p->proposeFromListening().count == 0, "clearing forgets what was heard");
+
+        // The same song as a reference file, starting after 0.37 s of silence (so the bar grid
+        // has to be found from the audio).
+        {
+            const auto lead = (int) (0.37 * sampleRate);
+            const auto total = (int) ((104.0 * barSec + 0.5) * sampleRate);
+            juce::AudioBuffer<float> file (2, lead + total);
+            file.clear();
+            juce::AudioBuffer<float> chunk (2, 4096);
+            for (int pos = 0; pos < total; pos += 4096)
+            {
+                const auto n = std::min (4096, total - pos);
+                chunk.setSize (2, n, false, false, true);
+                song (chunk, pos);
+                for (int ch = 0; ch < 2; ++ch) file.copyFrom (ch, lead + pos, chunk, ch, 0, n);
+            }
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("ouroboros_reference.wav");
+            writeWav (wav, file);
+            const auto fromFile = OuroborosProcessor::proposeFromFile (wav, 140.0);
+            const auto fileText = arrangement::toString (fromFile);
+            std::cout << "    from the file: " << fileText << std::endl;
+            check (fileText == "1:Intro 17:Groove 33:Breakdown 49:Build 57:Drop 89:Outro /104", "a reference file gives the same structure");
+            check (OuroborosProcessor::proposeFromFile (wav.getSiblingFile ("does_not_exist.wav"), 140.0).count == 0, "a missing file gives nothing");
+            wav.deleteFile();
+        }
     }
 
     if (outDir != juce::File())

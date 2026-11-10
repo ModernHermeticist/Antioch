@@ -5,6 +5,9 @@
 #include "Arrangement.h"
 #include "Listen.h"
 #include "SuiteDSP.h"
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <optional>
+#include <thread>
 
 class OuroborosProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -59,11 +62,23 @@ public:
     int barsHeard() const;
     suite::SectionMap proposeFromListening() const { return listen::propose (features()); }
 
+    /** Reference structure: decodes an audio file in the background, measures it bar by bar at
+        `bpm` and proposes its section map. Poll takeReferenceProposal() for the result. */
+    void analyseReference (const juce::File& file, double referenceBpm);
+    /** Blocking version (tests): returns the proposal, count 0 if the file couldn't be read. */
+    static suite::SectionMap proposeFromFile (const juce::File& file, double referenceBpm);
+    std::optional<suite::SectionMap> takeReferenceProposal();
+    std::atomic<bool> analysingReference { false };
+    juce::String referenceName() const { const juce::ScopedLock sl (lock); return lastReferenceName; }
+
     juce::AudioProcessorValueTreeState apvts;
 
     // Transport, written by the audio thread, read by the UI.
     std::atomic<double> ppq { 0.0 }, bpm { 138.0 }, barQuarters { 4.0 };
     std::atomic<bool> playing { false };
+    std::thread referenceThread;
+    std::optional<suite::SectionMap> referenceResult;
+    juce::String lastReferenceName;
     suite::SectionFollower morphFollower;
 
     static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" }, finalSnapId { "finalsnap" };

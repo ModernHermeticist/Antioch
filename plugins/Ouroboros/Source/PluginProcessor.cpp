@@ -32,6 +32,7 @@ OuroborosProcessor::OuroborosProcessor()
 OuroborosProcessor::~OuroborosProcessor()
 {
     stopTimer();
+    if (referenceThread.joinable()) referenceThread.join();
     if (wasBroadcasting)
         suite::SectionBus::withdraw();
 }
@@ -174,6 +175,44 @@ void OuroborosProcessor::markAtPlayhead (suite::SectionType type)
     auto m = getMap();
     arrangement::insertAt (m, juce::jlimit (1, m.totalBars, arrangement::snapBar (bar, snap)), type);
     setMap (m);
+}
+
+suite::SectionMap OuroborosProcessor::proposeFromFile (const juce::File& file, double referenceBpm)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+    if (reader == nullptr || reader->lengthInSamples <= 0 || reader->sampleRate <= 0.0)
+        return {};
+    const auto length = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (reader->sampleRate * 15.0 * 60.0));   // up to 15 minutes
+    juce::AudioBuffer<float> audio ((int) juce::jlimit (1u, 2u, reader->numChannels), length);
+    reader->read (&audio, 0, length, 0, true, true);
+    return listen::propose (listen::analyseAudio (audio, reader->sampleRate, referenceBpm));
+}
+
+void OuroborosProcessor::analyseReference (const juce::File& file, double referenceBpm)
+{
+    if (analysingReference.exchange (true))
+        return;
+    if (referenceThread.joinable()) referenceThread.join();
+    referenceThread = std::thread ([this, file, referenceBpm]
+    {
+        auto proposal = proposeFromFile (file, referenceBpm);
+        {
+            const juce::ScopedLock sl (lock);
+            referenceResult = proposal;
+            lastReferenceName = file.getFileNameWithoutExtension();
+        }
+        analysingReference.store (false);
+    });
+}
+
+std::optional<suite::SectionMap> OuroborosProcessor::takeReferenceProposal()
+{
+    const juce::ScopedLock sl (lock);
+    auto r = referenceResult;
+    referenceResult.reset();
+    return r;
 }
 
 void OuroborosProcessor::publish()

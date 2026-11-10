@@ -438,6 +438,10 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     addAndMakeVisible (saveSnapshotButton);
     addAndMakeVisible (snapshotStatus);
     arrangeButton.onClick = [this] { showArrange(); };
+    referenceButton.setTooltip ("Copy the structure of a reference track: choose an audio file (and its tempo); "
+                                "its sections are proposed as a map to Apply or Discard");
+    referenceButton.onClick = [this] { chooseReference(); };
+    addAndMakeVisible (referenceButton);
     suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");
     suiteButton.onClick = [this]
     {
@@ -535,11 +539,40 @@ void OuroborosEditor::refreshSnapshots()
         snapshotStatus.setText ("Suite snapshots", juce::dontSendNotification);
 }
 
+void OuroborosEditor::chooseReference()
+{
+    // Tempo first (defaults to the project's), then the file.
+    juce::PopupMenu menu;
+    const auto projectBpm = processor.bpm.load();
+    menu.addSectionHeader ("Reference tempo");
+    menu.addItem (1, "Same as the project (" + juce::String (projectBpm, 1) + " BPM)");
+    const int presets[] = { 128, 130, 132, 134, 136, 138, 140, 142 };
+    for (int i = 0; i < 8; ++i)
+        menu.addItem (10 + i, juce::String (presets[i]) + " BPM");
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (referenceButton), [this, projectBpm, presets] (int result)
+    {
+        if (result == 0) return;
+        referenceBpm = result == 1 ? projectBpm : (double) presets[result - 10];
+        referenceChooser = std::make_unique<juce::FileChooser> ("Choose a reference track",
+                                                                juce::File::getSpecialLocation (juce::File::userMusicDirectory),
+                                                                "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+        referenceChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                       [this] (const juce::FileChooser& fc)
+                                       {
+                                           if (fc.getResult().existsAsFile())
+                                               processor.analyseReference (fc.getResult(), referenceBpm);
+                                       });
+    });
+}
+
 void OuroborosEditor::propose()
 {
     const auto proposal = processor.proposeFromListening();
     if (proposal.count > 0)
+    {
         timeline.preview = proposal;
+        previewNote = {};
+    }
     else
         listenStatus.setText ("Not enough heard yet: play at least 16 bars with Listen on", juce::dontSendNotification);
 }
@@ -562,6 +595,7 @@ void OuroborosEditor::timerCallback()
         propose();
     wasPlaying = isPlaying;
     applyButton.setVisible (timeline.preview.has_value());
+    listenStatus.setBounds (timeline.preview.has_value() ? statusNarrow : statusWide);
     discardButton.setVisible (timeline.preview.has_value());
     proposeButton.setEnabled (heard >= 16);
     if (! timeline.preview.has_value())
@@ -569,7 +603,19 @@ void OuroborosEditor::timerCallback()
                                                          : heard > 0 ? "Heard " + juce::String (heard) + " bars" : "Turn on Listen and play the song",
                               juce::dontSendNotification);
     else
-        listenStatus.setText ({}, juce::dontSendNotification);
+        listenStatus.setText (previewNote, juce::dontSendNotification);
+    if (processor.analysingReference.load())
+        listenStatus.setText ("Analysing the reference...", juce::dontSendNotification);
+    if (auto proposal = processor.takeReferenceProposal())
+    {
+        if (proposal->count > 0)
+        {
+            timeline.preview = *proposal;
+            previewNote = "From '" + processor.referenceName() + "' at " + juce::String (juce::roundToInt (referenceBpm)) + " BPM";
+        }
+        else
+            listenStatus.setText ("Couldn't find a structure in that file (is the tempo right?)", juce::dontSendNotification);
+    }
 
     const auto m = processor.getMap();
     if ((int) lengthSlider.getValue() != m.totalBars)
@@ -638,12 +684,15 @@ void OuroborosEditor::resized()
     lengthSlider.setBounds (bar.removeFromRight (120).reduced (0, 2));
     lengthCaption.setBounds (bar.removeFromRight (50));
     bar.removeFromLeft (12);
+    referenceButton.setBounds (bar.removeFromLeft (100).reduced (4, 2));
     listenButton.setBounds (bar.removeFromLeft (80).reduced (0, 2));
     proposeButton.setBounds (bar.removeFromLeft (110).reduced (4, 2));
+    statusWide = bar.reduced (6, 0);
     auto actions = bar.removeFromRight (170);
     applyButton.setBounds (actions.removeFromLeft (80).reduced (2));
     discardButton.setBounds (actions.reduced (2));
-    listenStatus.setBounds (bar.reduced (6, 0));
+    statusNarrow = bar.reduced (6, 0);
+    listenStatus.setBounds (timeline.preview.has_value() ? statusNarrow : statusWide);
     s.removeFromTop (8);
     timeline.setBounds (s);
     bounds.removeFromTop (10);

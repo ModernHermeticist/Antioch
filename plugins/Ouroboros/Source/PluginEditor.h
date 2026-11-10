@@ -109,7 +109,12 @@ private:
     juce::String lastSnapshotVerb;
     void snapshotCommand (suite::SnapshotAction, int slot);
     void refreshSnapshots();
-    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" };
+    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." };
+    std::unique_ptr<juce::FileChooser> referenceChooser;
+    double referenceBpm = 138.0;
+    juce::String previewNote;
+    juce::Rectangle<int> statusWide, statusNarrow;   // the status line, without / with Apply and Discard showing
+    void chooseReference();
     arrangement::GenSettings lastArrange;
     void showArrange();
     bool wasPlaying = false;
