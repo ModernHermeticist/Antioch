@@ -17,7 +17,7 @@ private:
 
     AzothProcessor& processor;
     suite::ui::LookAndFeel lnf;
-    suite::ui::Knob impact, crash, swell, down, roll, level, tone, rollPitch;
+    suite::ui::Knob impact, crash, swell, down, roll, level, tone, rollPitch, laterDrops;
     suite::ui::Choice swellLen, rollStart, gap;
     suite::ui::Toggle follow, grooveCrash, reverseOn;
     suite::ui::Knob reverseLevel;

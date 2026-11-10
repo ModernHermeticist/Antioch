@@ -110,6 +110,25 @@ int main (int argc, char** argv)
         check (rmsBetween (b, 4.02, 4.25) < 1.0e-3f, "Instant cuts on the bar line");
     }
 
+    section ("Drop 2+ column");
+    {
+        suite::SectionMap twoDrops;   // Drop 1-2 (0-4 s), Breakdown 3-4, Drop 5-6 (8-12 s)
+        twoDrops.totalBars = 6; twoDrops.count = 3;
+        twoDrops.sections[0] = { 1, T::Drop };
+        twoDrops.sections[1] = { 3, T::Breakdown };
+        twoDrops.sections[2] = { 5, T::Drop };
+        auto p = make (roleIndex ("Lead"));   // lead: 0 dB in drops, +2 dB in Drop 2+
+        suite::SectionBus::publish (twoDrops);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> a;
+        render (*p, 12.0, tone (440.0f), &a, &head);
+        p->setPlayHead (nullptr);
+        const auto diff = juce::Decibels::gainToDecibels (rmsBetween (a, 9.0, 11.5) / rmsBetween (a, 1.0, 3.5));
+        check (std::abs (diff - 2.0f) < 0.3f, "the lead is 2 dB louder in the second drop (" + juce::String (diff, 2) + " dB)");
+    }
+
     section ("Pass-through when not following");
     {
         auto p = make (roleIndex ("Kick"));

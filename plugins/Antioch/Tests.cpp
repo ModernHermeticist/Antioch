@@ -257,6 +257,33 @@ int main (int argc, char** argv)
         p->setPlayHead (nullptr);
         suite::SectionBus::withdraw();
 
+        // Drop 2+ adds to the Drop scene, only in the second drop.
+        {
+            suite::SectionMap twoDrops;   // Drop 1-2, Breakdown 3, Drop 4-5 (2 s per bar)
+            twoDrops.totalBars = 5; twoDrops.count = 3;
+            twoDrops.sections[0] = { 1, suite::SectionType::Drop };
+            twoDrops.sections[1] = { 3, suite::SectionType::Breakdown };
+            twoDrops.sections[2] = { 4, suite::SectionType::Drop };
+            auto d = make();
+            set (*d, suite::SceneEngine::morphId, 0.0f);
+            const auto echoBase = d->apvts.getParameter (Params::echoLevel)->getValue();
+            suite::SectionBus::publish (twoDrops);
+            FakePlayHead h;
+            h.bpm = 120.0;
+            d->setPlayHead (&h);
+            float first = -1.0f, second = -1.0f;
+            render (*d, 9.5, {}, nullptr, &h, [&] (int64_t pos)
+            {
+                const auto t = (double) pos / sampleRate;
+                if (first < 0.0f && t > 2.0) first = d->scenes.getEffective (AntiochProcessor::sEcho);
+                if (second < 0.0f && t > 8.0) second = d->scenes.getEffective (AntiochProcessor::sEcho);
+            });
+            d->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            check (std::abs (first - echoBase) < 1.0e-3f && std::abs (second - (echoBase + 0.1f)) < 1.0e-3f,
+                   "Drop 2+ scene: more echo in the second drop only (" + juce::String (first, 2) + " -> " + juce::String (second, 2) + ")");
+        }
+
         p->scenes.setOffset ((int) suite::SectionType::Drop, AntiochProcessor::sEcho, -0.4f);
         juce::MemoryBlock state;
         p->getStateInformation (state);

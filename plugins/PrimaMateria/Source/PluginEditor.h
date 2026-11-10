@@ -18,12 +18,12 @@ private:
     PrimaMateriaProcessor& processor;
     suite::ui::LookAndFeel lnf;
     juce::ComboBox roleBox;
-    suite::ui::Toggle follow, ramp;
+    suite::ui::Toggle follow, ramp, laterOn;
     suite::ui::Choice morph, gap;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;
     juce::Rectangle<int> gridArea;
-    std::array<juce::Rectangle<int>, pm::numTypes> columns;
+    std::array<juce::Rectangle<int>, pm::numColumns> columns;
     int shownType = -2;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PrimaMateriaEditor)

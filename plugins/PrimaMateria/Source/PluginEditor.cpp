@@ -8,6 +8,7 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     : AudioProcessorEditor (p), processor (p),
       follow (p.apvts, pm::followId, "Follow Ouroboros", Colours::ember),
       ramp (p.apvts, pm::rampId, "Ramp through builds", Colours::brass),
+      laterOn (p.apvts, pm::laterOnId, "Separate Drop 2+", Colours::ember),
       morph (p.apvts, pm::morphId, "Morph"),
       gap (p.apvts, pm::gapId, "Gap before drop")
 {
@@ -18,9 +19,10 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
         roleBox.addItem (pm::roles()[i].name, (int) i + 1);
     roleBox.onChange = [this] { if (roleBox.getSelectedId() > 0) processor.applyRole (roleBox.getSelectedId() - 1); };
 
-    for (int t = 0; t < pm::numTypes; ++t)
+    auto columnColour = [] (int t) { return t == pm::laterDrop ? sectionColour (suite::SectionType::Drop).brighter (0.35f) : sectionColour ((suite::SectionType) t); };
+    for (int t = 0; t < pm::numColumns; ++t)
     {
-        const auto c = sectionColour ((suite::SectionType) t);
+        const auto c = columnColour (t);
         knobs.push_back (std::make_unique<Knob> (p.apvts, pm::levelId (t), "Level", c));
         knobs.push_back (std::make_unique<Knob> (p.apvts, pm::lowCutId (t), "Low cut", c));
         knobs.push_back (std::make_unique<Knob> (p.apvts, pm::highCutId (t), "High cut", c));
@@ -33,10 +35,10 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     }
 
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
-    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &morph, &gap, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &morph, &gap, &status })
         addAndMakeVisible (c);
 
-    setSize (1000, 600);
+    setSize (1120, 600);
     timerCallback();
     startTimerHz (15);
 }
@@ -61,7 +63,7 @@ void PrimaMateriaEditor::timerCallback()
     juce::String text;
     if (t >= 0)
     {
-        text << "Now: " << suite::sectionName ((suite::SectionType) t)
+        text << "Now: " << (t == pm::laterDrop ? juce::String ("Drop 2+") : juce::String (suite::sectionName ((suite::SectionType) t)))
              << (processor.ramping.load() ? " (ramping)" : "") << (processor.gapping.load() ? " (gap)" : "")
              << juce::String::fromUTF8 ("  \xc2\xb7  level ") << (lvl <= pm::offDb + 0.05f ? juce::String ("off") : juce::String (lvl, 1) + " dB");
         if (processor.nowLowCut.load() > pm::lowCutOff + 1.0f) text << ", low cut " << hz (processor.nowLowCut.load());
@@ -72,7 +74,7 @@ void PrimaMateriaEditor::timerCallback()
         text = processor.mapAvailable.load() ? "Ouroboros found: waiting for playback (passing audio unchanged)"
                                              : "No Ouroboros: passing audio unchanged";
     }
-    status.setColour (juce::Label::textColourId, t >= 0 ? sectionColour ((suite::SectionType) t) : Colours::dimText);
+    status.setColour (juce::Label::textColourId, t >= 0 ? sectionColour ((suite::SectionType) juce::jmin (t, pm::numTypes - 1)) : Colours::dimText);
     status.setText (text, juce::dontSendNotification);
 }
 
@@ -82,10 +84,10 @@ void PrimaMateriaEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "PRIMA MATERIA", "section mixer", accent);
     drawPanel (g, gridArea, {});
 
-    for (int t = 0; t < pm::numTypes; ++t)
+    for (int t = 0; t < pm::numColumns; ++t)
     {
         const auto col = columns[(size_t) t];
-        const auto c = sectionColour ((suite::SectionType) t);
+        const auto c = t == pm::laterDrop ? sectionColour (suite::SectionType::Drop).brighter (0.35f) : sectionColour ((suite::SectionType) t);
         const auto live = t == shownType;
         g.setColour (c.withAlpha (live ? 0.22f : 0.08f));
         g.fillRoundedRectangle (col.toFloat().reduced (3.0f), 6.0f);
@@ -96,7 +98,8 @@ void PrimaMateriaEditor::paint (juce::Graphics& g)
         }
         g.setColour (c.brighter (0.3f));
         g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-        g.drawText (juce::String (suite::sectionName ((suite::SectionType) t)).toUpperCase(), col.withHeight (30).translated (0, 6),
+        g.drawText (t == pm::laterDrop ? juce::String ("DROP 2+") : juce::String (suite::sectionName ((suite::SectionType) t)).toUpperCase(),
+                    col.withHeight (30).translated (0, 6),
                     juce::Justification::centred);
     }
 }
@@ -111,6 +114,7 @@ void PrimaMateriaEditor::resized()
     roleBox.setBounds (controls.removeFromLeft (240).withSizeKeepingCentre (240, 28).translated (0, 8));
     controls.removeFromLeft (16);
     ramp.setBounds (controls.removeFromLeft (190).withSizeKeepingCentre (180, 30).translated (0, 8));
+    laterOn.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 30).translated (0, 8));
     morph.setBounds (controls.removeFromLeft (170));
     gap.setBounds (controls.removeFromLeft (170));
 
@@ -119,8 +123,8 @@ void PrimaMateriaEditor::resized()
     gridArea = bounds;
 
     auto grid = gridArea.reduced (8);
-    const auto w = grid.getWidth() / pm::numTypes;
-    for (int t = 0; t < pm::numTypes; ++t)
+    const auto w = grid.getWidth() / pm::numColumns;
+    for (int t = 0; t < pm::numColumns; ++t)
     {
         columns[(size_t) t] = juce::Rectangle<int> (grid.getX() + t * w, grid.getY(), w, grid.getHeight());
         auto col = columns[(size_t) t].reduced (6).withTrimmedTop (34);

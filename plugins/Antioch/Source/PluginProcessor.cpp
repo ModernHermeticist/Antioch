@@ -39,7 +39,8 @@ AntiochProcessor::AntiochProcessor()
                     { T::Breakdown, sEcho, 0.15f }, { T::Breakdown, sHarmonics, 0.20f },
                     { T::Build, sVerb, 0.10f }, { T::Build, sEcho, 0.10f }, { T::Build, sEchoDamp, 0.10f },
                     { T::Drop, sVerb, -0.10f }, { T::Drop, sShimmer, -0.10f },
-                    { T::Intro, sVerb, 0.05f }, { T::Outro, sVerb, 0.10f }, { T::Outro, sEcho, 0.10f } });
+                    { T::Intro, sVerb, 0.05f }, { T::Outro, sVerb, 0.10f }, { T::Outro, sEcho, 0.10f },
+                    { T::count, sEcho, 0.10f }, { T::count, sShimmer, 0.05f } });   // Drop 2+: a little more
 }
 
 juce::AudioParameterBool* AntiochProcessor::boolParam (const juce::String& id)

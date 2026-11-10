@@ -74,6 +74,29 @@ int main (int argc, char** argv)
         if (outDir != juce::File()) writeWav (outDir.getChildFile ("azoth_transitions.wav"), audio);
     }
 
+    section ("Later drops hit harder");
+    {
+        suite::SectionMap twoDrops;   // Groove 1, Drop 2, Breakdown 3, Drop 4 (2 s per bar)
+        twoDrops.totalBars = 5; twoDrops.count = 4;
+        twoDrops.sections[0] = { 1, T::Groove };
+        twoDrops.sections[1] = { 2, T::Drop };
+        twoDrops.sections[2] = { 3, T::Breakdown };
+        twoDrops.sections[3] = { 4, T::Drop };
+        suite::SectionBus::publish (twoDrops);
+        auto p = make();
+        set (*p, AzothProcessor::downId, 0.0f);
+        set (*p, AzothProcessor::swellId, 0.0f);
+        set (*p, AzothProcessor::crashId, 0.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 8.0, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        const auto first = peakBetween (audio, 2.0, 2.4), second = peakBetween (audio, 6.0, 6.4);
+        check (second > 1.2f * first, "the second drop's impact is bigger (" + juce::String (first, 2) + " -> " + juce::String (second, 2) + ")");
+    }
+
     section ("Gap before the drop");
     {
         suite::SectionBus::publish (testMap());

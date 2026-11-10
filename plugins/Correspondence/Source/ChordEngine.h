@@ -499,6 +499,7 @@ namespace chords
         std::array<int, (int) suite::SectionType::count> arp    { 0, 1, 0, 1, 1, 0 };
         std::array<int, (int) suite::SectionType::count> lead   { 0, 0, 2, 0, 1, 0 };   // 1 = melody, 2 = teaser
         MelodySettings melody;
+        bool liftLaterDrops = true;   // the lead goes up an octave in the 2nd, 3rd... drop
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -532,6 +533,11 @@ namespace chords
             else if (part == SongPart::Arp)  { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
             else                             { cycle = melody (s, patterns.melody); if (choice == 2) cycle = teaser (cycle); }
 
+            int earlierSame = 0;
+            for (int k = 0; k < i; ++k) if (map.sections[(size_t) k].type == map.sections[(size_t) i].type) ++earlierSame;
+            const auto lift = part == SongPart::Lead && patterns.liftLaterDrops && map.sections[(size_t) i].type == suite::SectionType::Drop
+                              && earlierSame > 0 ? 12 : 0;
+
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
             for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
@@ -539,7 +545,7 @@ namespace chords
                 {
                     const auto start = offset + n.start;
                     if (start >= endQ - 1.0e-9) continue;
-                    out.push_back ({ n.pitch, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                    out.push_back ({ n.pitch + lift, start, std::min (n.length, endQ - start - 0.01), n.velocity });
                 }
         }
         return out;

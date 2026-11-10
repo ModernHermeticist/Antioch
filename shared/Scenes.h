@@ -18,6 +18,8 @@
 namespace suite
 {
     constexpr int numSectionTypes = (int) SectionType::count;
+    constexpr int laterDropSlot = numSectionTypes;       // extra scene for the 2nd, 3rd... drop (adds to the Drop scene)
+    constexpr int numSceneSlots = numSectionTypes + 1;
 
     class SceneEngine
     {
@@ -26,6 +28,7 @@ namespace suite
         static inline const juce::String enabledId { "scenes_on" };
         static inline const juce::String morphId { "scene_morph" };
 
+        /** A suggested offset. Use SectionType::count as the type for the "Drop 2+" scene. */
         struct Default { SectionType type; int param; float offset; };
 
         /** Adds the shared "Scenes on" and "Morph" parameters to a plugin's layout. */
@@ -68,13 +71,15 @@ namespace suite
             const auto on = enabled != nullptr && enabled->load() > 0.5f;
 
             int type = -1;
+            bool laterDrop = false;
             if (haveMap && host.playing && host.hasPpq)
             {
                 const auto mid = host.ppq + host.quartersPerSample (sampleRate) * numSamples * 0.5;
                 const auto pos = follower.locate (mid, host.barQuarters());
-                if (pos.valid) type = (int) pos.type;
+                if (pos.valid) { type = (int) pos.type; laterDrop = pos.isLaterDrop(); }
             }
             activeType.store (on ? type : -1);
+            activeLaterDrop.store (on && laterDrop);
 
             const auto blockQ = host.quartersPerSample (sampleRate) * numSamples;
             const auto morphQ = morph != nullptr ? morphQuarters ((int) morph->load()) : 1.0;
@@ -82,7 +87,9 @@ namespace suite
 
             for (int i = 0; i < count; ++i)
             {
-                const auto target = (on && type >= 0) ? offsets[(size_t) type][(size_t) i].load (std::memory_order_relaxed) : 0.0f;
+                auto target = (on && type >= 0) ? offsets[(size_t) type][(size_t) i].load (std::memory_order_relaxed) : 0.0f;
+                if (on && laterDrop)
+                    target += offsets[(size_t) laterDropSlot][(size_t) i].load (std::memory_order_relaxed);
                 auto c = current[(size_t) i].load (std::memory_order_relaxed);
                 c = c < target ? std::min (target, c + step) : std::max (target, c - step);
                 current[(size_t) i].store (c, std::memory_order_relaxed);
@@ -107,6 +114,7 @@ namespace suite
             return juce::jlimit (0.0f, 1.0f, params[(size_t) i]->getValue() + current[(size_t) i].load (std::memory_order_relaxed));
         }
         int getActiveType() const noexcept { return activeType.load(); }
+        bool isInLaterDrop() const noexcept { return activeLaterDrop.load(); }
         bool isOuroborosPresent() const noexcept { return follower.isAvailable(); }
 
         float getOffset (int type, int i) const noexcept { return offsets[(size_t) type][(size_t) i].load(); }
@@ -114,7 +122,7 @@ namespace suite
 
         void clearAll() noexcept
         {
-            for (auto& row : offsets) for (auto& o : row) o.store (0.0f);
+            for (auto& row : offsets) for (auto& o : row) o.store (0.0f);   // includes the Drop 2+ slot
         }
 
         void applySuggested() noexcept
@@ -131,7 +139,7 @@ namespace suite
         juce::ValueTree toValueTree() const
         {
             juce::ValueTree t ("Scenes");
-            for (int s = 0; s < numSectionTypes; ++s)
+            for (int s = 0; s < numSceneSlots; ++s)
             {
                 juce::StringArray values;
                 for (int i = 0; i < count; ++i) values.add (juce::String (getOffset (s, i), 4));
@@ -144,7 +152,7 @@ namespace suite
         {
             if (! t.hasType ("Scenes"))
                 return;
-            for (int s = 0; s < numSectionTypes; ++s)
+            for (int s = 0; s < numSceneSlots; ++s)
             {
                 const auto values = juce::StringArray::fromTokens (t[juce::Identifier ("s" + juce::String (s))].toString(), ",", "");
                 for (int i = 0; i < count; ++i)
@@ -174,11 +182,12 @@ namespace suite
         int count = 0;
         std::array<juce::String, maxParams> ids, labels;
         std::array<juce::RangedAudioParameter*, maxParams> params {};
-        std::array<std::array<std::atomic<float>, maxParams>, numSectionTypes> offsets {};
+        std::array<std::array<std::atomic<float>, maxParams>, numSceneSlots> offsets {};
         std::array<std::atomic<float>, maxParams> current {};   // gliding offset, written by the audio thread
         std::atomic<float>* enabled = nullptr;
         std::atomic<float>* morph = nullptr;
         std::atomic<int> activeType { -1 };
+        std::atomic<bool> activeLaterDrop { false };
         std::vector<Default> defaults;
         SectionFollower follower;
     };

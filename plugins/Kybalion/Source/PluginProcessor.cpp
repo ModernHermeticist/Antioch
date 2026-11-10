@@ -18,7 +18,8 @@ KybalionProcessor::KybalionProcessor()
                     { Params::Gate::swing, "Gate swing" }, { Params::Duck::depth, "Duck depth" } },
                   { { T::Intro, sGateDepth, -0.3f }, { T::Breakdown, sGateDepth, -0.6f }, { T::Breakdown, sGateFilter, 0.2f },
                     { T::Build, sGateLength, -0.25f }, { T::Build, sGateFilter, 0.3f },
-                    { T::Drop, sGateDepth, 0.2f }, { T::Outro, sGateDepth, -0.3f } });
+                    { T::Drop, sGateDepth, 0.2f }, { T::Outro, sGateDepth, -0.3f },
+                    { T::count, sGateDepth, 0.1f }, { T::count, sDuckDepth, 0.05f } });   // Drop 2+
 }
 
 bool KybalionProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const

@@ -14,6 +14,7 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       level (p.apvts, AzothProcessor::levelId, "FX level", Colours::text),
       tone (p.apvts, AzothProcessor::toneId, "Tone", accent),
       rollPitch (p.apvts, AzothProcessor::rollPitchId, "Roll pitch rise", accent),
+      laterDrops (p.apvts, AzothProcessor::laterDropsId, "Bigger later drops", suite::ui::sectionColour (suite::SectionType::Drop)),
       swellLen (p.apvts, AzothProcessor::swellLenId, "Swell length"),
       rollStart (p.apvts, AzothProcessor::rollStartId, "Roll starts"),
       gap (p.apvts, AzothProcessor::gapId, "Gap before drop"),
@@ -35,7 +36,7 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     }
     status.setFont (juce::FontOptions (13.0f));
     next.setFont (juce::FontOptions (20.0f, juce::Font::bold));
-    for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch,
+    for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch, &laterDrops,
                                                              &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote })
         addAndMakeVisible (c);
@@ -114,5 +115,5 @@ void AzothEditor::resized()
     auto s = shapeArea.reduced (10, 6).withTrimmedTop (14);
     auto toggleCell = s.removeFromRight (170);
     grooveCrash.setBounds (toggleCell.withSizeKeepingCentre (160, 30));
-    layoutRow (s, { &level, &tone, &swellLen, &rollStart, &rollPitch, &gap });
+    layoutRow (s, { &level, &tone, &swellLen, &rollStart, &rollPitch, &gap, &laterDrops });
 }

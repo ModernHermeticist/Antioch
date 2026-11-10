@@ -47,12 +47,15 @@ namespace suite::ui
         ScenePanel (SceneEngine& e, juce::AudioProcessorValueTreeState& state)
             : engine (e), enabled (state, SceneEngine::enabledId, "Scenes on", Colours::ember), morph (state, SceneEngine::morphId, "Morph")
         {
-            for (int t = 0; t < numSectionTypes; ++t)
+            for (int t = 0; t < numSceneSlots; ++t)
             {
-                auto b = std::make_unique<juce::TextButton> (sectionName ((SectionType) t));
+                const auto later = t == laterDropSlot;
+                const auto colour = later ? sectionColour (SectionType::Drop).brighter (0.35f) : sectionColour ((SectionType) t);
+                auto b = std::make_unique<juce::TextButton> (later ? juce::String ("Drop 2+") : juce::String (sectionName ((SectionType) t)));
                 b->setClickingTogglesState (false);
-                b->setColour (juce::TextButton::buttonColourId, sectionColour ((SectionType) t).withAlpha (0.25f));
-                b->setColour (juce::TextButton::buttonOnColourId, sectionColour ((SectionType) t));
+                b->setColour (juce::TextButton::buttonColourId, colour.withAlpha (0.25f));
+                b->setColour (juce::TextButton::buttonOnColourId, colour);
+                if (later) b->setTooltip ("Added on top of the Drop scene for the second and later drops");
                 b->onClick = [this, t] { selectType (t); };
                 addAndMakeVisible (*b);
                 typeButtons.push_back (std::move (b));
@@ -94,8 +97,8 @@ namespace suite::ui
 
         void selectType (int t)
         {
-            selected = juce::jlimit (0, numSectionTypes - 1, t);
-            for (int i = 0; i < numSectionTypes; ++i)
+            selected = juce::jlimit (0, numSceneSlots - 1, t);
+            for (int i = 0; i < numSceneSlots; ++i)
                 typeButtons[(size_t) i]->setToggleState (i == selected, juce::dontSendNotification);
             for (int i = 0; i < (int) rows.size(); ++i)
                 rows[(size_t) i]->slider.setValue (engine.getOffset (selected, i) * 100.0, juce::dontSendNotification);
@@ -118,7 +121,7 @@ namespace suite::ui
             r.removeFromTop (8);
 
             auto types = r.removeFromTop (32);
-            const auto w = types.getWidth() / numSectionTypes;
+            const auto w = types.getWidth() / numSceneSlots;
             for (auto& b : typeButtons) b->setBounds (types.removeFromLeft (w).reduced (2));
             r.removeFromTop (10);
 
@@ -137,7 +140,7 @@ namespace suite::ui
         {
             const auto active = engine.getActiveType();
             status.setColour (juce::Label::textColourId, active >= 0 ? sectionColour ((SectionType) active) : Colours::dimText);
-            status.setText (active >= 0 ? juce::String ("Now: ") + sectionName ((SectionType) active)
+            status.setText (active >= 0 ? juce::String ("Now: ") + sectionName ((SectionType) active) + (engine.isInLaterDrop() ? " 2+" : "")
                                         : engine.isOuroborosPresent() ? juce::String ("Ouroboros found: waiting for playback")
                                                                       : juce::String ("No Ouroboros: scenes inactive"),
                             juce::dontSendNotification);

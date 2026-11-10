@@ -55,6 +55,16 @@ int main (int argc, char** argv)
         check (std::abs (p.progress (40.0) - 0.5) < 1e-9 && p.hasNext && p.next == SectionType::Drop, "progress and next section");
         check (! f.locate (-1.0, barQ).valid && ! f.locate (16.0 * barQ + 1.0, barQ).valid, "before the start / after the end is 'no section'");
 
+        // Occurrences: in the classic template the drop at bar 113 is the first; add a second one.
+        auto two = arrangement::fromTemplate (arrangement::templates()[1]);   // two breakdowns, two drops
+        suite::SectionBus::publish (two);
+        suite::SectionFollower f2;
+        f2.refresh();
+        check (! f2.locate (4.0 * 95.0, 4.0).isLaterDrop() && f2.locate (4.0 * 175.0, 4.0).isLaterDrop(),
+               "knows the first drop from the second (occurrence " + juce::String (f2.locate (4.0 * 175.0, 4.0).occurrence) + ")");
+        suite::SectionBus::publish (m);
+        f.refresh();
+
         // A follower in 3/4 uses its own bar length.
         check (f.locate (8.0 * 3.0, 3.0).type == SectionType::Build, "bar maths follows the host time signature");
 

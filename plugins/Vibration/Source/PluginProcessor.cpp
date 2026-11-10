@@ -14,7 +14,8 @@ VibrationProcessor::VibrationProcessor()
                     { Params::mbDepth, "Multiband depth" }, { Params::width, "Width" } },
                   { { T::Breakdown, sEuphoria, -0.15f }, { T::Breakdown, sWidth, 0.15f }, { T::Breakdown, sAir, 0.05f },
                     { T::Build, sDrive, 0.10f }, { T::Build, sAir, 0.05f },
-                    { T::Drop, sEuphoria, 0.20f }, { T::Drop, sWidth, 0.10f } });
+                    { T::Drop, sEuphoria, 0.20f }, { T::Drop, sWidth, 0.10f },
+                    { T::count, sEuphoria, 0.15f }, { T::count, sWidth, 0.10f } });   // Drop 2+: even bigger
 }
 
 bool VibrationProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const

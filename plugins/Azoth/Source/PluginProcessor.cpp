@@ -28,6 +28,7 @@ namespace
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return "+" + String (roundToInt (v)) + " st"; })));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::gapId), "Gap Before Drop", StringArray { "None", "1/2 beat", "1 beat" }, 0));
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::grooveCrashId), "Crash Into Groove", true));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::laterDropsId), "Bigger Later Drops", NormalisableRange<float> (0.0f, 1.0f), 0.5f, percent));
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::reverseOnId), "Reverse Swells (3 s lookahead)", false));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::reverseLevelId), "Reverse Swell Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f, percent));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::reverseTargetId), "Reverse Swell Into", StringArray { "Drops", "Every section" }, 0));
@@ -84,13 +85,16 @@ void AzothProcessor::prepareToPlay (double newSampleRate, int)
     rollPos = -1.0e9;
 }
 
-void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz)
+void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop)
 {
     using T = suite::SectionType;
     if (type == T::Drop)
     {
-        impact.trigger (rootHz, value (impactId));
-        crash.trigger (value (crashId), value (toneId));
+        // Second and later drops hit harder (up to +50% at full "Bigger later drops").
+        const auto boost = laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f;
+        impact.trigger (rootHz, value (impactId) * boost);
+        crash.trigger (value (crashId) * boost, value (toneId));
+        lastImpactLevel.store (value (impactId) * boost);
     }
     else if (type == T::Breakdown)
     {
@@ -177,7 +181,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
             // Entering a new section while playing forward fires its transition.
             if (sec.valid && previousIndex >= 0 && ! jumped && sec.index != previousIndex)
-                enterSection (sec.type, previousType, host.bpm, barQ, rootHz);
+                enterSection (sec.type, previousType, host.bpm, barQ, rootHz, sec.isLaterDrop());
             previousIndex = sec.valid ? sec.index : -1;
             if (sec.valid) previousType = sec.type;
             previousPos = pos;
@@ -214,7 +218,12 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 // Swell: rising, opening noise into every Drop.
                 if (swellLevel > 0.0f && sec.hasNext && sec.next == T::Drop)
                 {
-                    const auto s = (pos - (end - swellQ)) / swellQ;
+                    // Into a later drop, the swell is longer (up to twice as long).
+                    bool dropBefore = false;
+                    for (int k = 0; k <= sec.index; ++k)
+                        if (sections.getMap().sections[(size_t) k].type == T::Drop) dropBefore = true;
+                    const auto thisSwellQ = dropBefore ? swellQ * (1.0 + value (laterDropsId)) : swellQ;
+                    const auto s = (pos - (end - thisSwellQ)) / thisSwellQ;
                     if (s >= 0.0 && s < 1.0)
                     {
                         const auto x = (float) s;

@@ -302,6 +302,20 @@ int main (int argc, char** argv)
         check (inBreakdown > 0 && inBreakdown < inDrop, "breakdown teases (" + juce::String (inBreakdown) + " notes), drop plays it all ("
                                                              + juce::String (inDrop) + ")");
 
+        // Later drops lift the lead an octave.
+        suite::SectionMap twoDrops;
+        twoDrops.totalBars = 8; twoDrops.count = 2;
+        twoDrops.sections[0] = { 1, suite::SectionType::Drop };
+        twoDrops.sections[1] = { 5, suite::SectionType::Drop };
+        const auto lifted = chords::songClip (s, twoDrops, patterns, chords::SongPart::Lead);
+        int firstPitch = -1, secondPitch = -1;
+        for (auto& n : lifted)
+        {
+            if (firstPitch < 0 && n.start < 16.0) firstPitch = n.pitch;
+            if (secondPitch < 0 && n.start >= 16.0) secondPitch = n.pitch;
+        }
+        check (secondPitch == firstPitch + 12, "the lead goes up an octave in the second drop");
+
         auto p = make();
         const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceMelodyTest");
         check (p->exportClip ("Melody", dir).existsAsFile(), "Melody tile exports a MIDI file");

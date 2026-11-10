@@ -329,9 +329,12 @@ namespace
             }
             hint.setText ("Each section of the Ouroboros map plays these patterns; the progression restarts at every section.",
                           juce::dontSendNotification);
+            lift = std::make_unique<juce::ToggleButton> ("Lead up an octave in drop 2+");
+            liftAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songLift, *lift);
+            addAndMakeVisible (*lift);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (680, 330);
+            setSize (680, 360);
         }
 
         void paint (juce::Graphics& g) override
@@ -348,6 +351,7 @@ namespace
             auto r = getLocalBounds().reduced (6);
             r.removeFromTop (20);
             hint.setBounds (r.removeFromBottom (24));
+            lift->setBounds (r.removeFromBottom (28));
             const auto rowH = r.getHeight() / (int) labels.size();
             for (size_t t = 0; t < labels.size(); ++t)
             {
@@ -364,6 +368,8 @@ namespace
         std::vector<std::unique_ptr<juce::ComboBox>> boxes;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
+        std::unique_ptr<juce::ToggleButton> lift;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment;
     };
 }
 

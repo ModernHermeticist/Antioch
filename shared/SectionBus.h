@@ -71,6 +71,9 @@ namespace suite
             double startQ = 0.0, endQ = 0.0;   // section bounds in quarter notes
             bool hasNext = false;
             int index = -1;
+            int occurrence = 0;   // how many earlier sections had the same type (0 = first drop, 1 = second drop...)
+
+            bool isLaterDrop() const noexcept { return type == SectionType::Drop && occurrence > 0; }
 
             double progress (double ppq) const noexcept { return endQ > startQ ? (ppq - startQ) / (endQ - startQ) : 0.0; }
         };
@@ -114,6 +117,8 @@ namespace suite
             p.type = map.sections[(size_t) i].type;
             p.startQ = (map.sections[(size_t) i].startBar - 1) * barQuarters;
             p.endQ = (map.endBar (i) - 1) * barQuarters;
+            for (int k = 0; k < i; ++k)
+                if (map.sections[(size_t) k].type == p.type) ++p.occurrence;
             p.hasNext = i + 1 < map.count;
             if (p.hasNext) p.next = map.sections[(size_t) i + 1].type;
             return p;

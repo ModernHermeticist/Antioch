@@ -57,7 +57,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     auto* left = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
     int typeNow = -1;
-    bool rampNow = false, gapNow = false;
+    bool rampNow = false, gapNow = false, laterNow = false;
 
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
@@ -71,7 +71,9 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (sec.valid)
             {
                 typeNow = (int) sec.type;
-                target = settingFor (typeNow);
+                const auto useLater = sec.isLaterDrop() && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f;
+                target = settingFor (useLater ? pm::laterDrop : typeNow);
+                laterNow = laterNow || useLater;
 
                 // Builds ramp from the previous section's settings to the Build's own.
                 if (ramp && sec.type == T::Build && sec.index > 0)
@@ -116,7 +118,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (right != nullptr) right[n] = processChannel (right[n], 1);
     }
 
-    currentType.store (follow ? typeNow : -1);
+    currentType.store (follow ? (laterNow ? pm::laterDrop : typeNow) : -1);
     ramping.store (rampNow);
     gapping.store (gapNow);
     nowLevelDb.store (levelDb);
@@ -145,6 +147,10 @@ void PrimaMateriaProcessor::applyRole (int index)
         setValue (pm::lowCutId (t), role.settings[(size_t) t].lowCut);
         setValue (pm::highCutId (t), role.settings[(size_t) t].highCut);
     }
+    setValue (pm::levelId (pm::laterDrop), role.later.levelDb);
+    setValue (pm::lowCutId (pm::laterDrop), role.later.lowCut);
+    setValue (pm::highCutId (pm::laterDrop), role.later.highCut);
+    setValue (pm::laterOnId, role.useLater ? 1.0f : 0.0f);
     setValue (pm::rampId, role.ramp ? 1.0f : 0.0f);
     setValue (pm::gapId, (float) role.gap);
 }

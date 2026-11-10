@@ -40,7 +40,7 @@ public:
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },
         impactId { "impact" }, crashId { "crash" }, swellId { "swell" }, downId { "downlifter" }, rollId { "roll" },
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
-        reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
+        laterDropsId { "laterdrops" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" };
     static constexpr double lookaheadSeconds = 3.0;
     static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }
 
@@ -58,13 +58,14 @@ public:
 
     // For the UI and tests
     std::atomic<int> eventsFired { 0 }, snareHits { 0 };
+    std::atomic<float> lastImpactLevel { 0.0f };
     std::atomic<bool> mapAvailable { false };
     std::atomic<int> nextType { -1 };
     std::atomic<float> barsToNext { 0.0f };
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
-    void enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz);
+    void enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop);
 
     suite::SectionFollower sections;
     azoth::Impact impact;
