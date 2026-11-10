@@ -17,7 +17,6 @@ DragTile::DragTile (CorrespondenceProcessor& p, juce::String k, juce::Colour c)
     : processor (p), kind (std::move (k)), colour (c)
 {
     setMouseCursor (juce::MouseCursor::DraggingHandCursor);
-    setTooltip ("Drag into FL Studio's playlist or piano roll");
 }
 
 void DragTile::paint (juce::Graphics& g)
@@ -113,14 +112,14 @@ void RollView::paint (juce::Graphics& g)
             for (auto p : voiced[(size_t) i])
             {
                 g.setColour (i == highlight ? accent : accent.withAlpha (0.65f));
-                g.fillRoundedRectangle (x + 4.0f, r.getBottom() - (float) (p - lo + 1) * rowH + 1.0f, colW - 8.0f, juce::jmax (2.0f, rowH - 2.0f), 2.0f);
+                g.fillRoundedRectangle (x + 4.0f, r.getBottom() - (float) (p - lo + 1) * rowH + 1.0f, colW - 8.0f, juce::jmax (5.0f, rowH - 1.0f), 2.0f);
             }
 
         if (i < (int) bass.size())
         {
             const auto p = bass[(size_t) i];
             g.setColour (Colours::brass.withAlpha (0.8f));
-            g.fillRoundedRectangle (x + 4.0f, r.getBottom() - (float) (p - lo + 1) * rowH + 1.0f, colW - 8.0f, juce::jmax (2.0f, rowH - 2.0f), 2.0f);
+            g.fillRoundedRectangle (x + 4.0f, r.getBottom() - (float) (p - lo + 1) * rowH + 1.0f, colW - 8.0f, juce::jmax (5.0f, rowH - 1.0f), 2.0f);
         }
     }
 

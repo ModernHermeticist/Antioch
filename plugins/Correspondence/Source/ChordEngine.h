@@ -177,7 +177,9 @@ namespace chords
             std::vector<int> best;
             double bestScore = 1.0e9;
 
-            for (size_t inv = 0; inv < pcs.size(); ++inv)
+            // Voice leading off = every chord in root position, placed nearest the register.
+            const auto inversions = s.voiceLead ? pcs.size() : (size_t) 1;
+            for (size_t inv = 0; inv < inversions; ++inv)
             {
                 std::vector<int> rotated (pcs.begin() + (long) inv, pcs.end());
                 rotated.insert (rotated.end(), pcs.begin(), pcs.begin() + (long) inv);
@@ -191,8 +193,6 @@ namespace chords
                     auto score = std::abs (detail::centroid (v) - centre);
                     if (s.voiceLead && ! previous.empty())
                         score = detail::movement (v, previous) + 0.3 * score;
-                    else if (inv != 0)
-                        score += 3.0; // prefer root position without voice leading
 
                     if (score < bestScore)
                     {
@@ -319,8 +319,10 @@ namespace chords
             {
                 case ArpPattern::Up:     for (int k = 0; k < n; ++k) order.push_back (k); break;
                 case ArpPattern::Down:   for (int k = n - 1; k >= 0; --k) order.push_back (k); break;
-                case ArpPattern::UpDown: for (int k = 0; k < n; ++k) order.push_back (k);
-                                         for (int k = n - 2; k > 0; --k) order.push_back (k); break;
+                case ArpPattern::UpDown:
+                    for (int k = 0; k < n; ++k) order.push_back (k);
+                    for (int k = n - 2; k > 0; --k) order.push_back (k);
+                    break;
                 case ArpPattern::Bounce: for (int k = 1; k < n; ++k) { order.push_back (0); order.push_back (k); } break;
             }
             if (order.empty()) order.push_back (0);

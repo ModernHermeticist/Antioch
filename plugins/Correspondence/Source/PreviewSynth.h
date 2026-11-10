@@ -24,7 +24,7 @@ public:
     {
         sr = (float) sampleRate;
         attack = 1.0f / (0.02f * sr);
-        release = 1.0f - std::exp (-1.0f / (0.25f * sr));
+        release = 1.0f - std::exp (-1.0f / (0.2f * sr));
         for (auto& v : voices) v = {};
     }
 

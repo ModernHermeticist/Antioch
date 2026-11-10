@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write  # needed to attach builds to releases on version tags
 
+env:
+  PLUGINS: Antioch CauseAndEffect Correspondence
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -39,37 +42,45 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DANTIOCH_BUILD_TESTS=ON
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSUITE_BUILD_TESTS=ON
           else
             cmake -B build -DCMAKE_BUILD_TYPE=Release
           fi
 
-      - name: Build VST3
-        run: cmake --build build --config Release --target Antioch_VST3 --parallel
+      - name: Build VST3s
+        shell: bash
+        run: |
+          for p in $PLUGINS; do
+            cmake --build build --config Release --target ${p}_VST3 --parallel
+          done
 
       - name: Run tests
         if: runner.os == 'Linux'
         run: |
-          cmake --build build --config Release --target AntiochTests --parallel
-          xvfb-run -a build/AntiochTests_artefacts/Release/AntiochTests test-output
+          for p in $PLUGINS; do
+            cmake --build build --config Release --target ${p}Tests --parallel
+            xvfb-run -a build/plugins/$p/${p}Tests_artefacts/Release/${p}Tests test-output
+          done
 
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
-          cp -R build/Antioch_artefacts/Release/VST3/Antioch.vst3 dist/
+          for p in $PLUGINS; do
+            cp -R build/plugins/$p/${p}_artefacts/Release/VST3/*.vst3 dist/
+          done
           cp README.md dist/
           cd dist
           if [ "$RUNNER_OS" = "Windows" ]; then
-            7z a ../Antioch-${{ matrix.name }}-VST3.zip .
+            7z a ../AntiochSuite-${{ matrix.name }}-VST3.zip .
           else
-            zip -r ../Antioch-${{ matrix.name }}-VST3.zip .
+            zip -r ../AntiochSuite-${{ matrix.name }}-VST3.zip .
           fi
 
       - name: Upload build
         uses: actions/upload-artifact@v4
         with:
-          name: Antioch-${{ matrix.name }}-VST3
+          name: AntiochSuite-${{ matrix.name }}-VST3
           path: dist/
 
       - name: Upload test renders
@@ -83,4 +94,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Antioch-${{ matrix.name }}-VST3.zip
+          files: AntiochSuite-${{ matrix.name }}-VST3.zip

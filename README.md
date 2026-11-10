@@ -1,101 +1,164 @@
-# Antioch: Harmonic Echo
+# Antioch Suite
 
-A VST3 delay for FL Studio and other DAWs where every echo can be **pitch-shifted**,
-**synced to tempo**, and **tuned to a key**. Each repeat feeds back through the pitch
-shifter and a resonator tuned to a harmonic of your root note, so the tail climbs into
-chords and rings in key instead of just fading out.
+Three VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+the setup work you'd otherwise redo in every project. All three share one key: set it once
+in **Correspondence**, and the others follow it.
 
-![Antioch UI](docs/ui.png)
-
-## How it works
-
-Antioch has four independent echo taps. Each tap runs this chain:
-
-```
-input ─► delay ─► pitch shift ─► harmonic resonator ─► low cut ─► damping ─┬─► level/pan ─► wet out
-           ▲                                                               │
-           └──────────────────── feedback (soft-saturated) ◄───────────────┘
-```
-
-Because pitch shifting sits inside the feedback loop, a tap set to **+12 st** with
-feedback gives a "shimmer" that rises an octave on every repeat. A **+7 st** tap stacks
-fifths.
-
-### Global controls
-
-| Control | What it does |
+| Plugin | What it replaces |
 |---|---|
-| **Tempo Sync** | On: taps use note divisions synced to FL Studio's tempo. Off: taps use free times in ms. |
-| **Key / Octave** | Root note for the harmonic resonators (e.g. C2 = 65 Hz). |
-| **Resonance** | How long the resonators ring. Higher values give a more pitched, metallic tail. |
-| **Harmonics** | Blend between the plain echo (0%) and the key-tuned resonator (100%). |
-| **Damping** | High-frequency rolloff on each repeat (lower = darker, tape-like). |
-| **Low Cut** | Removes low end from the echoes so repeats don't build up mud. |
-| **Mix** | Dry/wet. At 50% both are at full level; above that the dry fades out. |
-| **Output** | Final gain, −24 to +12 dB. |
+| **Antioch**: harmonic echo, euphoric reverb, throw delay | A delay, a reverb + EQ + sidechain chain, and the send automation for delay throws |
+| **Cause & Effect**: build-up macro | The 6+ automation clips (filter, reverb, noise, riser, gate, width) you draw for every build |
+| **Correspondence**: key and chord engine | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
 
-### Per-tap controls
+## Correspondence: key and chord engine
 
-| Control | What it does |
-|---|---|
-| **On** | Enables the tap. Its tail rings out naturally when you switch it off. |
-| **Division / Time** | Echo time: a note division (1/32 to 1 bar, including dotted and triplet) or 10–2500 ms. |
-| **Pitch** | Interval applied to every repeat, −24 to +24 semitones. |
-| **Feedback** | How many repeats. Saturation keeps high settings from blowing up. |
-| **Harmonic** | Which harmonic of the root the resonator rings at (H1 = root, H2 = octave, H3 = octave + fifth…). The label shows the nearest note and frequency. |
-| **Level / Pan** | Tap volume and stereo position. |
+![Correspondence](docs/correspondence.png)
+
+- **Key and scale** (minor, major, harmonic minor, Dorian, Phrygian, Mixolydian) are
+  broadcast to the other plugins. Turn **Broadcast key** off to stop that.
+- **Progression:** 2–8 chords, each set by scale degree (I–VII) and type (Auto, Major,
+  Minor, Sus2, Sus4, 7th, Add9, Power). Auto stays inside the scale. Ten presets cover the
+  classic trance moves (i–VI–III–VII, VI–VII–i, i–iv–VI–V, …).
+- **Voicing:** Close, Open (drop-2, pad-like) or Wide (root doubled below). Voice leading
+  keeps each chord close to the previous one, so pads move smoothly.
+- **Rhythm:** chords can be sustained, offbeat stabs, a 3-3-2 pluck or a 16th gate. Bass
+  can be offbeat, rolling, galloping or sustained. Arps go up, down, up-down or bounce.
+- **Drag into FL:** drag the **Chords**, **Bass** or **Arp** tile straight onto FL's
+  playlist or into a piano roll, and it lands as a MIDI clip. **Save MIDI…** writes all
+  three to a folder instead.
+- **Audition:** click a chord, or press **Play**, to hear the progression through a
+  simple preview tone. The audio of the channel it sits on passes through unchanged.
+
+Put it on any mixer insert, the master for example. It doesn't change the audio passing
+through it.
+
+## Antioch: space bundle
+
+![Antioch echo tab](docs/antioch_echo.png)
+
+There's one master strip (Dry, Echo, Reverb, Throw and Output levels, plus the key) and
+three tabs:
+
+- **Echo:** four tempo-synced taps. Each repeat goes through a pitch shifter (−24…+24
+  semitones) and a resonator tuned to a harmonic of the key, so the echoes climb into
+  chords and ring in key. **→ Reverb** sends the echoes into the reverb.
+- **Reverb:** an 8-line reverb with decay up to 20 s, pre-delay, modulation, width and
+  low/high cut. **Shimmer** feeds back a pitch-shifted copy of the tail (+5th, octave,
+  octave+5th, 2 octaves or −octave). **Duck** pushes the reverb down while the dry signal
+  plays, so it blooms in the gaps without washing out the lead.
+- **Throw:** a dub-style delay that only takes in audio while the **THROW** pad is held
+  (or latched, or automated). The tail keeps ringing after you let go. **Auto Throw**
+  catches the last 1/16th to 1 bar of every 2, 4, 8 or 16 bars while FL is playing, so
+  phrase-end throws happen without any automation. It has ping-pong, drive, filters,
+  ducking and a send to the reverb.
+
+![Antioch reverb tab](docs/antioch_reverb.png)
+![Antioch throw tab](docs/antioch_throw.png)
+
+## Cause & Effect: build-up macro
+
+![Cause & Effect](docs/cause_effect.png)
+
+Put it on the bus you want to build: a group, the music bus, or the master. Then drive it
+either way:
+
+1. **Automate the Build knob** with one ramp clip from 0 to 100%. Snapping it back to 0
+   is the drop.
+2. **Or flip TRIGGER BUILD on** at the start of the build (one automation point) and pick
+   a length: 4, 8, 16 or 32 bars. It ramps itself in sync with FL's tempo, snaps to the
+   nearest bar line, and snaps back exactly at the drop. Switching Trigger off early drops
+   early.
+
+As the build rises, it applies:
+
+- **High-pass sweep** up to a frequency you choose, with resonance.
+- **Reverb wash** that swells. **Cut tails at drop** clears it on the drop so the drop
+  lands clean.
+- **Noise riser:** band-passed white noise sweeping from 400 Hz to 12 kHz.
+- **Tonal riser:** detuned saws gliding up 1–3 octaves and landing exactly on the
+  song's root note.
+- **Stutter:** volume chops that speed up in steps (1/4 → 1/8 → 1/16 → 1/32).
+- **Widen:** the stereo image opens up, then snaps back to normal on the drop.
+
+**Curve** sets the shape of the ramp. "Late" (the default) keeps most of the action for
+the last few bars.
+
+## How the key sharing works
+
+Correspondence writes the key into a tiny block of shared memory several times a second.
+Antioch and Cause & Effect read it each audio block, and their **Follow Key** switch
+(on by default) decides whether they use it.
+
+- If no Correspondence is running, or you turn Follow Key off, each plugin uses its own
+  Key setting.
+- If you load several Correspondence instances, the most recently changed one wins.
 
 ## Installing in FL Studio 26 (Windows)
 
-1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build** run,
-   and download **Antioch-Windows-VST3**. Version tags (`v0.1.0`, …) also attach the zip
-   to a GitHub Release.
-2. Unzip it and copy `Antioch.vst3` to `C:\Program Files\Common Files\VST3\`.
-3. In FL Studio: **Options → Manage plugins → Find installed plugins**.
-4. Add **Antioch** to a mixer insert slot.
+1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
+   run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
+   the zip to a GitHub Release.
+2. Unzip it and copy the three `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
+4. Load Antioch and Cause & Effect on mixer inserts, and Correspondence on any insert.
 
-On macOS, copy `Antioch.vst3` to `~/Library/Audio/Plug-Ins/VST3/`. The CI build is not
-code-signed, so you may need to run `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Antioch.vst3`.
+On macOS, copy the `.vst3` folders to `~/Library/Audio/Plug-Ins/VST3/`. The CI builds are
+not code-signed, so you may need to run
+`xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/*.vst3`.
 
 ## Building from source
 
-Requirements: CMake 3.22+, a C++17 compiler (Visual Studio 2022 on Windows, Xcode on macOS).
-JUCE 8 is downloaded automatically at configure time.
+You need CMake 3.22+ and a C++17 compiler (Visual Studio 2022 on Windows, Xcode on
+macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3
-# Result: build/Antioch_artefacts/Release/VST3/Antioch.vst3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3
+# Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
-There is also a `Antioch_Standalone` target for quick testing without a DAW.
+Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ### Tests
 
 ```bash
-cmake -B build -DANTIOCH_BUILD_TESTS=ON
-cmake --build build --target AntiochTests
-./build/AntiochTests_artefacts/Release/AntiochTests test-output   # use xvfb-run on headless Linux
+cmake -B build -DSUITE_BUILD_TESTS=ON
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests
+./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
-The tests check that the output stays finite and bounded at extreme settings, that tails
-decay, that parameter automation doesn't break anything, and that state saves and reloads.
-They also write example WAV renders and a UI snapshot to `test-output/`.
+The tests render audio offline and check behaviour, not just that nothing crashes:
+
+- **Antioch:** echo timing, reverb decay time, how much ducking reduces the reverb, that
+  shimmer can't self-oscillate, that nothing enters the throw delay until thrown,
+  auto-throw only at phrase ends, and key following.
+- **Cause & Effect:** bar-accurate timed builds, exactly one drop, the bass removed late in
+  the build and back after the drop, the tonal riser landing on the key's root, and that
+  it's bit-transparent at 0.
+- **Correspondence:** chord spelling, that Auto chords stay in the scale for every scale,
+  that voice leading reduces movement, every rhythm pattern, MIDI files read back
+  correctly, and key broadcast.
+
+They also write example WAVs and UI snapshots to `test-output/`.
 
 ## Project layout
 
 ```
-Source/
-  Parameters.*        parameter IDs, ranges, defaults, display formatting
-  DSP.h               delay line, pitch shifter, comb resonator, filters
-  PluginProcessor.*   audio engine
-  PluginEditor.*      UI and look-and-feel
-Tests/RenderTest.cpp  offline test runner
-.github/workflows/    Windows/macOS/Linux CI builds
+shared/                  code used by every plugin
+  SuiteDSP.h             delay line, pitch shifter, resonator, filters, FDN reverb, oscillators
+  KeyBus.*               cross-plugin key broadcast (named shared memory)
+  Music.h                scales, note names, tempo divisions
+  HostInfo.h             tempo/position/time-signature snapshot from the host
+  SuiteUI.*              shared look-and-feel, knobs, toggles, tabs
+  TestUtils.h            offline render helpers for the tests
+plugins/Antioch/         Engines.h (echo, reverb, throw), processor, tabbed UI, tests
+plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
+plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all three
 ```
 
 ## Licence note
 
-JUCE is dual-licensed: AGPLv3, or a commercial JUCE licence. If you distribute Antioch
-closed-source or sell it, you need a JUCE licence (there is a free tier for small
-revenue). Otherwise, the project must be released under the AGPLv3.
+JUCE is dual-licensed: AGPLv3, or a commercial JUCE licence. For personal use, as here,
+nothing needs to be done. If you ever distribute the plugins, either release the source
+under AGPLv3 or get a JUCE licence (there is a free tier for small revenue).

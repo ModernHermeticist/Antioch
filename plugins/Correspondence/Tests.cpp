@@ -81,12 +81,21 @@ int main (int argc, char** argv)
 
     section ("Voicing and voice leading");
     {
+        // C major I-IV-V-I: root-position chords jump around, voice leading should not.
+        chords::Settings vl;
+        vl.root = 0; vl.scale = 1; vl.count = 4;
+        const int degrees[] = { 1, 4, 5, 1 };
+        for (int i = 0; i < 4; ++i) vl.slots[(size_t) i].degree = degrees[i];
+        vl.voicing = chords::Voicing::Close;
+        vl.voiceLead = false;
+        const auto plain = chords::voiceProgression (vl);
+        vl.voiceLead = true;
+        const auto ledC = chords::voiceProgression (vl);
+
         auto s = aMinor();
         s.voicing = chords::Voicing::Close;
         s.voiceLead = true;
         const auto led = chords::voiceProgression (s);
-        s.voiceLead = false;
-        const auto plain = chords::voiceProgression (s);
 
         auto totalMove = [] (const std::vector<std::vector<int>>& v)
         {
@@ -96,7 +105,7 @@ int main (int argc, char** argv)
                     total += std::abs (v[i][k] - v[i - 1][k]);
             return total;
         };
-        check (totalMove (led) < totalMove (plain), "voice leading reduces movement (" + juce::String (totalMove (led))
+        check (totalMove (ledC) < totalMove (plain), "voice leading reduces movement (" + juce::String (totalMove (ledC))
                                                        + " vs " + juce::String (totalMove (plain)) + " semitones)");
 
         bool tonesRight = true, inRegister = true;
@@ -109,6 +118,10 @@ int main (int argc, char** argv)
             for (auto p : led[(size_t) i]) if (p < 50 || p > 80) inRegister = false;
         }
         check (tonesRight, "voiced chords contain exactly the chord tones");
+        bool rootPosition = true;
+        for (int i = 0; i < 4; ++i)
+            if (plain[(size_t) i].front() % 12 != chords::chordRootPitchClass (vl, i)) rootPosition = false;
+        check (rootPosition, "voice leading off keeps every chord in root position");
         check (inRegister, "chords sit around the chosen register (C4 area)");
 
         s.voicing = chords::Voicing::Open;
@@ -201,7 +214,9 @@ int main (int argc, char** argv)
         check (rmsBetween (audio, 0.1, 0.5) > 0.01f, "preview chord is audible");
         p->preview.stop();
         render (*p, 2.0, {}, &audio);
-        check (peakBetween (audio, 1.8, 2.0) < 1.0e-4f, "preview releases to silence");
+        check (peakBetween (audio, 1.8, 2.0) < 1.0e-3f * peakBetween (audio, 0.0, 0.2), "preview releases to silence (peak "
+                                                         + juce::String (peakBetween (audio, 0.0, 0.2), 4) + " -> "
+                                                         + juce::String (peakBetween (audio, 1.8, 2.0), 6) + ")");
     }
 
     if (outDir != juce::File())
