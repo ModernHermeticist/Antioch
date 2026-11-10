@@ -205,6 +205,45 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     return file;
 }
 
+juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) const
+{
+    const auto s = Params::readSettings (apvts);
+    const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
+    const auto bpm = currentBpm.load();
+    auto folder = parent.getChildFile (juce::File::createLegalFileName (key + " " + juce::String (juce::roundToInt (bpm)) + " BPM "
+                                                                        + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M")));
+    folder = folder.getNonexistentSibling (false);
+    folder.createDirectory();
+
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead" })
+        exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
+
+    suite::SectionMap map;
+    if (suite::SectionBus::read (map) && map.count > 0)
+    {
+        auto patterns = Params::readSongPatterns (apvts);
+        patterns.melody = melodySettings();
+        std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
+        for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
+                                          { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead } })
+            parts.push_back ({ name, chords::songClip (s, map, patterns, part) });
+
+        std::vector<std::pair<double, juce::String>> markers;
+        std::array<int, (size_t) suite::SectionType::count> seen {};
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto type = map.sections[(size_t) i].type;
+            const auto n = ++seen[(size_t) type];
+            markers.push_back ({ (map.sections[(size_t) i].startBar - 1) * 4.0,
+                                 juce::String (suite::sectionName (type)) + (n > 1 ? " " + juce::String (n) : juce::String()) });
+        }
+        const auto file = folder.getChildFile (juce::File::createLegalFileName (key + " - all parts.mid"));
+        if (auto stream = file.createOutputStream())
+            chords::toMultiTrackMidi (parts, bpm, markers).writeTo (*stream);
+    }
+    return folder;
+}
+
 juce::AudioProcessorEditor* CorrespondenceProcessor::createEditor()
 {
     return new CorrespondenceEditor (*this);

@@ -94,7 +94,7 @@ private:
     juce::TextButton newMelodyButton { "New melody" };
     std::vector<chords::Note> melodyNotes;
     size_t nextMelodyNote = 0;
-    juce::TextButton playButton { "Play" }, saveButton { "Save MIDI..." }, songButton { "Song patterns..." };
+    juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." };
     void showSongPatterns();
     std::unique_ptr<juce::FileChooser> chooser;
 

@@ -23,6 +23,20 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     setLookAndFeel (&lnf);
 
     resetButton.onClick = [this] { processor.resetMeasurements(); };
+    roughMixButton.setTooltip ("Sets every Prima Materia track's Trim so it sits at the usual trance level for its role, "
+                               "relative to the kick (measured in the drops). Play a drop first.");
+    roughMixButton.onClick = [this]
+    {
+        lastFix = suite::Fix::RoughMix;
+        lastFixSeq = suite::FixBus::send (suite::Fix::RoughMix);
+        lastUndoSeq = 0;
+        fixStatusTicks = 0;
+    };
+    roughUndoButton.onClick = [this] { undoFixButton.onClick(); };
+    roughStatus.setFont (juce::FontOptions (12.0f));
+    roughStatus.setJustificationType (juce::Justification::centredRight);
+    for (auto* c : std::initializer_list<juce::Component*> { &roughMixButton, &roughUndoButton, &roughStatus })
+        addAndMakeVisible (c);
     loadButton.onClick = [this]
     {
         chooser = std::make_unique<juce::FileChooser> ("Choose a reference track",
@@ -107,6 +121,7 @@ void MentalismEditor::updateFixStatus()
         fixStatus.setColour (juce::Label::textColourId, Colours::dimText);
         fixStatus.setText ("Fix applies a small step in the plugins that can help; click again if it needs more.", juce::dontSendNotification);
         undoFixButton.setEnabled (false);
+        roughUndoButton.setEnabled (false);
         return;
     }
     if (lastUndoSeq != 0)
@@ -115,10 +130,21 @@ void MentalismEditor::updateFixStatus()
         fixStatus.setColour (juce::Label::textColourId, Colours::text);
         fixStatus.setText (n > 0 ? "Undone in " + juce::String (n) + (n == 1 ? " plugin." : " plugins.") : "Undoing...", juce::dontSendNotification);
         undoFixButton.setEnabled (false);
+        roughUndoButton.setEnabled (false);
+        if (lastFix == suite::Fix::RoughMix)
+            roughStatus.setText (n > 0 ? "Rough mix undone" : "Undoing...", juce::dontSendNotification);
         return;
     }
     const auto n = suite::FixBus::acknowledgements (lastFixSeq);
     undoFixButton.setEnabled (n > 0);
+    roughUndoButton.setEnabled (n > 0 && lastFix == suite::Fix::RoughMix);
+    if (lastFix == suite::Fix::RoughMix)
+    {
+        roughStatus.setColour (juce::Label::textColourId, n > 0 ? Colours::moss : fixStatusTicks > 10 ? Colours::ember : Colours::dimText);
+        roughStatus.setText (n > 0 ? "Rough mix: " + juce::String (n) + (n == 1 ? " track" : " tracks") + " trimmed"
+                             : fixStatusTicks > 10 ? "Rough mix: no changes (needs Prima Materia with roles, including a Kick, and a drop played)"
+                                                   : "Rough mix...", juce::dontSendNotification);
+    }
     if (n > 0)
     {
         fixStatus.setColour (juce::Label::textColourId, Colours::moss);
@@ -417,6 +443,9 @@ void MentalismEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
     auto header = bounds.removeFromTop (48);
     resetButton.setBounds (header.removeFromRight (110).reduced (4, 8));
+    roughUndoButton.setBounds (header.removeFromRight (70).reduced (4, 8));
+    roughMixButton.setBounds (header.removeFromRight (110).reduced (4, 8));
+    roughStatus.setBounds (header.removeFromRight (300).reduced (4, 8));
 
     auto top = bounds.removeFromTop (190);
     loudArea = top.removeFromLeft (top.getWidth() * 62 / 100);

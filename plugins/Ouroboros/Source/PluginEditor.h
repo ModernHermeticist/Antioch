@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SuiteCheck.h"
 #include <optional>
 
 /** The song as coloured section blocks. Drag a boundary to move it, double-click to split,
@@ -29,6 +30,20 @@ private:
 
     OuroborosProcessor& processor;
     int dragging = -1;
+};
+
+/** Suite overview: every suite plugin loaded, on which track, and setup advice. */
+class SuitePanel : public juce::Component, private juce::Timer
+{
+public:
+    SuitePanel() { refresh(); setSize (620, 440); startTimerHz (2); }
+    void paint (juce::Graphics&) override;
+    void refresh();
+
+private:
+    void timerCallback() override { refresh(); }
+    std::vector<suite::SuiteEntry> entries;
+    std::vector<suitecheck::Advice> advice;
 };
 
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
@@ -89,12 +104,12 @@ private:
     std::array<SlotButton, suite::SuiteProcessor::numSnapshotSlots> slotButtons;
     juce::TextButton saveSnapshotButton { "Save" };
     juce::Label snapshotStatus;
-    int currentSlot = 0;
+    int currentSlot = 0, suiteTicks = 0;
     uint32_t lastSnapshotSeq = 0;
     juce::String lastSnapshotVerb;
     void snapshotCommand (suite::SnapshotAction, int slot);
     void refreshSnapshots();
-    juce::TextButton arrangeButton { "Arrange..." };
+    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" };
     arrangement::GenSettings lastArrange;
     void showArrange();
     bool wasPlaying = false;

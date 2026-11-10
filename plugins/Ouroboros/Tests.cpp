@@ -183,6 +183,62 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Suite overview");
+    {
+        using namespace suite;
+        Registry::reset();
+        auto o = std::make_unique<OuroborosProcessor>();
+        o->setMap (arrangement::fromTemplate (arrangement::templates().front()));
+        o->announce();
+        Registry::announce (11, "Correspondence", "Chords", 0, {});
+        Registry::announce (12, "Kybalion", "Pads", Status::sidechainWanted, { 1.0f, 0, 0, 0 });
+        Registry::announce (13, "Prima Materia", "Insert 7", Status::followsOuroboros, { -1.0f, 0, 0, 0 });
+        Registry::announce (14, "Lapis", "Lead", 0, {});
+        Registry::announce (15, "Kybalion", "Bass", 0, { 2.0f, 0, 0, 0 });   // ducks to the suite kick
+        Registry::announce (16, "Solve et Coagula", "Music bus", Status::sidechainWanted | Status::sidechainConnected, {});
+
+        const auto entries = Registry::list();
+        check (entries.size() == 7, "lists every plugin that announced itself (" + juce::String ((int) entries.size()) + ")");
+        bool namesKept = false;
+        for (auto& e : entries) if (e.plugin == "Kybalion" && e.track == "Pads") namesKept = true;
+        check (namesKept, "with its track name");
+
+        const auto advice = suitecheck::check (entries);
+        juce::StringArray texts;
+        for (auto& a : advice) texts.add (a.text);
+        const auto all = texts.joinIntoString ("\n");
+        std::cout << "    " << all.replace ("\n", "\n    ") << std::endl;
+        check (all.contains ("Kybalion on 'Pads' is set to duck from its sidechain"), "flags a sidechain that isn't routed");
+        check (all.contains ("Prima Materia on 'Insert 7' has no role"), "flags a Prima Materia without a role");
+        check (all.contains ("Lapis is on 'Lead'"), "flags Lapis away from the master");
+        check (all.contains ("no kick is shared"), "flags Suite kick with nothing shared");
+        check (! all.contains ("Solve et Coagula") && ! all.contains ("No key source") && ! all.contains ("no song map"),
+               "doesn't complain about what's fine");
+
+        Registry::reset();
+        o->announce();
+        Registry::announce (11, "Correspondence", "Chords", 0, {});
+        const auto fine = suitecheck::check (Registry::list());
+        check (fine.size() == 1 && ! fine[0].problem, "a tidy session: 'Everything is set up'");
+
+        Registry::remove (11);
+        check (Registry::list().size() == 1, "a plugin that's removed disappears from the list");
+
+        if (outDir != juce::File())
+        {
+            Registry::announce (11, "Correspondence", "Chords", 0, {});
+            Registry::announce (12, "Kybalion", "Pads", Status::sidechainWanted, { 1.0f, 0, 0, 0 });
+            Registry::announce (13, "Prima Materia", "Insert 7", Status::followsOuroboros, { -1.0f, 0, 0, 0 });
+            Registry::announce (17, "Prima Materia", "Kick", Status::roleSet, { 1.0f, -6.0f, 0, 0 });
+            Registry::announce (18, "Azoth", "FX", 0, {});
+            Registry::announce (19, "Lapis", "Master", 0, {});
+            Registry::announce (20, "Mentalism", "Master", 0, {});
+            SuitePanel panel;
+            snapshot (panel, outDir.getChildFile ("ouroboros_suite.png"));
+        }
+        Registry::reset();
+    }
+
     section ("Plugin: broadcast, marking, state");
     {
         auto p = std::make_unique<OuroborosProcessor>();

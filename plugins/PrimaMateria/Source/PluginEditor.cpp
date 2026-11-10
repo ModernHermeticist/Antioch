@@ -35,7 +35,8 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     }
 
     trim = std::make_unique<Knob> (p.apvts, pm::trimId, "Trim", accent);
-    trim->maxHeight = 60;
+    trim->maxHeight = 56;
+    trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);
     trim->slider.setTooltip ("Track level after everything else. Mentalism's Rough mix sets it for the track's role.");
     addAndMakeVisible (*trim);
 
@@ -122,6 +123,9 @@ void PrimaMateriaEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
     auto header = bounds.removeFromTop (48);
     follow.setBounds (header.removeFromRight (180).reduced (4, 8));
+    header.removeFromRight (12);
+    trim->setBounds (header.removeFromRight (150).withTrimmedTop (-10).withTrimmedBottom (-6));
+    trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);
 
     auto controls = bounds.removeFromTop (60);
     roleBox.setBounds (controls.removeFromLeft (240).withSizeKeepingCentre (240, 28).translated (0, 8));
@@ -130,7 +134,7 @@ void PrimaMateriaEditor::resized()
     laterOn.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 30).translated (0, 8));
     morph.setBounds (controls.removeFromLeft (170));
     gap.setBounds (controls.removeFromLeft (170));
-    trim->setBounds (controls.removeFromLeft (130).withTrimmedTop (-8));
+
 
     status.setBounds (bounds.removeFromBottom (30));
     bounds.removeFromBottom (6);

@@ -137,6 +137,7 @@ namespace coach
             case suite::Fix::BuildRise:        return "Cause & Effect: more riser, noise and wash; Azoth: more swell and roll";
             case suite::Fix::IntroQuieter:     return "Prima Materia: intro 2 dB quieter";
             case suite::Fix::LaterDropBigger:  return "Prima Materia: Drop 2+ 1.5 dB up; Azoth: bigger later drops";
+            case suite::Fix::RoughMix:         return "Prima Materia: each track's trim set for its role, relative to the kick";
             case suite::Fix::None:
             default:                           return {};
         }

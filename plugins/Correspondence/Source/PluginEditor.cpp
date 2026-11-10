@@ -272,6 +272,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     };
     playButton.setClickingTogglesState (false);
     playButton.onClick = [this] { togglePlay(); };
+    saveButton.setTooltip ("Writes every clip into a new song folder, plus one MIDI file with all the song parts on separate "
+                           "tracks and the sections as markers: drag it into FL to get everything at once");
     saveButton.onClick = [this]
     {
         chooser = std::make_unique<juce::FileChooser> ("Choose a folder for the MIDI clips",
@@ -281,9 +283,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                               {
                                   const auto dir = fc.getResult();
                                   if (dir == juce::File()) return;
-                                  for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead" })
-                                      processor.exportClip (kind, dir);   // song clips are skipped without an Ouroboros map
-                                  dir.revealToUser();
+                                  processor.exportEverything (dir).revealToUser();
                               });
     };
 

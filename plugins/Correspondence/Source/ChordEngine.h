@@ -629,6 +629,42 @@ namespace chords
         return file;
     }
 
+    /** One MIDI file with a part per track (each on its own channel) and the song's sections
+        as markers on the first track, for importing everything into FL in one go. */
+    inline juce::MidiFile toMultiTrackMidi (const std::vector<std::pair<juce::String, std::vector<Note>>>& parts, double bpm,
+                                            const std::vector<std::pair<double, juce::String>>& markers)
+    {
+        constexpr int ppq = 960;
+        juce::MidiFile file;
+        file.setTicksPerQuarterNote (ppq);
+
+        juce::MidiMessageSequence conductor;
+        conductor.addEvent (juce::MidiMessage::textMetaEvent (3, "Sections"), 0.0);
+        conductor.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / bpm)), 0.0);
+        conductor.addEvent (juce::MidiMessage::timeSignatureMetaEvent (4, 4), 0.0);
+        for (const auto& [quarters, name] : markers)
+            conductor.addEvent (juce::MidiMessage::textMetaEvent (6, name), quarters * ppq);
+        conductor.sort();
+        file.addTrack (conductor);
+
+        int channel = 1;
+        for (const auto& [name, notes] : parts)
+        {
+            juce::MidiMessageSequence seq;
+            seq.addEvent (juce::MidiMessage::textMetaEvent (3, name), 0.0);
+            for (const auto& n : notes)
+            {
+                seq.addEvent (juce::MidiMessage::noteOn (channel, n.pitch, (juce::uint8) juce::jlimit (1, 127, n.velocity)), n.start * ppq);
+                seq.addEvent (juce::MidiMessage::noteOff (channel, n.pitch), (n.start + n.length) * ppq);
+            }
+            seq.sort();
+            seq.updateMatchedPairs();
+            file.addTrack (seq);
+            channel = channel % 16 + 1;
+        }
+        return file;
+    }
+
     //==============================================================================
     struct Preset
     {

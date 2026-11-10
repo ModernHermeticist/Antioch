@@ -185,6 +185,56 @@ void Timeline::mouseDoubleClick (const juce::MouseEvent& e)
 }
 
 //==============================================================================
+void SuitePanel::refresh()
+{
+    entries = suite::Registry::list();
+    std::sort (entries.begin(), entries.end(), [] (const auto& a, const auto& b)
+               { return a.plugin != b.plugin ? a.plugin < b.plugin : a.track < b.track; });
+    advice = suitecheck::check (entries);
+    repaint();
+}
+
+void SuitePanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (14, 10);
+    g.setColour (accent);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("SUITE: " + juce::String ((int) entries.size()) + " PLUGINS LOADED", r.removeFromTop (22), juce::Justification::centredLeft);
+
+    // Two columns of plugin / track.
+    const auto listHeight = juce::jmin (240, ((int) entries.size() + 1) / 2 * 20 + 6);
+    auto list = r.removeFromTop (listHeight);
+    const auto colW = list.getWidth() / 2;
+    g.setFont (juce::FontOptions (13.0f));
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto& e = entries[i];
+        auto row = juce::Rectangle<int> (list.getX() + (int) (i % 2) * colW, list.getY() + (int) (i / 2) * 20, colW - 8, 20);
+        if (row.getBottom() > list.getBottom()) break;
+        g.setColour (Colours::text);
+        g.drawText (e.plugin, row.removeFromLeft (130), juce::Justification::centredLeft);
+        g.setColour (Colours::dimText);
+        g.drawText (e.track.isNotEmpty() ? e.track : juce::String ("(track name unknown)"), row, juce::Justification::centredLeft);
+    }
+
+    r.removeFromTop (8);
+    g.setColour (Colours::outline);
+    g.drawHorizontalLine (r.getY(), (float) r.getX(), (float) r.getRight());
+    r.removeFromTop (8);
+    g.setFont (juce::FontOptions (13.0f));
+    for (const auto& a : advice)
+    {
+        auto row = r.removeFromTop (36);
+        if (row.getHeight() < 20) break;
+        g.setColour (a.problem ? Colours::ember : Colours::moss);
+        g.fillEllipse ((float) row.getX() + 2.0f, (float) row.getY() + 6.0f, 6.0f, 6.0f);
+        g.setColour (Colours::text);
+        g.drawFittedText (a.text, row.withTrimmedLeft (14), juce::Justification::topLeft, 2, 0.9f);
+    }
+}
+
+//==============================================================================
 ArrangePanel::ArrangePanel (arrangement::GenSettings initial, double tempo, std::function<void (arrangement::GenSettings)> onGenerate)
     : bpm (tempo), generate (std::move (onGenerate))
 {
@@ -379,6 +429,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     addAndMakeVisible (saveSnapshotButton);
     addAndMakeVisible (snapshotStatus);
     arrangeButton.onClick = [this] { showArrange(); };
+    suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");
+    suiteButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<SuitePanel>(), suiteButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (suiteButton);
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
     {
@@ -482,6 +538,14 @@ void OuroborosEditor::propose()
 void OuroborosEditor::timerCallback()
 {
     refreshSnapshots();
+    if (++suiteTicks % 10 == 0)
+    {
+        const auto entries = suite::Registry::list();
+        const auto advice = suitecheck::check (entries);
+        const auto problems = (int) std::count_if (advice.begin(), advice.end(), [] (const auto& a) { return a.problem; });
+        suiteButton.setButtonText ("Suite (" + juce::String ((int) entries.size()) + ")" + (problems > 0 ? juce::String (" !") : juce::String()));
+        suiteButton.setColour (juce::TextButton::textColourOffId, problems > 0 ? Colours::ember : Colours::text);
+    }
     // Listen: when playback stops after a decent listen, propose a map automatically.
     const auto isPlaying = processor.playing.load();
     const auto heard = processor.barsHeard();
@@ -549,6 +613,7 @@ void OuroborosEditor::resized()
     for (int s = (int) slotButtons.size() - 1; s >= 0; --s)
         slotButtons[(size_t) s].setBounds (header.removeFromRight (38).reduced (2, 8));
     snapshotStatus.setBounds (header.removeFromRight (170).reduced (4, 8));
+    suiteButton.setBounds (header.removeFromRight (110).reduced (4, 8));
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);

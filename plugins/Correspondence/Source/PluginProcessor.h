@@ -42,6 +42,10 @@ public:
     void applyPreset (int index);
 
     /** Learns a melody motif from the first two bars of a MIDI file (message thread). Returns the note count. */
+    /** Export all: a song folder inside `parent` with every clip, plus "<song> - all parts.mid"
+        (song parts on separate tracks, sections as markers) when Ouroboros has a map. Returns the folder. */
+    juce::File exportEverything (const juce::File& parent) const;
+
     int learnMotif (const juce::File&);
     void forgetMotif();
     std::vector<chords::Note> getMotif() const;

@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "Registry.h"
+#include "FixBus.h"
 
 using namespace suite::test;
 using T = suite::SectionType;
@@ -165,6 +167,91 @@ int main (int argc, char** argv)
         auto late = make (roleIndex ("Pads"));   // made after the fixes were sent: ignores them
         late->fixes->poll();
         check (late->fixes->appliedCount() == 0, "a plugin loaded later doesn't replay old fixes");
+    }
+
+    section ("Auto-role from the track name");
+    {
+        const std::pair<const char*, const char*> names[] = { { "Kick", "Kick" }, { "Sub Bass", "Bass" }, { "HH open", "Hats" },
+                                                               { "Supersaw Lead", "Lead" }, { "Pad 2", "Pads" }, { "Vox chop", "Vocal" },
+                                                               { "Riser FX", "Atmos" }, { "Pluck", "Pads" }, { "Insert 12", "" } };
+        bool allRight = true;
+        juce::StringArray got;
+        for (const auto& [name, expected] : names)
+        {
+            const auto r = pm::roleFromTrackName (name);
+            const auto roleName = r >= 0 ? juce::String (pm::roles()[(size_t) r].name) : juce::String();
+            got.add (juce::String (name) + "=" + (roleName.isEmpty() ? "-" : roleName));
+            allRight = allRight && roleName.startsWith (expected) && (juce::String (expected).isNotEmpty() || r < 0);
+        }
+        check (allRight, "track names map to roles: " + got.joinIntoString (", "));
+
+        auto fresh = std::make_unique<PrimaMateriaProcessor>();
+        prepare (*fresh);
+        juce::AudioProcessor::TrackProperties props;
+        props.name = juce::String ("Sub Bass");
+        fresh->updateTrackProperties (props);
+        check (fresh->getRole() == roleIndex ("Bass") && fresh->apvts.getRawParameterValue (pm::levelId ((int) T::Breakdown))->load() <= pm::offDb + 0.5f,
+               "a new Prima Materia on 'Sub Bass' sets itself up as Bass");
+        props.name = juce::String ("Lead");
+        fresh->updateTrackProperties (props);
+        check (fresh->getRole() == roleIndex ("Bass"), "renaming the track later doesn't override a role");
+    }
+
+    section ("Rough mix");
+    {
+        suite::Registry::reset();
+        suite::FixBus::reset();
+        suite::SectionMap allDrop;
+        allDrop.totalBars = 8; allDrop.count = 1;
+        allDrop.sections[0] = { 1, T::Drop };
+        auto measure = [&] (PrimaMateriaProcessor& p, float amp, float hz)
+        {
+            suite::SectionBus::publish (allDrop);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p.setPlayHead (&head);
+            render (p, 4.0, [amp, hz] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = amp * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, nullptr, &head);
+            p.setPlayHead (nullptr);
+            p.announce();
+        };
+        auto kick = make (roleIndex ("Kick"));
+        auto pad = make (roleIndex ("Pads"));
+        measure (*kick, 0.5f, 1000.0f);
+        measure (*pad, 0.5f, 1000.0f);   // as loud as the kick: far too loud for a pad
+        const auto padBefore = pad->measuredLufs();
+        check (kick->measuredLufs() > -20.0f && std::abs (padBefore - (kick->measuredLufs() - 2.0f)) < 0.2f,
+               "measures each track's drop loudness, after its section level (kick " + juce::String (kick->measuredLufs(), 1)
+                   + ", pad " + juce::String (padBefore, 1) + " LUFS: the Pads role sits 2 dB down in drops)");
+
+        const auto seq = suite::FixBus::send (suite::Fix::RoughMix);
+        kick->fixes->poll();
+        pad->fixes->poll();
+        const auto padTrim = pad->apvts.getRawParameterValue (pm::trimId)->load();
+        check (std::abs (padTrim - (kick->measuredLufs() - 7.0f - padBefore)) < 0.3f, "the pad is trimmed to sit 7 LU under the kick ("
+                   + juce::String (padTrim, 1) + " dB)");
+        check (std::abs (kick->apvts.getRawParameterValue (pm::trimId)->load()) < 0.01f && suite::FixBus::acknowledgements (seq) == 1,
+               "the kick is the reference and stays put");
+
+        measure (*pad, 0.5f, 1000.0f);
+        check (std::abs (pad->measuredLufs() - (kick->measuredLufs() - 7.0f)) < 0.5f, "after the rough mix the pad measures 7 LU under the kick ("
+                   + juce::String (pad->measuredLufs(), 1) + " LUFS)");
+
+        suite::FixBus::sendUndo (seq);
+        pad->fixes->poll();
+        check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load()) < 0.01f, "Undo puts the trim back");
+
+        auto loner = make (roleIndex ("Lead"));
+        suite::Registry::reset();
+        measure (*loner, 0.3f, 800.0f);
+        check (! loner->roughMixTrim().has_value(), "without a kick track there's no reference: nothing changes");
+        suite::SectionBus::withdraw();
     }
 
     section ("Pass-through when not following");

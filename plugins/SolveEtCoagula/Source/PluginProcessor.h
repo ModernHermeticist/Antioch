@@ -42,6 +42,12 @@ public:
     static float thresholdFor (float sensitivityPercent) { return -30.0f - 0.3f * sensitivityPercent; }
 
     Unmasker unmasker;
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus s;
+        s.flags = suite::Status::sidechainWanted | (sidechainConnected.load() ? suite::Status::sidechainConnected : 0u);
+        return s;
+    }
     suite::SceneEngine scenes;
     enum SceneSlot { sDepth, sSensitivity, sFocus, sMix };
     std::atomic<bool> sidechainConnected { false }, vocalPresent { false };

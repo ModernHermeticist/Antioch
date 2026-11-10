@@ -38,6 +38,12 @@ public:
 
     /** Message thread: read/replace the arrangement (published to the suite immediately). */
     suite::SectionMap getMap() const;
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus s;
+        if (getMap().count > 0) s.flags |= suite::Status::hasMap;
+        return s;
+    }
     void setMap (const suite::SectionMap&);
 
     /** Starts a section of `type` at the playhead's bar, snapped to the Snap setting. */

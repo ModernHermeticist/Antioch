@@ -249,6 +249,49 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Export all");
+    {
+        auto p = make();
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        map.sections[2] = { 9, suite::SectionType::Breakdown };
+        map.sections[3] = { 13, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceExportAll");
+        parent.deleteRecursively();
+        const auto folder = p->exportEverything (parent);
+        const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
+        check (folder.isDirectory() && files.size() == 9, "a song folder with 8 clips and one all-parts file (" + juce::String (files.size()) + " files in "
+                   + folder.getFileName() + ")");
+
+        juce::File all;
+        for (auto& f : files) if (f.getFileName().contains ("all parts")) all = f;
+        juce::MidiFile midi;
+        juce::FileInputStream in (all);
+        const auto read = all.existsAsFile() && midi.readFrom (in);
+        check (read && midi.getNumTracks() == 5, "all parts: a section track plus Chords, Bass, Arp and Lead (" + juce::String (midi.getNumTracks()) + " tracks)");
+        if (read && midi.getNumTracks() == 5)
+        {
+            juce::StringArray markers;
+            for (auto* e : *midi.getTrack (0))
+                if (e->message.isTextMetaEvent() && e->message.getMetaEventType() == 6)
+                    markers.add (e->message.getTextFromTextMetaEvent() + "@" + juce::String (e->message.getTimeStamp() / 960.0, 0));
+            check (markers.joinIntoString (" ") == "Groove@0 Drop@16 Breakdown@32 Drop 2@48", "sections as markers: " + markers.joinIntoString (" "));
+            int notes = 0;
+            for (int t = 1; t < 5; ++t)
+                for (auto* e : *midi.getTrack (t)) notes += e->message.isNoteOn();
+            check (notes > 50, "with the notes of every part (" + juce::String (notes) + ")");
+        }
+
+        suite::SectionBus::withdraw();
+        const auto noMap = p->exportEverything (parent);
+        check (noMap != folder && noMap.findChildFiles (juce::File::findFiles, false, "*.mid").size() == 4,
+               "without Ouroboros: just the four loop clips, in a new folder");
+        parent.deleteRecursively();
+    }
+
     section ("Melodia");
     {
         auto s = aMinor();   // Am F C G, 1 bar each

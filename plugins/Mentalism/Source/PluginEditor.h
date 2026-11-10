@@ -39,7 +39,8 @@ private:
     suite::ui::LookAndFeel lnf;
 
     suite::ui::Choice loudTarget, tonalTarget;
-    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." };
+    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" };
+    juce::Label roughStatus;
     juce::Label referenceLabel;
     std::unique_ptr<juce::FileChooser> chooser;
 
