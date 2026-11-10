@@ -115,6 +115,28 @@ int main (int argc, char** argv)
         suite::SectionBus::publish (testMap());
     }
 
+    section ("Energy curve");
+    {
+        auto impactAt = [] (int dropEnergy)
+        {
+            auto m = testMap();
+            m.sections[3].energy = dropEnergy;
+            suite::SectionBus::publish (m);
+            auto p = make();
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 13.0, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            return bandLevel (audio, 55.0f, 12.15, 12.65);
+        };
+        const auto usual = impactAt (-1), half = impactAt (50);
+        check (half > 0.4f * usual && half < 0.6f * usual, "a drop drawn at half energy gets half the impact ("
+                   + juce::String (half, 3) + " vs " + juce::String (usual, 3) + ")");
+        suite::SectionBus::publish (testMap());
+    }
+
     section ("Gap before the drop");
     {
         suite::SectionBus::publish (testMap());

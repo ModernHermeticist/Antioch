@@ -318,6 +318,15 @@ compare whole versions of the song (mix, scenes, map and all). Each plugin keeps
 copies inside its own saved state, so snapshots travel with the FL project. Right-click a
 slot to clear it.
 
+**Energy curve.** The brass line across the song map is the song's energy: each section
+sits at its type's usual level (drop 100%, build 60%, groove 55%, intro/outro 35%,
+breakdown 25%). Drag a section's line up or down (in 5% steps) and the suite follows:
+section scenes go further (or less far) than usual, Prima Materia moves each track's level
+(up to 12 dB at the extremes; a drop drawn at 75% plays 3 dB lower), and Azoth's
+transitions into that section, and its build risers and roll, get bigger or smaller.
+Right-click a section to put its energy back to the usual. Hand-drawn sections get a dot.
+At the usual levels nothing changes.
+
 **Recipes…** saves the whole suite's settings under a name (each plugin writes its own,
 matched by track name, or by plugin when it's used once) and loads them into any other
 project: your go-to anthem setup in one click. Recipes live in your user application
@@ -809,6 +818,9 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Masking map:** a pad and a lead both strong at 2 kHz are found and the pad is carved;
   tracks whose energy is elsewhere don't clash; the carve reaches only the addressed
   track, deepens on a second press, and measures about 4.5 dB down at 2 kHz.
+- **Energy curve:** untouched sections have their type's energy; a drawn energy is
+  shared and saved; followers see 70% as 0.7 of a drop's usual; a neutral Prima Materia
+  plays a drop drawn at 75% 3 dB lower; Azoth gives a half-energy drop half the impact.
 - **Solve et Coagula:** bit-exact pass-through with no or a silent sidechain; a 1 kHz
   vocal cuts 1 kHz music by about 7 dB but leaves 250 Hz and 4 kHz within 0.4 dB; more
   depth cuts more; the dips open while the vocal sings and close after it stops; a vocal

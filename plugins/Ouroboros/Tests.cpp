@@ -247,6 +247,30 @@ int main (int argc, char** argv)
         check (suite::SessionBus::read (seq, r) && r.style == 0 && r.root == 2 && r.scale == 0, "and asks the suite to set up D minor");
     }
 
+    section ("Energy curve");
+    {
+        auto p = std::make_unique<OuroborosProcessor>();
+        auto m = arrangement::fromTemplate (arrangement::templates().front());
+        const auto drop = m.lastDropIndex();
+        check (std::abs (m.energyOf (drop) - 1.0f) < 1.0e-6f && std::abs (m.energyOf (0) - suite::defaultEnergy (suite::SectionType::Intro)) < 1.0e-6f,
+               "untouched sections have their type's usual energy");
+        m.sections[(size_t) drop].energy = 70;
+        p->setMap (m);
+        suite::SectionMap shared;
+        check (suite::SectionBus::read (shared) && shared.sections[(size_t) drop].energy == 70 && shared.sections[0].energy == -1,
+               "a drawn energy is shared with the suite (and untouched ones stay 'usual')");
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getMap().sections[(size_t) drop].energy == 70, "and saved with the project");
+        suite::SectionFollower f;
+        f.refresh();
+        const auto pos = f.locate ((shared.sections[(size_t) drop].startBar - 1) * 4.0 + 1.0, 4.0);
+        check (pos.valid && std::abs (pos.energy - 0.7f) < 1.0e-6f && std::abs (pos.energyRatio - 0.7f) < 1.0e-6f, "followers see energy 0.7, 70% of a drop's usual");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Recipes");
     {
         const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AntiochRecipesTest");

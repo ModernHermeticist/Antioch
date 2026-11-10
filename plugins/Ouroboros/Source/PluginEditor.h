@@ -30,6 +30,9 @@ private:
 
     OuroborosProcessor& processor;
     int dragging = -1;
+    int energyDragging = -1;               // section whose energy line is being dragged
+    int energyLineNear (float x, float y) const;   // section whose energy line is under (x, y), or -1
+    float yForEnergy (float energy) const;
 };
 
 /** Suite overview: every suite plugin loaded, on which track, and setup advice. */

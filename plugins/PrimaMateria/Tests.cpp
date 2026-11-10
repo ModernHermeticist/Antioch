@@ -263,6 +263,32 @@ int main (int argc, char** argv)
         check (rmsBetween (none, 3.55, 3.95) > 0.1f, "'Per track' with no gap: plays through");
     }
 
+    section ("Energy curve");
+    {
+        // 120 BPM: Groove bars 1-2, Drop bars 3-4; the drop drawn at 75% energy.
+        auto run = [] (int dropEnergy)
+        {
+            suite::SectionMap m;
+            m.totalBars = 4; m.count = 2;
+            m.sections[0] = { 1, T::Groove };
+            m.sections[1] = { 3, T::Drop, dropEnergy };
+            auto p = make (0);   // neutral role: 0 dB everywhere
+            set (*p, pm::morphId, 0.0f);
+            suite::SectionBus::publish (m);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> a;
+            render (*p, 8.0, tone (440.0f), &a, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return juce::Decibels::gainToDecibels (rmsBetween (a, 5.0, 7.5) / rmsBetween (a, 1.0, 3.5));
+        };
+        const auto usual = run (-1), lower = run (75);
+        check (std::abs (usual) < 0.1f && std::abs (lower + 3.0f) < 0.2f, "a drop drawn at 75% plays 3 dB lower (" + juce::String (lower, 2)
+                   + " dB); untouched, no change");
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

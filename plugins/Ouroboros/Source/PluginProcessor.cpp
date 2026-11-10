@@ -248,6 +248,7 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
         juce::ValueTree s ("Section");
         s.setProperty ("start", m.sections[(size_t) i].startBar, nullptr);
         s.setProperty ("type", (int) m.sections[(size_t) i].type, nullptr);
+        if (m.sections[(size_t) i].energy >= 0) s.setProperty ("energy", m.sections[(size_t) i].energy, nullptr);
         arr.appendChild (s, nullptr);
     }
     state.removeChild (state.getChildWithName ("Arrangement"), nullptr);
@@ -271,7 +272,8 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         for (const auto& s : arr)
             if (m.count < suite::SectionMap::maxSections)
                 m.sections[(size_t) m.count++] = { juce::jmax (1, (int) s["start"]),
-                                                   (suite::SectionType) juce::jlimit (0, (int) suite::SectionType::count - 1, (int) s["type"]) };
+                                                   (suite::SectionType) juce::jlimit (0, (int) suite::SectionType::count - 1, (int) s["type"]),
+                                                   s.hasProperty ("energy") ? juce::jlimit (0, 100, (int) s["energy"]) : -1 };
         if (m.count > 0)
             m.sections[0].startBar = 1;
         state.removeChild (arr, nullptr);

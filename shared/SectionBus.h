@@ -27,7 +27,15 @@ namespace suite
     {
         int startBar = 1;                      // 1-based
         SectionType type = SectionType::Intro;
+        int energy = -1;                       // 0..100 drawn on Ouroboros' energy curve; -1 = the type's default
     };
+
+    /** The energy a section type has unless it's drawn otherwise (0..1). */
+    inline float defaultEnergy (SectionType t) noexcept
+    {
+        static const float e[] = { 0.35f, 0.55f, 0.25f, 0.6f, 1.0f, 0.35f };
+        return e[(int) t < (int) SectionType::count ? (int) t : 0];
+    }
 
     struct SectionMap
     {
@@ -37,6 +45,13 @@ namespace suite
         int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
         int dropGap = 0;                       // before every drop: 0 = per track, 1 = 1/2 beat silence, 2 = 1 beat, 3 = kick-only bar
         std::array<Section, maxSections> sections {};
+
+        /** Energy of section `index` (0..1): drawn, or the type's default. */
+        float energyOf (int index) const noexcept
+        {
+            const auto& s = sections[(size_t) index];
+            return s.energy >= 0 ? (float) s.energy / 100.0f : defaultEnergy (s.type);
+        }
 
         /** Index of the last Drop, or -1. */
         int lastDropIndex() const noexcept
@@ -56,7 +71,8 @@ namespace suite
         {
             if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift || dropGap != o.dropGap) return false;
             for (int i = 0; i < count; ++i)
-                if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type)
+                if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type
+                    || sections[(size_t) i].energy != o.sections[(size_t) i].energy)
                     return false;
             return true;
         }
@@ -90,6 +106,8 @@ namespace suite
             int occurrence = 0;   // how many earlier sections had the same type (0 = first drop, 1 = second drop...)
             int keyShift = 0;     // semitones above the song's key here (final-drop key change)
             int nextKeyShift = 0; // ... in the next section (a build leading into the lifted drop aims for the new key)
+            float energy = 1.0f, energyRatio = 1.0f;   // the energy curve here, and relative to the type's default (1 = as usual)
+            float nextEnergyRatio = 1.0f;
 
             bool isLaterDrop() const noexcept { return type == SectionType::Drop && occurrence > 0; }
 
@@ -140,6 +158,9 @@ namespace suite
             p.hasNext = i + 1 < map.count;
             if (p.hasNext) p.next = map.sections[(size_t) i + 1].type;
             p.keyShift = map.keyShiftOf (i);
+            p.energy = map.energyOf (i);
+            p.energyRatio = p.energy / std::max (0.05f, defaultEnergy (p.type));
+            if (p.hasNext) p.nextEnergyRatio = map.energyOf (i + 1) / std::max (0.05f, defaultEnergy (p.next));
             p.nextKeyShift = p.hasNext ? map.keyShiftOf (i + 1) : p.keyShift;
             return p;
         }

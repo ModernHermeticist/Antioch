@@ -201,7 +201,11 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
             // Entering a new section while playing forward fires its transition.
             if (sec.valid && previousIndex >= 0 && ! jumped && sec.index != previousIndex)
+            {
+                energyGain = juce::jlimit (0.25f, 2.0f, sec.energyRatio);   // the energy curve: bigger or smaller transitions
                 enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop());
+            }
+            if (sec.valid) riseGain = juce::jlimit (0.25f, 2.0f, sec.type == T::Build ? sec.nextEnergyRatio : 1.0f);
             if (sec.valid) riseKey = std::exp2 ((float) sec.nextKeyShift / 12.0f);
             previousIndex = sec.valid ? sec.index : -1;
             if (sec.valid) previousType = sec.type;
@@ -269,9 +273,9 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             previousIndex = -1;
         }
 
-        fx += impact.process() + crash.process() + downlifter.process();
-        fx += riser.process (rise, riserRootHz * riseKey, riserRange, riserLevel);
-        for (auto& s : snares) fx += s.process();
+        fx += (impact.process() + crash.process() + downlifter.process()) * energyGain;
+        fx += riser.process (rise, riserRootHz * riseKey, riserRange, riserLevel) * riseGain;
+        for (auto& s : snares) fx += s.process() * riseGain;
 
         fx *= level;
 

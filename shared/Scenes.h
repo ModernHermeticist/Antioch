@@ -72,11 +72,12 @@ namespace suite
 
             int type = -1;
             bool laterDrop = false;
+            float energyScale = 1.0f;   // Ouroboros' energy curve: above a section's usual energy, its scene goes further
             if (haveMap && host.playing && host.hasPpq)
             {
                 const auto mid = host.ppq + host.quartersPerSample (sampleRate) * numSamples * 0.5;
                 const auto pos = follower.locate (mid, host.barQuarters());
-                if (pos.valid) { type = (int) pos.type; laterDrop = pos.isLaterDrop(); }
+                if (pos.valid) { type = (int) pos.type; laterDrop = pos.isLaterDrop(); energyScale = juce::jlimit (0.0f, 2.0f, pos.energyRatio); }
             }
             activeType.store (on ? type : -1);
             activeLaterDrop.store (on && laterDrop);
@@ -90,6 +91,7 @@ namespace suite
                 auto target = (on && type >= 0) ? offsets[(size_t) type][(size_t) i].load (std::memory_order_relaxed) : 0.0f;
                 if (on && laterDrop)
                     target += offsets[(size_t) laterDropSlot][(size_t) i].load (std::memory_order_relaxed);
+                target *= energyScale;
                 auto c = current[(size_t) i].load (std::memory_order_relaxed);
                 c = c < target ? std::min (target, c + step) : std::max (target, c - step);
                 current[(size_t) i].store (c, std::memory_order_relaxed);

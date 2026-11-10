@@ -79,6 +79,7 @@ private:
     azoth::Riser riser;
     std::array<suite::PitchShifter, 2> trackShift;   // the track's own audio, pitched up through builds
     float trackRiseMix = 0.0f;
+    float energyGain = 1.0f, riseGain = 1.0f;   // from Ouroboros' energy curve
     int trackShiftCounter = 0;
     int nextSnare = 0;
     suite::Noise swellNoise { 0x51E11u };

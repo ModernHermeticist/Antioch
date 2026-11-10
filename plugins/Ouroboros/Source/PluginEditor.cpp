@@ -95,6 +95,25 @@ void Timeline::paint (juce::Graphics& g)
         g.drawText ("PROPOSAL FROM LISTENING: Apply or Discard", r.reduced (8.0f, 4.0f), juce::Justification::bottomRight);
     }
 
+    // Energy curve: a line per section at its energy, joined with ramps; drag a line to change it.
+    {
+        juce::Path curve;
+        for (int i = 0; i < m.count; ++i)
+        {
+            const auto x0 = xForBar (m.sections[(size_t) i].startBar) + 4.0f, x1 = xForBar (m.endBar (i)) - 4.0f;
+            const auto y = yForEnergy (m.energyOf (i));
+            if (i == 0) curve.startNewSubPath (x0, y); else curve.lineTo (x0, y);
+            curve.lineTo (x1, y);
+            if (m.sections[(size_t) i].energy >= 0)   // drawn by hand: mark it
+            {
+                g.setColour (Colours::brass);
+                g.fillEllipse ((x0 + x1) * 0.5f - 3.0f, y - 3.0f, 6.0f, 6.0f);
+            }
+        }
+        g.setColour (Colours::brass.withAlpha (0.85f));
+        g.strokePath (curve, juce::PathStrokeType (2.0f));
+    }
+
     // Ruler: a tick every 8 bars, labels every 32.
     g.setFont (juce::FontOptions (10.0f));
     for (int bar = 1; bar <= m.totalBars + 1; bar += 8)
@@ -119,9 +138,25 @@ void Timeline::paint (juce::Graphics& g)
     }
 }
 
+float Timeline::yForEnergy (float energy) const
+{
+    const auto area = getLocalBounds().toFloat().withTrimmedBottom (18.0f).reduced (0.0f, 22.0f);
+    return area.getBottom() - area.getHeight() * juce::jlimit (0.0f, 1.0f, energy);
+}
+
+int Timeline::energyLineNear (float x, float y) const
+{
+    if (preview.has_value()) return -1;
+    const auto m = processor.getMap();
+    const auto index = arrangement::sectionAt (m, (int) std::floor (barForX (x)));
+    return index >= 0 && std::abs (y - yForEnergy (m.energyOf (index))) < 6.0f ? index : -1;
+}
+
 void Timeline::mouseMove (const juce::MouseEvent& e)
 {
-    setMouseCursor (boundaryNear ((float) e.x) >= 0 ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::PointingHandCursor);
+    setMouseCursor (boundaryNear ((float) e.x) >= 0 ? juce::MouseCursor::LeftRightResizeCursor
+                    : energyLineNear ((float) e.x, (float) e.y) >= 0 ? juce::MouseCursor::UpDownResizeCursor
+                                                                     : juce::MouseCursor::PointingHandCursor);
 }
 
 void Timeline::mouseDown (const juce::MouseEvent& e)
@@ -130,6 +165,9 @@ void Timeline::mouseDown (const juce::MouseEvent& e)
     const auto m = processor.getMap();
     dragging = boundaryNear ((float) e.x);
     if (dragging >= 0)
+        return;
+    energyDragging = e.mods.isPopupMenu() ? -1 : energyLineNear ((float) e.x, (float) e.y);
+    if (energyDragging >= 0)
         return;
 
     const auto index = arrangement::sectionAt (m, (int) std::floor (barForX ((float) e.x)));
@@ -145,12 +183,15 @@ void Timeline::mouseDown (const juce::MouseEvent& e)
         for (int t = 0; t < numTypes; ++t)
             menu.addItem (t + 1, juce::String ("Make it ") + suite::sectionName ((SectionType) t));
         menu.addSeparator();
+        menu.addItem (101, "Energy: back to the usual for " + juce::String (suite::sectionName (m.sections[(size_t) index].type)),
+                      m.sections[(size_t) index].energy >= 0);
         menu.addItem (100, "Delete section", m.count > 1);
         menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                             [this, index] (int result)
                             {
                                 auto map = processor.getMap();
                                 if (result == 100) arrangement::remove (map, index);
+                                else if (result == 101) map.sections[(size_t) index].energy = -1;
                                 else if (result >= 1 && result <= numTypes) map.sections[(size_t) index].type = (SectionType) (result - 1);
                                 else return;
                                 processor.setMap (map);
@@ -164,6 +205,16 @@ void Timeline::mouseDown (const juce::MouseEvent& e)
 void Timeline::mouseDrag (const juce::MouseEvent& e)
 {
     if (preview.has_value()) return;   // no editing while a proposal is shown
+    if (energyDragging >= 0)
+    {
+        auto m = processor.getMap();
+        const auto area = getLocalBounds().toFloat().withTrimmedBottom (18.0f).reduced (0.0f, 22.0f);
+        const auto energy = juce::jlimit (0.0f, 1.0f, (area.getBottom() - (float) e.y) / area.getHeight());
+        m.sections[(size_t) energyDragging].energy = juce::roundToInt (energy * 20.0f) * 5;   // 5% steps
+        processor.setMap (m);
+        repaint();
+        return;
+    }
     if (dragging < 0)
         return;
     auto m = processor.getMap();
@@ -173,7 +224,7 @@ void Timeline::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
-void Timeline::mouseUp (const juce::MouseEvent&) { dragging = -1; }
+void Timeline::mouseUp (const juce::MouseEvent&) { dragging = -1; energyDragging = -1; }
 
 void Timeline::mouseDoubleClick (const juce::MouseEvent& e)
 {
@@ -795,7 +846,7 @@ void OuroborosEditor::paint (juce::Graphics& g)
     g.fillAll (Colours::background);
     drawHeader (g, { 20, 12, 700, 32 }, "OUROBOROS", "arrangement conductor", accent);
     drawPanel (g, nowArea, "Now playing");
-    drawPanel (g, songArea, "Song map  (drag edges, double-click to split, right-click for options)", accent);
+    drawPanel (g, songArea, "Song map  (drag edges or the energy line, double-click to split, right-click for options)", accent);
     drawPanel (g, markArea, "Mark at playhead  (click while the song plays)", Colours::brass);
     drawPanel (g, selectArea, "Selected section", Colours::verdigris);
 }

@@ -34,7 +34,7 @@ namespace suite::SectionBus
             static Shared local {};
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v3", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v4", sizeof (Shared)));
                 return m != nullptr ? m : &local;
             }();
             return *s;
@@ -50,8 +50,12 @@ namespace suite::SectionBus
 
         const auto n = map.count < 0 ? 0 : (map.count > SectionMap::maxSections ? SectionMap::maxSections : map.count);
         for (int i = 0; i < n; ++i)
-            s.entries[(size_t) i].store (((uint32_t) map.sections[(size_t) i].startBar << 8) | (uint32_t) map.sections[(size_t) i].type,
-                                         std::memory_order_relaxed);
+        {
+            // [ startBar : 16 | energy (255 = default) : 8 | type : 8 ]
+            const auto& sec = map.sections[(size_t) i];
+            const auto energy = sec.energy < 0 ? 255u : (uint32_t) std::min (100, sec.energy);
+            s.entries[(size_t) i].store (((uint32_t) sec.startBar << 16) | (energy << 8) | (uint32_t) sec.type, std::memory_order_relaxed);
+        }
         s.count.store ((uint32_t) n, std::memory_order_relaxed);
         s.totalBars.store ((uint32_t) map.totalBars, std::memory_order_relaxed);
         s.finalLift.store (map.finalLift, std::memory_order_relaxed);
@@ -88,7 +92,8 @@ namespace suite::SectionBus
             for (int i = 0; i < m.count; ++i)
             {
                 const auto e = s.entries[(size_t) i].load (std::memory_order_relaxed);
-                m.sections[(size_t) i].startBar = (int) (e >> 8);
+                m.sections[(size_t) i].startBar = (int) (e >> 16);
+                m.sections[(size_t) i].energy = ((e >> 8) & 0xffu) == 255u ? -1 : (int) ((e >> 8) & 0xffu);
                 m.sections[(size_t) i].type = (SectionType) (e & 0xffu);
             }
 

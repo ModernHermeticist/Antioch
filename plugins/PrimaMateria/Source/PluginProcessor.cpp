@@ -154,6 +154,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         pm::Setting target;   // unity when not following
         bool inGap = false, laterThis = false;
         int typeThis = -1;
+        float energyDb = 0.0f;
 
         if (follow)
         {
@@ -163,6 +164,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             {
                 typeNow = typeThis = (int) sec.type;
                 laterThis = sec.isLaterDrop();
+                energyDb = 12.0f * (sec.energy - suite::defaultEnergy (sec.type));   // drawn energy: up to +-12 dB, 0 when untouched
                 const auto useLater = sec.isLaterDrop() && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f;
                 target = settingFor (useLater ? pm::laterDrop : typeNow);
                 laterNow = laterNow || useLater;
@@ -186,6 +188,9 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 gapNow = gapNow || inGap;
             }
         }
+
+        if (energyDb != 0.0f && target.levelDb > pm::offDb + 0.5f)
+            target.levelDb = juce::jlimit (pm::offDb + 1.0f, 6.0f, target.levelDb + energyDb);
 
         // Low-end manager: where a kick or bass plays, other roles leave the low end to them.
         if (managerCut > 0.0f)
