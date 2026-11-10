@@ -1,8 +1,8 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <array>
-#include "DSP.h"
+#include "Engines.h"
+#include "KeyBus.h"
 #include "Parameters.h"
 
 class AntiochProcessor : public juce::AudioProcessor
@@ -24,7 +24,7 @@ public:
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 10.0; }
+    double getTailLengthSeconds() const override { return 20.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -37,48 +37,39 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    /** Host tempo as last seen by the audio thread (for the UI). */
+    // Read by the UI.
     std::atomic<double> currentBpm { 120.0 };
+    std::atomic<int> effectiveRoot { 0 };      // root actually used (local or followed)
+    std::atomic<bool> followingBus { false };  // true when the root comes from Correspondence
+    std::atomic<int> busScale { 0 };
+    std::atomic<float> throwGate { 0.0f };     // 0..1, lights the THROW button
+    std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
 
 private:
-    struct TapParams
+    juce::AudioParameterBool* boolParam (const juce::String& id);
+    juce::AudioParameterChoice* choiceParam (const juce::String& id);
+    juce::AudioParameterInt* intParam (const juce::String& id);
+    float value (const juce::String& id) const;
+
+    struct TapPtrs
     {
         juce::AudioParameterBool* on = nullptr;
         juce::AudioParameterChoice* division = nullptr;
+        juce::AudioParameterInt* harmonic = nullptr;
         std::atomic<float>* timeMs = nullptr;
         std::atomic<float>* pitch = nullptr;
         std::atomic<float>* feedback = nullptr;
-        juce::AudioParameterInt* harmonic = nullptr;
         std::atomic<float>* level = nullptr;
         std::atomic<float>* pan = nullptr;
     };
+    std::array<TapPtrs, Params::numTaps> tapPtrs;
 
-    struct Tap
-    {
-        dsp::DelayLine delay;
-        dsp::PitchShifter shifter;
-        dsp::CombResonator comb;
-        dsp::OnePole damp, lowCut;
-        float delaySamples = 0.0f;
-        juce::SmoothedValue<float> gainL, gainR, feedback, enabled;
-    };
+    HarmonicEcho echo;
+    EuphoricReverb reverb;
+    ThrowDelay throwDelay;
+    suite::EnvelopeFollower dryEnvelope;
 
-    float targetDelaySamples (int tapIndex, bool synced, double bpm) const;
-
-    std::array<TapParams, Params::numTaps> tapParams;
-    std::array<Tap, Params::numTaps> taps;
-
-    juce::AudioParameterBool* syncParam = nullptr;
-    juce::AudioParameterChoice* rootParam = nullptr;
-    juce::AudioParameterInt* octaveParam = nullptr;
-    std::atomic<float>* resonanceParam = nullptr;
-    std::atomic<float>* resMixParam = nullptr;
-    std::atomic<float>* dampParam = nullptr;
-    std::atomic<float>* lowCutParam = nullptr;
-    std::atomic<float>* mixParam = nullptr;
-    std::atomic<float>* outputParam = nullptr;
-
-    juce::SmoothedValue<float> dryGain, wetGain, resMix;
+    juce::SmoothedValue<float> dryGain, echoGain, verbGain, throwGain, outGain, echoSend, throwSend, verbDuck, throwDuck;
     double sampleRate = 44100.0;
     bool firstBlock = true;
 
