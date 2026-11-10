@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include <optional>
 
 /** The song as coloured section blocks. Drag a boundary to move it, double-click to split,
     right-click for type/delete, click to select. Shows the playhead. */
@@ -19,6 +20,7 @@ public:
 
     int selected = 0;
     std::function<void()> onSelectionChanged;
+    std::optional<suite::SectionMap> preview;   // a Listen proposal shown instead of the map
 
 private:
     float xForBar (double bar) const;      // bar is 1-based, may be fractional
@@ -54,6 +56,10 @@ private:
 
     std::vector<std::unique_ptr<juce::TextButton>> markButtons, typeButtons;
     juce::TextButton deleteButton { "Delete section" };
+    juce::TextButton listenButton { "LISTEN" }, proposeButton { "Propose map" }, applyButton { "Apply" }, discardButton { "Discard" };
+    juce::Label listenStatus;
+    bool wasPlaying = false;
+    void propose();
 
     juce::Rectangle<int> songArea, markArea, selectArea, nowArea;
 

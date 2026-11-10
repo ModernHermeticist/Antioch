@@ -38,15 +38,102 @@ bool OuroborosProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
         && ! layouts.getMainOutputChannelSet().isDisabled();
 }
 
-void OuroborosProcessor::processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&)
+void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
 {
-    // Audio passes through untouched; we only watch the transport for the UI.
+    sampleRate = newSampleRate;
+    const auto sr = (float) sampleRate;
+    lowBand.set (100.0f, 0.707f, sr);
+    highBand.set (6000.0f, 0.707f, sr);
+    lowBand.reset();
+    highBand.reset();
+    envAttack = 1.0f - std::exp (-1.0f / (0.002f * sr));
+    envRelease = 1.0f - std::exp (-1.0f / (0.04f * sr));
+    lowEnv = 0.0f;
+}
+
+void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    // Audio passes through untouched; we watch the transport and (when listening) measure the mix.
     const auto host = suite::HostInfo::read (getPlayHead(), bpm.load());
     bpm.store (host.bpm);
     barQuarters.store (host.barQuarters());
     playing.store (host.playing);
     if (host.hasPpq)
         ppq.store (host.ppq);
+
+    if (resetFeatures.exchange (false))
+        for (auto& b : barData) { b.flux.store (0.0f); b.high.store (0.0f); b.full.store (0.0f); b.samples.store (0); }
+
+    if (! listening.load() || ! host.playing || ! host.hasPpq || buffer.getNumChannels() == 0)
+        return;
+
+    const auto* l = buffer.getReadPointer (0);
+    const auto* r = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : l;
+    const auto qPerSample = host.quartersPerSample (sampleRate);
+    const auto barQ = host.barQuarters();
+
+    int currentBar = -1, count = 0;
+    float flux = 0.0f, high = 0.0f, full = 0.0f;
+    auto flush = [&]
+    {
+        if (currentBar < 0 || currentBar >= maxListenBars || count == 0) return;
+        auto& b = barData[(size_t) currentBar];
+        b.flux.store (b.flux.load() + flux);
+        b.high.store (b.high.load() + high);
+        b.full.store (b.full.load() + full);
+        b.samples.store (b.samples.load() + count);
+    };
+
+    for (int n = 0; n < buffer.getNumSamples(); ++n)
+    {
+        const auto bar = (int) std::floor ((host.ppq + qPerSample * n) / barQ);
+        if (bar != currentBar)
+        {
+            flush();
+            currentBar = bar; count = 0; flux = high = full = 0.0f;
+        }
+
+        const auto mono = 0.5f * (l[n] + r[n]);
+        const auto lo = std::abs (lowBand.lowpass (mono));
+        const auto hi = highBand.highpass (mono);
+        const auto before = lowEnv;
+        lowEnv += (lo > lowEnv ? envAttack : envRelease) * (lo - lowEnv);
+        flux += std::max (0.0f, lowEnv - before);     // low-end attacks: kicks
+        high += hi * hi;
+        full += mono * mono;
+        ++count;
+    }
+    flush();
+}
+
+std::vector<listen::BarFeature> OuroborosProcessor::features() const
+{
+    std::vector<listen::BarFeature> out;
+    int last = -1;
+    for (int b = 0; b < maxListenBars; ++b)
+        if (barData[(size_t) b].samples.load() > 0) last = b;
+    for (int b = 0; b <= last; ++b)
+    {
+        const auto& d = barData[(size_t) b];
+        listen::BarFeature f;
+        const auto n = d.samples.load();
+        f.heard = n > 0;
+        if (f.heard)
+        {
+            f.kickFlux = d.flux.load();
+            f.highDb = 10.0f * std::log10 (d.high.load() / (float) n + 1.0e-12f);
+            f.fullDb = 10.0f * std::log10 (d.full.load() / (float) n + 1.0e-12f);
+        }
+        out.push_back (f);
+    }
+    return out;
+}
+
+int OuroborosProcessor::barsHeard() const
+{
+    int n = 0;
+    for (const auto& b : barData) if (b.samples.load() > 0) ++n;
+    return n;
 }
 
 suite::SectionMap OuroborosProcessor::getMap() const

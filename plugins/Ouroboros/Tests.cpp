@@ -100,6 +100,64 @@ int main (int argc, char** argv)
         check (diff < 1.0e-9f, "audio passes through untouched");
     }
 
+    section ("Listen: proposes the structure of a song it hears");
+    {
+        // A synthetic 104-bar trance arrangement at 140 BPM.
+        //  1-16 Intro (kick, pad, quiet hats)   17-32 Groove (kick, pad, hats)
+        // 33-48 Breakdown (pad, soft lead)      49-56 Build (pad, rising noise riser)
+        // 57-88 Drop (kick, hats, bright lead)  89-104 Outro (kick only)
+        auto p = std::make_unique<OuroborosProcessor>();
+        prepare (*p);
+        FakePlayHead head;
+        head.bpm = 140.0;
+        p->setPlayHead (&head);
+        p->listening.store (true);
+        p->clearListening();
+
+        const auto barSec = 4.0 * 60.0 / head.bpm, beatSec = barSec / 4.0;
+        juce::Random rng (21);
+        auto song = [&] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto bar = (int) (t / barSec) + 1;
+                const auto inBeat = std::fmod (t, beatSec);
+                const bool intro = bar <= 16, groove = bar >= 17 && bar <= 32, breakdown = bar >= 33 && bar <= 48;
+                const bool build = bar >= 49 && bar <= 56, drop = bar >= 57 && bar <= 88, outro = bar >= 89 && bar <= 104;
+                const auto twoPi = juce::MathConstants<double>::twoPi;
+
+                double v = 0.0;
+                if (intro || groove || drop || outro)   // kick: pitch-swept thump
+                    v += 0.6 * std::sin (twoPi * (50.0 * inBeat + 70.0 / 30.0 * (1.0 - std::exp (-inBeat * 30.0)))) * std::exp (-inBeat * 10.0);
+                if (! outro && bar <= 104)              // pad
+                    for (double f : { 220.0, 277.2, 329.6 }) v += 0.06 * std::sin (twoPi * f * t);
+                const auto offbeat = std::fmod (t + beatSec * 0.5, beatSec) < 0.03;
+                if (offbeat && (groove || drop)) v += 0.08 * (rng.nextFloat() * 2.0f - 1.0f);
+                if (offbeat && intro)            v += 0.03 * (rng.nextFloat() * 2.0f - 1.0f);
+                if (drop)      v += 0.08 * (2.0 * std::fmod (t * 440.0, 1.0) - 1.0);   // bright saw lead
+                if (breakdown) v += 0.04 * std::sin (twoPi * 440.0 * t);
+                if (build)     v += 0.15 * ((t - 48.0 * barSec) / (8.0 * barSec)) * (rng.nextFloat() * 2.0f - 1.0f);
+                if (bar > 104) v = 0.0;
+                b.setSample (0, i, (float) v);
+                b.setSample (1, i, (float) v);
+            }
+        };
+        render (*p, 104.0 * barSec + 0.5, song, nullptr, &head);
+        p->setPlayHead (nullptr);
+
+        check (p->barsHeard() >= 104, "heard every bar (" + juce::String (p->barsHeard()) + ")");
+        const auto proposal = p->proposeFromListening();
+        const auto text = arrangement::toString (proposal);
+        std::cout << "    proposed: " << text << std::endl;
+        check (text == "1:Intro 17:Groove 33:Breakdown 49:Build 57:Drop 89:Outro /104", "matches the real structure");
+
+        p->listening.store (false);
+        p->clearListening();
+        render (*p, 0.05, {});
+        check (p->barsHeard() == 0 && p->proposeFromListening().count == 0, "clearing forgets what was heard");
+    }
+
     if (outDir != juce::File())
     {
         auto p = std::make_unique<OuroborosProcessor>();

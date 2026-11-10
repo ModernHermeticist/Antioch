@@ -37,7 +37,7 @@ int Timeline::boundaryNear (float x) const
 
 void Timeline::paint (juce::Graphics& g)
 {
-    const auto m = processor.getMap();
+    const auto m = preview.has_value() ? *preview : processor.getMap();
     auto r = getLocalBounds().toFloat();
     auto ruler = r.removeFromBottom (18.0f);
     g.setColour (Colours::background);
@@ -49,10 +49,23 @@ void Timeline::paint (juce::Graphics& g)
         const auto x0 = xForBar (s.startBar), x1 = xForBar (m.endBar (i));
         const auto block = juce::Rectangle<float>::leftTopRightBottom (x0, r.getY(), x1, r.getBottom()).reduced (1.0f, 4.0f);
         const auto c = sectionColour (s.type);
-        g.setColour (c.withAlpha (i == selected ? 0.55f : 0.32f));
+        const auto isSel = i == selected && ! preview.has_value();
+        g.setColour (c.withAlpha (isSel ? 0.55f : 0.32f));
         g.fillRoundedRectangle (block, 4.0f);
-        g.setColour (i == selected ? Colours::text : c);
-        g.drawRoundedRectangle (block, 4.0f, i == selected ? 2.0f : 1.0f);
+        g.setColour (isSel ? Colours::text : c);
+        if (preview.has_value())
+        {
+            juce::Path outline;
+            outline.addRoundedRectangle (block, 4.0f);
+            juce::Path dashed;
+            const float dashes[] = { 6.0f, 4.0f };
+            juce::PathStrokeType (1.5f).createDashedStroke (dashed, outline, dashes, 2);
+            g.fillPath (dashed);
+        }
+        else
+        {
+            g.drawRoundedRectangle (block, 4.0f, isSel ? 2.0f : 1.0f);
+        }
 
         if (block.getWidth() > 34.0f)
         {
@@ -65,6 +78,13 @@ void Timeline::paint (juce::Graphics& g)
             g.drawFittedText (juce::String (m.endBar (i) - s.startBar) + " bars", block.reduced (4.0f, 6.0f).toNearestInt(),
                               juce::Justification::centredBottom, 1, 0.6f);
         }
+    }
+
+    if (preview.has_value())
+    {
+        g.setColour (Colours::text);
+        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        g.drawText ("PROPOSAL FROM LISTENING: Apply or Discard", r.reduced (8.0f, 4.0f), juce::Justification::bottomRight);
     }
 
     // Ruler: a tick every 8 bars, labels every 32.
@@ -98,6 +118,7 @@ void Timeline::mouseMove (const juce::MouseEvent& e)
 
 void Timeline::mouseDown (const juce::MouseEvent& e)
 {
+    if (preview.has_value()) return;   // no editing while a proposal is shown
     const auto m = processor.getMap();
     dragging = boundaryNear ((float) e.x);
     if (dragging >= 0)
@@ -134,6 +155,7 @@ void Timeline::mouseDown (const juce::MouseEvent& e)
 
 void Timeline::mouseDrag (const juce::MouseEvent& e)
 {
+    if (preview.has_value()) return;   // no editing while a proposal is shown
     if (dragging < 0)
         return;
     auto m = processor.getMap();
@@ -147,6 +169,7 @@ void Timeline::mouseUp (const juce::MouseEvent&) { dragging = -1; }
 
 void Timeline::mouseDoubleClick (const juce::MouseEvent& e)
 {
+    if (preview.has_value()) return;   // no editing while a proposal is shown
     // Split the section here: the new part takes the next type in the usual order.
     auto m = processor.getMap();
     const auto snap = OuroborosProcessor::snapBars ((int) processor.apvts.getRawParameterValue (OuroborosProcessor::snapId)->load());
@@ -183,7 +206,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         }
     };
 
-    lengthCaption.setText ("Song length (bars)", juce::dontSendNotification);
+    lengthCaption.setText ("Length (bars)", juce::dontSendNotification);
     lengthCaption.setFont (juce::FontOptions (12.0f));
     lengthCaption.setJustificationType (juce::Justification::centredRight);
     lengthSlider.setRange (8, 1024, 1);
@@ -242,6 +265,30 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     };
     timeline.onSelectionChanged = [this] { refreshSelection(); };
 
+    listenButton.setClickingTogglesState (true);
+    listenButton.setColour (juce::TextButton::buttonOnColourId, accent);
+    listenButton.setToggleState (processor.listening.load(), juce::dontSendNotification);
+    listenButton.onClick = [this]
+    {
+        const auto on = listenButton.getToggleState();
+        if (on && ! processor.listening.load())
+            processor.clearListening();   // a fresh listen each time
+        processor.listening.store (on);
+    };
+    proposeButton.onClick = [this] { propose(); };
+    applyButton.onClick = [this]
+    {
+        if (timeline.preview.has_value()) processor.setMap (*timeline.preview);
+        timeline.preview.reset();
+        timeline.selected = 0;
+        refreshSelection();
+    };
+    discardButton.onClick = [this] { timeline.preview.reset(); };
+    listenStatus.setFont (juce::FontOptions (12.0f));
+    listenStatus.setJustificationType (juce::Justification::centredLeft);
+    for (auto* c : std::initializer_list<juce::Component*> { &listenButton, &proposeButton, &applyButton, &discardButton, &listenStatus })
+        addAndMakeVisible (c);
+
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
                                                              &selectionLabel, &legend, &broadcast, &snap, &timeline, &deleteButton })
         addAndMakeVisible (c);
@@ -273,8 +320,33 @@ void OuroborosEditor::refreshSelection()
     deleteButton.setEnabled (m.count > 1);
 }
 
+void OuroborosEditor::propose()
+{
+    const auto proposal = processor.proposeFromListening();
+    if (proposal.count > 0)
+        timeline.preview = proposal;
+    else
+        listenStatus.setText ("Not enough heard yet: play at least 16 bars with Listen on", juce::dontSendNotification);
+}
+
 void OuroborosEditor::timerCallback()
 {
+    // Listen: when playback stops after a decent listen, propose a map automatically.
+    const auto isPlaying = processor.playing.load();
+    const auto heard = processor.barsHeard();
+    if (wasPlaying && ! isPlaying && processor.listening.load() && heard >= 16 && ! timeline.preview.has_value())
+        propose();
+    wasPlaying = isPlaying;
+    applyButton.setVisible (timeline.preview.has_value());
+    discardButton.setVisible (timeline.preview.has_value());
+    proposeButton.setEnabled (heard >= 16);
+    if (! timeline.preview.has_value())
+        listenStatus.setText (processor.listening.load() ? "Listening: heard " + juce::String (heard) + " bars (stop playback to get a proposal)"
+                                                         : heard > 0 ? "Heard " + juce::String (heard) + " bars" : "Turn on Listen and play the song",
+                              juce::dontSendNotification);
+    else
+        listenStatus.setText ({}, juce::dontSendNotification);
+
     const auto m = processor.getMap();
     if ((int) lengthSlider.getValue() != m.totalBars)
         lengthSlider.setValue (m.totalBars, juce::dontSendNotification);
@@ -312,7 +384,7 @@ void OuroborosEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "OUROBOROS", "arrangement conductor", accent);
     drawPanel (g, nowArea, "Now playing");
     drawPanel (g, songArea, "Song map  (drag edges, double-click to split, right-click for options)", accent);
-    drawPanel (g, markArea, "Mark at playhead  (click while listening)", Colours::brass);
+    drawPanel (g, markArea, "Mark at playhead  (click while the song plays)", Colours::brass);
     drawPanel (g, selectArea, "Selected section", Colours::verdigris);
 }
 
@@ -331,9 +403,16 @@ void OuroborosEditor::resized()
     songArea = bounds.removeFromTop (210);
     auto s = songArea.reduced (12, 6).withTrimmedTop (16);
     auto bar = s.removeFromTop (30);
-    templateBox.setBounds (bar.removeFromLeft (300).reduced (0, 2));
-    lengthSlider.setBounds (bar.removeFromRight (140).reduced (0, 2));
-    lengthCaption.setBounds (bar.removeFromRight (140));
+    templateBox.setBounds (bar.removeFromLeft (260).reduced (0, 2));
+    lengthSlider.setBounds (bar.removeFromRight (130).reduced (0, 2));
+    lengthCaption.setBounds (bar.removeFromRight (130));
+    bar.removeFromLeft (12);
+    listenButton.setBounds (bar.removeFromLeft (90).reduced (0, 2));
+    proposeButton.setBounds (bar.removeFromLeft (110).reduced (4, 2));
+    auto actions = bar.removeFromRight (170);
+    applyButton.setBounds (actions.removeFromLeft (80).reduced (2));
+    discardButton.setBounds (actions.reduced (2));
+    listenStatus.setBounds (bar.reduced (6, 0));
     s.removeFromTop (8);
     timeline.setBounds (s);
     bounds.removeFromTop (10);

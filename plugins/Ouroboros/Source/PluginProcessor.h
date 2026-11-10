@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Arrangement.h"
+#include "Listen.h"
+#include "SuiteDSP.h"
 
 class OuroborosProcessor : public juce::AudioProcessor, private juce::Timer
 {
@@ -9,7 +11,7 @@ public:
     OuroborosProcessor();
     ~OuroborosProcessor() override;
 
-    void prepareToPlay (double, int) override {}
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -43,6 +45,13 @@ public:
     /** Publishes (or withdraws) the map. Called on a timer and after every edit. */
     void publish();
 
+    // ---- Listen: measure the mix bar by bar while playing, then propose a map ----
+    std::atomic<bool> listening { false };
+    void clearListening() { resetFeatures.store (true); }
+    std::vector<listen::BarFeature> features() const;
+    int barsHeard() const;
+    suite::SectionMap proposeFromListening() const { return listen::propose (features()); }
+
     juce::AudioProcessorValueTreeState apvts;
 
     // Transport, written by the audio thread, read by the UI.
@@ -55,6 +64,18 @@ public:
 
 private:
     void timerCallback() override { publish(); }
+
+    static constexpr int maxListenBars = 1024;
+    struct BarData
+    {
+        std::atomic<float> flux { 0.0f }, high { 0.0f }, full { 0.0f };
+        std::atomic<int> samples { 0 };
+    };
+    std::array<BarData, maxListenBars> barData;
+    std::atomic<bool> resetFeatures { false };
+    suite::Svf lowBand, highBand;
+    float lowEnv = 0.0f, envAttack = 0.1f, envRelease = 0.001f;
+    double sampleRate = 44100.0;
 
     mutable juce::CriticalSection lock;
     suite::SectionMap map;
