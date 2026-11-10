@@ -65,7 +65,7 @@ public:
     std::atomic<double> ppq { 0.0 }, bpm { 138.0 }, barQuarters { 4.0 };
     std::atomic<bool> playing { false };
 
-    static inline const juce::String broadcastId { "broadcast" };
+    static inline const juce::String broadcastId { "broadcast" }, liftId { "finallift" };
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 

@@ -34,11 +34,26 @@ namespace suite
         static constexpr int maxSections = 32;
         int count = 0;
         int totalBars = 0;                     // song length; the last section ends after this bar
+        int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
         std::array<Section, maxSections> sections {};
+
+        /** Index of the last Drop, or -1. */
+        int lastDropIndex() const noexcept
+        {
+            for (int i = count - 1; i >= 0; --i)
+                if (sections[(size_t) i].type == SectionType::Drop) return i;
+            return -1;
+        }
+        /** Semitones the key is shifted in section `index` (the last drop and everything after it). */
+        int keyShiftOf (int index) const noexcept
+        {
+            const auto last = lastDropIndex();
+            return finalLift != 0 && last >= 0 && index >= last ? finalLift : 0;
+        }
 
         bool operator== (const SectionMap& o) const noexcept
         {
-            if (count != o.count || totalBars != o.totalBars) return false;
+            if (count != o.count || totalBars != o.totalBars || finalLift != o.finalLift) return false;
             for (int i = 0; i < count; ++i)
                 if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type)
                     return false;
@@ -72,6 +87,8 @@ namespace suite
             bool hasNext = false;
             int index = -1;
             int occurrence = 0;   // how many earlier sections had the same type (0 = first drop, 1 = second drop...)
+            int keyShift = 0;     // semitones above the song's key here (final-drop key change)
+            int nextKeyShift = 0; // ... in the next section (a build leading into the lifted drop aims for the new key)
 
             bool isLaterDrop() const noexcept { return type == SectionType::Drop && occurrence > 0; }
 
@@ -121,6 +138,8 @@ namespace suite
                 if (map.sections[(size_t) k].type == p.type) ++p.occurrence;
             p.hasNext = i + 1 < map.count;
             if (p.hasNext) p.next = map.sections[(size_t) i + 1].type;
+            p.keyShift = map.keyShiftOf (i);
+            p.nextKeyShift = p.hasNext ? map.keyShiftOf (i + 1) : p.keyShift;
             return p;
         }
 

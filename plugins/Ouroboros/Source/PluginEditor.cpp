@@ -37,7 +37,8 @@ int Timeline::boundaryNear (float x) const
 
 void Timeline::paint (juce::Graphics& g)
 {
-    const auto m = preview.has_value() ? *preview : processor.getMap();
+    auto m = preview.has_value() ? *preview : processor.getMap();
+    m.finalLift = (int) processor.apvts.getRawParameterValue (OuroborosProcessor::liftId)->load();
     auto r = getLocalBounds().toFloat();
     auto ruler = r.removeFromBottom (18.0f);
     g.setColour (Colours::background);
@@ -77,6 +78,12 @@ void Timeline::paint (juce::Graphics& g)
             g.setFont (juce::FontOptions (11.0f));
             g.drawFittedText (juce::String (m.endBar (i) - s.startBar) + " bars", block.reduced (4.0f, 6.0f).toNearestInt(),
                               juce::Justification::centredBottom, 1, 0.6f);
+            if (const auto shift = m.keyShiftOf (i); shift != 0)
+            {
+                g.setColour (Colours::brass);
+                g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+                g.drawFittedText ("KEY +" + juce::String (shift), block.reduced (4.0f, 6.0f).toNearestInt(), juce::Justification::centred, 1, 0.6f);
+            }
         }
     }
 
@@ -313,6 +320,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     : AudioProcessorEditor (p), processor (p),
       broadcast (p.apvts, OuroborosProcessor::broadcastId, "Broadcast to suite", accent),
       snap (p.apvts, OuroborosProcessor::snapId, "Snap"),
+      lift (p.apvts, OuroborosProcessor::liftId, "Final drop key"),
       timeline (p)
 {
     setLookAndFeel (&lnf);
@@ -450,7 +458,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         addAndMakeVisible (c);
 
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
-                                                             &selectionLabel, &legend, &broadcast, &snap, &timeline, &deleteButton })
+                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &timeline, &deleteButton })
         addAndMakeVisible (c);
 
     setSize (1060, 560);
@@ -645,6 +653,7 @@ void OuroborosEditor::resized()
     selectArea = bottom;
 
     auto ma = markArea.reduced (12, 6).withTrimmedTop (16);
+    lift.setBounds (ma.removeFromRight (140));
     auto snapCell = ma.removeFromRight (110);
     snap.setBounds (snapCell);
     const auto bw = ma.getWidth() / 3;

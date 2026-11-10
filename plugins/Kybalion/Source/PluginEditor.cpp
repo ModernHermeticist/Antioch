@@ -165,6 +165,8 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       tabs ({ "RHYTHM  (gate)", "POLARITY  (duck)", "SCENES" }, { gateColour, duckColour, Colours::ember }),
       grid (p),
       gateRate (p.apvts, Params::Gate::rate, "Step size"),
+      fills (p.apvts, Params::Fill::when, "Fills before"),
+      fillStyle (p.apvts, Params::Fill::style, "Fill style"),
       length (p.apvts, Params::Gate::length, "Length", gateColour),
       attack (p.apvts, Params::Gate::attack, "Attack", gateColour),
       release (p.apvts, Params::Gate::release, "Release", gateColour),
@@ -209,7 +211,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     sourceStatus.setJustificationType (juce::Justification::centredLeft);
 
     for (auto* c : std::initializer_list<juce::Component*> { &grid, &patternBox, &randomButton, &gateRate, &length, &attack,
-                                                             &release, &depth, &swing, &stereo, &filter, &res })
+                                                             &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle })
         gatePanel.addAndMakeVisible (c);
     for (auto* c : std::initializer_list<juce::Component*> { &duckView, &presetBox, &source, &duckRate, &nudge, &duckDepth,
                                                              &duckAttack, &hold, &duckRelease, &curve, &split, &threshold,
@@ -250,7 +252,9 @@ void KybalionEditor::timerCallback()
     sectionStatus.setColour (juce::Label::textColourId, processor.autoBreakdown.load() ? Colours::ember : Colours::dimText);
     sectionStatus.setText (sec < 0 ? juce::String()
                                    : juce::String ("Section: ") + suite::sectionName ((suite::SectionType) sec)
-                                         + (processor.autoBreakdown.load() ? juce::String::fromUTF8 (" Â· ducking paused") : juce::String()),
+                                         + (processor.autoBreakdown.load() ? juce::String::fromUTF8 (" \xc2\xb7 ducking paused") : juce::String())
+                                         + (processor.currentFill.load() > 0 ? juce::String::fromUTF8 (" \xc2\xb7 fill: ")
+                                                + juce::StringArray { "", "stutter", "half-time", "gap", "roll" }[processor.currentFill.load()] : juce::String()),
                            juce::dontSendNotification);
 
     const auto wantsSidechain = (int) processor.apvts.getRawParameterValue (Params::Duck::source)->load() == Params::Duck::Sidechain;
@@ -349,7 +353,7 @@ void KybalionEditor::resized()
         grid.setBounds (top);
 
         auto shape = gatePanel.getLocalBounds().withTrimmedTop (310).reduced (10, 6).withTrimmedTop (12);
-        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res });
+        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle });
     }
 
     // ---- Polarity ----

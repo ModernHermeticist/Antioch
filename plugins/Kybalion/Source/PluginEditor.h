@@ -63,7 +63,7 @@ private:
     StepGrid grid;
     juce::ComboBox patternBox;
     juce::TextButton randomButton { "Randomise" };
-    suite::ui::Choice gateRate;
+    suite::ui::Choice gateRate, fills, fillStyle;
     suite::ui::Knob length, attack, release, depth, swing, stereo, filter, res;
 
     // Polarity

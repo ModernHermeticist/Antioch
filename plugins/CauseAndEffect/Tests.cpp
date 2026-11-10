@@ -260,6 +260,26 @@ int main (int argc, char** argv)
         check (level < 0.001f, "Follow Ouroboros off: sections are ignored");
     }
 
+    section ("Final-drop key change");
+    {
+        suite::SectionMap map;   // Drop 1-4, Build 5-8, Drop 9-12 (last, +1)
+        map.totalBars = 12; map.count = 3; map.finalLift = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 5, suite::SectionType::Build };
+        map.sections[2] = { 9, suite::SectionType::Drop };
+        auto p = make();
+        suite::SectionBus::publish (map);
+        const auto base = p->effectiveRoot.load();
+        FakePlayHead head;
+        head.ppq = 4.0 * 5.0;   // in the build
+        p->setPlayHead (&head);
+        render (*p, 0.05, {});
+        p->setPlayHead (nullptr);
+        check (p->effectiveRoot.load() == (base + 1) % 12, "the build's riser aims for the new key (" + juce::String (base) + " -> "
+                   + juce::String (p->effectiveRoot.load()) + ")");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Fix-it: a build that doesn't rise");
     {
         auto p = make();

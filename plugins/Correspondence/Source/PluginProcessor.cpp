@@ -235,7 +235,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
             const auto type = map.sections[(size_t) i].type;
             const auto n = ++seen[(size_t) type];
             markers.push_back ({ (map.sections[(size_t) i].startBar - 1) * 4.0,
-                                 juce::String (suite::sectionName (type)) + (n > 1 ? " " + juce::String (n) : juce::String()) });
+                                 juce::String (suite::sectionName (type)) + (n > 1 ? " " + juce::String (n) : juce::String())
+                                     + (map.keyShiftOf (i) != 0 && i == map.lastDropIndex() ? " (key +" + juce::String (map.keyShiftOf (i)) + ")" : juce::String()) });
         }
         const auto file = folder.getChildFile (juce::File::createLegalFileName (key + " - all parts.mid"));
         if (auto stream = file.createOutputStream())

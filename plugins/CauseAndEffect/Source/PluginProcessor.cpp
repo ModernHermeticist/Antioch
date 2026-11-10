@@ -83,7 +83,11 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const auto bus = suite::KeyBus::read();
     const auto follow = value (followKey) > 0.5f && bus.valid;
     if (follow) root = bus.root;
-    effectiveRoot.store (root);
+    // Final-drop key change: a build into the lifted drop rises to the new root.
+    if (haveSections && host.playing && host.hasPpq)
+        if (const auto sec = sections.locate (host.ppq, barQ); sec.valid)
+            root += sec.type == suite::SectionType::Build ? sec.nextKeyShift : sec.keyShift;
+    effectiveRoot.store (root % 12);
     followingBus.store (follow);
     busScale.store (bus.scale);
 

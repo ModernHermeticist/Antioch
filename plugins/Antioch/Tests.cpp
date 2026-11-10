@@ -312,6 +312,32 @@ int main (int argc, char** argv)
         check (! p->followingBus.load() && p->effectiveRoot.load() == 2, "falls back to the local key when nothing broadcasts");
     }
 
+    section ("Final-drop key change");
+    {
+        suite::SectionMap map;   // Drop 1-2, Breakdown 3-4, Drop 5-6 (the last drop), key +2 from there
+        map.totalBars = 6; map.count = 3; map.finalLift = 2;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Drop };
+        auto p = make();
+        suite::SectionBus::publish (map);
+        suite::KeyBus::publish (9, 0);   // A minor
+        set (*p, Params::followKey, 1.0f);
+        FakePlayHead head;
+        head.ppq = 2.0;                  // first drop
+        p->setPlayHead (&head);
+        render (*p, 0.05, {});
+        const auto before = p->effectiveRoot.load();
+        head.ppq = 4.0 * 4.0 + 2.0;      // last drop
+        head.playing = true;
+        render (*p, 0.05, {});
+        const auto after = p->effectiveRoot.load();
+        p->setPlayHead (nullptr);
+        check (before == 9 && after == 11, "harmonies move from A to B in the last drop (" + juce::String (before) + " -> " + juce::String (after) + ")");
+        suite::SectionBus::withdraw();
+        suite::KeyBus::withdraw();
+    }
+
     section ("State save/restore");
     {
         auto a = make();

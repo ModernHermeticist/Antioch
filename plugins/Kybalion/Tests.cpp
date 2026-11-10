@@ -209,6 +209,56 @@ int main (int argc, char** argv)
         check (peakBetween (out, 0.91, 0.93) < 0.15f, "ducks again on the second kick");
     }
 
+    section ("Gate fills before drops and breakdowns");
+    {
+        // 120 BPM (2 s bars): Groove bars 1-2, Drop 3-4, Groove 5-6, Breakdown 7-8.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Drop };
+        map.sections[2] = { 5, suite::SectionType::Groove };
+        map.sections[3] = { 7, suite::SectionType::Breakdown };
+        auto run = [&map] (int when, int style)
+        {
+            auto p = make (true, false);
+            for (int i = 0; i < Params::numSteps; ++i) set (*p, Params::Gate::step (i), 1.0f);   // gate wide open
+            set (*p, Params::Gate::length, 1.0f);
+            set (*p, Params::Gate::filter, 0.0f);
+            set (*p, Params::Fill::when, (float) when);
+            set (*p, Params::Fill::style, (float) style);
+            suite::SectionBus::publish (map);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> out;
+            render (*p, 13.0, tone (220.0f), &out, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return out;
+        };
+
+        const auto gap = run (Params::Fill::BeforeDrops, TranceGate::Gap);
+        check (channelRms (gap, 0, 3.55, 3.95) < 0.05f * channelRms (gap, 0, 2.2, 3.4), "Gap: silence on the last beat before the drop");
+        check (channelRms (gap, 0, 2.2, 3.4) > 0.3f && channelRms (gap, 0, 4.2, 5.0) > 0.3f, "open before it and in the drop");
+        check (channelRms (gap, 0, 11.55, 11.95) > 0.3f, "'Before drops' leaves the breakdown alone");
+
+        const auto stutter = run (Params::Fill::BeforeDrops, TranceGate::Stutter);
+        // 1/32 notes at 120 BPM are 62.5 ms: open for the first 45%, closed after.
+        const auto open = channelRms (stutter, 0, 3.0 + 0.005, 3.0 + 0.022), shut = channelRms (stutter, 0, 3.0 + 0.040, 3.0 + 0.060);
+        check (open > 0.25f && shut < 0.3f * open, "Stutter: 1/32 chops in the fill bar (" + juce::String (open, 3) + " / " + juce::String (shut, 3) + ")");
+        check (channelRms (stutter, 0, 1.0 + 0.040, 1.0 + 0.060) > 0.3f, "and only in the fill bar");
+
+        const auto autoFills = run (Params::Fill::BeforeDropsAndBreakdowns, 0);
+        const auto halfOn = channelRms (autoFills, 0, 10.03, 10.22), halfOff = channelRms (autoFills, 0, 10.28, 10.48);   // beats are 0.5 s
+        check (halfOn > 0.3f && halfOff < 0.1f * halfOn, "Auto: half-time fill into the breakdown");
+        // The first drop gets a roll: by beat 3 of the fill bar it's at 1/16 (on for 62.5 ms, off for 62.5 ms).
+        check (channelRms (autoFills, 0, 3.0 + 0.075, 3.0 + 0.12) < 0.3f * channelRms (autoFills, 0, 3.0 + 0.005, 3.0 + 0.055),
+               "Auto: a roll into the drop");
+
+        const auto off = run (Params::Fill::Off, 0);
+        check (channelRms (off, 0, 3.55, 3.95) > 0.3f && channelRms (off, 0, 10.55, 10.95) > 0.3f, "Fills off: the pattern plays through");
+    }
+
     section ("Fit to kick");
     {
         // A synthetic trance kick at 138 BPM: a pitch sweep down to `bodyHz`, ringing ~200 ms to -30 dB.

@@ -10,6 +10,8 @@ namespace
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::broadcastId, 1 }, "Broadcast", true));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::snapId, 1 }, "Mark Snap",
                                                              juce::StringArray { "1 bar", "4 bars", "8 bars", "16 bars" }, 2));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::liftId, 1 }, "Final Drop Key Change",
+                                                             juce::StringArray { "None", "+1 semitone", "+2 semitones" }, 0));
         return l;
     }
 }
@@ -165,7 +167,11 @@ void OuroborosProcessor::publish()
 {
     const auto on = apvts.getRawParameterValue (broadcastId)->load() > 0.5f;
     if (on)
-        suite::SectionBus::publish (getMap());
+    {
+        auto m = getMap();
+        m.finalLift = (int) apvts.getRawParameterValue (liftId)->load();   // the whole suite follows the key change
+        suite::SectionBus::publish (m);
+    }
     else if (wasBroadcasting)
         suite::SectionBus::withdraw();
     wasBroadcasting = on;

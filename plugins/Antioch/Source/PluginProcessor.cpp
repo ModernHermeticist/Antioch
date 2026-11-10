@@ -112,7 +112,11 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const auto follow = boolParam (followKey)->get() && bus.valid;
     if (follow)
         root = bus.root;
-    effectiveRoot.store (root);
+    // Final-drop key change from Ouroboros: the harmonies move up with the song.
+    if (sections.refresh() && host.playing && host.hasPpq)
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid)
+            root += sec.keyShift;
+    effectiveRoot.store (root % 12);
     followingBus.store (follow);
     busScale.store (bus.scale);
 

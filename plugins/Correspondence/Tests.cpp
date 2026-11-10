@@ -249,6 +249,28 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Final-drop key change");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;
+        map.totalBars = 12; map.count = 3; map.finalLift = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 5, suite::SectionType::Breakdown };
+        map.sections[2] = { 9, suite::SectionType::Drop };
+        chords::SongPatterns patterns;
+        auto noLift = map; noLift.finalLift = 0;
+        const auto lifted = chords::songClip (s, map, patterns, chords::SongPart::Chords);
+        const auto plain = chords::songClip (s, noLift, patterns, chords::SongPart::Chords);
+        bool firstSame = lifted.size() == plain.size(), lastUp = lifted.size() == plain.size();
+        for (size_t i = 0; i < lifted.size() && i < plain.size(); ++i)
+        {
+            if (lifted[i].start < 16.0) firstSame = firstSame && lifted[i].pitch == plain[i].pitch;
+            if (lifted[i].start >= 32.0) lastUp = lastUp && lifted[i].pitch == plain[i].pitch + 1;
+        }
+        check (firstSame && lastUp, "song chords: the first drop is unchanged, the last drop is a semitone up");
+        check (map.keyShiftOf (0) == 0 && map.keyShiftOf (1) == 0 && map.keyShiftOf (2) == 1, "only the last drop (and after) is shifted");
+    }
+
     section ("Export all");
     {
         auto p = make();

@@ -126,6 +126,8 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const auto haveSections = sections.refresh();
     const auto followSections = value (Params::follow) > 0.5f && haveSections && host.playing && host.hasPpq;
     const auto barQ = host.barQuarters();
+    const auto fillWhen = (int) value (Params::Fill::when), fillStyle = (int) value (Params::Fill::style);
+    fillNow = 0;
     int sectionNow = -1;
     bool pausedNow = false;
 
@@ -149,7 +151,26 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             kickLearner.process (0.5f * (l + r), position, barQ, typeHere, threshold);
 
         if (gateEnabled)
-            gate.process (position, l, r);
+        {
+            // Fills: the last bar before a drop (and a breakdown) plays a fill instead of the pattern.
+            int fill = TranceGate::NoFill;
+            double fillQ = 0.0;
+            if (followSections && fillWhen != Params::Fill::Off)
+            {
+                const auto sec = sections.locate (position, barQ);
+                const auto intoDrop = sec.hasNext && sec.next == suite::SectionType::Drop;
+                const auto intoBreakdown = sec.hasNext && sec.next == suite::SectionType::Breakdown && fillWhen == Params::Fill::BeforeDropsAndBreakdowns;
+                if (sec.valid && (intoDrop || intoBreakdown) && position >= sec.endQ - barQ && sec.endQ - sec.startQ > barQ + 1.0e-6)
+                {
+                    fillQ = position - (sec.endQ - barQ);
+                    if (fillStyle > 0) fill = fillStyle;
+                    else if (intoBreakdown) fill = TranceGate::HalfTime;
+                    else fill = (sec.index / 2) % 2 == 0 ? TranceGate::Roll : TranceGate::Gap;   // Auto: alternate into drops
+                }
+            }
+            fillNow = fill;
+            gate.process (position, l, r, fill, fillQ, barQ);
+        }
 
         // Time since the last duck trigger: from the beat grid, or from detected kicks.
         float ms;
@@ -202,6 +223,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     }
 
     gateStep.store (gate.getCurrentStep());
+    currentFill.store (fillNow);
     duckGain.store (duckEnabled ? ducker.getGain() : 1.0f);
     duckMs.store (lastMs);
     currentSection.store (haveSections ? sectionNow : -1);

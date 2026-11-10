@@ -191,6 +191,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     {
         float fx = 0.0f;
         float rise = -1.0f;   // progress through this build's riser, or -1
+        float riseKey = 1.0f; // final-drop key change: the riser aims for the key of the drop it leads into
 
         if (follow)
         {
@@ -200,7 +201,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
             // Entering a new section while playing forward fires its transition.
             if (sec.valid && previousIndex >= 0 && ! jumped && sec.index != previousIndex)
-                enterSection (sec.type, previousType, host.bpm, barQ, rootHz, sec.isLaterDrop());
+                enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop());
+            if (sec.valid) riseKey = std::exp2 ((float) sec.nextKeyShift / 12.0f);
             previousIndex = sec.valid ? sec.index : -1;
             if (sec.valid) previousType = sec.type;
             previousPos = pos;
@@ -268,7 +270,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         fx += impact.process() + crash.process() + downlifter.process();
-        fx += riser.process (rise, riserRootHz, riserRange, riserLevel);
+        fx += riser.process (rise, riserRootHz * riseKey, riserRange, riserLevel);
         for (auto& s : snares) fx += s.process();
 
         fx *= level;

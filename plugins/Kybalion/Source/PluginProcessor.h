@@ -49,6 +49,7 @@ public:
     // Read by the UI.
     std::atomic<double> currentBpm { 138.0 };
     std::atomic<int> gateStep { 0 };
+    std::atomic<int> currentFill { 0 };   // TranceGate::Fill playing now (0 = none)
     std::atomic<float> duckGain { 1.0f };
     std::atomic<float> duckMs { 1.0e9f };      // time since the last duck trigger
     std::atomic<bool> sidechainConnected { false };
@@ -78,6 +79,7 @@ private:
     std::array<std::atomic<float>*, Params::numSteps> stepParams {};
     juce::SmoothedValue<float> outGain;
     double position = 0.0, sampleRate = 44100.0;
+    int fillNow = 0;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (KybalionProcessor)
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KybalionProcessor)

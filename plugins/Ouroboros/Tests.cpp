@@ -183,6 +183,23 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Final-drop key change");
+    {
+        auto p = std::make_unique<OuroborosProcessor>();
+        p->setMap (arrangement::fromTemplate (arrangement::templates()[1]));   // two breakdowns, two drops
+        set (*p, OuroborosProcessor::liftId, 2.0f);
+        p->setMap (p->getMap());   // publishes
+        suite::SectionMap shared;
+        check (suite::SectionBus::read (shared) && shared.finalLift == 2, "the key change is shared with the suite");
+        const auto last = shared.lastDropIndex();
+        check (last >= 0 && shared.keyShiftOf (last) == 2 && shared.keyShiftOf (last - 1) == 0 && shared.keyShiftOf (shared.count - 1) == 2,
+               "it starts at the last drop and carries on to the end");
+        set (*p, OuroborosProcessor::liftId, 0.0f);
+        p->setMap (p->getMap());
+        check (suite::SectionBus::read (shared) && shared.finalLift == 0, "and can be turned off");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Suite overview");
     {
         using namespace suite;

@@ -591,6 +591,7 @@ namespace chords
             for (int k = 0; k < i; ++k) if (map.sections[(size_t) k].type == map.sections[(size_t) i].type) ++earlierSame;
             const auto lift = part == SongPart::Lead && patterns.liftLaterDrops && map.sections[(size_t) i].type == suite::SectionType::Drop
                               && earlierSame > 0 ? 12 : 0;
+            const auto keyChange = map.keyShiftOf (i);   // final-drop key change: everything from the last drop on moves up
 
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
@@ -599,7 +600,7 @@ namespace chords
                 {
                     const auto start = offset + n.start;
                     if (start >= endQ - 1.0e-9) continue;
-                    out.push_back ({ n.pitch + lift, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                    out.push_back ({ n.pitch + lift + keyChange, start, std::min (n.length, endQ - start - 0.01), n.velocity });
                 }
         }
         return out;

@@ -97,6 +97,24 @@ int main (int argc, char** argv)
         check (second > 1.2f * first, "the second drop's impact is bigger (" + juce::String (first, 2) + " -> " + juce::String (second, 2) + ")");
     }
 
+    section ("Final-drop key change");
+    {
+        auto m = testMap();   // one drop, so it's the last: +2 semitones
+        m.finalLift = 2;
+        suite::SectionBus::publish (m);
+        auto p = make();
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 13.0, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        const auto b = bandLevel (audio, 61.74f, 12.15, 12.65), a = bandLevel (audio, 55.0f, 12.15, 12.65);
+        check (b > 0.1f && b > 2.0f * a, "the impact into the lifted drop lands on B1, two semitones up (" + juce::String (b, 3) + " vs "
+                   + juce::String (a, 3) + " at A)");
+        suite::SectionBus::publish (testMap());
+    }
+
     section ("Gap before the drop");
     {
         suite::SectionBus::publish (testMap());

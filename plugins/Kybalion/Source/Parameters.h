@@ -34,6 +34,13 @@ namespace Params
     }
 
     // ---- Polarity (ducking) ----
+    namespace Fill
+    {
+        inline const juce::String when  { "g_fills" };       // Off, before drops, before drops & breakdowns
+        inline const juce::String style { "g_fillstyle" };   // Auto, Stutter, Half-time, Gap, Roll
+        enum When { Off = 0, BeforeDrops, BeforeDropsAndBreakdowns };
+    }
+
     namespace Duck
     {
         inline const juce::String source    { "d_source" };

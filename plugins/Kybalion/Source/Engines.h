@@ -56,7 +56,24 @@ public:
         step = (int) (((index % Params::numSteps) + Params::numSteps) % Params::numSteps);
     }
 
-    void process (double posQ, float& left, float& right) noexcept
+    enum Fill { NoFill = 0, Stutter, HalfTime, Gap, Roll };
+
+    /** Fill shapes for the last bar before a drop or breakdown; `f` = quarters into the fill bar. */
+    static float fillTarget (int fill, double f, double barQ) noexcept
+    {
+        auto gateAt = [f] (double stepQ, double length) { return std::fmod (f, stepQ) < stepQ * length ? 1.0f : 0.0f; };
+        switch (fill)
+        {
+            case Stutter:  return gateAt (0.125, 0.45);                       // 1/32 chops
+            case HalfTime: return gateAt (1.0, 0.5);                          // half a beat on, half off
+            case Gap:      return f < barQ - 1.0 ? 1.0f : 0.0f;               // open, then silence on the last beat
+            case Roll:     return gateAt (f < 0.5 * barQ ? 0.5 : f < 0.75 * barQ ? 0.25 : 0.125, 0.5);   // 1/8 -> 1/16 -> 1/32
+            default:       return 1.0f;
+        }
+    }
+
+    /** `fill` (with `fillQ` quarters into the fill bar) replaces the pattern for that bar. */
+    void process (double posQ, float& left, float& right, int fill = NoFill, double fillQ = 0.0, double barQ = 4.0) noexcept
     {
         int step; double phase;
         locate (posQ, step, phase);
@@ -66,7 +83,8 @@ public:
         for (size_t c = 0; c < 2; ++c)
         {
             const auto idx = (step + (c == 1 ? s.stereoOffset : 0)) % Params::numSteps;
-            const auto target = phase < (double) s.length ? s.steps[(size_t) idx] : 0.0f;
+            const auto target = fill != NoFill ? fillTarget (fill, fillQ, barQ)
+                              : phase < (double) s.length ? s.steps[(size_t) idx] : 0.0f;
             env[c] += (target > env[c] ? attackCoeff : releaseCoeff) * (target - env[c]);
 
             auto x = *ch[c];
