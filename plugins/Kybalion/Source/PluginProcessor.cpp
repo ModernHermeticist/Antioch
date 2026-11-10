@@ -105,6 +105,12 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const auto nudgeQ = value (Duck::nudge) / msPerQ;
     outGain.setTargetValue (juce::Decibels::decibelsToGain (value (output)));
 
+    const auto haveSections = sections.refresh();
+    const auto followSections = value (Params::follow) > 0.5f && haveSections && host.playing && host.hasPpq;
+    const auto barQ = host.barQuarters();
+    int sectionNow = -1;
+    bool pausedNow = false;
+
     auto* left = mainOut.getWritePointer (0);
     auto* right = mainOut.getNumChannels() > 1 ? mainOut.getWritePointer (1) : nullptr;
     float lastMs = 1.0e9f;
@@ -132,6 +138,17 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             if (phase < 0.0) phase += duckRateQ;
             ms = (float) (phase * msPerQ);
         }
+        // Ouroboros: no kick in breakdowns and builds, so don't duck there.
+        if (followSections)
+        {
+            const auto sec = sections.locate (position, barQ);
+            sectionNow = sec.valid ? (int) sec.type : -1;
+            if (sec.valid && suite::isKicklessSection (sec.type))
+            {
+                ms = 1.0e9f;   // far past the release: no gain reduction
+                pausedNow = true;
+            }
+        }
         lastMs = ms;
 
         if (duckEnabled)
@@ -147,6 +164,8 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     gateStep.store (gate.getCurrentStep());
     duckGain.store (duckEnabled ? ducker.getGain() : 1.0f);
     duckMs.store (lastMs);
+    currentSection.store (haveSections ? sectionNow : -1);
+    autoBreakdown.store (pausedNow);
 }
 
 void KybalionProcessor::setParam (const juce::String& id, float plainValue)

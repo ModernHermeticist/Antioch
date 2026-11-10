@@ -64,6 +64,7 @@ namespace Params
 
         layout.add (std::make_unique<AudioParameterChoice> (id (rootNote), "Root Key", suite::music::noteNames(), 9));
         layout.add (std::make_unique<AudioParameterBool> (id (followKey), "Follow Key", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (follow), "Follow Ouroboros", true));
         layout.add (std::make_unique<AudioParameterFloat> (id (output), "Output", NormalisableRange<float> (-24.0f, 12.0f), 0.0f,
                                                            Attr().withStringFromValueFunction ([] (float v, int)
                                                            {

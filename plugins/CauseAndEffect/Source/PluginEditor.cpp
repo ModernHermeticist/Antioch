@@ -51,9 +51,10 @@ void BuildMeter::paint (juce::Graphics& g)
                 arcBounds.withSizeKeepingCentre (arcBounds.getWidth(), 50.0f).translated (0.0f, -6.0f),
                 juce::Justification::centred);
 
-    juce::String status = "READY";
+    juce::String status = processor.ouroborosFound.load() ? "READY  (following Ouroboros)" : "READY";
     if (progress >= 0.0)
-        status = "BUILDING  bar " + juce::String (juce::jmin ((int) lengthBars, (int) (progress * lengthBars) + 1))
+        status = juce::String (processor.sectionBuild.load() ? "OUROBOROS BUILD  bar " : "BUILDING  bar ")
+                 + juce::String (juce::jmin ((int) lengthBars, (int) (progress * lengthBars) + 1))
                  + " / " + juce::String ((int) lengthBars);
     else if (level > 0.001f)
         status = "MANUAL BUILD";
@@ -81,6 +82,7 @@ CauseEffectEditor::CauseEffectEditor (CauseEffectProcessor& p)
       curve (p.apvts, Params::curve, "Curve", Colours::brass),
       trigger (p.apvts, Params::trigger, "TRIGGER BUILD", Colours::ember),
       dropCut (p.apvts, Params::dropCut, "Cut tails at drop", Colours::brass),
+      followSections (p.apvts, Params::follow, "Follow Ouroboros", Colours::ember),
       length (p.apvts, Params::length, "Timed length"),
       filterMax (p.apvts, Params::filterMax, "Sweep to", Colours::verdigris),
       filterRes (p.apvts, Params::filterRes, "Resonance", Colours::verdigris),
@@ -98,7 +100,7 @@ CauseEffectEditor::CauseEffectEditor (CauseEffectProcessor& p)
 {
     setLookAndFeel (&lnf);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &meter, &buildKnob, &curve, &trigger, &dropCut, &length,
+    for (auto* c : std::initializer_list<juce::Component*> { &meter, &buildKnob, &curve, &trigger, &dropCut, &followSections, &length,
                                                              &filterMax, &filterRes, &wash, &washDecay, &noise, &riser,
                                                              &riserRange, &stutter, &stutterMax, &widen, &rootChoice,
                                                              &followKey, &keyStatus, &output, &hint })
@@ -167,7 +169,9 @@ void CauseEffectEditor::resized()
     auto controls = b.removeFromTop (130);
     layoutRow (controls, { &buildKnob, &length, &curve });
     b.removeFromTop (6);
-    dropCut.setBounds (b.removeFromTop (30).reduced (70, 0));
+    auto toggles = b.removeFromTop (30);
+    dropCut.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2).reduced (4, 0));
+    followSections.setBounds (toggles.reduced (4, 0));
     b.removeFromTop (8);
     hint.setBounds (b);
 

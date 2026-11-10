@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SectionBus.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -10,6 +11,7 @@ namespace
 {
     std::unique_ptr<AntiochProcessor> make()
     {
+        suite::SectionBus::withdraw();     // no leftover arrangement from another test
         auto p = std::make_unique<AntiochProcessor>();
         set (*p, Params::followKey, 0.0f); // tests are independent of other plugins
         prepare (*p);
@@ -187,6 +189,39 @@ int main (int argc, char** argv)
 
         check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f, "silent before the throw window");
         check (peakBetween (audio, 3.9, 4.6) > 0.05f, "throw fires at the phrase end");
+    }
+
+    section ("Auto throw at Ouroboros section ends");
+    {
+        suite::SectionMap map;   // sections of 2 and 3 bars at 120 BPM (2 s per bar)
+        map.totalBars = 5; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Drop };
+
+        auto p = make();
+        soloSection (*p, 0.0f, 0.0f, 1.0f);
+        set (*p, Params::Throw::autoMode, (float) Params::Throw::autoAtSectionEnds);
+        set (*p, Params::Throw::autoLen, 2.0f);    // last beat
+        set (*p, Params::Throw::feedback, 0.0f);
+        suite::SectionBus::publish (map);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::Random rng (11);
+        juce::AudioBuffer<float> audio;
+        render (*p, 10.6, [&] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                    b.setSample (ch, i, 0.3f * (rng.nextFloat() * 2.0f - 1.0f));
+        }, &audio, &head);
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+
+        check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f, "silent through the first section");
+        check (peakBetween (audio, 3.9, 4.6) > 0.05f, "throws at the end of the 2-bar Groove (4 s)");
+        check (peakBetween (audio, 4.8, 9.4) < 1.0e-3f, "silent through the Drop until its end");
+        check (peakBetween (audio, 9.9, 10.6) > 0.05f, "throws at the end of the Drop (10 s)");
     }
 
     section ("Key follow via KeyBus");

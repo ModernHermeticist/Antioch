@@ -73,6 +73,7 @@ namespace Params
 
         layout.add (std::make_unique<AudioParameterBool> (id (gateOn), "Gate On", true));
         layout.add (std::make_unique<AudioParameterBool> (id (duckOn), "Duck On", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (follow), "Follow Ouroboros", true));
         layout.add (floatParam (output, "Output", { -24.0f, 12.0f }, 0.0f,
                                 Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));
 

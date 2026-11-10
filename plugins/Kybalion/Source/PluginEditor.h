@@ -51,7 +51,8 @@ private:
     KybalionProcessor& processor;
     suite::ui::LookAndFeel lnf;
 
-    suite::ui::Toggle gateOn, duckOn;
+    suite::ui::Toggle gateOn, duckOn, followSections;
+    juce::Label sectionStatus;
     suite::ui::Knob output;
     juce::Label bpmLabel;
     suite::ui::TabBar tabs;

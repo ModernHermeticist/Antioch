@@ -295,8 +295,8 @@ public:
                                                                  &pingPong, &drive, &lowCut, &highCut, &duck, &toVerb })
             addAndMakeVisible (c);
 
-        hint.setText ("Auto Throw catches the end of every phrase while FL is playing. "
-                      "Or automate the Throw switch for one-off throws.",
+        hint.setText ("Auto Throw catches the end of every phrase while FL is playing; 'At section ends' follows "
+                      "Ouroboros. Or automate the Throw switch for one-off throws.",
                       juce::dontSendNotification);
         hint.setFont (juce::FontOptions (12.0f));
         hint.setJustificationType (juce::Justification::topLeft);

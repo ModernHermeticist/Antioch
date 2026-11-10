@@ -159,6 +159,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     : AudioProcessorEditor (p), processor (p),
       gateOn (p.apvts, Params::gateOn, "RHYTHM ON", gateColour),
       duckOn (p.apvts, Params::duckOn, "POLARITY ON", duckColour),
+      followSections (p.apvts, Params::follow, "Follow Ouroboros", Colours::ember),
       output (p.apvts, Params::output, "Output", Colours::text),
       tabs ({ "RHYTHM  (gate)", "POLARITY  (duck)" }, { gateColour, duckColour }),
       grid (p),
@@ -208,7 +209,10 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
                                                              &breakdown, &sourceStatus })
         duckPanel.addAndMakeVisible (c);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &gateOn, &duckOn, &output, &bpmLabel, &tabs, &gatePanel, &duckPanel })
+    sectionStatus.setFont (juce::FontOptions (12.0f));
+    sectionStatus.setJustificationType (juce::Justification::centredLeft);
+    for (auto* c : std::initializer_list<juce::Component*> { &gateOn, &duckOn, &followSections, &sectionStatus, &output, &bpmLabel,
+                                                             &tabs, &gatePanel, &duckPanel })
         addAndMakeVisible (c);
 
     tabs.onChange = [this] (int i) { gatePanel.setVisible (i == 0); duckPanel.setVisible (i == 1); };
@@ -231,6 +235,13 @@ void KybalionEditor::timerCallback()
     bpmLabel.setText (juce::String (processor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
     grid.refresh();
     duckView.repaint();
+
+    const auto sec = processor.currentSection.load();
+    sectionStatus.setColour (juce::Label::textColourId, processor.autoBreakdown.load() ? Colours::ember : Colours::dimText);
+    sectionStatus.setText (sec < 0 ? juce::String()
+                                   : juce::String ("Section: ") + suite::sectionName ((suite::SectionType) sec)
+                                         + (processor.autoBreakdown.load() ? juce::String::fromUTF8 (" Â· ducking paused") : juce::String()),
+                           juce::dontSendNotification);
 
     const auto wantsSidechain = (int) processor.apvts.getRawParameterValue (Params::Duck::source)->load() == Params::Duck::Sidechain;
     const auto connected = processor.sidechainConnected.load();
@@ -276,6 +287,8 @@ void KybalionEditor::resized()
     auto m = masterArea.reduced (14, 8).withTrimmedTop (10);
     gateOn.setBounds (m.removeFromLeft (150).withSizeKeepingCentre (140, 30));
     duckOn.setBounds (m.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+    followSections.setBounds (m.removeFromLeft (170).withSizeKeepingCentre (160, 30));
+    sectionStatus.setBounds (m.removeFromLeft (360).withTrimmedLeft (10));
     output.setBounds (m.removeFromRight (120).withTrimmedTop (-14).withTrimmedBottom (-4));
     output.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 16);
     output.maxHeight = 60;

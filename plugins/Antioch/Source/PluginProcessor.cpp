@@ -159,10 +159,16 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     }
 
     const auto manualThrow = boolParam (Throw::on)->get();
-    const auto autoBars = Throw::autoBars (choiceParam (Throw::autoMode)->getIndex());
+    const auto autoIndex = choiceParam (Throw::autoMode)->getIndex();
+    const auto autoBars = Throw::autoBars (autoIndex);
     const auto autoOn = autoBars > 0 && host.playing && host.hasPpq;
+    const auto haveSections = sections.refresh();
+    ouroborosFound.store (haveSections);
+    const auto sectionThrows = autoIndex == Throw::autoAtSectionEnds && haveSections && host.playing && host.hasPpq;
+    const auto barQ = host.barQuarters();
     const auto phraseQ = autoBars * host.barQuarters();
-    const auto windowQ = juce::jmin (phraseQ, Throw::autoLengthQuarters (choiceParam (Throw::autoLen)->getIndex()));
+    const auto lengthQ = Throw::autoLengthQuarters (choiceParam (Throw::autoLen)->getIndex());
+    const auto windowQ = autoOn ? juce::jmin (phraseQ, lengthQ) : lengthQ;
     const auto qPerSample = host.quartersPerSample (sampleRate);
 
     // ---- Levels ----
@@ -214,6 +220,13 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             auto pos = std::fmod (host.ppq + qPerSample * n, phraseQ);
             if (pos < 0.0) pos += phraseQ;
             gateOpen = pos >= phraseQ - windowQ;
+        }
+        if (sectionThrows && ! gateOpen)
+        {
+            // Throw the last part of every section (into the next one), as marked in Ouroboros.
+            const auto posQ = host.ppq + qPerSample * n;
+            const auto sec = sections.locate (posQ, barQ);
+            gateOpen = sec.valid && posQ >= sec.endQ - juce::jmin (windowQ, sec.endQ - sec.startQ);
         }
         float tL, tR;
         throwDelay.process (inL, inR, gateOpen, tL, tR);

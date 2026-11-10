@@ -27,6 +27,7 @@ namespace Params
     inline const juce::String rootNote   { "root" };
     inline const juce::String followKey  { "followkey" };
     inline const juce::String output     { "output" };
+    inline const juce::String follow     { "follow" };     // follow Ouroboros Build sections
 
     int lengthBars (int index);
     int riserOctaves (int index);

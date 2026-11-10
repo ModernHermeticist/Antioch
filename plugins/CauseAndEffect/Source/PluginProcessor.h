@@ -4,6 +4,7 @@
 #include "BuildClock.h"
 #include "Parameters.h"
 #include "SuiteDSP.h"
+#include "SectionBus.h"
 
 class CauseEffectProcessor : public juce::AudioProcessor
 {
@@ -45,12 +46,17 @@ public:
     std::atomic<int> effectiveRoot { 9 };
     std::atomic<bool> followingBus { false };
     std::atomic<int> busScale { 0 };
+    std::atomic<bool> sectionBuild { false };   // the current build comes from an Ouroboros Build section
+    std::atomic<bool> ouroborosFound { false };
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     int choice (const juce::String& id) const { return (int) value (id); }
 
     BuildClock clock;
+    suite::SectionFollower sections;
+    bool inSectionBuild = false;
+    double sectionBuildEndQ = 0.0;
     suite::Svf hpL, hpR, noiseBpL, noiseBpR, riserLpL, riserLpR, washHpL, washHpR;
     suite::FdnReverb washVerb;
     suite::Noise noiseL { 0x1234567u }, noiseR { 0x7654321u };

@@ -78,8 +78,9 @@ namespace Params
         inline const juce::String duck     { "th_duck" };
         inline const juce::String toVerb   { "th_verb" };
 
-        /** Auto-throw phrase length in bars for each choice (0 = off). */
+        /** Auto-throw phrase length in bars for each choice (0 = off or section mode). */
         int autoBars (int index);
+        constexpr int autoAtSectionEnds = 5;   // choice index: throw at the end of every Ouroboros section
         /** Auto-throw window length in quarter notes for each choice. */
         double autoLengthQuarters (int index);
     }

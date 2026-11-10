@@ -47,6 +47,7 @@ void CauseEffectProcessor::prepareToPlay (double newSampleRate, int)
     stutterGain = tailGain = 1.0f;
     tailFading = false;
     manualArmed = false;
+    inSectionBuild = false;
 }
 
 void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -63,6 +64,11 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const auto sr = (float) sampleRate;
     const auto host = suite::HostInfo::read (getPlayHead());
     clock.beginBlock (host, sampleRate, Params::lengthBars (choice (Params::length)));
+    const auto haveSections = sections.refresh();
+    const auto followSections = value (Params::follow) > 0.5f && haveSections && host.playing && host.hasPpq;
+    ouroborosFound.store (sections.isAvailable());
+    const auto barQ = host.barQuarters();
+    double sectionProgress = -1.0, sectionBars = 0.0;
 
     // ---- Key ----
     auto root = choice (rootNote);
@@ -101,7 +107,32 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         // ---- Build amount: manual knob or timed trigger, whichever is higher ----
         bool drop = false;
+        const auto posQ = clock.getPosition();
         const auto ramp = clock.next (trig, drop);
+
+        // Ouroboros: ramp across a Build section and drop when playback crosses its end.
+        auto sectionRamp = 0.0f;
+        if (followSections)
+        {
+            const auto sec = sections.locate (posQ, barQ);
+            const auto building = sec.valid && sec.type == suite::SectionType::Build;
+            if (building)
+            {
+                sectionRamp = (float) juce::jlimit (0.0, 1.0, sec.progress (posQ));
+                sectionProgress = sec.progress (posQ);
+                sectionBars = (sec.endQ - sec.startQ) / barQ;
+                sectionBuildEndQ = sec.endQ;
+            }
+            else if (inSectionBuild && posQ >= sectionBuildEndQ - 1.0e-6 && posQ < sectionBuildEndQ + barQ)
+            {
+                drop = true;   // crossed the end of the build (not a jump elsewhere)
+            }
+            inSectionBuild = building;
+        }
+        else
+        {
+            inSectionBuild = false;
+        }
         const auto m = manual.getNextValue();
 
         // Manual automation coming back down from a real build to ~0 is also a drop.
@@ -113,7 +144,7 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             drop = true;
         }
 
-        const auto raw = juce::jmax (m, ramp);
+        const auto raw = juce::jmax (m, ramp, sectionRamp);
         const auto target = raw > 0.0f ? std::pow (raw, curveExp) : 0.0f;
         build += buildSmoothing * (target - build);
         const auto b = build;
@@ -235,8 +266,9 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     buildLevel.store (build);
-    progress.store (clock.getProgress());
-    lengthBars.store (clock.getLengthBars());
+    sectionBuild.store (sectionProgress >= 0.0);
+    progress.store (sectionProgress >= 0.0 ? sectionProgress : clock.getProgress());
+    lengthBars.store (sectionProgress >= 0.0 ? sectionBars : clock.getLengthBars());
 }
 
 juce::AudioProcessorEditor* CauseEffectProcessor::createEditor()

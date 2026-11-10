@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "SectionBus.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -10,6 +11,7 @@ namespace
 {
     std::unique_ptr<KybalionProcessor> make (bool gate, bool duck)
     {
+        suite::SectionBus::withdraw();   // no leftover arrangement from another test
         auto p = std::make_unique<KybalionProcessor>();
         set (*p, Params::gateOn, gate ? 1.0f : 0.0f);
         set (*p, Params::duckOn, duck ? 1.0f : 0.0f);
@@ -204,6 +206,28 @@ int main (int argc, char** argv)
         check (peakBetween (out, 0.31, 0.33) < 0.15f, "ducks on the first kick");
         check (peakBetween (out, 0.7, 0.88) > 0.48f, "recovers between kicks");
         check (peakBetween (out, 0.91, 0.93) < 0.15f, "ducks again on the second kick");
+    }
+
+    section ("Ouroboros: no ducking in breakdowns and builds");
+    {
+        suite::SectionMap map;   // Groove 1-2, Breakdown 3-4, Drop 5-6 (120 BPM: 2 s per bar)
+        map.totalBars = 6; map.count = 3;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Drop };
+
+        auto p = make (false, true);
+        p->applyDuckPreset (0);
+        suite::SectionBus::publish (map);
+        head.ppq = 0.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 11.0, tone (110.0f), &audio, &head);
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (peakBetween (audio, 2.003, 2.02) < 0.1f, "ducks on the beat in the Groove");
+        check (peakBetween (audio, 5.003, 5.02) > 0.48f, "no ducking on the beat in the Breakdown");
+        check (peakBetween (audio, 9.003, 9.02) < 0.1f, "ducking returns in the Drop");
     }
 
     section ("Presets and state");

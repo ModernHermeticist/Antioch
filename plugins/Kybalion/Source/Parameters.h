@@ -11,6 +11,7 @@ namespace Params
     inline const juce::String gateOn   { "gate_on" };
     inline const juce::String duckOn   { "duck_on" };
     inline const juce::String output   { "output" };
+    inline const juce::String follow   { "follow" };   // Breakdown during Ouroboros breakdown/build sections
 
     // ---- Rhythm (gate) ----
     namespace Gate

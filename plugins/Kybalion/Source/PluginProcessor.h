@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Engines.h"
+#include "SectionBus.h"
 
 class KybalionProcessor : public juce::AudioProcessor
 {
@@ -46,6 +47,8 @@ public:
     std::atomic<float> duckGain { 1.0f };
     std::atomic<float> duckMs { 1.0e9f };      // time since the last duck trigger
     std::atomic<bool> sidechainConnected { false };
+    std::atomic<int> currentSection { -1 };      // SectionType from Ouroboros, -1 if none
+    std::atomic<bool> autoBreakdown { false };   // ducking paused because of the section
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
@@ -54,6 +57,7 @@ private:
     TranceGate gate;
     Ducker ducker;
     SidechainTrigger scTrigger;
+    suite::SectionFollower sections;
     std::array<std::atomic<float>*, Params::numSteps> stepParams {};
     juce::SmoothedValue<float> outGain;
     double position = 0.0, sampleRate = 44100.0;

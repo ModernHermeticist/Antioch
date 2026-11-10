@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "KeyBus.h"
+#include "SectionBus.h"
 #include "Music.h"
 #include "TestUtils.h"
 
@@ -11,6 +12,7 @@ namespace
 {
     std::unique_ptr<CauseEffectProcessor> make()
     {
+        suite::SectionBus::withdraw();   // no leftover arrangement from another test
         auto p = std::make_unique<CauseEffectProcessor>();
         set (*p, Params::followKey, 0.0f);
         prepare (*p);
@@ -209,6 +211,53 @@ int main (int argc, char** argv)
         });
         check (s.finite, "output is finite");
         check (s.peak < 12.0f, "bounded peak (" + juce::String (s.peak, 2) + ")");
+    }
+
+    section ("Ouroboros: builds follow the arrangement");
+    {
+        suite::SectionMap map;   // 16 bars: Groove 1-4, Breakdown 5-8, Build 9-12, Drop 13-16
+        map.totalBars = 16;
+        map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 5, suite::SectionType::Breakdown };
+        map.sections[2] = { 9, suite::SectionType::Build };
+        map.sections[3] = { 13, suite::SectionType::Drop };
+
+        auto p = make();
+        suite::SectionBus::publish (map);
+        FakePlayHead head;   // 138 BPM
+        p->setPlayHead (&head);
+        const auto barSec = 4.0 * 60.0 / head.bpm;
+        float inBreakdown = -1.0f, midBuild = -1.0f, lateBuild = -1.0f;
+        int dropsBefore = -1;
+        juce::AudioBuffer<float> audio;
+        render (*p, 15.0 * barSec, music, &audio, &head, [&] (int64_t pos)
+        {
+            const auto t = (double) pos / sampleRate;
+            if (inBreakdown < 0.0f && t >= 6.0 * barSec) inBreakdown = p->buildLevel.load();
+            if (midBuild < 0.0f && t >= 10.0 * barSec) { midBuild = p->buildLevel.load(); dropsBefore = p->dropCount.load(); }
+            if (lateBuild < 0.0f && t >= 11.9 * barSec) lateBuild = p->buildLevel.load();
+        });
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+
+        check (inBreakdown < 0.001f, "nothing happens in the breakdown");
+        check (midBuild > 0.15f && midBuild < 0.4f, "half-way through the Build section (" + juce::String (midBuild, 3) + ")");
+        check (lateBuild > 0.9f, "nearly full at the end of the build (" + juce::String (lateBuild, 3) + ")");
+        check (dropsBefore == 0 && p->dropCount.load() == 1, "drops exactly once, on the Drop section");
+        check (p->buildLevel.load() < 0.001f, "clean in the drop");
+        check (lowBandRms (audio, 13.5 * barSec, 14.5 * barSec) > 0.9f * lowBandRms (audio, 1.0 * barSec, 2.0 * barSec), "bass is back in the drop");
+
+        auto q = make();
+        set (*q, Params::follow, 0.0f);
+        suite::SectionBus::publish (map);
+        FakePlayHead head2;
+        q->setPlayHead (&head2);
+        float level = -1.0f;
+        render (*q, 11.0 * barSec, music, nullptr, &head2, [&] (int64_t pos) { if ((double) pos / sampleRate >= 10.5 * barSec && level < 0.0f) level = q->buildLevel.load(); });
+        q->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (level < 0.001f, "Follow Ouroboros off: sections are ignored");
     }
 
     section ("BuildClock edge cases");

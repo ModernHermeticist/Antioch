@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Engines.h"
 #include "KeyBus.h"
+#include "SectionBus.h"
 #include "Parameters.h"
 
 class AntiochProcessor : public juce::AudioProcessor
@@ -44,6 +45,7 @@ public:
     std::atomic<int> busScale { 0 };
     std::atomic<float> throwGate { 0.0f };     // 0..1, lights the THROW button
     std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
+    std::atomic<bool> ouroborosFound { false };
 
 private:
     juce::AudioParameterBool* boolParam (const juce::String& id);
@@ -68,6 +70,7 @@ private:
     EuphoricReverb reverb;
     ThrowDelay throwDelay;
     suite::EnvelopeFollower dryEnvelope;
+    suite::SectionFollower sections;
 
     juce::SmoothedValue<float> dryGain, echoGain, verbGain, throwGain, outGain, echoSend, throwSend, verbDuck, throwDuck;
     double sampleRate = 44100.0;

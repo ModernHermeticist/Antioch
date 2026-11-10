@@ -38,7 +38,7 @@ private:
 
     BuildMeter meter;
     suite::ui::Knob buildKnob, curve;
-    suite::ui::Toggle trigger, dropCut;
+    suite::ui::Toggle trigger, dropCut, followSections;
     suite::ui::Choice length;
 
     suite::ui::Knob filterMax, filterRes, wash, washDecay, noise, riser, stutter, widen, output;

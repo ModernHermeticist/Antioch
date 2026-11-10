@@ -83,13 +83,13 @@ namespace Params
 
     namespace Throw
     {
-        static const StringArray autoNames { "Off", "Every 2 bars", "Every 4 bars", "Every 8 bars", "Every 16 bars" };
+        static const StringArray autoNames { "Off", "Every 2 bars", "Every 4 bars", "Every 8 bars", "Every 16 bars", "At section ends" };
         static const StringArray autoLenNames { "Last 1/16", "Last 1/8", "Last beat", "Last 2 beats", "Last bar" };
 
         int autoBars (int index)
         {
-            static const int bars[] = { 0, 2, 4, 8, 16 };
-            return bars[jlimit (0, 4, index)];
+            static const int bars[] = { 0, 2, 4, 8, 16, 0 };   // "At section ends" (Ouroboros) has no fixed length
+            return bars[jlimit (0, 5, index)];
         }
 
         double autoLengthQuarters (int index)

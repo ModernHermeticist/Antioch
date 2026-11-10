@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Six VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Seven VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. All three share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -12,6 +12,7 @@ in **Correspondence**, and the others follow it.
 | **Kybalion**: trance gate + smart ducking | Drawing gate shapes in Gross Beat or Peak Controller, and sidechain/LFO Tool setups |
 | **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
 | **Mentalism**: mix assistant | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong |
+| **Ouroboros**: arrangement conductor | Automation clips that switch builds, ducking and throws on and off across the song |
 
 ## Correspondence: key and chord engine
 
@@ -169,6 +170,35 @@ track (or its loudest section) and read the numbers:
 
 **Reset** starts a new measurement, for example after changing the mix.
 
+## Ouroboros: arrangement conductor
+
+![Ouroboros](docs/ouroboros.png)
+
+Map out your song once, and the rest of the suite follows it with no automation:
+
+| Section | Cause & Effect | Kybalion | Antioch |
+|---|---|---|---|
+| Build | Ramps the whole build across the section and drops exactly on its last bar | Stops ducking | Throws at its end (with *At section ends*) |
+| Breakdown | Nothing | Stops ducking (no kick) | Throws at its end |
+| Intro, Groove, Drop, Outro | Nothing | Ducks as usual | Throws at its end |
+
+- **Start from a template:** classic uplifting (208 bars), two breakdowns (232), radio
+  edit (88), or a short 16-bar loop for testing. Then edit it: drag section edges,
+  double-click to split, and right-click to change a section's type or delete it.
+- **Mark at playhead:** play the song and click INTRO, BREAKDOWN, BUILD, DROP and so on
+  as each section arrives. Each new section snaps to the 1, 4, 8 or 16-bar grid.
+- **Now playing** shows the current section, the bar within it, and what comes next
+  ("Next: Drop in 8 bars").
+- Each follower has a **Follow Ouroboros** switch. For Antioch, it's the
+  **Auto Throw → At section ends** option.
+- The arrangement is saved with the project. Put Ouroboros on any insert (the master is
+  fine): it doesn't touch the audio.
+
+How it works: Ouroboros shares the section map, not the current section, through the same
+kind of shared memory as the key. Each plugin then works out the section from its own copy
+of FL's transport, so every reaction lands exactly on the bar line, whatever order FL
+processes the tracks in.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -184,10 +214,11 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the six `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the seven `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
 4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
-   and Mentalism last on the master.
+   and Mentalism last on the master,
+   and Ouroboros on any insert.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
    sidechain, then select that input in the plugin's wrapper settings.
 
@@ -202,7 +233,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -212,7 +243,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -237,6 +268,11 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   the true peak catches an inter-sample peak that sample-peak metering misses by 3 dB,
   correlation, band detection, the advice rules, reference-track analysis and its
   save/restore, and bit-identical pass-through.
+- **Ouroboros:** section editing (insert, retype, move, delete, resize, snap), the map's
+  trip through shared memory, section lookup in other time signatures, marking at the
+  playhead, and save/restore. The followers' own tests check that builds ramp and drop on
+  the Build section, that ducking pauses in breakdowns, and that throws land on section
+  ends.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -246,7 +282,9 @@ They also write example WAVs and UI snapshots to `test-output/`.
 shared/                  code used by every plugin
   SuiteDSP.h             delay line, pitch shifter, resonator, filters, EQ, crossover, FDN reverb, oscillators
   Spectrum.h             audio-thread tap and real-time spectrum display
-  KeyBus.*               cross-plugin key broadcast (named shared memory)
+  SharedMemory.*         named shared memory block (Windows/macOS/Linux)
+  KeyBus.*               cross-plugin key broadcast
+  SectionBus.*           cross-plugin arrangement broadcast + SectionFollower helper
   Music.h                scales, note names, tempo divisions
   HostInfo.h             tempo/position/time-signature snapshot from the host
   SuiteUI.*              shared look-and-feel, knobs, toggles, tabs
@@ -257,7 +295,8 @@ plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), previe
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
 plugins/Mentalism/       Analysis.h (BS.1770 loudness, true peak, stereo, bands), Advisor.h, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all six
+plugins/Ouroboros/       Arrangement.h (section editing, templates), timeline editor, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all seven
 ```
 
 ## Licence note
