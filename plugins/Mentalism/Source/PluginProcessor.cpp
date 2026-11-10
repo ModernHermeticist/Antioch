@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
+#include "TargetBus.h"
 
 //==============================================================================
 ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::atomic<bool>* cancel)
@@ -54,10 +55,21 @@ MentalismProcessor::MentalismProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "MentalismState", Params::createLayout())
 {
+    timerCallback();
+    startTimerHz (4);
+}
+
+void MentalismProcessor::timerCallback()
+{
+    // Tell Lapis (and anything else listening) which loudness target we're measuring against.
+    const auto r = report();
+    suite::TargetBus::publish (r.targetLufs, r.ceiling);
 }
 
 MentalismProcessor::~MentalismProcessor()
 {
+    stopTimer();
+    suite::TargetBus::withdraw();
     cancelLoad.store (true);
     if (loader.joinable())
         loader.join();

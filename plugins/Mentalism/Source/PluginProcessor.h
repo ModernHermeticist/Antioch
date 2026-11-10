@@ -18,7 +18,7 @@ struct ReferenceProfile
     static ReferenceProfile analyse (const juce::File&, const std::atomic<bool>* cancel = nullptr);
 };
 
-class MentalismProcessor : public juce::AudioProcessor
+class MentalismProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     MentalismProcessor();
@@ -79,6 +79,8 @@ public:
     analysis::BandAnalyzer bands;
 
 private:
+    void timerCallback() override;
+
     std::atomic<bool> resetRequested { false }, loading { false }, cancelLoad { false };
     std::thread loader;
     mutable juce::CriticalSection referenceLock;
