@@ -76,6 +76,17 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
+    /** Arc match (Mentalism): a level change for one section of the map, kept with the
+        section's start bar so it only applies while the map still has that section there. */
+    struct ArcTrim { std::atomic<int> bar { -1 }; std::atomic<float> db { 0.0f }; };
+    std::array<ArcTrim, suite::SectionMap::maxSections> arcTrims;
+    float arcTrimFor (int index, int startBar) const
+    {
+        if (! juce::isPositiveAndBelow (index, (int) arcTrims.size())) return 0.0f;
+        const auto& t = arcTrims[(size_t) index];
+        return t.bar.load() == startBar ? t.db.load() : 0.0f;
+    }
+
     // For the UI
     std::atomic<int> currentType { -1 };
     std::atomic<bool> ramping { false }, gapping { false }, mapAvailable { false };
@@ -93,7 +104,7 @@ private:
     std::array<suite::Biquad, 2> carve;
     int carveBandNow = -1; float carveDepthNow = 0.0f;
     juce::SmoothedValue<float> trimGain;
-    float lastTrim = 0.0f;
+    float lastTrim = 0.0f, lastInputGain = 0.0f;
     std::array<suite::Svf, 2> lowCut, highCut;
     float levelDb = 0.0f, lowLog = 0.0f, highLog = 0.0f, gapGain = 1.0f;
     double sampleRate = 48000.0;

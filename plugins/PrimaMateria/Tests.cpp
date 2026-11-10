@@ -355,6 +355,52 @@ int main (int argc, char** argv)
                    + " dB); untouched, no change");
     }
 
+    section ("Arc match from Mentalism");
+    {
+        suite::FixBus::reset();
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 2;
+        m.sections[0] = { 1, T::Groove };
+        m.sections[1] = { 3, T::Drop };
+        auto p = make (0);
+        set (*p, pm::morphId, 0.0f);
+        auto level = [&] (PrimaMateriaProcessor& proc)
+        {
+            suite::SectionBus::publish (m);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            proc.setPlayHead (&head);
+            juce::AudioBuffer<float> a;
+            render (proc, 8.0, tone (440.0f), &a, &head);
+            proc.setPlayHead (nullptr);
+            return juce::Decibels::gainToDecibels (rmsBetween (a, 5.0, 7.5) / rmsBetween (a, 1.0, 3.5));
+        };
+        const auto usual = level (*p);
+        const auto seq = suite::FixBus::send (suite::Fix::ArcMatch, suite::packArc (1, -3.0f));
+        p->fixes->poll();
+        const auto trimmed = level (*p);
+        check (std::abs (usual) < 0.1f && std::abs (trimmed + 3.0f) < 0.2f && suite::FixBus::acknowledgements (seq) == 1,
+               "the drop (section 2) comes down 3 dB (" + juce::String (trimmed, 2) + " dB)");
+
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make (0);
+        set (*q, pm::morphId, 0.0f);
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (std::abs (level (*q) + 3.0f) < 0.2f, "it's saved with the project");
+
+        auto moved = m;
+        moved.sections[1].startBar = 2;   // the map changed: that section isn't there any more
+        std::swap (m, moved);
+        check (std::abs (level (*q)) < 0.1f, "and forgotten when the map moves the section");
+        std::swap (m, moved);
+
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (level (*p)) < 0.1f, "undo puts it back");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

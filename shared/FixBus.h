@@ -14,7 +14,7 @@
 
 namespace suite
 {
-    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage };
+    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch };
 
     /** Carve: which Prima Materia (low 12 bits of its instance id) and which octave band. */
     inline uint32_t packCarve (uint32_t instanceId, int band) noexcept { return ((uint32_t) (band & 0xf) << 12) | (instanceId & 0xfffu); }
@@ -29,6 +29,17 @@ namespace suite
     {
         lowDb = (float) (int8_t) (uint8_t) ((arg >> 8) & 0xff) / 4.0f;
         highDb = (float) (int8_t) (uint8_t) (arg & 0xff) / 4.0f;
+    }
+
+    /** ArcMatch: a section of the map (by index) and a level change in half dB. */
+    inline uint32_t packArc (int sectionIndex, float db) noexcept
+    {
+        return ((uint32_t) (sectionIndex & 0xff) << 8) | (uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 2.0f));
+    }
+    inline void unpackArc (uint32_t arg, int& sectionIndex, float& db) noexcept
+    {
+        sectionIndex = (int) ((arg >> 8) & 0xff);
+        db = (float) (int8_t) (uint8_t) (arg & 0xff) / 2.0f;
     }
 
     namespace FixBus
@@ -84,6 +95,11 @@ namespace suite
 
         int appliedCount() const noexcept { return applied; }
 
+        /** For fixes that aren't parameter moves: apply it and return how to undo it (or an
+            empty function if this plugin has nothing to do). Tried when the planner returns nothing. */
+        using Custom = std::function<std::function<void()> (Fix, uint32_t data)>;
+        void setCustom (Custom c) { custom = std::move (c); }
+
         /** Helper for planners: parameter `id` moved by `delta` in normalised (0..1) terms, as a plain value. */
         static Change nudge (juce::AudioProcessorValueTreeState& state, const juce::String& id, float delta)
         {
@@ -97,14 +113,23 @@ namespace suite
 
         // Each applied fix remembers, per parameter, the value before and after (last 16 fixes).
         struct Saved { juce::RangedAudioParameter* param; float before, after; };
-        struct Entry { uint32_t seq; std::vector<Saved> changes; };
+        struct Entry { uint32_t seq; std::vector<Saved> changes; std::function<void()> customUndo; };
 
         void apply (const FixBus::Message& m)
         {
             const auto changes = plan (m.fix, m.target);
             if (changes.empty())
+            {
+                if (custom == nullptr) return;
+                auto undoIt = custom (m.fix, m.target);
+                if (undoIt == nullptr) return;
+                history.push_back ({ m.seq, {}, std::move (undoIt) });
+                if (history.size() > 16) history.erase (history.begin());
+                ++applied;
+                FixBus::acknowledge (m.seq);
                 return;
-            Entry entry { m.seq, {} };
+            }
+            Entry entry { m.seq, {}, {} };
             for (const auto& c : changes)
                 if (auto* p = apvts.getParameter (c.paramId))
                 {
@@ -125,6 +150,7 @@ namespace suite
             for (auto it = history.begin(); it != history.end(); ++it)
                 if ((it->seq & 0xffffu) == (m.target & 0xffffu))
                 {
+                    if (it->customUndo != nullptr) it->customUndo();
                     for (auto c = it->changes.rbegin(); c != it->changes.rend(); ++c)
                         if (std::abs (c->param->getValue() - c->after) < 1.0e-4f)
                             set (*c->param, c->before);
@@ -143,6 +169,7 @@ namespace suite
 
         juce::AudioProcessorValueTreeState& apvts;
         DataPlanner plan;
+        Custom custom;
         uint32_t lastSeen = 0;
         std::vector<Entry> history;
         int applied = 0;

@@ -52,7 +52,7 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Clears integrated loudness, true peak and long-term balance (applied on the next block). */
-    void resetMeasurements() { resetRequested.store (true); }
+    void resetMeasurements() { resetRequested.store (true); autoPasses.store (0); }
 
     /** Starts analysing a reference track in the background. */
     void loadReference (const juce::File&);
@@ -132,6 +132,25 @@ public:
     }
     std::vector<FixRecord> getFixHistory() const { const juce::ScopedLock sl (historyLock); return fixHistory; }
 
+    /** Sends one of the coach's fixes and forgets what was measured for the sections it
+        changes, so the coach hears them again before judging. Returns the fix's sequence. */
+    uint32_t applyCoachFix (suite::Fix fix, uint32_t data, const suite::SectionMap& map);
+
+    /** Auto-coach: after every complete play-through, applies the coach's fixes (each once
+        per pass, at most `maxAutoPasses` passes), until the coach is happy. */
+    static constexpr int maxAutoPasses = 3;
+    int autoCoachPasses() const { return autoPasses.load(); }
+    juce::String autoCoachStatus() const { const juce::ScopedLock sl (historyLock); return autoStatus; }
+
+    /** Finish the song: gain staging, DJ intro/outro, reference tone, then (once the drops have
+        been heard again) the rough mix, then the auto-coach until the arc is right. */
+    enum class FinishStage { Idle, WaitingForDrop, Coaching, Done };
+    juce::StringArray finishSong();
+    FinishStage finishStage() const { return finishState.load(); }
+    juce::String finishStatus() const { const juce::ScopedLock sl (historyLock); return finishText; }
+    /** The timer's work (tests call it directly). */
+    void runAutomation();
+
     /** After a fix: forget what was measured for sections of `type`, so the coach re-checks them. */
     void forgetSections (suite::SectionType type, const suite::SectionMap& map)
     {
@@ -140,9 +159,18 @@ public:
                 statsBySection[(size_t) i].clear();
     }
 
+    void forgetSection (int index)
+    {
+        if (juce::isPositiveAndBelow (index, (int) statsBySection.size())) statsBySection[(size_t) index].clear();
+    }
+
 private:
     void timerCallback() override;
     juce::CriticalSection historyLock;
+    std::atomic<int> autoPasses { 0 };
+    juce::String autoStatus, finishText;
+    std::atomic<FinishStage> finishState { FinishStage::Idle };
+    float finishMeasuredAt = 0.0f;
     std::vector<FixRecord> fixHistory;
 
     struct AtomicStat

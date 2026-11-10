@@ -37,6 +37,7 @@ LapisProcessor::LapisProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "LapisState", layout())
 {
+    for (auto& g : gainForTarget) g.store (std::numeric_limits<float>::quiet_NaN());
     // Mentalism's "Match reference": nudge the tone shelves by the amounts it sends.
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
     {
@@ -90,6 +91,17 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto target = follow ? shared.lufs : targetLufsFor (targetIndex);
     const auto ceilingDb = follow ? shared.ceilingDbtp : value (ceilingId);
     effectiveTarget.store (target);
+
+    // A different target (a new version): remember this target's gain, recall the new one's.
+    if (! std::isnan (lastTarget) && std::abs (target - lastTarget) > 0.01f)
+    {
+        gainForTarget[(size_t) targetSlot (lastTarget)].store (learnedGainDb.load());
+        const auto known = gainForTarget[(size_t) targetSlot (target)].load();
+        learnedGainDb.store (std::isnan (known) ? juce::jlimit (-12.0f, 24.0f, learnedGainDb.load() + (target - lastTarget)) : known);
+        settledUpdates = 0;
+        runningMax = -100.0f;
+    }
+    lastTarget = target;
     effectiveCeiling.store (ceilingDb);
     followingMentalism.store (follow);
 
@@ -190,6 +202,11 @@ void LapisProcessor::getPluginState (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("learnedGain", learnedGainDb.load(), nullptr);
+    juce::StringArray perTarget;
+    for (int i = 0; i < numTargetSlots; ++i)
+        if (const auto g = gainForTarget[(size_t) i].load(); ! std::isnan (g))
+            perTarget.add (juce::String (i) + ":" + juce::String (g, 2));
+    state.setProperty ("gainPerTarget", perTarget.joinIntoString (";"), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -201,6 +218,11 @@ void LapisProcessor::setPluginState (const void* data, int sizeInBytes)
         {
             auto state = juce::ValueTree::fromXml (*xml);
             learnedGainDb.store ((float) state.getProperty ("learnedGain", 0.0f));
+            for (auto& g : gainForTarget) g.store (std::numeric_limits<float>::quiet_NaN());
+            for (const auto& item : juce::StringArray::fromTokens (state["gainPerTarget"].toString(), ";", ""))
+                if (const auto k = item.upToFirstOccurrenceOf (":", false, false).getIntValue(); juce::isPositiveAndBelow (k, numTargetSlots))
+                    gainForTarget[(size_t) k].store (item.fromFirstOccurrenceOf (":", false, false).getFloatValue());
+            lastTarget = std::numeric_limits<float>::quiet_NaN();
             appliedGainDb = learnedGainDb.load();
             apvts.replaceState (state);
         }

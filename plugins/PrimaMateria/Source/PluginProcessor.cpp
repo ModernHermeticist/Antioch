@@ -75,6 +75,29 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
             default: return {};
         }
     });
+
+    // Arc match: one section of the map up or down, on every track that plays in it.
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
+    {
+        suite::SectionMap map;
+        if (fix != suite::Fix::ArcMatch || ! suite::SectionBus::read (map)) return {};
+        int index = 0;
+        float db = 0.0f;
+        suite::unpackArc (data, index, db);
+        if (index >= map.count || index >= (int) arcTrims.size()) return {};
+        const auto bar = map.sections[(size_t) index].startBar;
+        if (apvts.getRawParameterValue (pm::levelId ((int) map.sections[(size_t) index].type))->load() <= pm::offDb + 0.5f) return {};   // silent here anyway
+        auto& t = arcTrims[(size_t) index];
+        const auto before = arcTrimFor (index, bar);
+        const auto after = juce::jlimit (-12.0f, 12.0f, before + db);
+        t.db.store (after);
+        t.bar.store (bar);
+        return [this, index, bar, before, after]
+        {
+            auto& tr = arcTrims[(size_t) index];
+            if (tr.bar.load() == bar && std::abs (tr.db.load() - after) < 1.0e-4f) tr.db.store (before);
+        };
+    });
 }
 
 bool PrimaMateriaProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -143,6 +166,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     // Trim (the rough mix sets it). A new trim makes the old loudness reading stale.
     const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
     if (std::abs (trim - lastTrim) > 0.05f) { loudness.reset(); lastTrim = trim; }
+    const auto inputGainDb = apvts.getRawParameterValue (pm::inputGainId)->load();
+    if (std::abs (inputGainDb - lastInputGain) > 0.05f) { loudness.reset(); lastInputGain = inputGainDb; }   // gain staging: measure again
     trimGain.setTargetValue (juce::Decibels::decibelsToGain (trim));
 
     auto* left = buffer.getWritePointer (0);
@@ -169,7 +194,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         pm::Setting target;   // unity when not following
         bool inGap = false, laterThis = false;
         int typeThis = -1;
-        float energyDb = 0.0f;
+        float energyDb = 0.0f, arcDb = 0.0f;
         double posHere = host.ppq + qPerSample * n;
 
         // Gain staging: measure, then apply Input Gain before everything else.
@@ -190,6 +215,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 typeNow = typeThis = (int) sec.type;
                 laterThis = sec.isLaterDrop();
                 energyDb = 12.0f * (sec.energy - suite::defaultEnergy (sec.type));   // drawn energy: up to +-12 dB, 0 when untouched
+                if (sec.index < sections.getMap().count)
+                    arcDb = arcTrimFor (sec.index, sections.getMap().sections[(size_t) sec.index].startBar);
                 const auto useLater = sec.isLaterDrop() && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f;
                 target = settingFor (useLater ? pm::laterDrop : typeNow);
                 laterNow = laterNow || useLater;
@@ -241,7 +268,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         {
             // Ouroboros' Intensity scales this track's section moves; the energy curve adds to them.
             const auto k = sections.getMap().intensityScale();
-            target.levelDb = juce::jlimit (pm::offDb + 1.0f, 6.0f, target.levelDb * k + energyDb * k);
+            target.levelDb = juce::jlimit (pm::offDb + 1.0f, 6.0f + juce::jmax (0.0f, arcDb), target.levelDb * k + energyDb * k + arcDb);
         }
 
         // Low-end manager: where a kick or bass plays, other roles leave the low end to them.
@@ -427,7 +454,13 @@ juce::AudioProcessorEditor* PrimaMateriaProcessor::createEditor()
 
 void PrimaMateriaProcessor::getPluginState (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    juce::StringArray arc;
+    for (size_t i = 0; i < arcTrims.size(); ++i)
+        if (arcTrims[i].bar.load() >= 0 && std::abs (arcTrims[i].db.load()) > 1.0e-3f)
+            arc.add (juce::String ((int) i) + ":" + juce::String (arcTrims[i].bar.load()) + ":" + juce::String (arcTrims[i].db.load(), 2));
+    state.setProperty ("arc", arc.joinIntoString (";"), nullptr);
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -435,7 +468,20 @@ void PrimaMateriaProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto state = juce::ValueTree::fromXml (*xml);
+            for (auto& t : arcTrims) { t.bar.store (-1); t.db.store (0.0f); }
+            for (const auto& item : juce::StringArray::fromTokens (state["arc"].toString(), ";", ""))
+            {
+                const auto parts = juce::StringArray::fromTokens (item, ":", "");
+                if (parts.size() == 3 && juce::isPositiveAndBelow (parts[0].getIntValue(), (int) arcTrims.size()))
+                {
+                    arcTrims[(size_t) parts[0].getIntValue()].db.store (parts[2].getFloatValue());
+                    arcTrims[(size_t) parts[0].getIntValue()].bar.store (parts[1].getIntValue());
+                }
+            }
+            apvts.replaceState (state);
+        }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

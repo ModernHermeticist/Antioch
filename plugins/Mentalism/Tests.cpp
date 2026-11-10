@@ -443,6 +443,88 @@ int main (int argc, char** argv)
         }
     }
 
+    section ("Arc match, auto-coach and Finish the song");
+    {
+        // Arc match: a breakdown drawn at 40% should sit 7.2 LU under the drop.
+        suite::SectionMap arc;
+        arc.totalBars = 8; arc.count = 2;
+        arc.sections[0] = { 1, suite::SectionType::Drop };
+        arc.sections[1] = { 5, suite::SectionType::Breakdown, 40 };
+        std::vector<coach::SectionStat> stats (2);
+        auto setLufs = [] (coach::SectionStat& st, float lufs) { st.blocks = 20; st.power = 20.0 * std::pow (10.0, (lufs + 0.691) / 10.0); };
+        setLufs (stats[0], -8.0f); setLufs (stats[1], -10.0f);
+        const auto loud = coach::analyse (arc, stats);
+        const auto text = loud.notes.joinIntoString (" | ");
+        int index = -1; float db = 0.0f;
+        if (loud.problems > 0) suite::unpackArc (loud.fixData[0], index, db);
+        check (loud.problems == 1 && text.contains ("5.2 LU louder than your energy curve") && loud.fixes[0] == suite::Fix::ArcMatch
+                   && index == 1 && std::abs (db + 5.0f) < 0.01f,
+               "a breakdown 5.2 LU above its drawn energy gets an arc fix for that section, -5 dB (" + text + ")");
+        check (! text.contains ("below the drop"), "the drawn curve replaces the usual breakdown contrast rule");
+        setLufs (stats[1], -15.0f);
+        check (coach::analyse (arc, stats).problems == 0 && coach::analyse (arc, stats).notes.joinIntoString (" ").contains ("follows your energy curve"),
+               "within 3 LU of the curve: no complaint");
+
+        // Auto-coach: after a complete play-through of a flat arrangement, one pass of fixes.
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        map.sections[2] = { 5, suite::SectionType::Build };
+        map.sections[3] = { 7, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        auto flat = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = 0.1f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * (double) (pos + i) / sampleRate);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        auto play = [&] (MentalismProcessor& m)
+        {
+            FakePlayHead head;
+            head.bpm = 120.0;
+            m.setPlayHead (&head);
+            render (m, 16.0, flat, nullptr, &head);
+            m.setPlayHead (nullptr);
+        };
+        suite::FixBus::reset();
+        auto p = make();
+        play (*p);
+        const auto before = p->report();
+        p->runAutomation();
+        check (suite::FixBus::latest() == 0, "auto-coach off: nothing is sent");
+        set (*p, Params::autoCoach, 1.0f);
+        p->runAutomation();
+        const auto sent = (int) suite::FixBus::latest();
+        check (before.arrangement.problems >= 2 && sent >= 2 && p->autoCoachPasses() == 1,
+               "auto-coach on: one pass sends the coach's fixes (" + juce::String (sent) + " for " + juce::String (before.arrangement.problems) + " notes)");
+        check (! p->report().sections[1].heard() && p->autoCoachStatus().contains ("Play the song again"), "and waits to hear the fixed sections again");
+        p->runAutomation();
+        check ((int) suite::FixBus::latest() == sent, "nothing more until they've been heard");
+
+        // Finish the song: gain staging now, the rough mix once the drop is heard again.
+        suite::FixBus::reset();
+        auto q = make();
+        play (*q);
+        const auto lines = q->finishSong();
+        suite::FixBus::Message first;
+        check (suite::FixBus::read (1, first) && first.fix == suite::Fix::GainStage && q->finishStage() == MentalismProcessor::FinishStage::WaitingForDrop
+                   && q->apvts.getRawParameterValue (Params::autoCoach)->load() > 0.5f,
+               "Finish: gain staging first, auto-coach on, waiting for the drop (" + lines.joinIntoString (" / ") + ")");
+        q->runAutomation();
+        check (q->finishStage() == MentalismProcessor::FinishStage::WaitingForDrop, "the drop hasn't been heard again yet");
+        play (*q);
+        const auto beforeRough = suite::FixBus::latest();
+        q->runAutomation();
+        suite::FixBus::Message rough;
+        check (suite::FixBus::read (beforeRough + 1, rough) && rough.fix == suite::Fix::RoughMix && q->finishStage() == MentalismProcessor::FinishStage::Coaching,
+               "after the drop: the rough mix, then coaching");
+        check (! q->report().arrangement.complete && q->finishStatus().contains ("Play the whole song"), "the coach starts from a fresh listen");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

@@ -2,6 +2,8 @@
 #include "PluginEditor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "TargetBus.h"
+#include "Checklist.h"
+#include "Registry.h"
 
 //==============================================================================
 ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::atomic<bool>* cancel)
@@ -64,6 +66,120 @@ void MentalismProcessor::timerCallback()
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();
     suite::TargetBus::publish (r.targetLufs, r.ceiling);
+    runAutomation();
+}
+
+uint32_t MentalismProcessor::applyCoachFix (suite::Fix fix, uint32_t data, const suite::SectionMap& map)
+{
+    if (fix == suite::Fix::None) return 0;
+    const auto seq = sendFix (fix, data);
+    using T = suite::SectionType;
+    if (fix == suite::Fix::ArcMatch)
+    {
+        int index = 0; float db = 0.0f;
+        suite::unpackArc (data, index, db);
+        forgetSection (index);
+    }
+    else
+    {
+        const auto type = fix == suite::Fix::BuildRise ? T::Build : fix == suite::Fix::IntroQuieter ? T::Intro
+                        : fix == suite::Fix::LaterDropBigger ? T::Drop : T::Breakdown;
+        forgetSections (type, map);
+    }
+    return seq;
+}
+
+juce::StringArray MentalismProcessor::finishSong()
+{
+    juce::StringArray done;
+    const auto rep = report();
+    sendFix (suite::Fix::GainStage);
+    done.add ("Gain staging: every Prima Materia input to -18 dBFS RMS");
+    for (const auto& item : checklist::check (rep, clippedSamples.load(), suite::Registry::list()))
+        if (item.fix == suite::Fix::DjIntroOutro)
+        {
+            sendFix (suite::Fix::DjIntroOutro);
+            done.add ("DJ intro/outro: melodic parts out of the intro and outro");
+        }
+    if (getReference().valid)
+        done.add (matchReference() != 0 ? "Reference: Lapis' tone moved towards it, loudness target matched"
+                                        : "Reference: loudness target matched (tone already close)");
+    setParameterPlain (apvts, Params::autoCoach, 1.0f);
+    autoPasses.store (0);
+    for (int i = 0; i < rep.map.count; ++i)
+        if (rep.map.sections[(size_t) i].type == suite::SectionType::Drop) forgetSection (i);
+    finishMeasuredAt = rep.measuredSeconds;
+    finishState.store (FinishStage::WaitingForDrop);
+    {
+        const juce::ScopedLock sl (historyLock);
+        finishText = "Play the drop again: the rough mix is next.";
+    }
+    done.add ("Next: play the drop for the rough mix, then the whole song for the coach");
+    return done;
+}
+
+void MentalismProcessor::runAutomation()
+{
+    const auto rep = report();
+    using T = suite::SectionType;
+    auto setText = [this] (juce::String& which, const juce::String& text) { const juce::ScopedLock sl (historyLock); which = text; };
+
+    // Finish: once the drops have been heard again, the rough mix.
+    if (finishState.load() == FinishStage::WaitingForDrop)
+    {
+        bool dropsHeard = rep.arrangementAvailable && rep.map.count > 0;
+        bool anyDrop = false;
+        for (int i = 0; dropsHeard && i < rep.map.count && i < (int) rep.sections.size(); ++i)
+            if (rep.map.sections[(size_t) i].type == T::Drop) { anyDrop = true; dropsHeard = rep.sections[(size_t) i].heard(); }
+        if (! anyDrop) dropsHeard = rep.measuredSeconds >= finishMeasuredAt + 10.0f;   // no map: 10 s more of the song
+        if (dropsHeard)
+        {
+            sendFix (suite::Fix::RoughMix);
+            for (int i = 0; i < rep.map.count; ++i) forgetSection (i);   // the coach hears the new balance from scratch
+            finishState.store (FinishStage::Coaching);
+            setText (finishText, "Rough mix done. Play the whole song: the auto-coach shapes the arc.");
+        }
+        return;
+    }
+
+    if (apvts.getRawParameterValue (Params::autoCoach)->load() < 0.5f || ! rep.arrangementAvailable || rep.map.count == 0)
+        return;
+    if (! rep.arrangement.complete)
+    {
+        if (finishState.load() == FinishStage::Coaching)
+            setText (finishText, "Coaching: play the whole song (pass " + juce::String (autoPasses.load() + 1) + ").");
+        return;
+    }
+    if (rep.arrangement.problems == 0 || autoPasses.load() >= maxAutoPasses)
+    {
+        const auto happy = rep.arrangement.problems == 0;
+        setText (autoStatus, happy ? juce::String ("The coach is happy.")
+                                   : "Stopped after " + juce::String (maxAutoPasses) + " passes: " + juce::String (rep.arrangement.problems) + " note(s) left for you.");
+        if (finishState.load() == FinishStage::Coaching)
+        {
+            const auto ready = checklist::readyToExport (checklist::check (rep, clippedSamples.load(), suite::Registry::list()));
+            finishState.store (FinishStage::Done);
+            setText (finishText, juce::String (happy ? "Finished: the arc is right. " : "Finished what can be automated. ")
+                                     + (ready ? "Ready to export." : "See the checklist before you export."));
+        }
+        return;
+    }
+
+    // One pass: each problem's fix once (arc fixes per section).
+    juce::StringArray applied;
+    std::vector<std::pair<suite::Fix, uint32_t>> sent;
+    for (int i = 0; i < rep.arrangement.problems && i < (int) rep.arrangement.fixes.size(); ++i)
+    {
+        const auto fix = rep.arrangement.fixes[(size_t) i];
+        const auto data = i < (int) rep.arrangement.fixData.size() ? rep.arrangement.fixData[(size_t) i] : 0u;
+        if (fix == suite::Fix::None) continue;
+        if (std::find (sent.begin(), sent.end(), std::make_pair (fix, data)) != sent.end()) continue;
+        sent.push_back ({ fix, data });
+        applyCoachFix (fix, data, rep.map);
+        applied.add (coach::describe (fix).fromFirstOccurrenceOf (": ", false, false));
+    }
+    autoPasses.fetch_add (1);
+    setText (autoStatus, "Auto-coach pass " + juce::String (autoPasses.load()) + ": " + applied.joinIntoString ("; ") + ". Play the song again.");
 }
 
 MentalismProcessor::~MentalismProcessor()

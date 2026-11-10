@@ -179,6 +179,17 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<ChecklistPanel> (processor), checklistButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (checklistButton);
+    autoCoach = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoCoach, "Auto-coach", Colours::ember);
+    autoCoach->setTooltip ("After every complete play-through, applies the coach's fixes by itself (up to 3 passes) until it's happy");
+    finishButton.setTooltip ("Gain staging, DJ intro/outro, reference tone, then the rough mix once the drop is heard again, "
+                             "then the auto-coach until the energy arc is right. Everything can be undone in History.");
+    finishButton.setColour (juce::TextButton::buttonColourId, Colours::moss.withAlpha (0.4f));
+    finishButton.onClick = [this] { processor.finishSong(); };
+    automationStatus.setFont (juce::FontOptions (12.0f));
+    automationStatus.setJustificationType (juce::Justification::centredLeft);
+    automationStatus.setColour (juce::Label::textColourId, Colours::moss);
+    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), &finishButton, &automationStatus })
+        addAndMakeVisible (c);
     matchButton.setTooltip ("Moves Lapis' low and high tone half-way towards the reference (at most 4 dB) and sets the loudness "
                             "target to match it. Undo it in History.");
     matchButton.onClick = [this]
@@ -260,15 +271,9 @@ void MentalismEditor::sendFix (int row)
     const auto fix = shownFixes[(size_t) row];
     if (fix == suite::Fix::None) return;
     lastFix = fix;
-    lastFixSeq = processor.sendFix (fix);
+    lastFixSeq = processor.applyCoachFix (fix, shownFixData[(size_t) row], rep.map);   // the fixed sections are heard again before re-judging
     lastUndoSeq = 0;
     fixStatusTicks = 0;
-
-    // The fixed sections need hearing again before the coach judges them.
-    using T = suite::SectionType;
-    const auto type = fix == suite::Fix::BuildRise ? T::Build : fix == suite::Fix::IntroQuieter ? T::Intro
-                    : fix == suite::Fix::LaterDropBigger ? T::Drop : T::Breakdown;
-    processor.forgetSections (type, rep.map);
 }
 
 void MentalismEditor::updateFixStatus()
@@ -328,6 +333,7 @@ void MentalismEditor::layoutFixButtons()
         auto row = notes.removeFromTop (21);
         const auto fix = i < rep.arrangement.problems && i < (int) rep.arrangement.fixes.size() ? rep.arrangement.fixes[(size_t) i] : suite::Fix::None;
         shownFixes[(size_t) i] = fix;
+        shownFixData[(size_t) i] = i < (int) rep.arrangement.fixData.size() ? rep.arrangement.fixData[(size_t) i] : 0u;
         auto& b = fixButtons[(size_t) i];
         b.setBounds (row.removeFromRight (56).reduced (2, 1));
         b.setTooltip (coach::describe (fix));
@@ -338,6 +344,13 @@ void MentalismEditor::layoutFixButtons()
 void MentalismEditor::timerCallback()
 {
     rep = processor.report();
+    {
+        const auto finish = processor.finishStatus(), coachText = processor.autoCoachStatus();
+        automationStatus.setText (processor.finishStage() != MentalismProcessor::FinishStage::Idle ? finish
+                                  : processor.apvts.getRawParameterValue (Params::autoCoach)->load() > 0.5f
+                                        ? (coachText.isNotEmpty() ? coachText : juce::String ("Auto-coach on: play the whole song through."))
+                                        : juce::String(), juce::dontSendNotification);
+    }
     clashes = masking::find (suite::Registry::list());
     updateCarveButtons();
     layoutFixButtons();
@@ -627,6 +640,7 @@ void MentalismEditor::paintAdvice (juce::Graphics& g, juce::Rectangle<int> area)
     g.setFont (juce::FontOptions (13.0f));
     for (const auto& line : rep.advice)
     {
+        if (area.getHeight() < 22) break;   // only whole lines
         auto row = area.removeFromTop (22);
         g.setColour (Colours::ember);
         g.fillEllipse ((float) row.getX() + 2.0f, (float) row.getCentreY() - 3.0f, 6.0f, 6.0f);
@@ -681,4 +695,7 @@ void MentalismEditor::resized()
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);
     checklistButton.setBounds (adviceArea.getRight() - 162, adviceArea.getY() + 6, 150, 26);
+    finishButton.setBounds (adviceArea.getRight() - 324, adviceArea.getY() + 6, 150, 26);
+    autoCoach->setBounds (adviceArea.getRight() - 456, adviceArea.getY() + 6, 124, 26);
+    automationStatus.setBounds (adviceContent.removeFromBottom (20));
 }

@@ -23,12 +23,14 @@ namespace coach
         bool heard() const { return blocks >= 10; }   // at least ~1 s of material
     };
 
+    constexpr float arcLuPerEnergy = 12.0f, arcTolerance = 3.0f;   // the energy curve: 12 LU between "silent" and "full"
     constexpr float minContrast = 2.0f, maxContrast = 12.0f, minRise = 1.0f, dropTolerance = 0.7f, introHeadroom = 1.5f;
 
     struct Result
     {
         juce::StringArray notes;       // problems first, then confirmations
         std::vector<suite::Fix> fixes; // per note: what the fix-it button would do (None for confirmations)
+        std::vector<uint32_t> fixData; // per note: the fix's data (ArcMatch: which section and how much)
         int problems = 0;
         bool complete = true;          // every section heard
     };
@@ -59,7 +61,8 @@ namespace coach
             const auto type = map.sections[(size_t) i].type;
             const auto& st = stats[(size_t) i];
 
-            if (type == T::Breakdown)
+            const auto drawn = map.sections[(size_t) i].energy >= 0;   // your curve decides this one (arc match, below)
+            if (type == T::Breakdown && ! drawn)
             {
                 // Compare with the drop that follows (or the last drop before it).
                 int drop = -1;
@@ -95,7 +98,7 @@ namespace coach
                 }
                 else good.add ("Build (" + barsOf (map, i) + ") rises " + fmt (rise) + " LU: good.");
             }
-            else if (type == T::Intro && ! drops.empty())
+            else if (type == T::Intro && ! drops.empty() && ! drawn)
             {
                 const auto headroom = stats[(size_t) drops.front()].lufs() - st.lufs();
                 if (headroom < introHeadroom)
@@ -120,10 +123,36 @@ namespace coach
             else good.add ("Drop " + juce::String ((int) k + 1) + " holds up against drop " + juce::String ((int) k) + ".");
         }
 
+        // Arc match: sections whose energy you drew on Ouroboros' curve should sit where the curve
+        // puts them, relative to the first drop (12 LU from an energy of 0 to 100%).
+        r.fixData.resize (r.fixes.size(), 0);
+        if (! drops.empty())
+        {
+            const auto ref = drops.front();
+            const auto refLufs = stats[(size_t) ref].lufs(), refEnergy = map.energyOf (ref);
+            bool anyDrawn = false, allMatch = true;
+            for (int i = 0; i < map.count; ++i)
+            {
+                if (i == ref || ! heard (i) || map.sections[(size_t) i].energy < 0) continue;
+                anyDrawn = true;
+                const auto expected = refLufs + arcLuPerEnergy * (map.energyOf (i) - refEnergy);
+                const auto off = stats[(size_t) i].lufs() - expected;
+                if (std::abs (off) <= arcTolerance) continue;
+                allMatch = false;
+                r.notes.add (juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " (" + barsOf (map, i) + ") is " + fmt (off) + " LU "
+                             + (off > 0.0f ? "louder" : "quieter") + " than your energy curve asks for.");
+                r.fixes.push_back (suite::Fix::ArcMatch);
+                r.fixData.push_back (suite::packArc (i, juce::jlimit (-9.0f, 9.0f, -off)));
+                ++r.problems;
+            }
+            if (anyDrawn && allMatch) good.add ("The song follows your energy curve.");
+        }
+
         r.notes.addArray (good);
         if (! r.complete)
             r.notes.add ("Play the whole song through once to check every section.");
         r.fixes.resize ((size_t) r.notes.size(), suite::Fix::None);
+        r.fixData.resize ((size_t) r.notes.size(), 0);
         return r;
     }
 
@@ -142,6 +171,7 @@ namespace coach
             case suite::Fix::ReferenceTone:    return "Lapis: low and high tone moved towards the reference";
             case suite::Fix::Carve:            return "Prima Materia: a dip carved in the less important track";
             case suite::Fix::GainStage:        return "Prima Materia: every track's input set to -18 dBFS RMS";
+            case suite::Fix::ArcMatch:         return "Prima Materia: that section's level moved towards your energy curve";
             case suite::Fix::None:
             default:                           return {};
         }

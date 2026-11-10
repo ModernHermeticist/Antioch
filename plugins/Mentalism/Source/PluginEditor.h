@@ -68,6 +68,7 @@ private:
     // Fix-it buttons, one per shown problem, plus undo and a confirmation line.
     std::array<juce::TextButton, 4> fixButtons;
     std::array<suite::Fix, 4> shownFixes {};
+    std::array<uint32_t, 4> shownFixData {};
     juce::TextButton undoFixButton { "Undo last fix" };
     juce::Label fixStatus;
     uint32_t lastFixSeq = 0, lastUndoSeq = 0;
@@ -84,6 +85,9 @@ private:
     juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" },
                      matchButton { "Match reference" };
     uint32_t matchSeq = 0;
+    juce::TextButton finishButton { "Finish the song" };
+    std::unique_ptr<suite::ui::Toggle> autoCoach;
+    juce::Label automationStatus;
     juce::Label roughStatus;
     juce::Label referenceLabel;
     std::unique_ptr<juce::FileChooser> chooser;

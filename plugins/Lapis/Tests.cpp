@@ -41,6 +41,29 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
+    section ("Loudness per version");
+    {
+        auto p = make (1);   // club, -8 LUFS
+        render (*p, 0.05, {});
+        set (*p, LapisProcessor::targetId, 3.0f);   // streaming, -14 LUFS: not learned yet
+        render (*p, 0.05, {});
+        check (std::abs (p->getLearnedGainDb() + 6.0f) < 0.01f, "a new target starts 6 dB down from the club gain");
+        p->resetLearning();
+        render (*p, 0.05, {});
+        set (*p, LapisProcessor::targetId, 1.0f);
+        render (*p, 0.05, {});
+        check (std::abs (p->getLearnedGainDb()) < 0.01f, "back to the club target: its own gain, not a guess");
+        set (*p, LapisProcessor::targetId, 3.0f);
+        render (*p, 0.05, {});
+        check (std::abs (p->getLearnedGainDb()) < 0.01f && ! std::isnan (p->rememberedGainFor (-8.0f)), "and the streaming gain is remembered too");
+
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make (1);
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (std::abs (q->rememberedGainFor (-14.0f)) < 0.01f && std::abs (q->rememberedGainFor (-8.0f)) < 0.01f, "remembered with the project");
+    }
+
     if (outDir != juce::File())
         outDir.createDirectory();
 

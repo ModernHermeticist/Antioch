@@ -250,6 +250,26 @@ Materia tracks, and its **Fix** button takes the melodic parts out, undoable in 
 warning or fail, with *Ready to export* when everything passes. Press Reset and play the
 whole song through first.
 
+**Arc match.** Where you've drawn a section's energy on Ouroboros' curve, the coach holds
+the song to it: relative to the first drop, each drawn section should sit 12 LU lower per
+100% of energy (a breakdown drawn at 40% belongs 7.2 LU under the drop). More than 3 LU
+off and it says so, with a **Fix** that moves that one section up or down on every Prima
+Materia track that plays in it (undoable; saved with the project; forgotten if the map
+moves the section). For drawn sections the curve replaces the usual breakdown and intro
+rules.
+
+**Auto-coach** (Suggestions panel) takes the clicking out: after every complete
+play-through it applies the coach's fixes by itself, forgets those sections so it hears
+them again, and repeats on the next play-through, up to three passes or until the coach
+is happy. Everything it does is in History.
+
+**Finish the song** does the rest in one click: gain staging on every Prima Materia track,
+the DJ intro/outro fix if the checklist wants it, the reference match if a reference is
+loaded, and auto-coach on. Once you've played the drop again (the tracks measure their new
+levels), it runs the rough mix; then play the whole song and the auto-coach shapes the
+arc. The line under the suggestions says what it's waiting for, and finally whether you're
+ready to export.
+
 **Arrangement coach.** With Ouroboros running, Mentalism also measures loudness section
 by section, and the two halves of each build. The **Arrangement** tab charts it and checks
 the arc:
@@ -469,6 +489,10 @@ integrated target, because breakdowns pull the song average down by about that m
   limiting, it stops and says so.
 - **Hold** locks the learned gain, and **Manual** lets you set it yourself. The learned
   gain is saved with the project.
+- **Loudness per version:** the gain learned for each target is remembered. Switch from
+  the club master to streaming (with *Make versions*, a session or by hand) and Lapis goes
+  straight to the gain it learned for that target, or, the first time, starts from the
+  current gain moved by the difference in targets (6 dB down from -8 to -14 LUFS).
 - **Clip** shaves the sharpest peaks with a soft clipper before the limiter.
 - The **limiter** is a lookahead true-peak design that detects inter-sample peaks, adds
   77 samples of latency (FL compensates for it automatically), and holds the ceiling.
@@ -909,6 +933,16 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Recipes and versions:** a recipe saved in one project loads into another; an unknown
   recipe changes nothing; versions give a 120-bar radio edit in B, a map 64 bars longer
   in C and the original in A; Mentalism switches to streaming / club accordingly.
+- **Arc match:** a breakdown drawn at 40% that plays 5.2 LU too loud gets a -5 dB fix for
+  that section (and no contrast complaint); within 3 LU, none. In Prima Materia the fix
+  takes the drop down 3 dB, survives a save, is ignored once the map moves the section and
+  undoes cleanly.
+- **Auto-coach and Finish:** off, nothing is sent; on, one pass sends the coach's fixes
+  and waits to hear those sections again. Finish sends gain staging first and turns the
+  auto-coach on; after the drop is played again it sends the rough mix and starts coaching
+  from a fresh listen.
+- **Loudness per version (Lapis):** a new -14 target starts 6 dB below the club gain; each
+  target's gain is recalled when you switch back, and saved with the project.
 - **Match reference:** with a reference that has 2 dB less low end and 4 dB more top, it
   asks for -1 dB low and +2 dB high; Lapis' shelves move 40 Hz and 14 kHz by that much,
   leave 1 kHz alone, and undo flattens them.

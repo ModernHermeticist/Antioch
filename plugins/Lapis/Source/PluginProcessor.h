@@ -52,6 +52,15 @@ public:
     static constexpr float loudSectionOffset = 1.0f;
 
     void resetLearning() { resetRequested.store (true); }
+    float getLearnedGainDb() const { return learnedGainDb.load(); }
+
+    /** Auto-loudness per version: the gain learned for each loudness target is remembered (in
+        half-LU steps from -24 to -4 LUFS), so switching between the club and streaming versions
+        lands straight on the right gain. An unknown target starts from the current gain moved by
+        the difference in target. */
+    static int targetSlot (float lufs) { return juce::jlimit (0, numTargetSlots - 1, (int) std::lround ((lufs + 24.0f) * 2.0f)); }
+    static constexpr int numTargetSlots = 41;
+    float rememberedGainFor (float lufs) const { return gainForTarget[(size_t) targetSlot (lufs)].load(); }
 
     /** Versions: when not following Mentalism, a radio edit aims at streaming, an extended mix at the club. */
     bool applyVersion (int kind) override
@@ -79,6 +88,8 @@ private:
     float shownLow = 1000.0f, shownHigh = 1000.0f;
     analysis::LoudnessMeter loudness;
     std::atomic<float> learnedGainDb { 0.0f };
+    std::array<std::atomic<float>, numTargetSlots> gainForTarget;   // NaN = not learned yet
+    float lastTarget = std::numeric_limits<float>::quiet_NaN();
     std::atomic<bool> resetRequested { false };
     float runningMax = -100.0f, appliedGainDb = 0.0f;
     std::array<float, 10> stHistory { -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f };
