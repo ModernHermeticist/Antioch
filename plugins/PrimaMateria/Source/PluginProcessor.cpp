@@ -7,6 +7,45 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PrimaMateriaState", pm::layout())
 {
+    // Mentalism's fix-it buttons: nudge this track's section levels (muted sections stay muted).
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    {
+        using T = suite::SectionType;
+        auto level = [this] (int column) { return apvts.getRawParameterValue (pm::levelId (column))->load(); };
+        auto muted = [] (float db) { return db <= pm::offDb + 0.5f; };
+        auto shift = [&] (T type, float db) -> std::vector<suite::FixReceiver::Change>
+        {
+            const auto v = level ((int) type);
+            if (muted (v)) return {};
+            return { { pm::levelId ((int) type), juce::jlimit (pm::offDb + 1.0f, 6.0f, v + db) } };
+        };
+
+        switch (fix)
+        {
+            case suite::Fix::BreakdownQuieter: return shift (T::Breakdown, -2.0f);
+            case suite::Fix::BreakdownLouder:  return shift (T::Breakdown, 2.0f);
+            case suite::Fix::IntroQuieter:     return shift (T::Intro, -2.0f);
+            case suite::Fix::LaterDropBigger:
+            {
+                const auto drop = (int) T::Drop;
+                if (apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f)
+                {
+                    const auto v = level (pm::laterDrop);
+                    if (muted (v)) return {};
+                    return { { pm::levelId (pm::laterDrop), juce::jmin (6.0f, v + 1.5f) } };
+                }
+                if (muted (level (drop))) return {};
+                // Start the Drop 2+ column from the drop's settings, 1.5 dB up.
+                return { { pm::lowCutId (pm::laterDrop), apvts.getRawParameterValue (pm::lowCutId (drop))->load() },
+                         { pm::highCutId (pm::laterDrop), apvts.getRawParameterValue (pm::highCutId (drop))->load() },
+                         { pm::levelId (pm::laterDrop), juce::jmin (6.0f, level (drop) + 1.5f) },
+                         { pm::laterOnId, 1.0f } };
+            }
+            case suite::Fix::BuildRise:
+            case suite::Fix::None:
+            default: return {};
+        }
+    });
 }
 
 bool PrimaMateriaProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const

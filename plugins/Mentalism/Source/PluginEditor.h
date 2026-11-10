@@ -21,7 +21,19 @@ private:
     void paintAdvice (juce::Graphics&, juce::Rectangle<int>);
     void paintArrangement (juce::Graphics&, juce::Rectangle<int>);
     suite::ui::TabBar balanceTabs { { "TONAL BALANCE", "ARRANGEMENT" }, { suite::ui::Colours::brass, suite::ui::Colours::ember } };
-    juce::Rectangle<int> arrangementContent;
+    juce::Rectangle<int> arrangementContent, arrangementNotes;
+
+    // Fix-it buttons, one per shown problem, plus undo and a confirmation line.
+    std::array<juce::TextButton, 4> fixButtons;
+    std::array<suite::Fix, 4> shownFixes {};
+    juce::TextButton undoFixButton { "Undo last fix" };
+    juce::Label fixStatus;
+    uint32_t lastFixSeq = 0, lastUndoSeq = 0;
+    suite::Fix lastFix = suite::Fix::None;
+    int fixStatusTicks = 0;
+    void sendFix (int row);
+    void layoutFixButtons();
+    void updateFixStatus();
 
     MentalismProcessor& processor;
     suite::ui::LookAndFeel lnf;

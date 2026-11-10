@@ -129,6 +129,44 @@ int main (int argc, char** argv)
         check (std::abs (diff - 2.0f) < 0.3f, "the lead is 2 dB louder in the second drop (" + juce::String (diff, 2) + " dB)");
     }
 
+    section ("Fix-it buttons from Mentalism");
+    {
+        suite::FixBus::reset();
+        auto lvl = [] (PrimaMateriaProcessor& p, int column) { return p.apvts.getRawParameterValue (pm::levelId (column))->load(); };
+        auto pads = make (roleIndex ("Pads"));
+        auto kick = make (roleIndex ("Kick"));   // breakdown muted: stays muted
+        const auto padsBefore = lvl (*pads, (int) T::Breakdown);
+
+        const auto seq = suite::FixBus::send (suite::Fix::BreakdownQuieter);
+        pads->fixes->poll();
+        kick->fixes->poll();
+        check (std::abs (lvl (*pads, (int) T::Breakdown) - (padsBefore - 2.0f)) < 0.05f, "breakdown 2 dB quieter ("
+                   + juce::String (padsBefore, 1) + " -> " + juce::String (lvl (*pads, (int) T::Breakdown), 1) + " dB)");
+        check (lvl (*kick, (int) T::Breakdown) <= pm::offDb + 0.5f, "a muted breakdown stays muted");
+        check (suite::FixBus::acknowledgements (seq) == 1, "one plugin acknowledges it");
+
+        pads->fixes->poll();
+        check (std::abs (lvl (*pads, (int) T::Breakdown) - (padsBefore - 2.0f)) < 0.05f, "each fix is applied once");
+
+        const auto undo = suite::FixBus::sendUndo (seq);
+        pads->fixes->poll();
+        kick->fixes->poll();
+        check (std::abs (lvl (*pads, (int) T::Breakdown) - padsBefore) < 0.05f && suite::FixBus::acknowledgements (undo) == 1, "undo restores it");
+
+        // Later drops: turns on the Drop 2+ column, starting from the drop's settings.
+        auto lead = make (roleIndex ("Pads"));
+        const auto drop = lvl (*lead, (int) T::Drop);
+        set (*lead, pm::laterOnId, 0.0f);
+        suite::FixBus::send (suite::Fix::LaterDropBigger);
+        lead->fixes->poll();
+        check (lead->apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f && std::abs (lvl (*lead, pm::laterDrop) - (drop + 1.5f)) < 0.05f,
+               "bigger later drops: Drop 2+ on, 1.5 dB above the drop");
+
+        auto late = make (roleIndex ("Pads"));   // made after the fixes were sent: ignores them
+        late->fixes->poll();
+        check (late->fixes->appliedCount() == 0, "a plugin loaded later doesn't replay old fixes");
+    }
+
     section ("Pass-through when not following");
     {
         auto p = make (roleIndex ("Kick"));

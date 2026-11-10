@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "FixBus.h"
 #include "BuildClock.h"
 #include "Parameters.h"
 #include "SuiteDSP.h"
@@ -37,6 +38,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
     // Read by the UI.
     std::atomic<float> buildLevel { 0.0f };    // curved build amount actually applied

@@ -44,6 +44,15 @@ AzothProcessor::AzothProcessor()
       apvts (*this, nullptr, "AzothState", layout())
 {
     startTimerHz (4);
+
+    // Mentalism's fix-it buttons: more swell and roll into a flat build; bigger later drops.
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    {
+        using R = suite::FixReceiver;
+        if (fix == suite::Fix::BuildRise) return { R::nudge (apvts, swellId, 0.1f), R::nudge (apvts, rollId, 0.1f) };
+        if (fix == suite::Fix::LaterDropBigger) return { R::nudge (apvts, laterDropsId, 0.25f) };
+        return {};
+    });
 }
 
 void AzothProcessor::updateLatency()

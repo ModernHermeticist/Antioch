@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "FixBus.h"
 #include "Params.h"
 #include "SuiteDSP.h"
 #include "HostInfo.h"
@@ -38,6 +39,7 @@ public:
     void applyRole (int index);
 
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
     // For the UI
     std::atomic<int> currentType { -1 };

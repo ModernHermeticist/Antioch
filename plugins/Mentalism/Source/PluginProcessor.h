@@ -87,6 +87,14 @@ public:
     /** Loudness gathered per section of the current Ouroboros map (any thread). */
     std::vector<coach::SectionStat> sectionStats() const;
 
+    /** After a fix: forget what was measured for sections of `type`, so the coach re-checks them. */
+    void forgetSections (suite::SectionType type, const suite::SectionMap& map)
+    {
+        for (int i = 0; i < juce::jmin (map.count, (int) statsBySection.size()); ++i)
+            if (map.sections[(size_t) i].type == type)
+                statsBySection[(size_t) i].clear();
+    }
+
 private:
     void timerCallback() override;
 

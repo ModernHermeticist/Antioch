@@ -208,6 +208,15 @@ int main (int argc, char** argv)
         check (badText.contains ("only 1.0 LU below the drop"), "flags a breakdown that's too loud");
         check (badText.contains ("Build (bars 5-6) only rises"), "flags a build that doesn't grow");
         check (bad.advice[0].startsWith ("Arrangement:"), "the top problem joins the main suggestions");
+        {
+            const auto& f = bad.arrangement.fixes;
+            const auto has = [&f] (suite::Fix x) { return std::find (f.begin(), f.end(), x) != f.end(); };
+            check (f.size() == (size_t) bad.arrangement.notes.size() && has (suite::Fix::BreakdownQuieter) && has (suite::Fix::BuildRise),
+                   "each problem carries its fix (quieter breakdown, more rise)");
+            bool confirmationsHaveNone = true;
+            for (size_t i = (size_t) bad.arrangement.problems; i < f.size(); ++i) confirmationsHaveNone = confirmationsHaveNone && f[i] == suite::Fix::None;
+            check (confirmationsHaveNone, "confirmations have no Fix button");
+        }
 
         // A good arc: deep breakdown, rising build, loud drop.
         const auto good = playSong ([] (double t)
@@ -230,6 +239,28 @@ int main (int argc, char** argv)
         setLufs (stats[0], -9.0f); setLufs (stats[1], -16.0f); setLufs (stats[2], -11.0f);
         const auto r = coach::analyse (twoDrops, stats);
         check (r.notes.joinIntoString (" ").contains ("Drop 2 (bars 6-8) is 2.0 LU quieter than drop 1"), "flags a weaker second drop");
+        check (std::find (r.fixes.begin(), r.fixes.end(), suite::Fix::LaterDropBigger) != r.fixes.end(), "... with a 'bigger later drops' fix");
+
+        // After a fix, the fixed sections are forgotten so the coach hears them again.
+        {
+            suite::SectionBus::publish (map);
+            auto p = make();
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            render (*p, 16.0, [] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = 0.1f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * (double) (pos + i) / sampleRate);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, nullptr, &head);
+            p->setPlayHead (nullptr);
+            p->forgetSections (suite::SectionType::Breakdown, map);
+            const auto after = p->report();
+            check (! after.sections[1].heard() && after.sections[3].heard(), "forgetting breakdowns keeps the other sections' measurements");
+        }
         suite::SectionBus::withdraw();
     }
 
@@ -284,7 +315,7 @@ int main (int argc, char** argv)
                 for (int i = 0; i < b.getNumSamples(); ++i)
                 {
                     const auto t = (double) (pos + i) / sampleRate;
-                    const auto db = t < 4.0 ? -16.0f : t < 8.0 ? -17.0f : t < 12.0 ? -20.0f + 6.0f * (float) ((t - 8.0) / 4.0) : -12.0f;
+                    const auto db = t < 4.0 ? -16.0f : t < 8.0 ? -13.5f : t < 12.0 ? -20.0f + 6.0f * (float) ((t - 8.0) / 4.0) : -12.0f;
                     const auto v = juce::Decibels::decibelsToGain (db) * (float) std::sin (juce::MathConstants<double>::twoPi * 500.0 * t);
                     b.setSample (0, i, v); b.setSample (1, i, v);
                 }

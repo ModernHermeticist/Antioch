@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "FixBus.h"
 #include "Voices.h"
 #include "SectionBus.h"
 #include "HostInfo.h"
@@ -55,6 +56,7 @@ public:
     void audition (int which) { pendingAudition.fetch_or (which); }
 
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's fix-it buttons
 
     // For the UI and tests
     std::atomic<int> eventsFired { 0 }, snareHits { 0 };

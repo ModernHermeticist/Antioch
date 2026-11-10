@@ -5,6 +5,7 @@
 
 #include "SectionBus.h"
 #include "Analysis.h"
+#include "FixBus.h"
 #include <juce_core/juce_core.h>
 #include <vector>
 
@@ -27,6 +28,7 @@ namespace coach
     struct Result
     {
         juce::StringArray notes;       // problems first, then confirmations
+        std::vector<suite::Fix> fixes; // per note: what the fix-it button would do (None for confirmations)
         int problems = 0;
         bool complete = true;          // every section heard
     };
@@ -69,12 +71,14 @@ namespace coach
                 {
                     r.notes.add ("Breakdown (" + barsOf (map, i) + ") is only " + fmt (contrast) + " LU below the drop: the drop won't feel "
                                  "like a lift. Thin the breakdown out or take more of its low end away.");
+                    r.fixes.push_back (suite::Fix::BreakdownQuieter);
                     ++r.problems;
                 }
                 else if (contrast > maxContrast)
                 {
                     r.notes.add ("Breakdown (" + barsOf (map, i) + ") is " + fmt (contrast) + " LU below the drop: people turn it up and then "
                                  "get blasted. Bring the breakdown up a little.");
+                    r.fixes.push_back (suite::Fix::BreakdownLouder);
                     ++r.problems;
                 }
                 else good.add ("Breakdown to drop contrast " + fmt (contrast) + " LU: good.");
@@ -86,6 +90,7 @@ namespace coach
                 {
                     r.notes.add ("Build (" + barsOf (map, i) + ") only rises " + juce::String (rise, 1) + " LU: let it grow with risers, "
                                  "more top end or Cause & Effect's wash.");
+                    r.fixes.push_back (suite::Fix::BuildRise);
                     ++r.problems;
                 }
                 else good.add ("Build (" + barsOf (map, i) + ") rises " + fmt (rise) + " LU: good.");
@@ -96,6 +101,7 @@ namespace coach
                 if (headroom < introHeadroom)
                 {
                     r.notes.add ("Intro is only " + fmt (headroom) + " LU below the drop: leave headroom so the drop lands.");
+                    r.fixes.push_back (suite::Fix::IntroQuieter);
                     ++r.problems;
                 }
             }
@@ -108,6 +114,7 @@ namespace coach
             {
                 r.notes.add ("Drop " + juce::String ((int) k + 1) + " (" + barsOf (map, drops[k]) + ") is " + fmt (diff) + " LU quieter than drop "
                              + juce::String ((int) k) + ": a later drop should hit at least as hard.");
+                r.fixes.push_back (suite::Fix::LaterDropBigger);
                 ++r.problems;
             }
             else good.add ("Drop " + juce::String ((int) k + 1) + " holds up against drop " + juce::String ((int) k) + ".");
@@ -116,6 +123,22 @@ namespace coach
         r.notes.addArray (good);
         if (! r.complete)
             r.notes.add ("Play the whole song through once to check every section.");
+        r.fixes.resize ((size_t) r.notes.size(), suite::Fix::None);
         return r;
+    }
+
+    /** What a fix-it button does, for its tooltip and the confirmation line. */
+    inline juce::String describe (suite::Fix fix)
+    {
+        switch (fix)
+        {
+            case suite::Fix::BreakdownQuieter: return "Prima Materia: breakdowns 2 dB quieter";
+            case suite::Fix::BreakdownLouder:  return "Prima Materia: breakdowns 2 dB louder";
+            case suite::Fix::BuildRise:        return "Cause & Effect: more riser, noise and wash; Azoth: more swell and roll";
+            case suite::Fix::IntroQuieter:     return "Prima Materia: intro 2 dB quieter";
+            case suite::Fix::LaterDropBigger:  return "Prima Materia: Drop 2+ 1.5 dB up; Azoth: bigger later drops";
+            case suite::Fix::None:
+            default:                           return {};
+        }
     }
 }

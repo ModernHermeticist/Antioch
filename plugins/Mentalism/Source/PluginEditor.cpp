@@ -46,8 +46,31 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     {
         for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel })
             c->setVisible (i == 0);
+        undoFixButton.setVisible (i == 1);
+        fixStatus.setVisible (i == 1);
+        layoutFixButtons();
         repaint();
     };
+
+    for (int i = 0; i < (int) fixButtons.size(); ++i)
+    {
+        auto& b = fixButtons[(size_t) i];
+        b.setButtonText ("Fix");
+        b.setColour (juce::TextButton::buttonColourId, Colours::ember.withAlpha (0.35f));
+        b.onClick = [this, i] { sendFix (i); };
+        addChildComponent (b);
+    }
+    undoFixButton.onClick = [this]
+    {
+        if (lastFixSeq == 0) return;
+        lastUndoSeq = suite::FixBus::sendUndo (lastFixSeq);
+        fixStatusTicks = 0;
+    };
+    undoFixButton.setEnabled (false);
+    fixStatus.setFont (juce::FontOptions (12.0f));
+    fixStatus.setJustificationType (juce::Justification::centredLeft);
+    addChildComponent (undoFixButton);
+    addChildComponent (fixStatus);
 
     setSize (1040, 720);
     timerCallback();
@@ -60,9 +83,79 @@ MentalismEditor::~MentalismEditor()
     setLookAndFeel (nullptr);
 }
 
+void MentalismEditor::sendFix (int row)
+{
+    const auto fix = shownFixes[(size_t) row];
+    if (fix == suite::Fix::None) return;
+    lastFix = fix;
+    lastFixSeq = suite::FixBus::send (fix);
+    lastUndoSeq = 0;
+    fixStatusTicks = 0;
+
+    // The fixed sections need hearing again before the coach judges them.
+    using T = suite::SectionType;
+    const auto type = fix == suite::Fix::BuildRise ? T::Build : fix == suite::Fix::IntroQuieter ? T::Intro
+                    : fix == suite::Fix::LaterDropBigger ? T::Drop : T::Breakdown;
+    processor.forgetSections (type, rep.map);
+}
+
+void MentalismEditor::updateFixStatus()
+{
+    ++fixStatusTicks;
+    if (lastFixSeq == 0)
+    {
+        fixStatus.setColour (juce::Label::textColourId, Colours::dimText);
+        fixStatus.setText ("Fix applies a small step in the plugins that can help; click again if it needs more.", juce::dontSendNotification);
+        undoFixButton.setEnabled (false);
+        return;
+    }
+    if (lastUndoSeq != 0)
+    {
+        const auto n = suite::FixBus::acknowledgements (lastUndoSeq);
+        fixStatus.setColour (juce::Label::textColourId, Colours::text);
+        fixStatus.setText (n > 0 ? "Undone in " + juce::String (n) + (n == 1 ? " plugin." : " plugins.") : "Undoing...", juce::dontSendNotification);
+        undoFixButton.setEnabled (false);
+        return;
+    }
+    const auto n = suite::FixBus::acknowledgements (lastFixSeq);
+    undoFixButton.setEnabled (n > 0);
+    if (n > 0)
+    {
+        fixStatus.setColour (juce::Label::textColourId, Colours::moss);
+        fixStatus.setText ("Applied in " + juce::String (n) + (n == 1 ? " plugin" : " plugins") + " (" + coach::describe (lastFix)
+                           + "). Play the section again to re-check.", juce::dontSendNotification);
+    }
+    else if (fixStatusTicks > 10)
+    {
+        fixStatus.setColour (juce::Label::textColourId, Colours::ember);
+        fixStatus.setText ("Nothing could apply it. It needs " + coach::describe (lastFix).upToFirstOccurrenceOf (":", false, false)
+                           + " in the project.", juce::dontSendNotification);
+    }
+    else
+        fixStatus.setText ("Applying...", juce::dontSendNotification);
+}
+
+void MentalismEditor::layoutFixButtons()
+{
+    const auto show = balanceTabs.getSelected() == 1 && rep.arrangementAvailable && rep.map.count > 0;
+    auto notes = arrangementNotes;
+    for (int i = 0; i < (int) fixButtons.size(); ++i)
+    {
+        auto row = notes.removeFromTop (21);
+        const auto fix = i < rep.arrangement.problems && i < (int) rep.arrangement.fixes.size() ? rep.arrangement.fixes[(size_t) i] : suite::Fix::None;
+        shownFixes[(size_t) i] = fix;
+        auto& b = fixButtons[(size_t) i];
+        b.setBounds (row.removeFromRight (56).reduced (2, 1));
+        b.setTooltip (coach::describe (fix));
+        b.setVisible (show && fix != suite::Fix::None);
+    }
+}
+
 void MentalismEditor::timerCallback()
 {
     rep = processor.report();
+    layoutFixButtons();
+    updateFixStatus();
     const auto ref = processor.getReference();
     referenceLabel.setColour (juce::Label::textColourId, ref.valid ? accent : Colours::dimText);
     referenceLabel.setText (processor.isLoadingReference() ? "Analysing reference..."
@@ -256,6 +349,7 @@ void MentalismEditor::paintArrangement (juce::Graphics& g, juce::Rectangle<int> 
     }
 
     auto notes = area.removeFromBottom (juce::jmin (88, area.getHeight() / 3));
+    notes.removeFromRight (60);   // room for the Fix buttons
     const auto chart = area.toFloat();
     g.setColour (Colours::background);
     g.fillRoundedRectangle (chart, 6.0f);
@@ -348,6 +442,13 @@ void MentalismEditor::resized()
     b.removeFromTop (6);
     balanceContent = b;
     arrangementContent = balanceArea.reduced (12, 6).withTrimmedTop (60);
+    arrangementNotes = arrangementContent.withTop (arrangementContent.getBottom() - juce::jmin (88, arrangementContent.getHeight() / 3));
+    {
+        auto c = balanceArea.reduced (12, 6).withTrimmedTop (14).removeFromTop (54).withTrimmedTop (18);
+        undoFixButton.setBounds (c.removeFromLeft (130).reduced (0, 4));
+        fixStatus.setBounds (c.withTrimmedLeft (8));
+    }
+    layoutFixButtons();
     balanceTabs.setBounds (balanceArea.getRight() - 372, balanceArea.getY() + 6, 360, 28);
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);

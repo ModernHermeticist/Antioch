@@ -260,6 +260,24 @@ int main (int argc, char** argv)
         check (level < 0.001f, "Follow Ouroboros off: sections are ignored");
     }
 
+    section ("Fix-it: a build that doesn't rise");
+    {
+        auto p = make();
+        auto v = [&p] (const juce::String& id) { return p->apvts.getParameter (id)->getValue(); };
+        const auto riser = v (Params::riser), noise = v (Params::noise), wash = v (Params::wash);
+        const auto seq = suite::FixBus::send (suite::Fix::BuildRise);
+        p->fixes->poll();
+        check (std::abs (v (Params::riser) - riser - 0.1f) < 0.01f && std::abs (v (Params::noise) - noise - 0.1f) < 0.01f
+                   && std::abs (v (Params::wash) - wash - 0.1f) < 0.01f && suite::FixBus::acknowledgements (seq) >= 1,
+               "more riser, noise and wash (+10% each)");
+        suite::FixBus::send (suite::Fix::BreakdownQuieter);
+        p->fixes->poll();
+        check (std::abs (v (Params::riser) - riser - 0.1f) < 0.01f, "ignores fixes it can't help with");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (v (Params::riser) - riser) < 0.001f, "undo puts them back");
+    }
+
     section ("BuildClock edge cases");
     {
         BuildClock clock;

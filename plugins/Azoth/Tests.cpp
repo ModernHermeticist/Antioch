@@ -166,6 +166,19 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Fix-it from Mentalism");
+    {
+        auto p = make();
+        auto v = [&p] (const juce::String& id) { return p->apvts.getParameter (id)->getValue(); };
+        const auto swell = v (AzothProcessor::swellId), later = v (AzothProcessor::laterDropsId);
+        suite::FixBus::send (suite::Fix::BuildRise);
+        p->fixes->poll();
+        check (std::abs (v (AzothProcessor::swellId) - swell - 0.1f) < 0.01f, "a flat build gets more swell");
+        suite::FixBus::send (suite::Fix::LaterDropBigger);
+        p->fixes->poll();
+        check (std::abs (v (AzothProcessor::laterDropsId) - later - 0.25f) < 0.01f, "a weaker later drop gets 'Bigger later drops' turned up");
+    }
+
     section ("No surprises");
     {
         suite::SectionBus::publish (testMap());

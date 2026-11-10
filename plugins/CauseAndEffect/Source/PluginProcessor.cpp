@@ -9,6 +9,14 @@ CauseEffectProcessor::CauseEffectProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CauseEffectState", Params::createLayout())
 {
+    // Mentalism's fix-it buttons: a build that doesn't rise gets more riser, noise and wash.
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    {
+        if (fix != suite::Fix::BuildRise) return {};
+        using R = suite::FixReceiver;
+        return { R::nudge (apvts, Params::riser, 0.1f), R::nudge (apvts, Params::noise, 0.1f), R::nudge (apvts, Params::wash, 0.1f) };
+    });
+
     // Spread the riser oscillators' start phases so they don't begin in lock-step.
     for (size_t i = 0; i < saws.size(); ++i)
         saws[i].setPhase ((float) i * 0.27f);
