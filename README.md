@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Three VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Four VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. All three share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -9,6 +9,7 @@ in **Correspondence**, and the others follow it.
 | **Antioch**: harmonic echo, euphoric reverb, throw delay | A delay, a reverb + EQ + sidechain chain, and the send automation for delay throws |
 | **Cause & Effect**: build-up macro | The 6+ automation clips (filter, reverb, noise, riser, gate, width) you draw for every build |
 | **Correspondence**: key and chord engine | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
+| **Kybalion**: trance gate + smart ducking | Drawing gate shapes in Gross Beat or Peak Controller, and sidechain/LFO Tool setups |
 
 ## Correspondence: key and chord engine
 
@@ -83,6 +84,43 @@ As the build rises, it applies:
 **Curve** sets the shape of the ramp. "Late" (the default) keeps most of the action for
 the last few bars.
 
+## Kybalion: trance bus (Rhythm + Polarity)
+
+![Kybalion rhythm tab](docs/kybalion_rhythm.png)
+
+**Rhythm** is a 16-step trance gate.
+
+- Draw step levels by clicking or dragging on the grid (right-drag erases), pick from 9
+  patterns (straight 16ths, trance classic, 3-3-2, offbeat, gallop, stutter, accents,
+  half-time, ramp up), or hit **Randomise**.
+- Step size can be 1/8, 1/16 or 1/32. **Length**, **Attack** and **Release** shape each
+  step. **Depth** sets how far closed steps drop.
+- **Swing** pushes every second step later.
+- **Stereo offset** shifts the right channel's pattern by 1–8 steps, for gates that
+  bounce left and right.
+- **Filter** makes closed steps darker as well as quieter, with resonance.
+
+![Kybalion polarity tab](docs/kybalion_polarity.png)
+
+**Polarity** is ducking with no sidechain routing.
+
+- In **Tempo** mode it ducks on the beat grid (every 1/2, 1/4 or 1/8). A negative
+  **Nudge** ducks slightly before the beat, which works like lookahead with no added
+  latency.
+- In **Sidechain** mode it follows a kick you route into the plugin's sidechain input,
+  with a threshold.
+- Presets for each element: Bass (tight), Pads (deep), Leads (gentle), Classic pump,
+  Reverb & delays, and Lows only.
+- **Split** ducks only below a chosen frequency, using a Linkwitz-Riley crossover, so the
+  bass pumps and the top stays put.
+- **BREAKDOWN** switches ducking off. Automate it for breakdowns where the kick drops
+  out.
+- The curve display shows the gain shape over two beats, with a live position marker and
+  a gain-reduction meter.
+
+Put it on any insert. A typical setup: Rhythm on a pad or pluck bus, and Polarity
+(Tempo, *Bass (tight)*) on the bass.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -98,9 +136,11 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the three `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the four `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
-4. Load Antioch and Cause & Effect on mixer inserts, and Correspondence on any insert.
+4. Load Antioch, Cause & Effect and Kybalion on mixer inserts, and Correspondence on any insert.
+   To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
+   sidechain, then select that input in the plugin's wrapper settings.
 
 On macOS, copy the `.vst3` folders to `~/Library/Audio/Plug-Ins/VST3/`. The CI builds are
 not code-signed, so you may need to run
@@ -113,7 +153,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -123,7 +163,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -138,6 +178,9 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Correspondence:** chord spelling, that Auto chords stay in the scale for every scale,
   that voice leading reduces movement, every rhythm pattern, MIDI files read back
   correctly, and key broadcast.
+- **Kybalion:** gate steps on the 16th grid, swing, stereo offset, filter, beat-grid
+  ducking depth and recovery, nudge, Breakdown, the low-band split (lows ducked, highs
+  untouched), and sidechain kick triggering.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -154,7 +197,8 @@ shared/                  code used by every plugin
 plugins/Antioch/         Engines.h (echo, reverb, throw), processor, tabbed UI, tests
 plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
 plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all three
+plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all four
 ```
 
 ## Licence note

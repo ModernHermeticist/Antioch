@@ -1,0 +1,315 @@
+#include "PluginEditor.h"
+
+using namespace suite::ui;
+
+namespace
+{
+    const juce::Colour gateColour = Colours::amethyst, duckColour = Colours::moss;
+}
+
+//==============================================================================
+StepGrid::StepGrid (KybalionProcessor& p) : processor (p)
+{
+    for (int i = 0; i < Params::numSteps; ++i)
+        params[(size_t) i] = p.apvts.getParameter (Params::Gate::step (i));
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+juce::Rectangle<float> StepGrid::stepBounds (int i) const
+{
+    const auto w = (float) getWidth() / (float) Params::numSteps;
+    return { (float) i * w, 0.0f, w, (float) getHeight() };
+}
+
+void StepGrid::paint (juce::Graphics& g)
+{
+    g.setColour (Colours::background);
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+
+    for (int i = 0; i < Params::numSteps; ++i)
+    {
+        auto r = stepBounds (i).reduced (3.0f, 6.0f);
+        const auto level = params[(size_t) i]->convertFrom0to1 (params[(size_t) i]->getValue());
+        const auto beatStart = i % 4 == 0;
+
+        g.setColour (beatStart ? Colours::outline.brighter (0.15f) : Colours::outline);
+        g.fillRoundedRectangle (r, 3.0f);
+
+        if (level > 0.001f)
+        {
+            const auto lit = i == playing;
+            g.setColour (lit ? gateColour.brighter (0.4f) : gateColour.withAlpha (0.55f + 0.45f * level));
+            g.fillRoundedRectangle (r.withTop (r.getBottom() - r.getHeight() * level), 3.0f);
+        }
+        if (i == playing)
+        {
+            g.setColour (Colours::text);
+            g.drawRoundedRectangle (r, 3.0f, 1.5f);
+        }
+    }
+}
+
+void StepGrid::mouseDown (const juce::MouseEvent& e)
+{
+    // Left-drag draws levels, right-drag erases.
+    erasing = e.mods.isRightButtonDown();
+    for (auto* p : params) p->beginChangeGesture();
+    edit (e);
+}
+
+void StepGrid::mouseDrag (const juce::MouseEvent& e) { edit (e); }
+
+void StepGrid::mouseUp (const juce::MouseEvent&)
+{
+    for (auto* p : params) p->endChangeGesture();
+}
+
+void StepGrid::edit (const juce::MouseEvent& e)
+{
+    const auto i = juce::jlimit (0, Params::numSteps - 1, (int) ((float) e.x / ((float) getWidth() / Params::numSteps)));
+    const auto r = stepBounds (i).reduced (3.0f, 6.0f);
+    auto level = erasing ? 0.0f : juce::jlimit (0.0f, 1.0f, (r.getBottom() - (float) e.y) / r.getHeight());
+    if (level < 0.06f) level = 0.0f;          // bottom edge = off
+    if (level > 0.94f) level = 1.0f;          // top edge = full
+    params[(size_t) i]->setValueNotifyingHost (params[(size_t) i]->convertTo0to1 (level));
+    repaint();
+}
+
+void StepGrid::refresh()
+{
+    playing = processor.gateStep.load();
+    repaint();
+}
+
+//==============================================================================
+void DuckView::paint (juce::Graphics& g)
+{
+    auto r = getLocalBounds().toFloat();
+    g.setColour (Colours::background);
+    g.fillRoundedRectangle (r, 6.0f);
+
+    auto meter = r.removeFromRight (26.0f).reduced (6.0f, 10.0f);
+    auto plot = r.reduced (12.0f, 14.0f);
+
+    auto& s = processor.apvts;
+    auto v = [&] (const juce::String& id) { return s.getRawParameterValue (id)->load(); };
+    const auto depth = v (Params::Duck::depth), attack = v (Params::Duck::attack), hold = v (Params::Duck::hold);
+    const auto release = v (Params::Duck::release), curve = v (Params::Duck::curve);
+    const auto breakdown = v (Params::Duck::breakdown) > 0.5f;
+    const auto cycleMs = (float) (Params::Duck::rateQuarters ((int) v (Params::Duck::rate)) * 60000.0 / processor.currentBpm.load());
+
+    auto amountAt = [&] (float ms)
+    {
+        if (breakdown) return 0.0f;
+        if (ms < attack) return depth * ms / juce::jmax (0.001f, attack);
+        ms -= attack;
+        if (ms < hold) return depth;
+        const auto x = (ms - hold) / juce::jmax (1.0f, release);
+        return x >= 1.0f ? 0.0f : depth * (1.0f - std::pow (x, curve));
+    };
+
+    // Grid: beat lines
+    g.setColour (Colours::outline);
+    g.drawHorizontalLine ((int) plot.getY(), plot.getX(), plot.getRight());
+    g.drawHorizontalLine ((int) plot.getBottom(), plot.getX(), plot.getRight());
+
+    // Two cycles of the gain curve
+    juce::Path path;
+    const auto points = 240;
+    for (int i = 0; i <= points; ++i)
+    {
+        const auto t = (float) i / (float) points * 2.0f * cycleMs;
+        const auto gain = 1.0f - amountAt (std::fmod (t, cycleMs));
+        const auto x = plot.getX() + plot.getWidth() * (float) i / (float) points;
+        const auto y = plot.getBottom() - plot.getHeight() * gain;
+        if (i == 0) path.startNewSubPath (x, y); else path.lineTo (x, y);
+    }
+    juce::Path fill (path);
+    fill.lineTo (plot.getRight(), plot.getBottom());
+    fill.lineTo (plot.getX(), plot.getBottom());
+    fill.closeSubPath();
+    g.setColour (duckColour.withAlpha (0.15f));
+    g.fillPath (fill);
+    g.setColour (breakdown ? Colours::dimText : duckColour);
+    g.strokePath (path, juce::PathStrokeType (2.0f));
+
+    // Live marker (only meaningful while ducking is cycling)
+    const auto ms = processor.duckMs.load();
+    if (ms < cycleMs * 2.0f)
+    {
+        const auto x = plot.getX() + plot.getWidth() * 0.5f * std::fmod (ms, cycleMs) / cycleMs;
+        g.setColour (Colours::text.withAlpha (0.6f));
+        g.drawVerticalLine ((int) x, plot.getY(), plot.getBottom());
+    }
+
+    g.setColour (Colours::dimText);
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawText (breakdown ? "BREAKDOWN: ducking off" : "gain over two beats", plot.removeFromTop (14.0f), juce::Justification::topRight);
+
+    // Gain-reduction meter
+    g.setColour (Colours::outline);
+    g.fillRoundedRectangle (meter, 3.0f);
+    const auto gr = 1.0f - processor.duckGain.load();
+    g.setColour (duckColour);
+    g.fillRoundedRectangle (meter.withHeight (meter.getHeight() * juce::jlimit (0.0f, 1.0f, gr)), 3.0f);
+}
+
+//==============================================================================
+KybalionEditor::KybalionEditor (KybalionProcessor& p)
+    : AudioProcessorEditor (p), processor (p),
+      gateOn (p.apvts, Params::gateOn, "RHYTHM ON", gateColour),
+      duckOn (p.apvts, Params::duckOn, "POLARITY ON", duckColour),
+      output (p.apvts, Params::output, "Output", Colours::text),
+      tabs ({ "RHYTHM  (gate)", "POLARITY  (duck)" }, { gateColour, duckColour }),
+      grid (p),
+      gateRate (p.apvts, Params::Gate::rate, "Step size"),
+      length (p.apvts, Params::Gate::length, "Length", gateColour),
+      attack (p.apvts, Params::Gate::attack, "Attack", gateColour),
+      release (p.apvts, Params::Gate::release, "Release", gateColour),
+      depth (p.apvts, Params::Gate::depth, "Depth", gateColour),
+      swing (p.apvts, Params::Gate::swing, "Swing", Colours::brass),
+      stereo (p.apvts, Params::Gate::stereo, "Stereo offset", Colours::verdigris),
+      filter (p.apvts, Params::Gate::filter, "Filter", Colours::ember),
+      res (p.apvts, Params::Gate::res, "Resonance", Colours::ember),
+      duckView (p),
+      source (p.apvts, Params::Duck::source, "Trigger"),
+      duckRate (p.apvts, Params::Duck::rate, "Every"),
+      nudge (p.apvts, Params::Duck::nudge, "Nudge", Colours::brass),
+      duckDepth (p.apvts, Params::Duck::depth, "Depth", duckColour),
+      duckAttack (p.apvts, Params::Duck::attack, "Attack", duckColour),
+      hold (p.apvts, Params::Duck::hold, "Hold", duckColour),
+      duckRelease (p.apvts, Params::Duck::release, "Release", duckColour),
+      curve (p.apvts, Params::Duck::curve, "Curve", duckColour),
+      split (p.apvts, Params::Duck::split, "Split", Colours::verdigris),
+      threshold (p.apvts, Params::Duck::threshold, "SC threshold", Colours::brass),
+      breakdown (p.apvts, Params::Duck::breakdown, "BREAKDOWN", Colours::ember)
+{
+    setLookAndFeel (&lnf);
+
+    patternBox.setTextWhenNothingSelected ("Gate pattern...");
+    for (size_t i = 0; i < Params::Gate::patterns().size(); ++i)
+        patternBox.addItem (Params::Gate::patterns()[i].name, (int) i + 1);
+    patternBox.onChange = [this] { if (patternBox.getSelectedId() > 0) processor.applyGatePattern (patternBox.getSelectedId() - 1); };
+    randomButton.onClick = [this] { juce::Random rng; processor.randomiseGate (rng); patternBox.setSelectedId (0, juce::dontSendNotification); };
+
+    presetBox.setTextWhenNothingSelected ("Ducking preset...");
+    for (size_t i = 0; i < Params::Duck::presets().size(); ++i)
+        presetBox.addItem (Params::Duck::presets()[i].name, (int) i + 1);
+    presetBox.onChange = [this] { if (presetBox.getSelectedId() > 0) processor.applyDuckPreset (presetBox.getSelectedId() - 1); };
+
+    sourceStatus.setFont (juce::FontOptions (12.0f));
+    sourceStatus.setJustificationType (juce::Justification::centredLeft);
+
+    for (auto* c : std::initializer_list<juce::Component*> { &grid, &patternBox, &randomButton, &gateRate, &length, &attack,
+                                                             &release, &depth, &swing, &stereo, &filter, &res })
+        gatePanel.addAndMakeVisible (c);
+    for (auto* c : std::initializer_list<juce::Component*> { &duckView, &presetBox, &source, &duckRate, &nudge, &duckDepth,
+                                                             &duckAttack, &hold, &duckRelease, &curve, &split, &threshold,
+                                                             &breakdown, &sourceStatus })
+        duckPanel.addAndMakeVisible (c);
+
+    for (auto* c : std::initializer_list<juce::Component*> { &gateOn, &duckOn, &output, &bpmLabel, &tabs, &gatePanel, &duckPanel })
+        addAndMakeVisible (c);
+
+    tabs.onChange = [this] (int i) { gatePanel.setVisible (i == 0); duckPanel.setVisible (i == 1); };
+    tabs.onChange (0);
+    tabs.setComponentID ("tabs");
+
+    setSize (980, 660);
+    timerCallback();
+    startTimerHz (30);
+}
+
+KybalionEditor::~KybalionEditor()
+{
+    stopTimer();
+    setLookAndFeel (nullptr);
+}
+
+void KybalionEditor::timerCallback()
+{
+    bpmLabel.setText (juce::String (processor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
+    grid.refresh();
+    duckView.repaint();
+
+    const auto wantsSidechain = (int) processor.apvts.getRawParameterValue (Params::Duck::source)->load() == Params::Duck::Sidechain;
+    const auto connected = processor.sidechainConnected.load();
+    threshold.setEnabled (wantsSidechain);
+    duckRate.setEnabled (! wantsSidechain);
+    nudge.setEnabled (! wantsSidechain);
+    sourceStatus.setColour (juce::Label::textColourId, wantsSidechain && ! connected ? Colours::ember : Colours::dimText);
+    sourceStatus.setText (! wantsSidechain ? "Ducks on the beat grid: no routing needed"
+                          : connected ? "Ducking from the sidechain input"
+                                      : "No sidechain routed: using the beat grid",
+                          juce::dontSendNotification);
+}
+
+void KybalionEditor::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::background);
+    drawHeader (g, { 20, 12, 700, 32 }, "KYBALION", juce::String::fromUTF8 ("rhythm \xc2\xb7 polarity \xc2\xb7 trance bus"), gateColour);
+    drawPanel (g, masterArea, "Master");
+
+    const auto drawSection = [&] (juce::Component& panel, std::initializer_list<std::pair<juce::Rectangle<int>, juce::String>> areas,
+                                  juce::Colour colour)
+    {
+        if (! panel.isVisible()) return;
+        for (auto& [area, title] : areas)
+            drawPanel (g, area + panel.getPosition(), title, colour);
+    };
+
+    const auto gb = gatePanel.getLocalBounds();
+    drawSection (gatePanel, { { gb.withHeight (300), "Pattern  (click or drag to draw, right-drag to erase)" },
+                              { gb.withTrimmedTop (310), "Shape" } }, gateColour);
+    const auto db = duckPanel.getLocalBounds();
+    drawSection (duckPanel, { { db.withHeight (250), "Ducking curve" }, { db.withTrimmedTop (260), "Shape & trigger" } }, duckColour);
+}
+
+void KybalionEditor::resized()
+{
+    auto bounds = getLocalBounds().reduced (16);
+    auto header = bounds.removeFromTop (40);
+    bpmLabel.setBounds (header.removeFromRight (100));
+
+    bounds.removeFromTop (8);
+    masterArea = bounds.removeFromTop (70);
+    auto m = masterArea.reduced (14, 8).withTrimmedTop (10);
+    gateOn.setBounds (m.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+    duckOn.setBounds (m.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+    output.setBounds (m.removeFromRight (120).withTrimmedTop (-14).withTrimmedBottom (-4));
+    output.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 16);
+    output.maxHeight = 60;
+
+    bounds.removeFromTop (10);
+    tabs.setBounds (bounds.removeFromTop (34));
+    bounds.removeFromTop (10);
+    gatePanel.setBounds (bounds);
+    duckPanel.setBounds (bounds);
+
+    // ---- Rhythm ----
+    {
+        auto top = gatePanel.getLocalBounds().withHeight (300).reduced (14, 8).withTrimmedTop (16);
+        auto bar = top.removeFromTop (30);
+        randomButton.setBounds (bar.removeFromRight (110).reduced (2));
+        patternBox.setBounds (bar.removeFromRight (200).reduced (2));
+        top.removeFromTop (8);
+        grid.setBounds (top);
+
+        auto shape = gatePanel.getLocalBounds().withTrimmedTop (310).reduced (10, 6).withTrimmedTop (12);
+        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res });
+    }
+
+    // ---- Polarity ----
+    {
+        auto top = duckPanel.getLocalBounds().withHeight (250).reduced (14, 8).withTrimmedTop (16);
+        auto bar = top.removeFromTop (30);
+        breakdown.setBounds (bar.removeFromRight (130).reduced (2));
+        presetBox.setBounds (bar.removeFromRight (200).reduced (2));
+        sourceStatus.setBounds (bar);
+        top.removeFromTop (8);
+        duckView.setBounds (top);
+
+        auto shape = duckPanel.getLocalBounds().withTrimmedTop (260).reduced (10, 6).withTrimmedTop (12);
+        layoutRow (shape, { &source, &duckRate, &nudge, &duckDepth, &duckAttack, &hold, &duckRelease, &curve, &split, &threshold });
+    }
+}

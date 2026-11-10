@@ -11,7 +11,7 @@ permissions:
   contents: write  # needed to attach builds to releases on version tags
 
 env:
-  PLUGINS: Antioch CauseAndEffect Correspondence
+  PLUGINS: Antioch CauseAndEffect Correspondence Kybalion
 
 jobs:
   build:
