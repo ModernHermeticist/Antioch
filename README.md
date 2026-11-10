@@ -41,7 +41,8 @@ With the full suite loaded, here is everything that happens without automation c
    gain to hit it. Mentalism's **arrangement coach** checks the energy arc section by
    section, and its **Fix** buttons adjust the other plugins in one click.
 9. **Every drop after the first goes bigger**: more echo and Euphoria, louder impacts,
-   longer swells and the lead up an octave (see *Bigger later drops*).
+   longer swells, the lead up an octave and embellished with a harmony line, and an
+   optional **key change** for the last drop that the whole suite follows.
 10. **Solve et Coagula** makes room for the vocal in the music, only where and when it sings.
 11. **Set-up:** Prima Materia and Kybalion set themselves up from the track names, every
     Kybalion can duck to the real kick with no routing (**Suite kick**), **Rough mix**
@@ -139,6 +140,10 @@ the last few bars.
 - **Stereo offset** shifts the right channel's pattern by 1–8 steps, for gates that
   bounce left and right.
 - **Filter** makes closed steps darker as well as quieter, with resonance.
+- **Fills** (with Ouroboros): the last bar before each drop (and, with *Both*, each
+  breakdown) plays a fill instead of the pattern: **Stutter** (1/32 chops), **Half-time**,
+  **Gap** (silence on the last beat), **Roll** (1/8 → 1/16 → 1/32), or **Auto**, which
+  alternates roll and gap into drops and uses half-time into breakdowns.
 
 ![Kybalion polarity tab](docs/kybalion_polarity.png)
 
@@ -328,7 +333,23 @@ The second, third and later drops build on the first, so the last drop isn't a r
 - **Prima Materia** has a **Separate Drop 2+** column, e.g. the lead 2 dB up, hats up,
   atmos down.
 - **Correspondence's** full-song lead jumps up an octave in later drops (*Lift later drops*
-  in Song patterns).
+  in Song patterns). It's also **varied** there (passing notes across leaps, an octave
+  climax in the last phrase) with a **harmony line** a diatonic third below, written as
+  the SONG HARMONY clip and track in Export all (*Vary the lead + harmony* in Song
+  patterns).
+
+### Final-drop key change
+
+Set **Final drop key** in Ouroboros to +1 or +2 semitones, and the song moves up from the
+last drop to the end (the timeline marks it **KEY +n**). The whole suite follows:
+
+- Correspondence's song clips (and Export all) are transposed from there.
+- Azoth's impact into that drop lands on the new root, and the build risers before it aim
+  for the new key.
+- Antioch's harmonic echo moves its harmonies up.
+- Cause & Effect's tonal riser in the build rises to the new root.
+
+Everything keeps working from the same song key; only the last drop onwards is shifted.
 
 ## Ouroboros Listen
 
@@ -653,6 +674,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   under the kick (re-measured afterwards), leaves the kick alone, and Undo restores it.
 - **Export all:** 8 clips plus the all-parts file, with 4 tracks of notes and the
   sections as markers (Groove, Drop, Breakdown, Drop 2).
+- **Final-drop key change:** Ouroboros shares the lift, which starts at the last drop and
+  runs to the end; song chords move a semitone up there and nowhere else; Azoth's impact
+  lands on B1 instead of A1 with +2; Antioch's harmonies go from A to B; Cause & Effect's
+  build riser aims for the new root.
+- **Gate fills:** Gap silences the last beat before a drop; Stutter chops at 1/32 only in
+  the fill bar; Auto plays half-time into a breakdown and a roll into the first drop;
+  Off plays the pattern through.
+- **Varied later drops:** the second drop's lead gains passing notes (all in key) and a
+  climax note, and the harmony is a diatonic third under it, only in later drops.
 - **Build risers:** silent before the build, rising through it, starting on the song's
   root, sweeping away from it, and stopping at the drop; the track riser pitches the
   track's own audio up an octave.
