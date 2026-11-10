@@ -11,7 +11,7 @@ permissions:
   contents: write  # needed to attach builds to releases on version tags
 
 env:
-  PLUGINS: Antioch CauseAndEffect Correspondence Kybalion Vibration Mentalism Ouroboros
+  PLUGINS: Antioch CauseAndEffect Correspondence Kybalion Vibration Mentalism Ouroboros Lapis EmeraldTablet
 
 jobs:
   build:

@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Seven VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Nine VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. All three share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -13,6 +13,25 @@ in **Correspondence**, and the others follow it.
 | **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
 | **Mentalism**: mix assistant | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong |
 | **Ouroboros**: arrangement conductor | Automation clips that switch builds, ducking and throws on and off across the song |
+| **Lapis**: master finisher | Riding the master limiter until the drop is loud enough, and checking true peak |
+| **Emerald Tablet**: key detector | Working out the key of a track, loop or acapella by ear |
+
+## How much runs on its own
+
+With the full suite loaded, here is everything that happens without automation clips:
+
+1. **Emerald Tablet** hears the key and hands it to **Correspondence**, which shares it
+   with every plugin.
+2. **Ouroboros** listens to one play-through, proposes the song's sections, and tells the
+   suite where it is.
+3. **Cause & Effect** builds and drops on cue, **Kybalion** stops ducking in breakdowns,
+   and **Antioch** throws at section ends.
+4. **Section scenes** move each plugin's key controls per section: more reverb and shimmer
+   in breakdowns, more Euphoria and width in drops, and so on.
+5. **Mentalism** measures against its target and shares it, and **Lapis** sets the master
+   gain to hit it.
+
+What's left to you is writing and arranging the music, plus choosing taste settings.
 
 ## Correspondence: key and chord engine
 
@@ -199,6 +218,74 @@ kind of shared memory as the key. Each plugin then works out the section from it
 of FL's transport, so every reaction lands exactly on the bar line, whatever order FL
 processes the tracks in.
 
+## Section scenes (Antioch, Kybalion, Vibration)
+
+![Antioch scenes](docs/antioch_scenes.png)
+
+Each of these three plugins has a **Scenes** tab. For each section type (Intro, Groove,
+Breakdown, Build, Drop, Outro) you set how far some of its controls move, as an offset on
+top of your own settings. Your knobs never move. Instead, a **ghost ring** on each knob
+shows the value actually in use. Changes glide in over the **Morph** time, from instant
+up to 1 bar.
+
+**Suggested** fills in sensible starting points:
+
+| Plugin | Breakdown | Build | Drop |
+|---|---|---|---|
+| Antioch | more reverb, decay, shimmer, echo and harmonics | a little more reverb and echo, brighter | less reverb and shimmer |
+| Kybalion | gate much shallower, darker | shorter, more filtered gate | deeper gate |
+| Vibration | less Euphoria, wider, more air | more drive and air | more Euphoria and width |
+
+Scenes follow Ouroboros and are saved with the project. The section is checked once per
+audio block, so changes land within about 10 ms of the bar line.
+
+## Ouroboros Listen
+
+Turn on **LISTEN** and play the song through. While it plays, Ouroboros measures each bar's
+kick activity (low-end attacks), top-end energy and overall level. When you stop, it
+proposes a map, shown as a dashed preview: kick runs become Intro, Groove or Drop, and
+kickless stretches become Breakdowns ending in a Build where the top end rises. Where the
+top end falls away at the end, it proposes the Outro. Press **Apply** to use the map, or
+**Discard** it. Everything snaps to 4-bar phrases. Treat the proposal as a starting point:
+check it and nudge the edges if needed.
+
+## Lapis: master finisher
+
+![Lapis](docs/lapis.png)
+
+Lapis goes on the master, just before Mentalism. In **Auto** mode, play the loudest part
+(the drop): Lapis learns the gain that puts steady loud sections at the target. By default
+it uses Mentalism's target, and its own setting otherwise. It aims 1 LU above the
+integrated target, because breakdowns pull the song average down by about that much.
+
+- **Breakdowns are ignored.** It learns only from steady material close to the loudest it
+  has heard, so quiet sections and the slide into them never push the gain up.
+- **It won't crush the mix.** If reaching the target would need more than 8 dB of
+  limiting, it stops and says so.
+- **Hold** locks the learned gain, and **Manual** lets you set it yourself. The learned
+  gain is saved with the project.
+- **Clip** shaves the sharpest peaks with a soft clipper before the limiter.
+- The **limiter** is a lookahead true-peak design that detects inter-sample peaks, adds
+  77 samples of latency (FL compensates for it automatically), and holds the ceiling.
+
+## Emerald Tablet: key detector
+
+![Emerald Tablet](docs/emerald_tablet.png)
+
+Put it on the master, or on a loop or acapella channel, and play about 20 seconds. It
+builds a picture of which pitch classes are present (scoring each note by its whole
+harmonic series, so overtones don't skew it) and matches it against all 24 major and
+minor key profiles. It shows the best key, its confidence, and the two runners-up.
+
+When the result has been confident and stable for 8 seconds, it **sends the key**:
+- If Correspondence is running, it adopts the key, unless its **Accept detected** switch
+  is off. Opening a saved project never changes its key.
+- If Correspondence isn't running, Emerald Tablet broadcasts the key to the rest of the
+  suite itself. It never overrides Correspondence.
+
+It detects major and minor; modes such as Dorian are reported as their nearest major or
+minor key.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -214,11 +301,12 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the seven `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the nine `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
 4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
    and Mentalism last on the master,
-   and Ouroboros on any insert.
+   Ouroboros on any insert, Lapis on the master before Mentalism, and Emerald Tablet wherever
+   you want the key detected.
    To use Kybalion's sidechain mode, route the kick track to Kybalion's mixer track as a
    sidechain, then select that input in the plugin's wrapper settings.
 
@@ -233,7 +321,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3
+cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -243,7 +331,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests
+cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -272,7 +360,18 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   trip through shared memory, section lookup in other time signatures, marking at the
   playhead, and save/restore. The followers' own tests check that builds ramp and drop on
   the Build section, that ducking pauses in breakdowns, and that throws land on section
-  ends.
+  ends. **Listen** is tested on a synthetic 104-bar arrangement, and its proposal matches
+  the real structure exactly.
+- **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
+  Scenes off restores the knob value, and scenes survive save/restore.
+- **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true
+  peak stays within 0.3 dB under 18 dB of drive; it lands loud material within 1 LU of
+  target; the gain doesn't move through a 10 dB quieter breakdown; Hold works, and it
+  follows Mentalism's target.
+- **Emerald Tablet:** A minor, C major, E minor and F major cadences are detected
+  correctly; it sends only when confident; it broadcasts alone without Correspondence and
+  never overrides it. Correspondence's tests check that it adopts suggestions and that
+  projects keep their key.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
@@ -285,6 +384,9 @@ shared/                  code used by every plugin
   SharedMemory.*         named shared memory block (Windows/macOS/Linux)
   KeyBus.*               cross-plugin key broadcast
   SectionBus.*           cross-plugin arrangement broadcast + SectionFollower helper
+  TargetBus.*            Mentalism's loudness target, for Lapis
+  Scenes.h, SceneUI.h    section scenes engine, ghost rings and scene editor panel
+  Analysis.h             BS.1770 loudness, true peak, stereo and band meters
   Music.h                scales, note names, tempo divisions
   HostInfo.h             tempo/position/time-signature snapshot from the host
   SuiteUI.*              shared look-and-feel, knobs, toggles, tabs
@@ -295,8 +397,10 @@ plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), previe
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests
 plugins/Mentalism/       Analysis.h (BS.1770 loudness, true peak, stereo, bands), Advisor.h, tests
-plugins/Ouroboros/       Arrangement.h (section editing, templates), timeline editor, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all seven
+plugins/Ouroboros/       Arrangement.h (section editing), Listen.h (section detection), timeline editor, tests
+plugins/Lapis/           Limiter.h (lookahead true-peak limiter), auto-gain loop, tests
+plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tests
+.github/workflows/       Windows/macOS/Linux CI builds of all nine
 ```
 
 ## Licence note
