@@ -62,7 +62,7 @@ ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::a
         chunkLoudness.push_back (meterL->shortTerm.load());
         const auto length = (juce::int64) std::min<double> ((double) reader->lengthInSamples, 20.0 * reader->sampleRate);
         // The 20 s window with the highest average short-term loudness (each reading covers the 3 s before it).
-        const auto span = juce::jmax<size_t> (1, (size_t) (length / chunk));
+        const auto span = std::max<size_t> (1, (size_t) (length / chunk));
         double best = -1.0e9;
         juce::int64 bestEnd = length;
         for (size_t k = 0; k + span <= chunkLoudness.size(); ++k)
@@ -832,8 +832,8 @@ MentalismProcessor::Report MentalismProcessor::report() const
             while (rep.advice.size() > 6) rep.advice.remove (rep.advice.size() - 1);
         }
     }
-    for (const auto& m : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), m);
-    for (const auto& m : liveChecks()) rep.advice.insert (0, m);   // live problems first
+    for (const auto& note : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), note);
+    for (const auto& note : liveChecks()) rep.advice.insert (0, note);   // live problems first
     {
         Pass before;
         { const juce::ScopedLock sl (historyLock); before = previousPass; }
