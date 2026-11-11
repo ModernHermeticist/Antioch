@@ -90,6 +90,10 @@ three tabs:
   plays, so it blooms in the gaps without washing out the lead. **Freeze into breakdowns**
   (with Ouroboros): as each breakdown starts, the last half second of the reverb is held as
   an endless wash under it, fading out over 1, 2 or 4 bars (**Freeze level** sets how loud).
+  **Tension** (default 30%, with Correspondence running) widens the reverb on the chords
+  that pull away from home (anything but i and its relative major), up to half again as
+  wide at 100%, and brings it back on the home chord, so the space breathes with the
+  harmony.
 - **Throw:** a dub-style delay that only takes in audio while the **THROW** pad is held
   (or latched, or automated). The tail keeps ringing after you let go. **Auto Throw**
   catches the last 1/16th to 1 bar of every 2, 4, 8 or 16 bars while FL is playing, so
@@ -156,6 +160,9 @@ the last few bars.
   *Restart* starts the pattern again at each change (it matters when chords are shorter
   than the pattern). Changes are counted from each section's start, as Correspondence
   writes them.
+- **Dynamic gate** (off by default): the gate's depth follows the song: in drops it grows
+  from 60% to full over the drop; elsewhere it follows the section's energy, so a quiet
+  breakdown gates gently and a hot groove hard.
 
 ![Kybalion polarity tab](docs/kybalion_polarity.png)
 
@@ -178,6 +185,10 @@ the last few bars.
   it rings and the pitch of its body. The button sets Hold and Release to match, and the
   status line shows the kick's note against the song's root (for example *"55.1 Hz (A1 +4
   ct): in tune with the root"*, or how many semitones to retune it).
+- **Phase check:** while a kick plays on the sidechain (or shared), Kybalion compares this
+  track's low end (below 120 Hz) with the kick's. If they cancel, the status line says
+  *"low end OUT OF PHASE with the kick"*: turn on **Flip polarity** (next to Breakdown),
+  which inverts this track.
 - **Split** ducks only below a chosen frequency, using a Linkwitz-Riley crossover, so the
   bass pumps and the top stays put.
 - **BREAKDOWN** switches ducking off. Automate it for breakdowns where the kick drops
@@ -215,6 +226,12 @@ Pad, Vocal chop, Arp, Clean), then fine-tune:
   <name>*: the character comes back, and Mud, Presence and Air move 70% of the way towards
   the stored tone. Play it again and match once more to refine. Fingerprints live in
   *Antioch Suite/Lead fingerprints*.
+- **Tension width** (default 30%, with Correspondence running): the lead widens on the
+  chords that pull away from home (up to 50% wider at 100%) and narrows back on the home
+  chord.
+- **Pitch bright** (off by default): Vibration tracks the lead's pitch; notes above its
+  usual pitch get more air and presence (up to +4 and +2 dB) and notes below get less, so
+  the top of a melody sparkles and low notes stay warm.
 
 ## Mentalism: mix assistant
 
@@ -315,6 +332,13 @@ the arc:
   second: a build that only gets louder is flagged, with the same Fix.)
 - Does every later drop hit at least as hard as the one before?
 - Does the intro leave headroom for the drop?
+- On songs of 64 bars or more: is any build shorter than 8 bars, or any breakdown shorter
+  than 16? The Fix makes it 8 bars longer in Ouroboros's map (later sections move along;
+  undoable like any fix).
+
+**Your own numbers.** Once you've finished songs (with *Finish the song*), the coach learns
+your usual breakdown depth and build rise from them, and its messages add *"(your usual:
+X LU)"*, so you can tell a real problem from your style.
 
 Problems appear there and at the top of the suggestions, for example *"Breakdown (bars
 65-96) is only 1.0 LU below the drop: the drop won't feel like a lift."*
@@ -476,6 +500,21 @@ which track, and checks the setup. It flags a Kybalion set to sidechain with not
 routed, a Prima Materia without a role, Lapis or Mentalism off the master, Suite kick with
 no kick shared, no key source, no song map, and two Ouroboros at once. It shows **!**
 when something needs attention.
+
+At the top, **NEXT:** says the one thing to do now, in order: draw a map, add a key source,
+give Prima Materia a role, fix a **key clash** (Emerald Tablet hears a different key from
+the one Correspondence shares), add Mentalism, play more of the song, answer the coach,
+clear the checklist, and finally *ready to export*. It also warns about plugins adding a
+lot of latency, and lists plugins that are loaded but doing nothing (a Kybalion with gate
+and duck off, a Solve et Coagula with no vocal), so you can remove them.
+
+**Snapshots per section…** (template list) gives each section type a snapshot slot (or
+none): as the song plays into a section, the whole suite recalls that slot. For example,
+put the breakdown sound in C and the drop sound in B.
+
+**Render plan…** (template list) lists the versions you made with *Make versions*, with
+what to do for each (which slot, reset Mentalism, play through so Lapis settles on its
+loudness target, check the checklist, export), its file name and the export settings.
 
 ![Suite overview](docs/ouroboros_suite.png)
 
@@ -639,6 +678,13 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
   sounds) and, if they have a clear low pitch, **tuned to the song's key** (to the nearest
   root, at most 6 semitones, following the final-drop key change too; switch it off in the
   menu). A **producer tag** slot plays your tag on the first drop, on every drop, or never.
+  *Save everything here as a preset…* (in the same *Samples and presets…* menu) keeps every
+  Azoth knob and sample under a name, listed in every project.
+- **Riser follows the chords** (on by default, with Correspondence running): the tonal riser
+  moves with the progression across the build rather than staying on the root.
+- **Roll designer:** **Roll from** (1/4 or 1/8) and **Roll to** (1/16, 1/32 or 1/64) set
+  the snare roll's first and last speed, **Curve** how it speeds up (steps, smooth or late),
+  and the start velocity how quietly it begins before growing into the drop.
 - **Play** buttons audition each sound (your sample if you've loaded one).
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
@@ -706,7 +752,9 @@ name or from its sound), in any project, starts from your settings.
   about 8 dB, recovering over ~110 ms, with no routing and no Kybalion on the track.
 - **Input gain** and **Gain-stage all tracks:** every Prima Materia measures what arrives
   at its input; the button sets each one's Input gain so every track hits -18 dBFS RMS
-  before processing. Undo it in Mentalism's History.
+  before processing. Undo it in Mentalism's History. **Keep at -18** keeps doing
+  it while the song plays: every 10 s, if the input has drifted more than 1.5 dB from
+  -18 dBFS, the input gain follows.
 
 **Drop entrance** (Ouroboros, Perform row) decides how every drop arrives: **Slam** (all
 at once), **Staggered** (kick on beat 1, bass on beat 2, everything else on beat 3), or
@@ -724,7 +772,14 @@ cutting.
 has a **Trim**. Mentalism's **Rough mix** button sets every Trim so each track sits at the
 usual trance level for its role, relative to the kick: bass 2 LU under, vocal 1, lead 4,
 pads 7, hats 10, FX 12. It's a starting balance to refine by ear, and **Undo** puts the
-trims back. Play a drop first so there's something to measure.
+trims back. Play a drop first so there's something to measure. Once two or more of your
+finished songs are in the style log, the rough mix uses **your** balance for each role (from
+those songs) instead of the built-in one.
+
+**Signature chain per role.** *Save as my role* also saves the suite plugins on that track
+(Vibration, Antioch, Kybalion...) as a chain for the role. When the role is applied to
+another track, in any project, the plugins on it load that chain. This needs FL to pass
+track names, as for auto-roles.
 
 ## Correspondence: full-song MIDI
 
@@ -745,7 +800,12 @@ section plays. The defaults:
 (the default) or IV, for every part, so the drop's return to i lands harder: Am F C G
 becomes F C G Am in the breakdown. The **Walking** bass pattern rolls on each root and
 steps through the scale to the next chord's root in the last two 16ths before each
-change (C to G walks C, B, A, G).
+change (C to G walks C, B, A, G). **Lift to III halfway** plays the breakdown from i
+for its first half and from III for its second, so it lifts before the build.
+
+**Breakdown piano:** Export all also writes a SONG PIANO clip: in every breakdown, each
+chord as a low root and its chord tones broken upwards in 8ths and held, with the sustain
+pedal (CC 64) down for each chord.
 
 The progression restarts at every section, and notes never spill into the next one. Song
 clips need Ouroboros to be running; without it the tile says so.
@@ -758,6 +818,11 @@ At 0% you get the plain pattern; the preview isn't affected.
 clip, plus *"<key> - all parts.mid"*: one MIDI file with the song's chords, bass, arp and
 lead on separate tracks and the sections as markers. Drag it into FL to get the whole song
 in one go.
+
+**Song pack for a vocalist** (the Export button's menu) writes a folder for a singer or
+topliner: the song's chords, bass and lead guide as MIDI, the sections as markers, and
+*For the vocalist.txt* with the key, tempo, chords, the lead guide's range and every section
+with its bar and time.
 
 **Your song's name.** Type a title and artist in Song patterns. Export all then names the
 folder *"Artist - Title (Am 138 BPM)"* and adds **Song sheet.txt**: title, artist, key,
@@ -790,7 +855,9 @@ drops and grooves. It's a track of its own in the all-parts file too.
 **Lead leaves room for the vocal** (on by default): Solve et Coagula marks the bars the
 vocal sings in while the song plays; there, the exported lead keeps only its beat 1 and 3
 notes (softer) and the harmony and counter-melody step out. Play the song through once
-with the vocal on Solve et Coagula's sidechain before exporting.
+with the vocal on Solve et Coagula's sidechain before exporting. The same switch (*Lead and
+vocal take turns*) also has the lead **answer the vocal**: in a section with no lead, the
+bar after each vocal phrase gets a short lead reply.
 
 **Phrase turnarounds** (Song patterns, on by default): in the last bar of every 8-bar
 phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp lifts an
@@ -825,6 +892,15 @@ chord). The motif becomes the call of every phrase as you played it, fitted to t
 register. The answers keep its rhythm and shape, start on a chord tone and follow the
 chords. It's saved with the project and goes into the MELODY and SONG LEAD exports.
 **Forget motif** goes back to generated melodies.
+
+**Your hook bank.** *Save the current hook…* (bottom of the preset list) keeps the motif (or
+the melody's first two bars) under a name; *Your hooks* in the preset list brings it back
+in any project, fitted to the new key.
+
+**Your progressions.** Correspondence reads the style log: progressions you've used in two
+or more exported songs are listed under *Your progressions* in the preset list, and a new
+song (from Ouroboros's New song…, with the mood left at *As the style*) starts on your
+favourite.
 
 **Drop anything MIDI.** The same panel works out what you dropped:
 
@@ -1167,6 +1243,21 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Reverse swells:** 3 s of latency is reported; the track's audio comes out exactly 3 s
   later; the swell rises into the downbeat and plays in full; the impact stays aligned
   with the delayed audio.
+- **Round 10, expression:** the breakdown piano holds chord tones with the pedal down;
+  *Lift to III* changes the breakdown's second half; the lead answers after a vocal phrase;
+  the riser follows the chords; the roll designer's speeds; the dynamic gate is shallower
+  early in a drop and in a quiet breakdown; the reverb and lead widen on the tension chord;
+  pitch-tracking brightness finds the lead's octave and adds air to high notes.
+- **Round 10, identity:** progressions used in two songs are offered and applied to a new
+  song; hooks are saved and recalled in another key; Azoth presets round-trip; the coach
+  learns your thresholds; the rough mix uses your balance; a role's chain is saved and
+  loaded on another track of that role.
+- **Round 10, automation:** the next step follows the order (no map, no key source, a key
+  clash, ..., ready); idle plugins and high latency are listed; sections too short for
+  their job are flagged and extended (and undone); the kick/bass phase check spots an
+  inverted bass; continuous gain staging moves a drifting input back to -18 dBFS; the song
+  pack has the clips, the markers and a note with key, chords, range and structure; a
+  snapshot is recalled as its section starts; the render plan lists the versions.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 
