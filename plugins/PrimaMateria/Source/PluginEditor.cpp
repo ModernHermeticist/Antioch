@@ -119,6 +119,8 @@ void PrimaMateriaEditor::timerCallback()
     const auto lufs = processor.measuredLufs();
     if (lufs > -70.0f)
         text << "   |   Drop loudness " << juce::String (lufs, 1) << " LUFS";
+    if (processor.roleGuessed.load() && processor.getRole() >= 0)
+        text << "   |   Role guessed from the sound: " << pm::roles()[(size_t) processor.getRole()].name << " (choose another if it's wrong)";
     status.setText (text, juce::dontSendNotification);
 
     const auto in = processor.inputLevelDb();

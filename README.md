@@ -151,6 +151,11 @@ the last few bars.
   in every project.
 - **Suite groove:** when Correspondence's *Groove* is a shuffle, the gate swings with it
   (unless its own Swing is set higher), so gated pads sit with the exported MIDI.
+- **Chord changes** (with Correspondence running): *Accent* opens the gate fully on the
+  first step of every chord change and lifts it a touch, so pads pulse with the harmony;
+  *Restart* starts the pattern again at each change (it matters when chords are shorter
+  than the pattern). Changes are counted from each section's start, as Correspondence
+  writes them.
 
 ![Kybalion polarity tab](docs/kybalion_polarity.png)
 
@@ -279,6 +284,16 @@ Materia track that plays in it (undoable; saved with the project; forgotten if t
 moves the section). For drawn sections the curve replaces the usual breakdown and intro
 rules.
 
+**Since the last pass.** Press Reset after playing the song (20 s or more) and that pass is
+kept: once the next pass has run 20 s, the Suggestions say how much louder or quieter it
+is (and how far to turn the master to compare at equal loudness) and which bands changed.
+
+**Mix report.** *Save mix report* (in the export checklist) writes everything Mentalism
+knows about the mix to a text file in *Antioch Suite/Mix reports*: loudness, true peak,
+stereo, tone against the target, the comparison with the last pass, the suggestions, each
+section's loudness and the coach's notes, the checklist and every fix applied. Finish the
+song saves one automatically when it completes.
+
 **Auto-coach** (Suggestions panel) takes the clicking out: after every complete
 play-through it applies the coach's fixes by itself, forgets those sections so it hears
 them again, and repeats on the next play-through, up to three passes or until the coach
@@ -295,7 +310,9 @@ ready to export.
 by section, and the two halves of each build. The **Arrangement** tab charts it and checks
 the arc:
 - Is each breakdown 2–12 LU below the drop that follows?
-- Does each build rise by at least 1 LU?
+- Does each build rise by at least 1 LU, and get brighter? (Where the build has real top
+  end, its 8 kHz band should rise at least 1 dB against the mids from the first half to the
+  second: a build that only gets louder is flagged, with the same Fix.)
 - Does every later drop hit at least as hard as the one before?
 - Does the intro leave headroom for the drop?
 
@@ -555,6 +572,10 @@ integrated target, because breakdowns pull the song average down by about that m
   the club master to streaming (with *Make versions*, a session or by hand) and Lapis goes
   straight to the gain it learned for that target, or, the first time, starts from the
   current gain moved by the difference in targets (6 dB down from -8 to -14 LUFS).
+- **Master fingerprint…** keeps your master sound: after 10 s of a finished master, save
+  its chain (target, ceiling, clip, release, tone) and its tonal shape. On a new song,
+  *Match* recalls the chain and moves the low and high tone half-way towards the stored
+  shape (at most 3 dB a time; match again to refine).
 - **Clip** shaves the sharpest peaks with a soft clipper before the limiter.
 - The **limiter** is a lookahead true-peak design that detects inter-sample peaks, adds
   77 samples of latency (FL compensates for it automatically), and holds the ceiling.
@@ -613,7 +634,11 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
 - **Your samples…** swaps the synthesised impact, crash or downlifter for your own WAV,
   AIFF or FLAC (mixed to mono, up to 20 s). The knobs still set their level, bigger later
   drops and the energy curve still apply, and the files are remembered with the project.
-  Choose *Back to the synthesised…* to return to the in-key sounds.
+  Choose *Back to the synthesised…* to return to the in-key sounds. Your samples are
+  **level-matched** (their loudest half second is brought to the level of the built-in
+  sounds) and, if they have a clear low pitch, **tuned to the song's key** (to the nearest
+  root, at most 6 semitones, following the final-drop key change too; switch it off in the
+  menu). A **producer tag** slot plays your tag on the first drop, on every drop, or never.
 - **Play** buttons audition each sound (your sample if you've loaded one).
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
@@ -661,6 +686,15 @@ Hats/Perc/Clap, Pad/Chords/Pluck/Keys, Lead/Saw/Arp, Vox/Vocal and FX/Atmos/Rise
 does this while no role has been chosen, so renaming a track later never overrides your
 choice. This needs FL to pass the mixer track's name to the plugin. If it doesn't, the
 Suite overview shows "(track name unknown)" and you pick roles by hand.
+
+When the name doesn't say, Prima Materia **guesses the role from the sound** after 8 s of
+playback: low and punchy is a kick, low and sustained a bass, a bright top hats, a forward
+2–4 kHz a lead, warm mids pads. When it's unsure it leaves the role alone; when it guesses,
+the status line says so, and choosing another role is always yours.
+
+**Save as my role** keeps this track's section levels, cuts, ramp, gap, breath and pump as
+your settings for its role. From then on, every track given that role (by hand, from its
+name or from its sound), in any project, starts from your settings.
 
 **Expression** (second row):
 - **Breath:** a slow 8-bar swell (up to 3 dB peak to trough) in breakdowns and drops, so
@@ -742,6 +776,22 @@ first note of each phrase up into its pitch from 2 semitones below, over a 1/16,
 bend. Choose the bend range your synth uses (2 or 12 semitones) so the scoop is the right
 size, or *Plain lead* for neither. The lead track in the all-parts file gets the glides.
 
+**Climbing chords in drop 2+** (on by default): each chord in later drops gains its top
+note an octave higher, so the second drop is bigger and brighter with the same harmony.
+
+**Ghost notes** (on by default): soft in-between 16ths in the bass and arp exports, just
+after a note and never on the beat, more of them where the energy curve is higher.
+
+**Drum fills** (on by default): a SONG FILLS clip, General MIDI drums for FPC or any kit:
+a snare roll speeding up into every drop, a tom run into breakdowns, a short snare fill
+into other sections, a crash on every change and a small fill at each 8-bar phrase end in
+drops and grooves. It's a track of its own in the all-parts file too.
+
+**Lead leaves room for the vocal** (on by default): Solve et Coagula marks the bars the
+vocal sings in while the song plays; there, the exported lead keeps only its beat 1 and 3
+notes (softer) and the harmony and counter-melody step out. Play the song through once
+with the vocal on Solve et Coagula's sidechain before exporting.
+
 **Phrase turnarounds** (Song patterns, on by default): in the last bar of every 8-bar
 phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp lifts an
 octave, so long sections keep moving. The section's own last bar is left to the
@@ -785,6 +835,11 @@ chords. It's saved with the project and goes into the MELODY and SONG LEAD expor
   like to put notes, and how far you like to move between them. New melodies use your
   rhythm and your kind of steps and leaps, over any chords. It's saved with the project;
   **Forget my DNA** clears it.
+- **A chord clip** also sets **your voicing**: close, open or wide from how far your chords
+  spread, the register they sit in, and whether you put the root underneath.
+- **Bass clips** (low, one note at a time) teach your **bassline DNA**: which 16ths you play
+  and where you jump up an octave. The Bass pattern switches to **Mine (learned)**, which
+  plays your rhythm over any progression. Saved with the project; Forget clears it.
 - **One melody clip** becomes the motif, as above.
 
 ## Solve et Coagula: vocal unmasking
@@ -1000,6 +1055,26 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   it, in key, with chord tones on the beat; in the song it plays with the full lead in the
   drop, not under the breakdown teaser, and can be switched off; Export all gains the
   Counter clip and track.
+- **Climbing chords, ghosts, fills, vocal room:** drop 2's chords gain a top note an octave
+  up; ghost notes fill gaps (more in the drop than the groove, never overlapping, none when
+  off); fills give a 16-hit roll into the drop, toms into the breakdown, crashes and phrase
+  fills; where the vocal sings (bars 9-12) the lead keeps only beats 1 and 3.
+- **Bassline and voicing DNA:** an off-beat bass clip with octave jumps teaches the Mine
+  pattern, which plays those steps over any chords and is saved; a wide chord clip with the
+  root underneath sets the voicing and register.
+- **Vocal bars:** Solve et Coagula marks bars 1-2 (vocal) and not 3-4 (silence).
+- **Gate on chord changes:** accent opens a closed downbeat at each of 4 changes; restart
+  with half-bar chords never reaches the pattern's second half.
+- **Samples in key:** a 100 Hz boom is found, tuned to 110 Hz (A) and level-matched from
+  -26 dBFS; the tag plays on the first drop only, every drop, or never.
+- **Role settings and auto-role:** Save as my Pads applies to new Pads tracks only and can
+  be forgotten; spectra map to kick, bass, hats, lead and pads (nothing when unsure); a
+  kick with no role becomes the Kick after 8 s.
+- **Master fingerprint:** needs 10 s; matching a dark master to a bright one recalls the
+  chain and moves the tone up top and down low.
+- **Build brightness, pass compare, mix report:** a build that rises 4 LU but only 0.5 dB
+  in top end is flagged, +6 dB passes, no top end isn't judged; a pass 1.2 LU louder with
+  2 kHz up is described; the mix report is saved as text.
 - **Club edit:** version D has a 32-bar intro and outro around the same body; Prima
   Materia takes pads out of them and puts the kick in; other versions leave the mixer alone.
 - **DJ phrasing:** a 20-bar intro, a 24-bar outro and the sections they push off the grid are

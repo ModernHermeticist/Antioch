@@ -438,6 +438,40 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Auto-role from the sound");
+    {
+        using B = std::array<float, analysis::numBands>;
+        //                31   63  125  250  500   1k   2k   4k   8k  16k
+        const B lowHeavy { -20, -12, -18, -36, -42, -48, -55, -60, -65, -70 };
+        const B hats     { -80, -80, -70, -60, -50, -40, -30, -22, -16, -24 };
+        const B lead     { -70, -60, -45, -35, -28, -22, -16, -18, -26, -40 };
+        const B pads     { -60, -50, -34, -22, -20, -26, -32, -38, -46, -58 };
+        const B flat     { -30, -30, -30, -30, -30, -30, -30, -30, -30, -30 };
+        check (PrimaMateriaProcessor::roleFromSound (lowHeavy, 14.0f) == 1 && PrimaMateriaProcessor::roleFromSound (lowHeavy, 5.0f) == 2,
+               "low and punchy is a kick; low and sustained is a bass");
+        check (PrimaMateriaProcessor::roleFromSound (hats, 10.0f) == 3 && PrimaMateriaProcessor::roleFromSound (lead, 6.0f) == 5
+                   && PrimaMateriaProcessor::roleFromSound (pads, 5.0f) == 4, "bright top is hats, forward 2-4 kHz is a lead, warm mids are pads");
+        check (PrimaMateriaProcessor::roleFromSound (flat, 6.0f) == -1, "and it says nothing when unsure");
+
+        // A real kick: decaying 55 Hz thumps at 138 BPM, on a track with no role and no telling name.
+        auto p = std::make_unique<PrimaMateriaProcessor>();
+        prepare (*p);
+        FakePlayHead head;
+        p->setPlayHead (&head);
+        render (*p, 9.0, [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate, beat = std::fmod (t, 60.0 / 138.0);
+                const auto v = 0.8f * (float) (std::sin (juce::MathConstants<double>::twoPi * 55.0 * beat) * std::exp (-beat * 14.0));
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        }, nullptr, &head);
+        p->setPlayHead (nullptr);
+        p->suiteStatus();
+        check (p->getRole() == 1 && p->roleGuessed.load(), "after 8 s of a kick with no role, it becomes the Kick (crest " + juce::String (p->averageCrestDb(), 1) + " dB)");
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

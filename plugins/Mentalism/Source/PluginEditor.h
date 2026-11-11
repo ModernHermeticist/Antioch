@@ -19,7 +19,7 @@ private:
     void resized() override;
     MentalismProcessor& processor;
     std::vector<checklist::Item> items;
-    juce::TextButton fixButton;
+    juce::TextButton fixButton, reportButton { "Save mix report" };
     suite::Fix pendingFix = suite::Fix::None;
     uint32_t sentSeq = 0;
 };

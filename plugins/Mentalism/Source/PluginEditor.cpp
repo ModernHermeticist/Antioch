@@ -20,6 +20,15 @@ ChecklistPanel::ChecklistPanel (MentalismProcessor& p) : processor (p)
 {
     fixButton.onClick = [this] { if (pendingFix != suite::Fix::None) sentSeq = processor.sendFix (pendingFix); refresh(); };
     addChildComponent (fixButton);
+    reportButton.setTooltip ("Writes everything Mentalism knows about this mix (loudness, peaks, tone, arrangement, checklist, "
+                             "fixes) to a text file in Antioch Suite/Mix reports");
+    reportButton.onClick = [this]
+    {
+        const auto f = processor.saveMixReport();
+        reportButton.setButtonText (f.existsAsFile() ? "Report saved" : "Couldn't save");
+        if (f.existsAsFile()) f.revealToUser();
+    };
+    addAndMakeVisible (reportButton);
     refresh();
     setSize (640, 420);
     startTimerHz (2);
@@ -39,7 +48,10 @@ void ChecklistPanel::refresh()
 
 void ChecklistPanel::resized()
 {
-    fixButton.setBounds (getLocalBounds().reduced (14, 10).removeFromBottom (30));
+    auto bottom = getLocalBounds().reduced (14, 10).removeFromBottom (30);
+    reportButton.setBounds (bottom.removeFromRight (170));
+    bottom.removeFromRight (8);
+    fixButton.setBounds (bottom);
 }
 
 void ChecklistPanel::paint (juce::Graphics& g)

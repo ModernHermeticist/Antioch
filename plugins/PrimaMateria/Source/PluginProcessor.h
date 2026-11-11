@@ -62,6 +62,14 @@ public:
     static bool hasMyRole (int role);
     static void forgetMyRole (int role);
 
+    /** Auto-role from the sound: for a track with no role yet (and a name that didn't say),
+        once 8 s of it has been heard the role is guessed from its spectrum and how punchy it
+        is (crest factor): kick, bass, hats, pads or lead. Returns -1 when unsure. */
+    static int roleFromSound (const std::array<float, analysis::numBands>& bandsDb, float crestDb);
+    float averageCrestDb() const { const auto n = crestCount.load(); return n > 0 ? crestSum.load() / (float) n : 0.0f; }
+    std::atomic<bool> roleGuessed { false };
+    void guessRoleFromSound();
+
     /** Club edit: DJ-friendly intro and outro: pads, leads and vocals out, the kick in. */
     bool applyVersion (int kind) override
     {
@@ -128,6 +136,11 @@ private:
     suite::SectionFollower sections;
     analysis::LoudnessMeter loudness;
     analysis::BandAnalyzer spectrum;
+    std::atomic<float> crestSum { 0.0f };
+    std::atomic<int> crestCount { 0 };
+    float windowPeak = 0.0f;
+    double windowPower = 0.0;
+    int windowSamples = 0;
     std::atomic<double> inputPower { 0.0 };
     std::atomic<int64_t> inputCount { 0 };
     float pumpGain = 1.0f;   // the track's spectrum in the drops, for the masking map

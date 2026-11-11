@@ -120,6 +120,107 @@ juce::StringArray MentalismProcessor::finishSong()
     return done;
 }
 
+void MentalismProcessor::keepPassForCompare()
+{
+    const auto lufs = loudness.integrated();
+    if (bands.longSeconds.load() < 20.0f || lufs <= -70.0f) return;
+    Pass p;
+    p.valid = true;
+    p.lufs = lufs;
+    p.truePeakDb = truePeak.peakDb();
+    for (size_t b = 0; b < p.bands.size(); ++b) p.bands[b] = bands.longDb[b].load();
+    setPreviousPass (p);
+}
+
+juce::String MentalismProcessor::comparePasses (const Pass& before, const Pass& now)
+{
+    if (! before.valid || ! now.valid) return {};
+    const auto d = now.lufs - before.lufs;
+    juce::String text = "Since the last pass: ";
+    if (std::abs (d) < 0.3f) text << "the same loudness";
+    else text << juce::String (std::abs (d), 1) << " LU " << (d > 0.0f ? "louder" : "quieter")
+              << " (turn the master " << (d > 0.0f ? "down " : "up ") << juce::String (std::abs (d), 1) << " dB to compare at equal loudness)";
+    const auto a = advisor::normalise (before.bands), b = advisor::normalise (now.bands);
+    std::vector<std::pair<float, int>> changes;
+    for (int i = 0; i < (int) a.size(); ++i)
+        if (std::abs (b[(size_t) i] - a[(size_t) i]) >= 1.5f) changes.push_back ({ b[(size_t) i] - a[(size_t) i], i });
+    std::sort (changes.begin(), changes.end(), [] (const auto& x, const auto& y) { return std::abs (x.first) > std::abs (y.first); });
+    juce::StringArray bandsText;
+    for (size_t k = 0; k < std::min<size_t> (3, changes.size()); ++k)
+    {
+        const auto hz = analysis::bandCentres()[(size_t) changes[k].second];
+        bandsText.add ((hz >= 1000.0f ? juce::String (hz / 1000.0f, 0) + " kHz " : juce::String (juce::roundToInt (hz)) + " Hz ")
+                       + (changes[k].first > 0.0f ? "+" : "") + juce::String (changes[k].first, 1) + " dB");
+    }
+    text << (bandsText.isEmpty() ? "; the tonal balance is unchanged." : "; " + bandsText.joinIntoString (", ") + ".");
+    return text;
+}
+
+juce::String MentalismProcessor::mixReport() const
+{
+    const auto rep = report();
+    const auto& m = rep.measurement;
+    juce::StringArray lines;
+    lines.add ("MIX REPORT  " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M"));
+    lines.add ("");
+    lines.add ("Loudness:   " + (m.integratedLufs > -70.0f ? juce::String (m.integratedLufs, 1) + " LUFS integrated" : juce::String ("not measured"))
+               + "  (target " + juce::String (rep.targetLufs, 1) + ": " + rep.targetName + ")");
+    lines.add ("True peak:  " + (m.truePeakDb > -99.0f ? juce::String (m.truePeakDb, 1) + " dBTP" : juce::String ("not measured"))
+               + "  (ceiling " + juce::String (rep.ceiling, 1) + ")");
+    lines.add ("Stereo:     correlation " + juce::String (m.correlation, 2) + ", below 120 Hz " + juce::String (m.lowCorrelation, 2)
+               + ", mono sum " + juce::String (juce::jmax (0.0f, m.monoLossDb), 1) + " dB down");
+    lines.add ("Measured:   " + juce::String ((int) rep.measuredSeconds) + " s");
+    if (rep.tonalAvailable && rep.measuredSeconds > 2.0f)
+    {
+        juce::StringArray t;
+        for (size_t b = 0; b < rep.longDiff.size(); ++b)
+        {
+            const auto hz = analysis::bandCentres()[b];
+            t.add ((hz >= 1000.0f ? juce::String (hz / 1000.0f, 0) + "k" : juce::String (juce::roundToInt (hz))) + " "
+                   + (rep.longDiff[b] >= 0.0f ? "+" : "") + juce::String (rep.longDiff[b], 1));
+        }
+        lines.add ("Tonal:      " + t.joinIntoString ("  ") + "  (dB against the tonal target)");
+    }
+    if (rep.sinceLastPass.isNotEmpty()) lines.add (rep.sinceLastPass);
+    lines.add ("");
+    lines.add ("SUGGESTIONS");
+    for (const auto& a : rep.advice) lines.add ("  - " + a);
+    if (rep.arrangementAvailable && rep.map.count > 0)
+    {
+        lines.add ("");
+        lines.add ("ARRANGEMENT");
+        for (int i = 0; i < rep.map.count && i < (int) rep.sections.size(); ++i)
+            if (rep.sections[(size_t) i].heard())
+                lines.add ("  " + juce::String (suite::sectionName (rep.map.sections[(size_t) i].type)) + " (" + coach::barsOf (rep.map, i) + "): "
+                           + juce::String (rep.sections[(size_t) i].lufs(), 1) + " LUFS");
+        for (const auto& n : rep.arrangement.notes) lines.add ("  - " + n);
+    }
+    lines.add ("");
+    lines.add ("CHECKLIST");
+    for (const auto& item : checklist::check (rep, clippedSamples.load(), suite::Registry::list()))
+    {
+        const auto mark = item.state == checklist::State::Pass ? "PASS" : item.state == checklist::State::Warn ? "WARN"
+                        : item.state == checklist::State::Fail ? "FAIL" : " ?  ";
+        lines.add (juce::String ("  [") + mark + "] " + item.name + ": " + item.detail);
+    }
+    const auto history = getFixHistory();
+    if (! history.empty())
+    {
+        lines.add ("");
+        lines.add ("FIXES APPLIED");
+        for (const auto& f : history)
+            lines.add ("  " + f.when.formatted ("%H:%M") + "  " + coach::describe (f.fix) + (f.undoSeq != 0 ? "  (undone)" : ""));
+    }
+    return lines.joinIntoString ("\n") + "\n";
+}
+
+juce::File MentalismProcessor::saveMixReport() const
+{
+    const auto f = reportFolder().getChildFile ("Mix report " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S") + ".txt");
+    f.getParentDirectory().createDirectory();
+    return f.replaceWithText (mixReport()) ? f : juce::File();
+}
+
 void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashes)
 {
     std::map<juce::String, int> next;
@@ -185,6 +286,7 @@ void MentalismProcessor::runAutomation()
         {
             const auto ready = checklist::readyToExport (checklist::check (rep, clippedSamples.load(), suite::Registry::list()));
             finishState.store (FinishStage::Done);
+            saveMixReport();   // a report of the finished mix, next to the others
             if (rep.measurement.integratedLufs > -70.0f)   // the style log: one finished master
                 suite::StyleLog::add ("master", { { "lufs", juce::String (rep.measurement.integratedLufs, 1) },
                                                   { "truepeak", juce::String (rep.measurement.truePeakDb, 1) },
@@ -324,6 +426,9 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                         auto& count = firstHalf ? st.firstBlocks : st.secondBlocks;
                         sum.store (sum.load() + power);
                         count.store (count.load() + 1);
+                        auto& bright = firstHalf ? st.brightFirst : st.brightSecond;   // the top end against the mids
+                        const auto top = bands.shortDb[8].load(), mids = bands.shortDb[5].load();
+                        bright.store (bright.load() + (top < -90.0f || mids < -90.0f ? -100.0 : (double) (top - mids)));   // silent: no top end to judge
                     }
                 }
             }
@@ -365,6 +470,7 @@ std::vector<coach::SectionStat> MentalismProcessor::sectionStats() const
         st.blocks = a.blocks.load();
         st.firstHalf = a.first.load(); st.firstBlocks = a.firstBlocks.load();
         st.secondHalf = a.second.load(); st.secondBlocks = a.secondBlocks.load();
+        st.brightFirst = a.brightFirst.load(); st.brightSecond = a.brightSecond.load();
         out.push_back (st);
     }
     return out;
@@ -483,6 +589,19 @@ MentalismProcessor::Report MentalismProcessor::report() const
         }
     }
     for (const auto& m : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), m);
+    {
+        Pass before;
+        { const juce::ScopedLock sl (historyLock); before = previousPass; }
+        if (before.valid && rep.measuredSeconds >= 20.0f && rep.measurement.integratedLufs > -70.0f)
+        {
+            Pass now;
+            now.valid = true;
+            now.lufs = rep.measurement.integratedLufs;
+            for (size_t b = 0; b < now.bands.size(); ++b) now.bands[b] = bands.longDb[b].load();
+            rep.sinceLastPass = comparePasses (before, now);
+            rep.advice.add (rep.sinceLastPass);
+        }
+    }
     while (rep.advice.size() > 6) rep.advice.remove (rep.advice.size() - 1);
     return rep;
 }

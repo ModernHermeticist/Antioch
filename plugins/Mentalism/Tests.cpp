@@ -597,6 +597,49 @@ int main (int argc, char** argv)
         check (p->maskingSuggestions().isEmpty(), "and leaves when the clash is gone (nothing is changed automatically)");
     }
 
+    section ("Build brightness, pass compare and the mix report");
+    {
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Build };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        std::vector<coach::SectionStat> stats (2);
+        auto setLufs = [] (coach::SectionStat& st, float lufs) { st.blocks = 20; st.power = 20.0 * std::pow (10.0, (lufs + 0.691) / 10.0); };
+        setLufs (stats[0], -14.0f); setLufs (stats[1], -9.0f);
+        auto& build = stats[0];
+        build.firstBlocks = 10; build.secondBlocks = 10;
+        build.firstHalf = 10.0 * std::pow (10.0, (-16.0 + 0.691) / 10.0); build.secondHalf = 10.0 * std::pow (10.0, (-12.0 + 0.691) / 10.0);   // rises 4 LU
+        build.brightFirst = 10.0 * -10.0; build.brightSecond = 10.0 * -9.5;   // but hardly brighter (+0.5 dB)
+        const auto dull = coach::analyse (map, stats);
+        check (dull.problems == 1 && dull.notes[0].contains ("gets louder but not brighter") && dull.fixes[0] == suite::Fix::BuildRise,
+               "a build that rises in level but not in top end is flagged (" + dull.notes[0] + ")");
+        build.brightSecond = 10.0 * -4.0;   // +6 dB of top end
+        check (coach::analyse (map, stats).problems == 0, "one that opens up passes");
+        build.brightFirst = 10.0 * -80.0; build.brightSecond = 10.0 * -80.0;   // no top end at all: nothing to judge
+        check (coach::analyse (map, stats).problems == 0, "a build with no top end isn't judged on brightness");
+
+        MentalismProcessor::Pass before, now;
+        before.valid = now.valid = true;
+        before.lufs = -10.0f; now.lufs = -8.8f;
+        for (size_t b = 0; b < before.bands.size(); ++b) before.bands[b] = now.bands[b] = -30.0f;
+        now.bands[6] = -27.0f;   // 2 kHz up 3 dB
+        const auto text = MentalismProcessor::comparePasses (before, now);
+        check (text.contains ("1.2 LU louder") && text.contains ("turn the master down 1.2 dB") && text.contains ("2 kHz +"),
+               "pass compare: how much louder, how to match it, and what changed in tone (" + text + ")");
+
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("MentalismReports");
+        dir.deleteRecursively();
+        MentalismProcessor::reportFolderOverride() = dir;
+        auto p = make();
+        render (*p, 3.0, sine (1000.0f, -14.0f));
+        const auto file = p->saveMixReport();
+        const auto report = file.loadFileAsString();
+        check (file.existsAsFile() && report.contains ("MIX REPORT") && report.contains ("Loudness:") && report.contains ("CHECKLIST") && report.contains ("True peak"),
+               "the mix report is saved as text (" + file.getFileName() + ")");
+        MentalismProcessor::reportFolderOverride() = juce::File();
+        dir.deleteRecursively();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

@@ -15,7 +15,13 @@ namespace coach
     struct SectionStat
     {
         double power = 0.0, firstHalf = 0.0, secondHalf = 0.0;
+        double brightFirst = 0.0, brightSecond = 0.0;   // builds: sum of (8 kHz minus 1 kHz band level, dB) per half
         int blocks = 0, firstBlocks = 0, secondBlocks = 0;
+        /** True when the build has real top end to judge: 8 kHz within 15 dB of 1 kHz (mixes sit about 6 dB under;
+            a lone mid tone leaks about 18 dB into the 8 kHz band). */
+        bool hasTopEnd() const { return secondBlocks > 0 && brightSecond / secondBlocks > -15.0; }
+        /** How much brighter (dB, top end against the mids) the second half of a build is than the first. */
+        float brightnessRise() const { return firstBlocks > 0 && secondBlocks > 0 ? (float) (brightSecond / secondBlocks - brightFirst / firstBlocks) : 0.0f; }
 
         float lufs() const { return blocks > 0 ? analysis::powerToLufs (power / blocks) : -100.0f; }
         float firstLufs() const { return firstBlocks > 0 ? analysis::powerToLufs (firstHalf / firstBlocks) : -100.0f; }
@@ -23,6 +29,7 @@ namespace coach
         bool heard() const { return blocks >= 10; }   // at least ~1 s of material
     };
 
+    constexpr float minBrightening = 1.0f;   // a build should also get brighter (top end against the mids), dB
     constexpr float arcLuPerEnergy = 12.0f, arcTolerance = 3.0f;   // the energy curve: 12 LU between "silent" and "full"
     constexpr float minContrast = 2.0f, maxContrast = 12.0f, minRise = 1.0f, dropTolerance = 0.7f, introHeadroom = 1.5f;
 
@@ -96,7 +103,15 @@ namespace coach
                     r.fixes.push_back (suite::Fix::BuildRise);
                     ++r.problems;
                 }
-                else good.add ("Build (" + barsOf (map, i) + ") rises " + fmt (rise) + " LU: good.");
+                else if (st.hasTopEnd() && st.brightnessRise() < minBrightening)
+                {
+                    r.notes.add ("Build (" + barsOf (map, i) + ") gets louder but not brighter (" + juce::String (st.brightnessRise(), 1)
+                                 + " dB more top end): open a filter across it, or add a riser or noise sweep.");
+                    r.fixes.push_back (suite::Fix::BuildRise);
+                    ++r.problems;
+                }
+                else good.add ("Build (" + barsOf (map, i) + ") rises " + fmt (rise) + " LU"
+                               + (st.hasTopEnd() ? " and opens up " + fmt (st.brightnessRise()) + " dB" : juce::String()) + ": good.");
             }
             else if (type == T::Intro && ! drops.empty() && ! drawn)
             {

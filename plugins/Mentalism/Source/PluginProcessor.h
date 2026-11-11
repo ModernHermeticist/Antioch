@@ -55,7 +55,26 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Clears integrated loudness, true peak and long-term balance (applied on the next block). */
-    void resetMeasurements() { resetRequested.store (true); autoPasses.store (0); }
+    void resetMeasurements() { keepPassForCompare(); resetRequested.store (true); autoPasses.store (0); }
+
+    /** Pass compare: Reset keeps the pass you just measured (if it ran 20 s or more), and the
+        next pass is compared with it: loudness (so you can hear both at equal loudness) and the
+        tonal changes. */
+    struct Pass { bool valid = false; float lufs = -100.0f, truePeakDb = -100.0f; advisor::Bands bands {}; };
+    void keepPassForCompare();
+    void setPreviousPass (const Pass& p) { const juce::ScopedLock sl (historyLock); previousPass = p; }
+    static juce::String comparePasses (const Pass& before, const Pass& now);
+
+    /** Mix report: everything Mentalism knows about this mix, as text. Saved by "Save mix
+        report" in the checklist, and automatically when Finish the song completes. */
+    juce::String mixReport() const;
+    static juce::File& reportFolderOverride() { static juce::File f; return f; }   // tests
+    static juce::File reportFolder()
+    {
+        if (reportFolderOverride() != juce::File()) return reportFolderOverride();
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Mix reports");
+    }
+    juce::File saveMixReport() const;
 
     /** My sound: learns a loudness and tonal target from your finished tracks (in the
         background), saved for every project. */
@@ -85,6 +104,7 @@ public:
         coach::Result arrangement;
         float measuredSeconds = 0.0f;
         juce::StringArray advice;
+        juce::String sinceLastPass;   // pass compare, once this pass has run 20 s
     };
     Report report() const;
 
@@ -190,13 +210,14 @@ private:
     float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f;
     std::map<juce::String, int> maskingCounts;
     juce::StringArray persistentMasking;
+    Pass previousPass;
     std::vector<FixRecord> fixHistory;
 
     struct AtomicStat
     {
-        std::atomic<double> power { 0.0 }, first { 0.0 }, second { 0.0 };
+        std::atomic<double> power { 0.0 }, first { 0.0 }, second { 0.0 }, brightFirst { 0.0 }, brightSecond { 0.0 };
         std::atomic<int> blocks { 0 }, firstBlocks { 0 }, secondBlocks { 0 };
-        void clear() { power = 0.0; first = 0.0; second = 0.0; blocks = 0; firstBlocks = 0; secondBlocks = 0; }
+        void clear() { power = 0.0; first = 0.0; second = 0.0; brightFirst = 0.0; brightSecond = 0.0; blocks = 0; firstBlocks = 0; secondBlocks = 0; }
     };
     std::array<AtomicStat, suite::SectionMap::maxSections> statsBySection;
     suite::SectionFollower sections;

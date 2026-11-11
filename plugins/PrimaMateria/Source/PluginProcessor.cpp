@@ -326,6 +326,20 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         {
             loudness.process (left[n], right != nullptr ? right[n] : left[n]);
             spectrum.process (left[n], right != nullptr ? right[n] : left[n]);
+            // Crest factor (peak against RMS) over 400 ms windows: punchy (kick) or sustained (bass, pads).
+            const auto x = 0.5f * (left[n] + (right != nullptr ? right[n] : left[n]));
+            windowPeak = std::max (windowPeak, std::abs (x));
+            windowPower += (double) x * x;
+            if (++windowSamples >= (int) (0.4 * getSampleRate()))
+            {
+                const auto rms = std::sqrt (windowPower / windowSamples);
+                if (rms > 1.0e-3)
+                {
+                    crestSum.store (crestSum.load() + juce::Decibels::gainToDecibels ((float) (windowPeak / rms)));
+                    crestCount.fetch_add (1);
+                }
+                windowPeak = 0.0f; windowPower = 0.0; windowSamples = 0;
+            }
         }
     }
 
@@ -357,6 +371,7 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
         for (size_t b = 0; b < s.bands.size(); ++b) s.bands[b] = spectrum.longDb[b].load();
     }
     s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
+    guessRoleFromSound();
     refreshLowOwners();
     return s;
 }
@@ -454,6 +469,28 @@ void PrimaMateriaProcessor::applyRole (int index)
             const auto pid = line.upToFirstOccurrenceOf ("=", false, false).trim();
             if (myRoleParamIds().contains (pid)) setValue (pid, line.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
         }
+}
+
+int PrimaMateriaProcessor::roleFromSound (const std::array<float, analysis::numBands>& b, float crestDb)
+{
+    auto maxOf = [&b] (int from, int to) { float m = -200.0f; for (int i = from; i <= to; ++i) m = std::max (m, b[(size_t) i]); return m; };
+    const auto low = maxOf (0, 2), lowMid = maxOf (3, 4), mid = maxOf (3, 6), presence = maxOf (6, 7), high = maxOf (7, 9);
+    if (low >= mid + 6.0f)                                return crestDb >= 11.0f ? 1 : 2;   // kick (punchy) or bass (sustained)
+    if (high >= mid + 3.0f && low <= high - 15.0f)        return 3;                          // hats & percussion
+    if (presence >= lowMid + 2.0f && low <= mid - 6.0f)   return 5;                          // lead: bright, 2-4 kHz forward
+    if (lowMid >= presence + 3.0f && crestDb < 11.0f)     return 4;                          // pads & chords: warm, sustained
+    return -1;
+}
+
+void PrimaMateriaProcessor::guessRoleFromSound()
+{
+    if (getRole() >= 0 || roleGuessed.load() || spectrum.longSeconds.load() < 8.0f || crestCount.load() < 10) return;
+    std::array<float, analysis::numBands> bandsDb {};
+    for (size_t i = 0; i < bandsDb.size(); ++i) bandsDb[i] = spectrum.longDb[i].load();
+    const auto guess = roleFromSound (bandsDb, averageCrestDb());
+    if (guess < 0) return;
+    roleGuessed.store (true);
+    applyRole (guess);
 }
 
 juce::StringArray PrimaMateriaProcessor::myRoleParamIds()
