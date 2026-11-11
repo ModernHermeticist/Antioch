@@ -77,7 +77,7 @@ AzothEditor::~AzothEditor()
 
 void AzothEditor::updateSamplesNote()
 {
-    const char* names[] = { "Impact", "Crash", "Downlifter" };
+    const char* names[] = { "Impact", "Crash", "Downlifter", "Tag" };
     juce::StringArray mine;
     for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
         if (processor.sampleName (i).isNotEmpty()) mine.add (juce::String (names[i]) + ": " + processor.sampleName (i));
@@ -88,15 +88,33 @@ void AzothEditor::updateSamplesNote()
 
 void AzothEditor::showSamplesMenu()
 {
-    const char* names[] = { "impact", "crash", "downlifter" };
+    const char* names[] = { "impact", "crash", "downlifter", "producer tag" };
     juce::PopupMenu m;
     for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
         m.addItem (i + 1, juce::String ("Use my own ") + names[i] + " sample...");
     m.addSeparator();
     for (int i = 0; i < AzothProcessor::numSampleSlots; ++i)
-        m.addItem (100 + i, juce::String ("Back to the synthesised ") + names[i], processor.sampleName (i).isNotEmpty());
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&samplesButton), [this] (int id)
+        m.addItem (100 + i, i == AzothProcessor::slotTag ? juce::String ("Remove the producer tag") : juce::String ("Back to the synthesised ") + names[i],
+                   processor.sampleName (i).isNotEmpty());
+    m.addSeparator();
+    const auto tune = processor.apvts.getRawParameterValue (AzothProcessor::tuneSamplesId)->load() > 0.5f;
+    m.addItem (200, "Tune my samples to the song's key (and match their level)", true, tune);
+    const auto where = (int) processor.apvts.getRawParameterValue (AzothProcessor::tagWhereId)->load();
+    const char* places[] = { "Tag: off", "Tag: on the first drop", "Tag: on every drop" };
+    for (int k = 0; k < 3; ++k) m.addItem (201 + k, places[k], true, where == k);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&samplesButton), [this, tune] (int id)
     {
+        auto setParam = [this] (const juce::String& pid, float plain)
+        {
+            if (auto* p = processor.apvts.getParameter (pid))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (plain));
+                p->endChangeGesture();
+            }
+        };
+        if (id == 200) { setParam (AzothProcessor::tuneSamplesId, tune ? 0.0f : 1.0f); return; }
+        if (id >= 201 && id <= 203) { setParam (AzothProcessor::tagWhereId, (float) (id - 201)); return; }
         if (id >= 100) { processor.clearSample (id - 100); updateSamplesNote(); return; }
         if (id <= 0) return;
         const auto slot = id - 1;

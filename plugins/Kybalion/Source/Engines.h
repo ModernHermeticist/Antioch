@@ -73,7 +73,8 @@ public:
     }
 
     /** `fill` (with `fillQ` quarters into the fill bar) replaces the pattern for that bar. */
-    void process (double posQ, float& left, float& right, int fill = NoFill, double fillQ = 0.0, double barQ = 4.0) noexcept
+    /** `accent` > 0: a chord change: this step is wide open and that much louder (0..1 = up to +2 dB). */
+    void process (double posQ, float& left, float& right, int fill = NoFill, double fillQ = 0.0, double barQ = 4.0, float accent = 0.0f) noexcept
     {
         int step; double phase;
         locate (posQ, step, phase);
@@ -84,6 +85,7 @@ public:
         {
             const auto idx = (step + (c == 1 ? s.stereoOffset : 0)) % Params::numSteps;
             const auto target = fill != NoFill ? fillTarget (fill, fillQ, barQ)
+                              : accent > 0.0f ? 1.0f
                               : phase < (double) s.length ? s.steps[(size_t) idx] : 0.0f;
             env[c] += (target > env[c] ? attackCoeff : releaseCoeff) * (target - env[c]);
 
@@ -95,7 +97,7 @@ public:
                 filters[c].set (cutoff, 0.7f + 5.0f * s.res, sr);
                 x = filters[c].lowpass (x);
             }
-            *ch[c] = x * (1.0f - s.depth * (1.0f - env[c]));
+            *ch[c] = x * (1.0f - s.depth * (1.0f - env[c])) * (1.0f + 0.26f * accent);
         }
     }
 

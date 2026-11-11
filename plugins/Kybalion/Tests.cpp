@@ -4,6 +4,7 @@
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "Registry.h"
 #include "KickBus.h"
 
 using namespace suite::test;
@@ -405,6 +406,53 @@ int main (int argc, char** argv)
         check (peakBetween (audio, 2.003, 2.02) < 0.1f, "ducks on the beat in the Groove");
         check (peakBetween (audio, 5.003, 5.02) > 0.48f, "no ducking on the beat in the Breakdown");
         check (peakBetween (audio, 9.003, 9.02) < 0.1f, "ducking returns in the Drop");
+    }
+
+    section ("Gate on Correspondence's chord changes");
+    {
+        suite::Registry::reset();
+        suite::Registry::announce (77, "Correspondence", "Chords", 0, { 0.0f, 4.0f, 0.0f, 0.0f });   // a chord every bar
+        auto run = [] (int mode, int firstOpen)
+        {
+            auto p = make (true, false);
+            for (int i = 0; i < Params::numSteps; ++i) set (*p, Params::Gate::step (i), i >= firstOpen ? 1.0f : 0.0f);
+            set (*p, Params::Gate::depth, 1.0f);
+            set (*p, Params::Gate::swing, 0.0f);
+            set (*p, Params::Gate::stereo, 0.0f);
+            set (*p, Params::Fill::chords, (float) mode);
+            p->suiteStatus();   // reads the chord length from the suite
+            FakePlayHead head;
+            head.bpm = 120.0;   // a bar every 2 s
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 6.2, tone (440.0f), &audio, &head);
+            p->setPlayHead (nullptr);
+            return std::make_pair (channelRms (audio, 0, 4.01, 4.1), p->chordAccents.load());
+        };
+        const auto [off, offCount] = run (Params::Fill::ChordsOff, 1);      // step 1 (the downbeat) closed
+        const auto [accent, accents] = run (Params::Fill::ChordsAccent, 1);
+        check (off < 0.01f && accent > 0.2f && accents == 4, "accent: each chord change opens the gate on its downbeat ("
+                   + juce::String (off, 3) + " -> " + juce::String (accent, 3) + ", " + juce::String (accents) + " changes)");
+        suite::Registry::announce (77, "Correspondence", "Chords", 0, { 0.0f, 2.0f, 0.0f, 0.0f });   // half-bar chords
+        auto quiet = [] (int mode)
+        {
+            auto p = make (true, false);
+            for (int i = 0; i < Params::numSteps; ++i) set (*p, Params::Gate::step (i), i >= 8 ? 1.0f : 0.0f);
+            set (*p, Params::Gate::depth, 1.0f);
+            set (*p, Params::Gate::swing, 0.0f);
+            set (*p, Params::Fill::chords, (float) mode);
+            p->suiteStatus();
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 4.0, tone (440.0f), &audio, &head);
+            p->setPlayHead (nullptr);
+            return channelRms (audio, 0, 1.0, 4.0);
+        };
+        check (quiet (Params::Fill::ChordsRestart) < 0.01f && quiet (Params::Fill::ChordsOff) > 0.1f,
+               "restart: with half-bar chords the pattern starts again at every change, so its second half never plays");
+        suite::Registry::reset();
     }
 
     section ("Presets and state");

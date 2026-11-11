@@ -66,7 +66,7 @@ private:
     std::unique_ptr<juce::AlertWindow> nameWindow;
     void fillPatterns();
     juce::TextButton randomButton { "Randomise" };
-    suite::ui::Choice gateRate, fills, fillStyle;
+    suite::ui::Choice gateRate, fills, fillStyle, chordFollow;
     suite::ui::Knob length, attack, release, depth, swing, stereo, filter, res;
 
     // Polarity

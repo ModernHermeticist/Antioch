@@ -102,6 +102,7 @@ public:
     {
         SuiteStatus st;
         st.metrics[0] = Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load());
+        st.metrics[1] = (float) Params::quartersPerChord ((int) apvts.getRawParameterValue (Params::perChord)->load());   // chord length (Kybalion's gate follows the changes)
         return st;
     }
     void forgetMotif();

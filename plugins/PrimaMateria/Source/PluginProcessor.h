@@ -48,6 +48,20 @@ public:
     float measuredLufs() const { return loudness.integrated(); }
     SuiteStatus suiteStatus() override;
 
+    /** Your own role settings: "Save as my <role>" keeps this track's section levels, cuts,
+        ramp, gap, breath and pump for its role; every time that role is applied (by hand or
+        from the track name) your settings come after the built-in ones. */
+    static juce::File& roleFolderOverride() { static juce::File f; return f; }   // tests
+    static juce::File userRoleFolder()
+    {
+        if (roleFolderOverride() != juce::File()) return roleFolderOverride();
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Roles");
+    }
+    static juce::StringArray myRoleParamIds();
+    bool saveMyRole();
+    static bool hasMyRole (int role);
+    static void forgetMyRole (int role);
+
     /** Club edit: DJ-friendly intro and outro: pads, leads and vocals out, the kick in. */
     bool applyVersion (int kind) override
     {

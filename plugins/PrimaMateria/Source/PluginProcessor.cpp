@@ -445,6 +445,47 @@ void PrimaMateriaProcessor::applyRole (int index)
     setValue (pm::rampId, role.ramp ? 1.0f : 0.0f);
     setValue (pm::roleId, (float) (index + 1));
     setValue (pm::gapId, (float) role.gap);
+
+    // Your own settings for this role, on top.
+    const auto mine = userRoleFolder().getChildFile (juce::File::createLegalFileName (role.name) + ".role");
+    if (mine.existsAsFile())
+        for (const auto& line : juce::StringArray::fromLines (mine.loadFileAsString()))
+        {
+            const auto pid = line.upToFirstOccurrenceOf ("=", false, false).trim();
+            if (myRoleParamIds().contains (pid)) setValue (pid, line.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+        }
+}
+
+juce::StringArray PrimaMateriaProcessor::myRoleParamIds()
+{
+    juce::StringArray ids;
+    for (int c = 0; c < pm::numColumns; ++c) ids.addArray ({ pm::levelId (c), pm::lowCutId (c), pm::highCutId (c) });
+    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId });
+    return ids;
+}
+
+bool PrimaMateriaProcessor::saveMyRole()
+{
+    const auto role = getRole();
+    if (! juce::isPositiveAndBelow (role, (int) pm::roles().size())) return false;
+    juce::StringArray lines;
+    for (const auto& pid : myRoleParamIds())
+        lines.add (pid + "=" + juce::String (apvts.getRawParameterValue (pid)->load(), 4));
+    userRoleFolder().createDirectory();
+    return userRoleFolder().getChildFile (juce::File::createLegalFileName (pm::roles()[(size_t) role].name) + ".role")
+               .replaceWithText (lines.joinIntoString ("\n") + "\n");
+}
+
+bool PrimaMateriaProcessor::hasMyRole (int role)
+{
+    return juce::isPositiveAndBelow (role, (int) pm::roles().size())
+        && userRoleFolder().getChildFile (juce::File::createLegalFileName (pm::roles()[(size_t) role].name) + ".role").existsAsFile();
+}
+
+void PrimaMateriaProcessor::forgetMyRole (int role)
+{
+    if (juce::isPositiveAndBelow (role, (int) pm::roles().size()))
+        userRoleFolder().getChildFile (juce::File::createLegalFileName (pm::roles()[(size_t) role].name) + ".role").deleteFile();
 }
 
 juce::AudioProcessorEditor* PrimaMateriaProcessor::createEditor()

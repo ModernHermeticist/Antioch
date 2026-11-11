@@ -39,6 +39,8 @@ namespace Params
         inline const juce::String when  { "g_fills" };       // Off, before drops, before drops & breakdowns
         inline const juce::String style { "g_fillstyle" };   // Auto, Stutter, Half-time, Gap, Roll
         enum When { Off = 0, BeforeDrops, BeforeDropsAndBreakdowns };
+        inline const juce::String chords { "g_chords" };     // follow Correspondence's chord changes: off / accent / restart
+        enum Chords { ChordsOff = 0, ChordsAccent, ChordsRestart };
     }
 
     namespace Duck

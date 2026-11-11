@@ -55,6 +55,81 @@ bool LapisProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
         && layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo();
 }
 
+std::array<float, analysis::numBands> LapisProcessor::measuredShape() const
+{
+    std::array<float, analysis::numBands> s {};
+    float mean = 0.0f;
+    for (size_t b = 0; b < s.size(); ++b) { s[b] = outBands.longDb[b].load(); mean += s[b]; }
+    mean /= (float) s.size();
+    for (auto& v : s) v -= mean;
+    return s;
+}
+
+static const juce::StringArray& masterSettingIds()
+{
+    static const juce::StringArray ids { LapisProcessor::targetId, LapisProcessor::ceilingId, LapisProcessor::clipId, LapisProcessor::releaseId,
+                                         LapisProcessor::toneLowId, LapisProcessor::toneHighId };
+    return ids;
+}
+
+bool LapisProcessor::saveFingerprint (const juce::File& dir, const juce::String& name)
+{
+    if (! fingerprintReady() || name.trim().isEmpty()) return false;
+    juce::StringArray shape, settings;
+    for (auto v : measuredShape()) shape.add (juce::String (v, 2));
+    for (const auto& pid : masterSettingIds()) settings.add (pid + "=" + juce::String (value (pid), 3));
+    dir.createDirectory();
+    return dir.getChildFile (juce::File::createLegalFileName (name.trim()) + ".master")
+              .replaceWithText ("shape " + shape.joinIntoString (",") + "\nsettings " + settings.joinIntoString (",") + "\n");
+}
+
+std::vector<LapisProcessor::MasterFingerprint> LapisProcessor::loadFingerprints (const juce::File& dir)
+{
+    std::vector<MasterFingerprint> out;
+    for (const auto& f : dir.findChildFiles (juce::File::findFiles, false, "*.master"))
+    {
+        MasterFingerprint m;
+        m.name = f.getFileNameWithoutExtension();
+        bool ok = false;
+        for (const auto& line : juce::StringArray::fromLines (f.loadFileAsString()))
+        {
+            const auto rest = line.fromFirstOccurrenceOf (" ", false, false);
+            if (line.startsWith ("shape "))
+            {
+                const auto v = juce::StringArray::fromTokens (rest, ",", "");
+                if (v.size() == (int) m.shape.size()) { for (int b = 0; b < v.size(); ++b) m.shape[(size_t) b] = v[b].getFloatValue(); ok = true; }
+            }
+            else if (line.startsWith ("settings "))
+                for (const auto& kv : juce::StringArray::fromTokens (rest, ",", ""))
+                    if (masterSettingIds().contains (kv.upToFirstOccurrenceOf ("=", false, false)))
+                        m.settings[kv.upToFirstOccurrenceOf ("=", false, false)] = kv.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+        }
+        if (ok) out.push_back (std::move (m));
+    }
+    std::sort (out.begin(), out.end(), [] (const auto& a, const auto& b) { return a.name < b.name; });
+    return out;
+}
+
+juce::String LapisProcessor::matchFingerprint (const MasterFingerprint& m)
+{
+    for (const auto& [pid, v] : m.settings) setParameterPlain (apvts, pid, v);
+    if (! fingerprintReady())
+        return "Recalled the chain of '" + m.name + "'. Play 10 s of the song and match again for its tone.";
+    const auto now = measuredShape();
+    auto diff = [&] (std::initializer_list<int> bands)
+    {
+        float d = 0.0f;
+        for (auto b : bands) d += m.shape[(size_t) b] - now[(size_t) b];
+        return d / (float) bands.size();
+    };
+    const auto low = juce::jlimit (-3.0f, 3.0f, 0.5f * diff ({ 0, 1, 2 })), high = juce::jlimit (-3.0f, 3.0f, 0.5f * diff ({ 8, 9 }));
+    setParameterPlain (apvts, toneLowId, juce::jlimit (-6.0f, 6.0f, value (toneLowId) + low));
+    setParameterPlain (apvts, toneHighId, juce::jlimit (-6.0f, 6.0f, value (toneHighId) + high));
+    outBands.reset();
+    auto fmt = [] (float v) { return (v >= 0.0f ? "+" : "") + juce::String (v, 1); };
+    return "Matched '" + m.name + "': chain recalled; low tone " + fmt (low) + " dB, high tone " + fmt (high) + " dB. Match again to refine.";
+}
+
 void LapisProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
@@ -63,6 +138,7 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
     shownLow = shownHigh = 1000.0f;   // recalculate the shelves for this sample rate
     setLatencySamples (limiter.getLatency());
     loudness.prepare (sampleRate);
+    outBands.prepare (sampleRate);
     outputPeak.reset();
     updateInterval = juce::jmax (1, (int) (sampleRate * 0.1));
     samplesSinceUpdate = 0;
@@ -154,6 +230,7 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         R[n] = juce::jlimit (-ceiling, ceiling, r);
 
         loudness.process (L[n], R[n]);
+        outBands.process (L[n], R[n]);
         outputPeak.process (L[n], R[n]);
         maxGr = std::max (maxGr, -juce::Decibels::gainToDecibels (limiter.getGain()));
 

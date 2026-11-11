@@ -165,7 +165,53 @@ namespace azoth
         juce::AudioBuffer<float> mono;
         double rate = 48000.0;
         juce::String path;
+        float pitchHz = 0.0f;   // its main pitch (0 = unpitched, e.g. noise)
+        float gain = 1.0f;      // level match: brings its loud part to the level of the built-in sounds
+
+        /** Measures the loudest half second (level match) and, if there's a clear low pitch
+            (30-400 Hz) in the first 0.4 s, what it is. */
+        void analyse()
+        {
+            const auto n = mono.getNumSamples();
+            const auto* d = mono.getReadPointer (0);
+            const auto window = juce::jmax (1, juce::jmin (n, (int) (0.5 * rate)));
+            double best = 0.0, sum = 0.0;
+            for (int i = 0; i < n; ++i)
+            {
+                sum += (double) d[i] * d[i];
+                if (i >= window) sum -= (double) d[i - window] * d[i - window];
+                best = std::max (best, sum);
+            }
+            const auto rms = std::sqrt (best / window);
+            gain = rms > 1.0e-5 ? (float) juce::jlimit (0.25, 8.0, 0.35 / rms) : 1.0f;
+
+            const auto len = juce::jmin (n, (int) (0.4 * rate));
+            std::vector<float> mags;
+            float peak = 0.0f, peakHz = 0.0f;
+            for (float hz = 30.0f; hz <= 400.0f; hz *= 1.005f)
+            {
+                double s = 0.0, c = 0.0;
+                const auto w = juce::MathConstants<double>::twoPi * hz / rate;
+                for (int i = 0; i < len; ++i) { s += d[i] * std::sin (w * i); c += d[i] * std::cos (w * i); }
+                const auto m = (float) std::sqrt (s * s + c * c);
+                mags.push_back (m);
+                if (m > peak) { peak = m; peakHz = hz; }
+            }
+            std::sort (mags.begin(), mags.end());
+            const auto median = mags.empty() ? 0.0f : mags[mags.size() / 2];
+            pitchHz = peak > 6.0f * median && peak > 1.0e-3f ? peakHz : 0.0f;
+        }
     };
+
+    /** Playback-rate ratio that moves `pitchHz` to the nearest pitch with the pitch class of
+        `targetHz` (at most 6 semitones either way); 1 if unpitched. */
+    inline double tuneRatio (float pitchHz, float targetHz)
+    {
+        if (pitchHz <= 0.0f || targetHz <= 0.0f) return 1.0;
+        auto semis = 12.0 * std::log2 ((double) targetHz / pitchHz);
+        semis -= 12.0 * std::round (semis / 12.0);
+        return std::exp2 (semis / 12.0);
+    }
 
     /** Plays a user sample in place of a synthesised voice. The message thread hands over a
         new sample with setSample(); the audio thread picks it up on the next trigger. The
@@ -176,14 +222,16 @@ namespace azoth
         void prepare (float sampleRate) { hostRate = sampleRate; active = false; }
         void setSample (std::shared_ptr<const Sample> s) { std::atomic_store (&pending, std::move (s)); }
         bool loaded() const { return std::atomic_load (&pending) != nullptr; }
-        void trigger (float level)
+        /** The loaded sample's pitch (for tuning), 0 if none or unpitched. */
+        float pitch() const { const auto s = std::atomic_load (&pending); return s != nullptr ? s->pitchHz : 0.0f; }
+        void trigger (float level, double ratio = 1.0)
         {
             current = std::atomic_load (&pending);
             active = current != nullptr && level > 0.0f && current->mono.getNumSamples() > 1;
             if (! active) return;
             pos = 0.0;
-            gain = level;
-            step = current->rate / juce::jmax (1.0f, hostRate);
+            gain = level * current->gain;
+            step = current->rate / juce::jmax (1.0f, hostRate) * ratio;
         }
         float process() noexcept
         {

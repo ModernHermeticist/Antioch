@@ -20,7 +20,12 @@ private:
     suite::ui::LookAndFeel lnf;
     suite::ui::Choice target, mode;
     suite::ui::Knob ceiling, clip, release, manualGain, toneLow, toneHigh;
-    juce::TextButton resetButton { "Reset learning" };
+    juce::TextButton resetButton { "Reset learning" }, fingerprintButton { "Master fingerprint..." };
+    std::unique_ptr<juce::AlertWindow> nameWindow;
+    void showFingerprintMenu();
+    void showNote (const juce::String& text) { note = text; noteUntil = juce::Time::getMillisecondCounterHiRes() + 8000.0; status.setText (text, juce::dontSendNotification); }
+    juce::String note;
+    double noteUntil = 0.0;
     juce::Label status;
     juce::Rectangle<int> meterArea, controlArea;
     float grShown = 0.0f;

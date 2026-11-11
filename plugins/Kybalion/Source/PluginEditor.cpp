@@ -167,6 +167,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       gateRate (p.apvts, Params::Gate::rate, "Step size"),
       fills (p.apvts, Params::Fill::when, "Fills before"),
       fillStyle (p.apvts, Params::Fill::style, "Fill style"),
+      chordFollow (p.apvts, Params::Fill::chords, "Chord changes"),
       length (p.apvts, Params::Gate::length, "Length", gateColour),
       attack (p.apvts, Params::Gate::attack, "Attack", gateColour),
       release (p.apvts, Params::Gate::release, "Release", gateColour),
@@ -233,7 +234,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     sourceStatus.setJustificationType (juce::Justification::centredLeft);
 
     for (auto* c : std::initializer_list<juce::Component*> { &grid, &patternBox, &randomButton, &gateRate, &length, &attack,
-                                                             &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle })
+                                                             &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle, &chordFollow })
         gatePanel.addAndMakeVisible (c);
     for (auto* c : std::initializer_list<juce::Component*> { &duckView, &presetBox, &source, &duckRate, &nudge, &duckDepth,
                                                              &duckAttack, &hold, &duckRelease, &curve, &split, &threshold,
@@ -391,7 +392,7 @@ void KybalionEditor::resized()
         grid.setBounds (top);
 
         auto shape = gatePanel.getLocalBounds().withTrimmedTop (310).reduced (10, 6).withTrimmedTop (12);
-        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle });
+        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle, &chordFollow });
     }
 
     // ---- Polarity ----

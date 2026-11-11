@@ -470,6 +470,82 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Your samples in key, level-matched, and your tag");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AzothTuned");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        auto writeTone = [&] (const char* name, float hz, float amp, double seconds)
+        {
+            const auto f = dir.getChildFile (name);
+            juce::AudioBuffer<float> b (1, (int) (seconds * 48000.0));
+            for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (0, i, amp * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / 48000.0));
+            juce::WavAudioFormat format;
+            std::unique_ptr<juce::AudioFormatWriter> writer (format.createWriterFor (new juce::FileOutputStream (f), 48000.0, 1, 24, {}, 0));
+            writer->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            return f;
+        };
+        const auto boom = writeTone ("quiet boom.wav", 100.0f, 0.05f, 0.6);   // between G# and A, and very quiet
+        auto run = [&] (bool tune)
+        {
+            suite::SectionBus::publish (testMap());   // A minor; the drop at 12 s
+            auto p = quiet();
+            set (*p, AzothProcessor::impactId, 1.0f);
+            set (*p, AzothProcessor::tuneSamplesId, tune ? 1.0f : 0.0f);
+            p->loadSample (AzothProcessor::slotImpact, boom);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 12.6, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            return std::make_pair (peakFrequency (audio, 80.0f, 130.0f, 12.05, 12.5), rmsBetween (audio, 12.05, 12.5));
+        };
+        auto q = quiet();
+        q->loadSample (AzothProcessor::slotImpact, boom);
+        check (std::abs (q->samplePitch (AzothProcessor::slotImpact) - 100.0f) < 2.0f, "finds the sample's pitch (" + juce::String (q->samplePitch (AzothProcessor::slotImpact), 1) + " Hz)");
+        const auto [tunedHz, tunedRms] = run (true);
+        const auto [plainHz, plainRms] = run (false);
+        check (std::abs (tunedHz - 110.0f) < 2.5f && std::abs (plainHz - 100.0f) < 2.5f, "tuned to the song's A (" + juce::String (tunedHz, 0) + " Hz; untuned "
+                   + juce::String (plainHz, 0) + " Hz)");
+        check (tunedRms > 0.2f, "and level-matched: a sample at -26 dBFS plays like the built-in impact (rms " + juce::String (tunedRms, 3) + ")");
+
+        // The tag: on the first drop only, or on every drop.
+        suite::SectionMap twoDrops;
+        twoDrops.totalBars = 8; twoDrops.count = 3;
+        twoDrops.sections[0] = { 1, T::Drop };       // 0-4 s
+        twoDrops.sections[1] = { 3, T::Breakdown };  // 4-8 s
+        twoDrops.sections[2] = { 5, T::Drop };       // 8-16 s
+        const auto tag = writeTone ("my tag.wav", 1000.0f, 0.3f, 0.4);
+        auto tags = [&] (int where)
+        {
+            suite::SectionMap withIntro = twoDrops;   // start in a short groove so the first drop is entered
+            withIntro.count = 4; withIntro.totalBars = 9;
+            withIntro.sections[0] = { 1, T::Groove };
+            withIntro.sections[1] = { 2, T::Drop };       // 2-6 s
+            withIntro.sections[2] = { 4, T::Breakdown };  // 6-10 s
+            withIntro.sections[3] = { 6, T::Drop };       // 10-18 s
+            suite::SectionBus::publish (withIntro);
+            auto p = quiet();
+            p->loadSample (AzothProcessor::slotTag, tag);
+            set (*p, AzothProcessor::tagWhereId, (float) where);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 10.6, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            return std::make_tuple (p->tagsPlayed.load(), bandLevel (audio, 1000.0f, 2.05, 2.3), bandLevel (audio, 1000.0f, 10.05, 10.3));
+        };
+        const auto [firstCount, firstA, firstB] = tags (AzothProcessor::tagFirstDrop);
+        const auto [everyCount, everyA, everyB] = tags (AzothProcessor::tagEveryDrop);
+        const auto [offCount, offA, offB] = tags (AzothProcessor::tagOff);
+        check (firstCount == 1 && firstA > 0.1f && firstB < 0.01f, "your tag plays on the first drop only");
+        check (everyCount == 2 && everyB > 0.1f && offCount == 0 && offA < 0.01f, "or on every drop, or not at all");
+        suite::SectionBus::publish (testMap());
+        dir.deleteRecursively();
+    }
+
     section ("No surprises");
     {
         suite::SectionBus::publish (testMap());

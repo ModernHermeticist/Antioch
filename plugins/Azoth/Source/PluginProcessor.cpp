@@ -42,6 +42,8 @@ namespace
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::buildShapeId), "Build Shape", StringArray { "Smooth", "Stepped", "Late surge" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::buildFilterId), "Build Filter", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::preLiftId), "Key Change Pre-lift", true));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::tuneSamplesId), "Tune My Samples to the Key", true));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::tagWhereId), "Producer Tag", StringArray { "Off", "First drop", "Every drop" }, 1));
         return l;
     }
 
@@ -123,16 +125,22 @@ void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType p
     {
         // Second and later drops hit harder (up to +50% at full "Bigger later drops").
         const auto boost = laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f;
-        if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId) * boost);
+        if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId) * boost, tuning (slotImpact, rootHz));
         else impact.trigger (rootHz, value (impactId) * boost);
-        if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (value (crashId) * boost);
+        const auto where = (int) value (tagWhereId);
+        if (samplePlayers[slotTag].loaded() && (where == tagEveryDrop || (where == tagFirstDrop && ! laterDrop)))
+        {
+            samplePlayers[slotTag].trigger (0.8f, tuning (slotTag, rootHz));   // your tag, level-matched (and tuned if it's pitched)
+            tagsPlayed.fetch_add (1);
+        }
+        if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (value (crashId) * boost, tuning (slotCrash, rootHz));
         else crash.trigger (value (crashId) * boost, value (toneId));
         lastImpactLevel.store (value (impactId) * boost);
     }
     else if (type == T::Breakdown)
     {
         const auto twoBars = (float) (2.0 * barQ * 60.0 / bpm);
-        if (samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (value (downId));
+        if (samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (value (downId), tuning (slotDown, rootHz));
         else downlifter.trigger (twoBars, rootHz * 4.0f, value (downId));
     }
     else if (type == T::Groove && previous == T::Intro && value (grooveCrashId) > 0.5f)
@@ -521,12 +529,24 @@ bool AzothProcessor::loadSample (int slot, const juce::File& file)
         sample->mono.addFrom (0, 0, raw, c, 0, length, 1.0f / (float) raw.getNumChannels());
     sample->rate = reader->sampleRate;
     sample->path = file.getFullPathName();
+    sample->analyse();   // level match, and its pitch for tuning to the key
 
     sampleKeep.push_back (sample);
     samplePlayers[(size_t) slot].setSample (sample);
     samplePaths[(size_t) slot] = sample->path;
     apvts.state.setProperty (sampleProperty (slot), sample->path, nullptr);
     return true;
+}
+
+double AzothProcessor::tuning (int slot, float rootHz) const
+{
+    if (value (tuneSamplesId) < 0.5f) return 1.0;
+    return azoth::tuneRatio (samplePlayers[(size_t) slot].pitch(), rootHz);
+}
+
+float AzothProcessor::samplePitch (int slot) const
+{
+    return juce::isPositiveAndBelow (slot, (int) numSampleSlots) ? samplePlayers[(size_t) slot].pitch() : 0.0f;
 }
 
 void AzothProcessor::clearSample (int slot)

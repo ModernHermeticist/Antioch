@@ -20,6 +20,14 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     for (size_t i = 0; i < pm::roles().size(); ++i)
         roleBox.addItem (pm::roles()[i].name, (int) i + 1);
     roleBox.onChange = [this] { if (roleBox.getSelectedId() > 0) processor.applyRole (roleBox.getSelectedId() - 1); };
+    saveRole.setTooltip ("Keeps this track's section settings as yours for its role: every track given this role "
+                         "(by hand or from its name) starts from them, in every project");
+    saveRole.onClick = [this]
+    {
+        const auto role = processor.getRole();
+        if (role >= 0 && processor.saveMyRole())
+            saveRole.setButtonText (juce::String ("Saved as my ") + pm::roles()[(size_t) role].name);
+    };
 
     auto columnColour = [] (int t) { return t == pm::laterDrop ? sectionColour (suite::SectionType::Drop).brighter (0.35f) : sectionColour ((suite::SectionType) t); };
     for (int t = 0; t < pm::numColumns; ++t)
@@ -63,10 +71,10 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
 
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     lowManager.setTooltip ("Where a kick or bass track is playing, this track leaves the low end to them (an automatic low cut for its role)");
-    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &status })
         addAndMakeVisible (c);
 
-    setSize (1120, 670);
+    setSize (1290, 670);
     timerCallback();
     startTimerHz (15);
 }
@@ -159,6 +167,7 @@ void PrimaMateriaEditor::resized()
 
     auto controls = bounds.removeFromTop (60);
     roleBox.setBounds (controls.removeFromLeft (220).withSizeKeepingCentre (220, 28).translated (0, 8));
+    saveRole.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 28).translated (0, 8));
     controls.removeFromLeft (12);
     ramp.setBounds (controls.removeFromLeft (180).withSizeKeepingCentre (172, 30).translated (0, 8));
     laterOn.setBounds (controls.removeFromLeft (160).withSizeKeepingCentre (152, 30).translated (0, 8));

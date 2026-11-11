@@ -414,6 +414,30 @@ int main (int argc, char** argv)
         check (! pads->applyVersion (suite::radioEdit), "other versions leave the mixer alone");
     }
 
+    section ("Your own role settings");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PrimaMateriaRoles");
+        dir.deleteRecursively();
+        PrimaMateriaProcessor::roleFolderOverride() = dir;
+        const auto pads = roleIndex ("Pads");
+        auto p = make (pads);
+        const auto builtIn = p->apvts.getRawParameterValue (pm::levelId ((int) T::Breakdown))->load();
+        set (*p, pm::levelId ((int) T::Breakdown), -9.0f);
+        set (*p, pm::breathId, 0.5f);
+        check (p->saveMyRole() && PrimaMateriaProcessor::hasMyRole (pads), "Save as my role keeps this track's settings for Pads");
+        auto q = make (pads);   // a new pads track (applyRole runs, as when it's named "Pads")
+        check (std::abs (q->apvts.getRawParameterValue (pm::levelId ((int) T::Breakdown))->load() + 9.0f) < 0.05f
+                   && std::abs (q->apvts.getRawParameterValue (pm::breathId)->load() - 0.5f) < 0.01f,
+               "a new Pads track starts from your settings (breakdown -9 dB, breath 50%)");
+        auto kick = make (roleIndex ("Kick"));
+        check (std::abs (kick->apvts.getRawParameterValue (pm::breathId)->load()) < 0.01f, "other roles are untouched");
+        PrimaMateriaProcessor::forgetMyRole (pads);
+        auto r = make (pads);
+        check (std::abs (r->apvts.getRawParameterValue (pm::levelId ((int) T::Breakdown))->load() - builtIn) < 0.05f, "forget it and the built-in Pads come back");
+        PrimaMateriaProcessor::roleFolderOverride() = juce::File();
+        dir.deleteRecursively();
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

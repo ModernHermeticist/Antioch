@@ -64,6 +64,31 @@ int main (int argc, char** argv)
         check (std::abs (q->rememberedGainFor (-14.0f)) < 0.01f && std::abs (q->rememberedGainFor (-8.0f)) < 0.01f, "remembered with the project");
     }
 
+    section ("Master fingerprint");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("LapisFingerprints");
+        dir.deleteRecursively();
+        auto white = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            juce::Random rng (pos + 3);
+            for (int i = 0; i < b.getNumSamples(); ++i) { const auto v = 0.1f * (rng.nextFloat() * 2.0f - 1.0f); b.setSample (0, i, v); b.setSample (1, i, v); }
+        };
+        auto p = make (1);
+        set (*p, LapisProcessor::clipId, 0.8f);
+        render (*p, 3.0, white);
+        check (! p->saveFingerprint (dir, "Bright"), "needs about 10 s of the master first");
+        render (*p, 8.0, white);
+        check (p->saveFingerprint (dir, "Bright") && LapisProcessor::loadFingerprints (dir).size() == 1, "saves a master fingerprint");
+
+        auto q = make (1);
+        render (*q, 11.0, music ([] (double) { return -20.0f; }));   // a much darker master
+        const auto line = q->matchFingerprint (LapisProcessor::loadFingerprints (dir)[0]);
+        check (std::abs (q->apvts.getRawParameterValue (LapisProcessor::clipId)->load() - 0.8f) < 0.01f, "matching recalls the chain (clip 80%)");
+        check (q->apvts.getRawParameterValue (LapisProcessor::toneHighId)->load() > 1.0f && q->apvts.getRawParameterValue (LapisProcessor::toneLowId)->load() < -0.5f,
+               "and moves the tone towards the stored master: brighter, less low end (" + line + ")");
+        dir.deleteRecursively();
+    }
+
     if (outDir != juce::File())
         outDir.createDirectory();
 

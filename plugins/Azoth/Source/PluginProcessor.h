@@ -44,7 +44,7 @@ public:
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
         laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" },
         dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" },
-        preLiftId { "prelift" };
+        preLiftId { "prelift" }, tuneSamplesId { "tunesamples" }, tagWhereId { "tagwhere" };
     enum DropFx { dfOff, dfTapeStop, dfStutter };
     enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
     static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }
@@ -59,10 +59,13 @@ public:
     }
 
     /** Your own samples in place of the synthesised impact, crash and downlifter (message thread). */
-    enum SampleSlot { slotImpact, slotCrash, slotDown, numSampleSlots };
+    enum SampleSlot { slotImpact, slotCrash, slotDown, slotTag, numSampleSlots };
+    enum TagWhere { tagOff, tagFirstDrop, tagEveryDrop };
+    std::atomic<int> tagsPlayed { 0 };
     bool loadSample (int slot, const juce::File&);
     void clearSample (int slot);
     juce::String sampleName (int slot) const;
+    float samplePitch (int slot) const;
     static constexpr double lookaheadSeconds = 3.0;
     static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }
 
@@ -90,6 +93,7 @@ public:
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
+    double tuning (int slot, float rootHz) const;   // playback ratio that puts a sample on the song's key
     void enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop);
 
     suite::SectionFollower sections;

@@ -17,9 +17,11 @@ LapisEditor::LapisEditor (LapisProcessor& p)
 {
     setLookAndFeel (&lnf);
     resetButton.onClick = [this] { processor.resetLearning(); };
+    fingerprintButton.setTooltip ("Save this master chain and the finished master's tonal shape, or match a new song to one you saved");
+    fingerprintButton.onClick = [this] { showFingerprintMenu(); };
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &resetButton, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &resetButton, &fingerprintButton, &status })
         addAndMakeVisible (c);
     setSize (1000, 520);
     startTimerHz (20);
@@ -49,7 +51,7 @@ void LapisEditor::timerCallback()
     else
         text << "Manual gain.";
     status.setColour (juce::Label::textColourId, processor.limitedByReduction.load() ? Colours::ember : Colours::text);
-    status.setText (text, juce::dontSendNotification);
+    status.setText (juce::Time::getMillisecondCounterHiRes() < noteUntil ? note : text, juce::dontSendNotification);
 
     grShown = std::max (processor.gainReductionDb.load(), grShown * 0.85f);
     repaint (meterArea);
@@ -107,6 +109,34 @@ void LapisEditor::paint (juce::Graphics& g)
     g.drawText (juce::String (grShown, 1) + " dB  (max " + juce::String (maxGr, 1) + ")", meterRow, juce::Justification::centredRight);
 }
 
+void LapisEditor::showFingerprintMenu()
+{
+    const auto saved = LapisProcessor::loadFingerprints (LapisProcessor::fingerprintFolder());
+    juce::PopupMenu m;
+    m.addItem (1, processor.fingerprintReady() ? "Save this master's fingerprint..." : "Save this master's fingerprint (play 10 s first)",
+               processor.fingerprintReady());
+    if (! saved.empty()) m.addSeparator();
+    for (size_t i = 0; i < saved.size(); ++i) m.addItem (100 + (int) i, "Match: " + saved[i].name);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fingerprintButton), [this, saved] (int id)
+    {
+        if (id >= 100 && id - 100 < (int) saved.size())
+            showNote (processor.matchFingerprint (saved[(size_t) (id - 100)]));
+        else if (id == 1)
+        {
+            nameWindow = std::make_unique<juce::AlertWindow> ("Master fingerprint", "Name this master sound:", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My master");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr)
+                    showNote (processor.saveFingerprint (LapisProcessor::fingerprintFolder(), nameWindow->getTextEditorContents ("name"))
+                                  ? juce::String ("Saved the master fingerprint") : juce::String ("Couldn't save it"));
+            }));
+        }
+    });
+}
+
 void LapisEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
@@ -118,6 +148,7 @@ void LapisEditor::resized()
     auto c = controlArea.reduced (12, 8).withTrimmedTop (14);
     auto statusRow = c.removeFromBottom (30);
     resetButton.setBounds (statusRow.removeFromRight (140).reduced (2));
+    fingerprintButton.setBounds (statusRow.removeFromRight (170).reduced (2));
     status.setBounds (statusRow);
     layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh });
 }

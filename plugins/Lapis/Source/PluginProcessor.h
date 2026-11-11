@@ -7,6 +7,7 @@
 #include "TargetBus.h"
 #include "FixBus.h"
 #include "SuiteDSP.h"
+#include <map>
 
 class LapisProcessor : public suite::SuiteProcessor
 {
@@ -70,6 +71,26 @@ public:
         resetLearning();
         return true;
     }
+
+    /** Master fingerprint: your master chain (target, ceiling, clip, release, tone) and the
+        tonal shape of the finished master, kept as a file. Matching recalls the chain and moves
+        the tone shelves half-way towards the stored shape (after ~10 s of the new song). */
+    struct MasterFingerprint
+    {
+        juce::String name;
+        std::array<float, analysis::numBands> shape {};
+        std::map<juce::String, float> settings;
+    };
+    analysis::BandAnalyzer outBands;
+    static juce::File fingerprintFolder()
+    {
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Master fingerprints");
+    }
+    bool fingerprintReady() const { return outBands.longSeconds.load() >= 10.0f; }
+    std::array<float, analysis::numBands> measuredShape() const;
+    bool saveFingerprint (const juce::File& dir, const juce::String& name);
+    static std::vector<MasterFingerprint> loadFingerprints (const juce::File& dir);
+    juce::String matchFingerprint (const MasterFingerprint&);
 
     // For the UI
     std::atomic<float> gainDb { 0.0f }, gainReductionDb { 0.0f }, maxReductionDb { 0.0f };

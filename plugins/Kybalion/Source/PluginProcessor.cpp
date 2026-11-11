@@ -127,6 +127,9 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     const auto followSections = value (Params::follow) > 0.5f && haveSections && host.playing && host.hasPpq;
     const auto barQ = host.barQuarters();
     const auto fillWhen = (int) value (Params::Fill::when), fillStyle = (int) value (Params::Fill::style);
+    const auto chordMode = (int) value (Params::Fill::chords);
+    const auto chordQ = (double) suiteChordQ.load();
+    const auto stepQNow = Params::Gate::rateQuarters ((int) value (Params::Gate::rate));
     fillNow = 0;
     int sectionNow = -1;
     bool pausedNow = false;
@@ -169,7 +172,28 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
                 }
             }
             fillNow = fill;
-            gate.process (position, l, r, fill, fillQ, barQ);
+
+            // Chord changes (from Correspondence): accent the step on each change, or restart the
+            // pattern there. Changes are counted from the section start, as Correspondence writes them.
+            float accent = 0.0f;
+            auto gatePos = position;
+            if (chordMode != Params::Fill::ChordsOff && chordQ > 0.0 && fill == TranceGate::NoFill)
+            {
+                double origin = 0.0;
+                if (followSections)
+                    if (const auto sec = sections.locate (position, barQ); sec.valid) origin = sec.startQ;
+                const auto since = std::fmod (position - origin, chordQ);
+                const auto into = since < 0.0 ? since + chordQ : since;
+                if (chordMode == Params::Fill::ChordsRestart)
+                    gatePos = into;
+                else if (into < stepQNow)
+                {
+                    accent = 1.0f;
+                    if (! inChordAccent) chordAccents.fetch_add (1);
+                }
+                inChordAccent = accent > 0.0f;
+            }
+            gate.process (gatePos, l, r, fill, fillQ, barQ, accent);
         }
 
         // Time since the last duck trigger: from the beat grid, or from detected kicks.
@@ -249,6 +273,10 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     for (const auto& e : suite::Registry::list())
         if (e.plugin == "Correspondence") swing = std::max (swing, e.metrics[0]);
     suiteSwing.store (swing);
+    float chordQ = 0.0f;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Correspondence" && e.metrics[1] > 0.0f) chordQ = e.metrics[1];
+    suiteChordQ.store (chordQ);
     s.metrics[1] = suiteKickAvailable.load() ? 1.0f : 0.0f;
     return s;
 }
