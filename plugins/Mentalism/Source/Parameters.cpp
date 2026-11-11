@@ -15,6 +15,7 @@ namespace Params
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoCoach, 1 }, "Auto-coach", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { compareAB, 1 }, "Compare with Reference (A/B)", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoMasking, 1 }, "Resolve Masking Automatically", false));
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoBalance, 1 }, "Balance the Mix Automatically", false));
         return layout;
     }
 }

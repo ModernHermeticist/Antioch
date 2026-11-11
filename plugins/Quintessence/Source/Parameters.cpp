@@ -39,6 +39,8 @@ namespace qn
             l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { whenId (s), 1 }, n + "when",
                        juce::StringArray { "Always", "While the vocal sings", "While the lead plays" }, 0, notAutomatable));
             l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { lockId (s), 1 }, n + "locked", false, boolNotAutomatable));
+            l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { bdId (s), 1 }, n + "breakdown gain",
+                       juce::NormalisableRange<float> (-8.0f, 8.0f, 0.1f), 0.0f, dbAttr));
         }
 
         for (int b = 0; b < numMbBands; ++b)

@@ -163,6 +163,7 @@ private:
     int carveBandNow = -1; float carveDepthNow = 0.0f;
     juce::SmoothedValue<float> trimGain;
     float lastTrim = 0.0f, lastInputGain = 0.0f;
+    std::atomic<float> measuredAtTrim { 0.0f };   // the trim the current loudness reading was measured at
     std::array<suite::Svf, 2> lowCut, highCut;
     suite::Svf monoSide;   // mono lows
     float monoHzNow = 0.0f;

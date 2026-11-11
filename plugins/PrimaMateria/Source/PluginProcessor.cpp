@@ -97,6 +97,17 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 if (const auto t = roughMixTrim()) return { { pm::trimId, *t } };
                 return {};
             }
+            case suite::Fix::BalanceStep:
+            {
+                // Mentalism's balance loop: a 1 dB step towards the rough-mix balance, if more than 1 dB off
+                const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
+                if (std::abs (measuredAtTrim.load() - trim) > 0.05f) return {};   // the last step hasn't been heard yet
+                if (const auto t = roughMixTrim())
+                {
+                    if (std::abs (*t - trim) >= 1.0f) return { { pm::trimId, trim + juce::jlimit (-1.0f, 1.0f, *t - trim) } };
+                }
+                return {};
+            }
             case suite::Fix::BuildRise:
             case suite::Fix::None:
             default: return {};
@@ -197,7 +208,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     // Trim (the rough mix sets it). A new trim makes the old loudness reading stale.
     const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
-    if (std::abs (trim - lastTrim) > 0.05f) { loudness.reset(); lastTrim = trim; }
+    if (std::abs (trim - lastTrim) > 0.05f) { loudness.reset(); lastTrim = trim; measuredAtTrim.store (trim); }
     const auto inputGainDb = apvts.getRawParameterValue (pm::inputGainId)->load();
     if (std::abs (inputGainDb - lastInputGain) > 0.05f) { loudness.reset(); lastInputGain = inputGainDb; }   // gain staging: measure again
     if (learnReset.exchange (false)) { loudness.reset(); inputPower.store (0.0); inputCount.store (0); crestSum.store (0.0f); crestCount.store (0); }

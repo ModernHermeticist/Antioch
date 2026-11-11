@@ -772,6 +772,22 @@ int main (int argc, char** argv)
         pad->fixes->poll();
         check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load()) < 0.01f, "Undo puts the trim back");
 
+        // Mentalism's balance loop: a 1 dB step at a time, measured afresh after each
+        measure (*pad, 0.5f, 1000.0f);
+        auto step = suite::FixBus::send (suite::Fix::BalanceStep);
+        kick->fixes->poll();
+        pad->fixes->poll();
+        check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load() + 1.0f) < 0.01f && suite::FixBus::acknowledgements (step) == 1,
+               "a balance step moves the pad 1 dB towards its balance (the kick stays)");
+        step = suite::FixBus::send (suite::Fix::BalanceStep);
+        pad->fixes->poll();
+        check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load() + 1.0f) < 0.01f && suite::FixBus::acknowledgements (step) == 0,
+               "and waits to hear the new level before the next one");
+        measure (*pad, 0.5f, 1000.0f);
+        step = suite::FixBus::send (suite::Fix::BalanceStep);
+        pad->fixes->poll();
+        check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load() + 2.0f) < 0.01f, "then takes the next step");
+
         auto loner = make (roleIndex ("Lead"));
         suite::Registry::reset();
         measure (*loner, 0.3f, 800.0f);

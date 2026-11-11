@@ -351,6 +351,72 @@ void SectionSnapPanel::resized()
 }
 
 //==============================================================================
+ChangesPanel::ChangesPanel()
+{
+    search.setTextToShowWhenEmpty ("Search: a bar (\"bar 64\") or words (\"pads\", \"undid\", \"Quintessence\")", Colours::dimText);
+    search.setFont (juce::FontOptions (14.0f));
+    search.onTextChange = [this] { refresh(); };
+    addAndMakeVisible (search);
+    setSize (720, 520);
+    refresh();
+    startTimerHz (2);
+}
+
+void ChangesPanel::refresh()
+{
+    const auto all = suite::MoveLog::read();
+    total = (int) all.size();
+    shown.clear();
+    for (const auto& e : all)
+        if (suite::MoveLog::matches (e, search.getText())) shown.push_back (e);
+    repaint();
+}
+
+void ChangesPanel::resized()
+{
+    search.setBounds (getLocalBounds().reduced (12).removeFromTop (28));
+}
+
+void ChangesPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (12);
+    r.removeFromTop (34);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    g.drawText (juce::String ((int) shown.size()) + " of " + juce::String (total) + " moves", r.removeFromTop (18), juce::Justification::centredLeft);
+    if (shown.empty())
+    {
+        g.drawFittedText (total == 0 ? "Nothing yet: automatic moves (fixes, EQ and dynamics moves, balance steps) appear here as the suite makes them."
+                                     : "Nothing matches.", r.removeFromTop (40), juce::Justification::topLeft, 2);
+        return;
+    }
+    const auto now = juce::Time::currentTimeMillis();
+    for (const auto& e : shown)
+    {
+        if (r.getHeight() < 34) break;
+        auto row = r.removeFromTop (34);
+        r.removeFromTop (2);
+        const auto colour = e.kind == suite::MoveLog::kept ? Colours::moss : e.kind == suite::MoveLog::undone ? Colours::ember
+                          : e.kind == suite::MoveLog::fix ? Colours::brass : Colours::text;
+        g.setColour (colour.withAlpha (0.8f));
+        g.fillRect (row.removeFromLeft (3));
+        row.removeFromLeft (8);
+        auto head = row.removeFromTop (15);
+        const auto secs = (int) ((now - e.timeMs) / 1000);
+        const auto ago = secs < 60 ? juce::String (secs) + " s ago" : secs < 3600 ? juce::String (secs / 60) + " min ago" : juce::String (secs / 3600) + " h ago";
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (11.0f));
+        const auto dot = juce::String::fromUTF8 ("  \xc2\xb7  ");
+        g.drawText (e.plugin + (e.track.isNotEmpty() ? dot + e.track : juce::String()) + (e.bar > 0 ? dot + "bar " + juce::String (e.bar) : juce::String())
+                        + dot + ago, head, juce::Justification::centredLeft);
+        g.setColour (colour);
+        g.setFont (juce::FontOptions (13.0f));
+        g.drawText (e.text, row, juce::Justification::centredLeft, true);
+    }
+}
+
+//==============================================================================
 namespace
 {
     /** Moments: one per line, "bar what" (impact, stop or throw). */
@@ -727,6 +793,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
             processor.undoLearningPass();
+            return;
+        }
+        if (id == 987)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<ChangesPanel>(), templateBox.getScreenBounds(), nullptr);
             return;
         }
         if (id == 990)
@@ -1278,6 +1350,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Stem plan for a remix pack...", 993);
     templateBox.addItem ("Project tidy...", 992);
     templateBox.addItem ("Arrange from my loop (Prima Materia roles decide who plays where)", 991);
+    templateBox.addItem ("What changed? Every automatic move, and why...", 987);
     templateBox.addItem ("Moments (an impact, a stop or a throw on any bar)...", 990);
     templateBox.addItem ("Learning pass: play the song once and the suite sets itself up", 989);
     templateBox.addItem ("Undo the learning pass", 988);

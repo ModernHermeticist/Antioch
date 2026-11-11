@@ -138,7 +138,10 @@ void QuintessenceEditor::paint (juce::Graphics& g)
     c.removeFromTop (140);
     g.setFont (juce::FontOptions (13.0f));
     g.setColour (Colours::text);
-    g.drawText ("Steering towards: " + juce::String (roleNames[juce::jlimit (0, 7, processor.roleShown.load())]), c.removeFromTop (20), juce::Justification::centredLeft);
+    const auto learnedSongs = processor.learnedShown.load();
+    g.drawText ("Steering towards: " + juce::String (roleNames[juce::jlimit (0, 7, processor.roleShown.load())])
+                + (learnedSongs > 0 ? " (your sound, " + juce::String (learnedSongs) + " songs)" : juce::String())
+                + (processor.groupShown.load() == 1 ? ", breakdown" : ""), c.removeFromTop (20), juce::Justification::centredLeft);
     g.setColour (Colours::dimText);
     g.drawText (juce::String (processor.passes.load()) + " passes, " + juce::String (processor.kept.load()) + " moves kept, "
                 + juce::String (processor.undone.load()) + " undone", c.removeFromTop (20), juce::Justification::centredLeft);
@@ -154,6 +157,14 @@ void QuintessenceEditor::paint (juce::Graphics& g)
         g.setFont (juce::FontOptions (12.0f));
         g.drawText (qn::reasonNames()[reason] + (when == 1 ? " (vocal)" : when == 2 ? " (lead)" : ""),
                     slotAreas[(size_t) s].reduced (10, 6).removeFromTop (16), juce::Justification::centredRight);
+        const auto bd = processor.apvts.getRawParameterValue (qn::bdId (s))->load();
+        if (std::abs (bd) > 0.05f)
+        {
+            g.setColour (Colours::dimText);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText ("Breakdowns " + juce::String (bd > 0.0f ? "+" : "") + juce::String (bd, 1) + " dB",
+                        slotAreas[(size_t) s].reduced (10, 6).removeFromBottom (44).removeFromTop (14), juce::Justification::centred);
+        }
     }
 
     for (int b = 0; b < qn::numMbBands; ++b)

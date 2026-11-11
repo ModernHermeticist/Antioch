@@ -93,6 +93,12 @@ between versions.
 - [ ] **6b.4** With Prima Materia on the same track, Mentalism's *Mix it* puts its masking and mud
   dips in Quintessence (purple/brass bands), not in Prima Materia. Undo Mix it removes them.
 - [ ] **6b.5** Save the project, reopen it: same bands, same locks, the log is still there.
+- [ ] **6b.6** With Ouroboros' map playing, the breakdown gets its own moves (*Breakdowns +x dB* under
+  a band) and the drop keeps its own.
+- [ ] **6b.7** Ouroboros, *Start from a template... > What changed?*: every move above is listed with
+  its track and bar; typing a bar number shows what changed just before it.
+- [ ] **6b.8** Mentalism: turn on *Balance* (or *Mix it*), play the drop. Over a minute the pad/lead
+  trims in Prima Materia move 1 dB at a time, each one kept or undone in *What changed?*.
 
 ## 7. A song end to end
 

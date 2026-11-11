@@ -16,6 +16,7 @@ namespace qn
     inline juce::String reasonId (int s) { return slotId (s, "reason"); }
     inline juce::String whenId (int s)   { return slotId (s, "when"); }
     inline juce::String lockId (int s)   { return slotId (s, "lock"); }
+    inline juce::String bdId (int s)     { return slotId (s, "bd"); }     // extra gain in breakdowns (the breakdown's own correction)
 
     inline juce::String mbId (int band, const char* what) { return "mb" + juce::String (band + 1) + "_" + what; }
     inline juce::String thrId (int b)    { return mbId (b, "thr"); }

@@ -72,6 +72,22 @@ private:
     juce::Label note;
 };
 
+/** What changed: every automatic move in the suite, newest first, with a search. */
+class ChangesPanel : public juce::Component, private juce::Timer
+{
+public:
+    ChangesPanel();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void refresh();
+    juce::TextEditor search;
+
+private:
+    void timerCallback() override { refresh(); }
+    std::vector<suite::MoveLog::Entry> shown;
+    int total = 0;
+};
+
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */
 /** Recipes: save the whole suite's settings under a name, or load a saved recipe. */
 class RecipePanel : public juce::Component, private juce::Timer

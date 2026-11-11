@@ -1037,5 +1037,31 @@ int main (int argc, char** argv)
         snapshot (session, outDir.getChildFile ("ouroboros_session.png"));
     }
 
+    section ("What changed");
+    {
+        suite::MoveLog::clear();
+        auto p = std::make_unique<OuroborosProcessor>();
+        prepare (*p);
+        FakePlayHead head;
+        head.bpm = 138.0;
+        head.ppq = 4.0 * 63.5;   // bar 64
+        p->setPlayHead (&head);
+        render (*p, 0.05, {}, nullptr, &head);
+        p->setPlayHead (nullptr);
+        check (suite::MoveLog::currentBar() == 64, "the play head's bar is shared, so moves say where they happened (" + juce::String (suite::MoveLog::currentBar()) + ")");
+        suite::MoveLog::add ("Prima Materia", "Pads", "Breakdowns quieter: Breakdown level -2.0 dB -> -4.0 dB", suite::MoveLog::fix);
+        suite::MoveLog::add ("Quintessence", "Pads", "Kept: band 2 250 Hz -1.5 dB (distance from a pad's usual tone 2.0 -> 1.6 dB)", suite::MoveLog::kept, 40);
+        suite::MoveLog::add ("Mentalism", "Master", "Undid a balance step on 3 tracks: the master moved away from its target (1.1 -> 1.8 dB)", suite::MoveLog::undone, 96);
+        suite::MoveLog::add ("Quintessence", "Lead", "Dynamics, mid band: -24.0 dB, 3.0:1 (its loud moments stand 18.0 dB out; a lead wants about 6)", suite::MoveLog::info, 100);
+        ChangesPanel panel;
+        check (suite::MoveLog::read().size() == 4 && suite::MoveLog::read()[3].bar == 64, "a move logged without a bar gets the current one");
+        panel.search.setText ("why did the pads get quieter at bar 64?");
+        int matching = 0;
+        for (const auto& e : suite::MoveLog::read()) matching += suite::MoveLog::matches (e, panel.search.getText()) ? 1 : 0;
+        check (matching == 1, "asking about bar 64 finds the move made there");
+        panel.search.setText ({});
+        if (outDir != juce::File()) snapshot (panel, outDir.getChildFile ("ouroboros_changes.png"));
+    }
+
     return finish();
 }

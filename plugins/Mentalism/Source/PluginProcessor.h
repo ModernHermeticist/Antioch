@@ -220,6 +220,15 @@ public:
     /** Auto-coach: after every complete play-through, applies the coach's fixes (each once
         per pass, at most `maxAutoPasses` passes), until the coach is happy. */
     static constexpr int maxAutoPasses = 3;
+
+    /** The balance loop (every 4 s of music, while Balance is on): every Prima Materia that's off
+        its rough-mix balance takes a 1 dB step towards it; on the next pass the step is kept if
+        the master didn't move away from its tonal target, undone if it did. When nobody needs a
+        step, it rests. Called by the timer; tests call it directly. Returns true if it sent or undid. */
+    bool balancePass (const Report& rep);
+    static constexpr float balanceEverySeconds = 4.0f;
+    std::atomic<int> balanceKept { 0 }, balanceUndone { 0 };
+    uint32_t balanceSeq = 0;   // the step waiting to be checked
     int autoCoachPasses() const { return autoPasses.load(); }
     /** Fixes that check themselves: after each auto-coach pass, the next complete play-through
         shows whether its fixes helped. One whose problem is still flagged, while the arrangement
@@ -279,7 +288,9 @@ private:
     std::atomic<int> autoPasses { 0 };
     juce::String autoStatus, finishText;
     std::atomic<FinishStage> finishState { FinishStage::Idle };
-    float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f;
+    float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f, lastBalanceAt = 0.0f, balanceBefore = -1.0f;
+    int balanceRest = 0;
+    std::vector<uint32_t> keptBalance;
     std::map<juce::String, int> maskingCounts;
     juce::StringArray persistentMasking;
     Pass previousPass;

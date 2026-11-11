@@ -3,6 +3,8 @@
 #include "ActivityBus.h"
 #include "Analysis.h"
 #include "Registry.h"
+#include "MoveLog.h"
+#include "StyleLog.h"
 #include <map>
 
 namespace
@@ -14,7 +16,7 @@ namespace
         {
             std::map<juce::String, int> out;
             for (int s = 0; s < qn::numSlots; ++s)
-                for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s) }) out[id] = s;
+                for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s), qn::bdId (s) }) out[id] = s;
             out[qn::lowCutId] = 6;
             out[qn::highCutId] = 7;
             for (int b = 0; b < qn::numMbBands; ++b) { out[qn::thrId (b)] = 8 + b; out[qn::ratioId (b)] = 8 + b; }
@@ -53,6 +55,7 @@ QuintessenceProcessor::QuintessenceProcessor()
         return {};
     });
     for (auto& a : passBandDb) a.store (-100.0f);
+    loadLearned();
 }
 
 QuintessenceProcessor::~QuintessenceProcessor()
@@ -108,6 +111,17 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     juce::ScopedNoDenormals noDenormals;
     if (resetRequested.exchange (false)) resetMeasurement();
 
+    // Breakdowns get their own correction: a pass measures one kind of section only
+    int group = 0;
+    const auto info = suite::HostInfo::read (getPlayHead());
+    if (follower.refresh() && info.hasPpq)
+    {
+        const auto pos = follower.locate (info.ppq, info.barQuarters());
+        if (pos.valid && pos.type == suite::SectionType::Breakdown) group = 1;
+    }
+    if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
+    if (group != passGroup) { resetMeasurement(); passGroup = group; measureGroup.store (group); }
+
     const auto n = buffer.getNumSamples();
     const auto chs = juce::jmin (2, buffer.getNumChannels());
     if (chs == 0) return;
@@ -125,7 +139,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     for (int s = 0; s < qn::numSlots; ++s)
     {
         const auto f = value (qn::freqId (s)), q = value (qn::qId (s));
-        auto g = value (qn::gainId (s));
+        auto g = value (qn::gainId (s)) + (group == 1 ? value (qn::bdId (s)) : 0.0f);
         if (const auto when = (int) value (qn::whenId (s)); when > 0)
             g = std::round (2.0f * g * suite::ActivityBus::read (when == 1 ? suite::ActivityBus::vocal : suite::ActivityBus::lead)) * 0.5f;
         auto& now = peakNow[(size_t) s];
@@ -242,6 +256,7 @@ QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
     Measurement m;
     for (int b = 0; b < analysis::numBands; ++b) m.bandsDb[(size_t) b] = passBandDb[(size_t) b].load();
     m.seconds = (float) passWindowsShared.load() * 0.1f;
+    m.group = measureGroup.load();
     auto percentiles = [] (const std::array<std::atomic<int>, histBins>& h, float& p50, float& p95) -> int
     {
         int total = 0;
@@ -271,6 +286,7 @@ std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int
     std::array<float, 10> diff {};
     const auto& t = qn::targets::roles()[(size_t) juce::jlimit (0, 7, role)];
     if (t.from > t.to) return diff;
+    const auto& shape = shapeFor (role);
 
     // Bands that matter: the role's, minus bands a carve is dipping on purpose, minus bands with
     // nothing in them (40 dB under the loudest: there's nothing to shape).
@@ -287,11 +303,11 @@ std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int
     double sumM = 0.0, sumT = 0.0;
     int count = 0;
     for (int b = 0; b < 10; ++b)
-        if (use[(size_t) b]) { sumM += m.bandsDb[(size_t) b]; sumT += t.shape[(size_t) b]; ++count; }
+        if (use[(size_t) b]) { sumM += m.bandsDb[(size_t) b]; sumT += shape[(size_t) b]; ++count; }
     if (count < 2) return diff;
     const auto meanM = (float) (sumM / count), meanT = (float) (sumT / count);
     for (int b = 0; b < 10; ++b)
-        if (use[(size_t) b]) diff[(size_t) b] = (m.bandsDb[(size_t) b] - meanM) - (t.shape[(size_t) b] - meanT);
+        if (use[(size_t) b]) diff[(size_t) b] = (m.bandsDb[(size_t) b] - meanM) - (shape[(size_t) b] - meanT);
     return diff;
 }
 
@@ -355,20 +371,59 @@ void QuintessenceProcessor::applyLocks()
 
 void QuintessenceProcessor::addLog (const juce::String& line)
 {
-    const juce::ScopedLock sl (logLock);
-    log.insert (0, line);
-    while (log.size() > 40) log.remove (log.size() - 1);
+    {
+        const juce::ScopedLock sl (logLock);
+        log.insert (0, line);
+        while (log.size() > 40) log.remove (log.size() - 1);
+    }
+    // ... and in the suite's What changed
+    const auto kind = line.startsWith ("Kept") ? suite::MoveLog::kept : line.startsWith ("Undid") ? suite::MoveLog::undone : suite::MoveLog::info;
+    suite::MoveLog::add (getName(), getTrackName(), line, kind);
+}
+
+const std::array<float, 10>& QuintessenceProcessor::shapeFor (int role) const
+{
+    const auto r = (size_t) juce::jlimit (0, 7, role);
+    return learnedCount[r] >= 3 ? learned[r] : qn::targets::roles()[r].shape;
+}
+
+void QuintessenceProcessor::loadLearned()
+{
+    // Mentalism logs each track's tone (relative to its loudest band) when you finish a song;
+    // your last 8 songs per role make your target.
+    std::array<std::vector<std::array<float, 10>>, 8> found;
+    for (const auto& e : suite::StyleLog::read())
+    {
+        if (e.kind != "tone") continue;
+        const auto role = e.get ("role").getIntValue();
+        const auto parts = juce::StringArray::fromTokens (e.get ("bands"), ",", "");
+        if (role < 1 || role > 7 || parts.size() != 10) continue;
+        std::array<float, 10> shape {};
+        for (int b = 0; b < 10; ++b) shape[(size_t) b] = parts[b].getFloatValue();
+        found[(size_t) role].push_back (shape);
+    }
+    for (size_t r = 0; r < 8; ++r)
+    {
+        auto& list = found[r];
+        if (list.size() > 8) list.erase (list.begin(), list.end() - 8);
+        learnedCount[r] = (int) list.size();
+        learned[r].fill (0.0f);
+        for (const auto& s : list)
+            for (size_t b = 0; b < 10; ++b) learned[r][b] += s[b] / (float) list.size();
+    }
 }
 
 //==============================================================================
 bool QuintessenceProcessor::autoPass()
 {
     const auto m = measurement();
-    if (m.seconds < (float) passSeconds) return false;
+    if (m.seconds < (float) passSecondsNow()) return false;
     requestReset();
     const auto role = effectiveRole();
     roleShown.store (role);
-    ++passes;
+    groupShown.store (m.group);
+    if (++passes % 40 == 0) loadLearned();
+    learnedShown.store (learnedSongs (role) >= 3 ? learnedSongs (role) : 0);
 
     if (! haveBands) { longBands = m.bandsDb; haveBands = true; }
     else for (int b = 0; b < 10; ++b) longBands[(size_t) b] += 0.3f * (m.bandsDb[(size_t) b] - longBands[(size_t) b]);
@@ -463,7 +518,8 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
     const auto& t = qn::targets::roles()[(size_t) role];
 
     // Low cut where the part has no job (once; it's checked like any move)
-    if (t.lowCutHz > 0.0f && ! lowCutTried && value (qn::lowCutLockId) < 0.5f && value (qn::lowCutId) <= qn::lowCutOff)
+    const auto breakdown = m.group == 1;
+    if (! breakdown && t.lowCutHz > 0.0f && ! lowCutTried && value (qn::lowCutLockId) < 0.5f && value (qn::lowCutId) <= qn::lowCutOff)
     {
         float below = -200.0f, loudest = -200.0f;
         for (int b = 0; b < 10; ++b)
@@ -498,24 +554,35 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
         const auto slot = slotFor (band, false);
         if (slot < 0) continue;
         const auto err = diff[(size_t) band];
-        const auto step = std::round (juce::jlimit (0.5f, 1.5f, std::abs (err) * 0.5f) * 2.0f) * 0.5f * (err > 0.0f ? -1.0f : 1.0f);
+        // Bigger steps while a new track is far off; small ones once it's close
+        const auto maxStep = passes.load() < 8 && std::abs (err) > 4.0f ? 2.5f : 1.5f;
+        const auto step = std::round (juce::jlimit (0.5f, maxStep, std::abs (err) * 0.5f) * 2.0f) * 0.5f * (err > 0.0f ? -1.0f : 1.0f);
         const auto fresh = (int) value (qn::reasonId (slot)) != qn::roleTone;
-        const auto current = fresh ? 0.0f : value (qn::gainId (slot));
-        const auto next = juce::jlimit (-qn::maxToneDb, qn::maxToneDb, current + step);
+        // In breakdowns the move goes into the band's breakdown gain (on top of its main gain), so
+        // the breakdown gets its own correction without touching the drops
+        const auto gainNow = fresh ? 0.0f : value (qn::gainId (slot));
+        const auto& id = breakdown ? qn::bdId (slot) : qn::gainId (slot);
+        const auto current = fresh ? 0.0f : value (id);
+        const auto next = breakdown ? juce::jlimit (-qn::maxToneDb - gainNow, qn::maxToneDb - gainNow, current + step)
+                                    : juce::jlimit (-qn::maxToneDb, qn::maxToneDb, current + step);
         if (std::abs (next - current) < 0.05f) { toneCooldown[(size_t) band] = 8; continue; }   // as far as it goes
 
         const auto centre = analysis::bandCentres()[(size_t) band];
+        const auto where = breakdown ? juce::String (" in breakdowns") : juce::String();
         pending = { Pending::eqSlot, slot, band,
                     { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
-                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) } },
+                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) },
+                      { qn::bdId (slot), value (qn::bdId (slot)) } },
                     before,
-                    "band " + juce::String (slot + 1) + " " + hzText (centre) + " " + dbText (next) };
+                    "band " + juce::String (slot + 1) + " " + hzText (centre) + " " + dbText (next) + where };
         write (qn::freqId (slot), centre);
         write (qn::qId (slot), 1.0f);
         write (qn::reasonId (slot), (float) qn::roleTone);
-        write (qn::gainId (slot), next);
-        addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (next) + " (" + juce::String (std::abs (err), 1) + " dB "
-                + (err > 0.0f ? "more" : "less") + " there than a " + juce::String (t.name) + " usually has)");
+        if (fresh) { write (qn::gainId (slot), 0.0f); write (qn::bdId (slot), 0.0f); }
+        write (id, next);
+        const auto yours = learnedSongs (role) >= 3;
+        addLog ("Band " + juce::String (slot + 1) + where + ": " + hzText (centre) + " " + dbText (next) + " (" + juce::String (std::abs (err), 1) + " dB "
+                + (err > 0.0f ? "more" : "less") + " there than " + (yours ? "your " + juce::String (t.name) + "s usually have" : "a " + juce::String (t.name) + " usually has") + ")");
         lastWasEq = true;
         return true;
     }
@@ -524,7 +591,7 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
 
 bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
 {
-    if (value (qn::autoMbId) < 0.5f) return false;
+    if (value (qn::autoMbId) < 0.5f || m.group == 1) return false;   // dynamics are set in the main sections
     const auto& t = qn::targets::roles()[(size_t) role];
     // Bands with something in them (not just the edges of another band's sound), furthest from their target first
     float loudest = -200.0f;
@@ -578,6 +645,7 @@ void QuintessenceProcessor::relearn()
             write (qn::gainId (s), 0.0f);
             write (qn::freqId (s), qn::defaultFreqs()[(size_t) s]);
             write (qn::qId (s), 1.0f);
+            write (qn::bdId (s), 0.0f);
             write (qn::reasonId (s), (float) qn::free);
         }
     if (value (qn::lowCutLockId) < 0.5f) write (qn::lowCutId, 20.0f);
@@ -587,6 +655,7 @@ void QuintessenceProcessor::relearn()
     toneCooldown.fill (0); mbCooldown.fill (0);
     lowCutTried = false;
     haveBands = false;
+    loadLearned();
     requestReset();
     addLog ("Re-learning: automatic moves cleared (masking fixes and your own bands stay)");
 }

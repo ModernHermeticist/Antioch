@@ -226,7 +226,10 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     autoMasking = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoMasking, "Resolve masking", Colours::ember);
     autoMasking->setTooltip ("Clashes that last over a minute are resolved by themselves: the track that matters less gives way in that band, "
                              "only while the vocal or lead it clashes with plays (undo in History)");
-    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), autoMasking.get(), &finishButton, &automationStatus })
+    autoBalance = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoBalance, "Balance", Colours::ember);
+    autoBalance->setTooltip ("Every 4 s of music, each track that's off its rough-mix balance moves 1 dB towards it; the step is kept "
+                             "only if the master didn't move away from its tonal target (see What changed in Ouroboros)");
+    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), autoMasking.get(), autoBalance.get(), &finishButton, &automationStatus })
         addAndMakeVisible (c);
     matchButton.setTooltip ("Moves Lapis' low and high tone half-way towards the reference (at most 4 dB) and sets the loudness "
                             "target to match it. Undo it in History.");
@@ -783,5 +786,6 @@ void MentalismEditor::resized()
     finishButton.setBounds (adviceArea.getRight() - 324, adviceArea.getY() + 6, 150, 26);
     autoCoach->setBounds (adviceArea.getRight() - 456, adviceArea.getY() + 6, 124, 26);
     autoMasking->setBounds (adviceArea.getRight() - 608, adviceArea.getY() + 6, 146, 26);
+    autoBalance->setBounds (adviceArea.getRight() - 704, adviceArea.getY() + 6, 90, 26);
     automationStatus.setBounds (adviceContent.removeFromBottom (20));
 }

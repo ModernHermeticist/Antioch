@@ -944,6 +944,37 @@ int main (int argc, char** argv)
         suite::Registry::reset();
     }
 
+    section ("The balance loop");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.tonalAvailable = true;
+        r.shortDiff.fill (1.0f);
+        check (! p->balancePass (r) && suite::FixBus::latest() == 0, "off: nothing is sent");
+        set (*p, Params::autoBalance, 1.0f);
+        check (p->balancePass (r) && suite::FixBus::latest() == 1, "on: each pass sends a balance step");
+        suite::FixBus::Message m;
+        check (suite::FixBus::read (1, m) && m.fix == suite::Fix::BalanceStep, "(a BalanceStep to every Prima Materia)");
+        suite::FixBus::acknowledge (1);   // two tracks took a step
+        suite::FixBus::acknowledge (1);
+        r.shortDiff.fill (1.2f);
+        check (p->balancePass (r) && p->balanceKept.load() == 1 && suite::FixBus::latest() == 2, "the master stayed near its target: kept, and the next step goes out");
+        suite::FixBus::acknowledge (2);
+        r.shortDiff.fill (2.5f);
+        suite::FixBus::Message undo;
+        check (p->balancePass (r) && p->balanceUndone.load() == 1 && suite::FixBus::read (3, undo) && undo.undo && (undo.target & 0xffffffu) == 2u,
+               "the master moved away from its target: that step is undone");
+        int quiet = 0;
+        for (int i = 0; i < 4; ++i) quiet += p->balancePass (r) ? 0 : 1;
+        check (quiet == 4 && p->balancePass (r), "it rests a few passes, then tries again");
+        check (! p->balancePass (r) && suite::FixBus::latest() == 4, "nobody took the step (all balanced): it rests");
+        bool logged = false;
+        for (const auto& e : suite::MoveLog::read()) logged = logged || (e.plugin == "Mentalism" && e.text.startsWith ("Undid a balance step"));
+        check (logged, "kept and undone steps show in What changed");
+        suite::FixBus::reset();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

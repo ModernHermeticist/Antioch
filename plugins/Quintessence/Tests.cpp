@@ -5,6 +5,8 @@
 #include "ActivityBus.h"
 #include "Analysis.h"
 #include "Registry.h"
+#include "MoveLog.h"
+#include "StyleLog.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -54,26 +56,37 @@ namespace
     {
         InputFn input;
         int64_t at = 0;
+        FakePlayHead* head = nullptr;
         void play (juce::AudioProcessor& p, double seconds, juce::AudioBuffer<float>* capture = nullptr, std::function<void (int64_t)> before = {})
         {
             const auto start = at;
-            render (p, seconds, [&] (juce::AudioBuffer<float>& b, int64_t pos) { input (b, start + pos); }, capture, nullptr, before);
+            render (p, seconds, [&] (juce::AudioBuffer<float>& b, int64_t pos) { input (b, start + pos); }, capture, head, before);
             at += (int64_t) (seconds * sampleRate);
         }
     };
 
     /** Listens and runs a pass, `count` times. */
-    void passes (QuintessenceProcessor& p, Player& player, int count)
+    void passes (QuintessenceProcessor& p, Player& player, int count, double seconds = QuintessenceProcessor::passSeconds + 0.3)
     {
         for (int i = 0; i < count; ++i)
         {
-            player.play (p, QuintessenceProcessor::passSeconds + 0.3);
+            player.play (p, seconds);
             p.applyLocks();
             p.autoPass();
         }
     }
 
     float v (QuintessenceProcessor& p, const juce::String& id) { return p.apvts.getRawParameterValue (id)->load(); }
+
+    const std::array<float, 10> heavyPad { -12.0f, -12.0f, -8.0f, 4.0f, -1.0f, 0.0f, -2.0f, -5.0f, -9.0f, -14.0f };   // 8 dB too much 250 Hz
+
+    /** The role-tone band working at `hz`, or -1. */
+    int toneSlotAt (QuintessenceProcessor& p, float hz)
+    {
+        for (int s = 0; s < qn::numSlots; ++s)
+            if (std::abs (std::log2 (v (p, qn::freqId (s)) / hz)) < 0.2f && (int) v (p, qn::reasonId (s)) == qn::roleTone) return s;
+        return -1;
+    }
 
     int slotNear (QuintessenceProcessor& p, float hz)
     {
@@ -90,6 +103,10 @@ int main (int argc, char** argv)
     if (outDir != juce::File())
         outDir.createDirectory();
     suite::ActivityBus::clear();
+    suite::SectionBus::withdraw();
+    const auto logFile = juce::File::createTempFile ("quintessence-style.txt");
+    suite::StyleLog::setFileForTests (logFile);
+    suite::MoveLog::clear();
 
     section ("Untouched, it's transparent");
     {
@@ -123,11 +140,82 @@ int main (int argc, char** argv)
         if (std::getenv ("QDEBUG")) std::cout << p->moveLog().joinIntoString ("\n") << std::endl;
         check (p->kept.load() >= 3 && std::abs (v (*p, qn::lowCutId) - 100.0f) < 1.0f, "the moves that helped were kept (" + juce::String (p->kept.load()) + "), the low cut too");
         check (! p->moveLog().isEmpty() && p->moveLog().joinIntoString ("\n").contains ("a pad"), "each move is explained in the log");
+        const auto shared = suite::MoveLog::read();
+        const auto inShared = std::count_if (shared.begin(), shared.end(), [] (const suite::MoveLog::Entry& e) { return e.plugin == "Quintessence"; });
+        check (inShared >= 6 && shared.front().kind == suite::MoveLog::kept, "and in the suite's What changed (" + juce::String ((int) inShared) + " lines, newest first)");
 
         p->relearn();
         bool clear = true;
         for (int sl = 0; sl < qn::numSlots; ++sl) clear = clear && std::abs (v (*p, qn::gainId (sl))) < 0.05f;
         check (clear && v (*p, qn::lowCutId) <= qn::lowCutOff, "Re-learn clears the automatic moves");
+    }
+
+    section ("A new track settles quickly");
+    {
+        auto p = make (4);
+        Player player { bands (heavyPad) };
+        passes (*p, player, 5, QuintessenceProcessor::firstPassSeconds + 0.3);
+        const auto s = toneSlotAt (*p, 250.0f);
+        check (s >= 0 && v (*p, qn::gainId (s)) <= -3.5f, "within five short passes (about 9 s) the 250 Hz excess is dipped ("
+                                                             + (s >= 0 ? juce::String (v (*p, qn::gainId (s)), 1) : juce::String ("none")) + " dB)");
+    }
+
+    section ("Breakdowns get their own correction");
+    {
+        auto p = make (4);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        Player player { bands (heavyPad) };
+        player.head = &head;
+        suite::SectionMap map;
+        map.totalBars = 999; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        suite::SectionBus::publish (map);
+        passes (*p, player, 8);
+        auto s = toneSlotAt (*p, 250.0f);
+        check (s >= 0 && v (*p, qn::bdId (s)) <= -2.5f && std::abs (v (*p, qn::gainId (s))) < 0.05f,
+               "in a breakdown, the dip goes into the band's breakdown gain ("
+                   + (s >= 0 ? juce::String (v (*p, qn::bdId (s)), 1) + " dB; main " + juce::String (v (*p, qn::gainId (s)), 1) : juce::String ("none")) + ")");
+        check (std::abs (v (*p, qn::lowCutId) - 20.0f) < 0.5f && v (*p, qn::ratioId (1)) < 1.01f, "low cut and dynamics wait for the main sections");
+
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        passes (*p, player, 10);
+        s = toneSlotAt (*p, 250.0f);
+        check (s >= 0 && v (*p, qn::gainId (s)) <= -1.5f && v (*p, qn::bdId (s)) <= -0.5f,
+               "in the drop it makes the main correction, and the breakdown keeps its own on top");
+        suite::SectionBus::withdraw();
+        p->setPlayHead (nullptr);
+    }
+
+    section ("Your own sound: targets from the songs you finished");
+    {
+        // Three finished songs whose pads all had this shape: that's what a pad sounds like, for you
+        juce::StringArray shape;
+        for (auto db : heavyPad) shape.add (juce::String (db - 4.0f, 1));
+        for (int i = 0; i < 3; ++i) suite::StyleLog::add ("tone", { { "role", "4" }, { "bands", shape.joinIntoString (",") } });
+        auto p = make (4);
+        check (p->learnedSongs (4) == 3, "it reads your pads' tone from the style log (3 songs)");
+        Player player { bands (heavyPad) };
+        passes (*p, player, 8);
+        const auto s = toneSlotAt (*p, 250.0f);
+        check (s < 0 || std::abs (v (*p, qn::gainId (s))) < 1.0f, "so the 250 Hz that suits your sound stays");
+        logFile.deleteFile();
+        auto q = make (4);
+        check (q->learnedSongs (4) == 0, "with no songs logged it uses the built-in targets");
+    }
+
+    section ("What changed: the search");
+    {
+        suite::MoveLog::clear();
+        suite::MoveLog::add ("Prima Materia", "Pads", "Breakdowns quieter: Breakdown level -2.0 dB -> -4.0 dB", suite::MoveLog::fix, 60);
+        suite::MoveLog::add ("Quintessence", "Lead", "Band 2: 250 Hz -1.5 dB", suite::MoveLog::info, 120);
+        const auto all = suite::MoveLog::read();
+        int at64 = 0, lead = 0;
+        for (const auto& e : all) { at64 += suite::MoveLog::matches (e, "why did it get quieter at bar 64?") ? 1 : 0; lead += suite::MoveLog::matches (e, "lead") ? 1 : 0; }
+        check (all.size() == 2 && all.front().plugin == "Quintessence", "newest first");
+        check (at64 == 1 && lead == 1, "'bar 64' finds the change at bar 60; 'lead' finds the lead's");
     }
 
     section ("A move that doesn't help is undone");

@@ -11,11 +11,25 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include "MoveLog.h"
+#include "SuiteProcessor.h"
 
 namespace suite
 {
     enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch, DjPhrasing, ExtendSection, SessionHealth, ArrangeFromLoop, DraftSong,
-                                    LearnStart, KickFit, PhaseFlip, FinishSong };   // the learning pass (Ouroboros)
+                                    LearnStart, KickFit, PhaseFlip, FinishSong,     // the learning pass (Ouroboros)
+                                    BalanceStep };                                  // Mentalism's balance loop: each track a step towards its balance
+
+    /** A fix in words (What changed). */
+    inline juce::String fixName (Fix f)
+    {
+        static const char* names[] = { "None", "Breakdowns quieter", "Breakdowns louder", "Build rise", "Intro quieter", "Later drop bigger",
+                                       "Rough mix", "DJ intro and outro", "Reference tone", "Masking carve", "Gain staging", "Arc match",
+                                       "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
+                                       "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step" };
+        const auto i = (int) f;
+        return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
+    }
 
     /** Carve: which Prima Materia (low 12 bits of its instance id) and which octave band. */
     inline uint32_t packCarve (uint32_t instanceId, int band) noexcept { return ((uint32_t) (band & 0xf) << 12) | (instanceId & 0xfffu); }
@@ -133,13 +147,17 @@ namespace suite
                 return;
             }
             Entry entry { m.seq, {}, {} };
+            juce::StringArray moved;
             for (const auto& c : changes)
                 if (auto* p = apvts.getParameter (c.paramId))
                 {
                     const auto before = p->getValue();
                     set (*p, p->convertTo0to1 (p->getNormalisableRange().snapToLegalValue (c.plainValue)));
                     entry.changes.push_back ({ p, before, p->getValue() });
+                    if (std::abs (p->getValue() - before) > 1.0e-5f)
+                        moved.add (p->getName (40) + " " + p->getText (before, 40) + " -> " + p->getCurrentValueAsText());
                 }
+            if (! moved.isEmpty()) log (fixName (m.fix) + ": " + moved.joinIntoString (", "), MoveLog::fix);
             history.push_back (std::move (entry));
             if (history.size() > 16) history.erase (history.begin());
             ++applied;
@@ -154,13 +172,25 @@ namespace suite
                 if ((it->seq & 0xffffffu) == (m.target & 0xffffffu))
                 {
                     if (it->customUndo != nullptr) it->customUndo();
+                    juce::StringArray moved;
                     for (auto c = it->changes.rbegin(); c != it->changes.rend(); ++c)
                         if (std::abs (c->param->getValue() - c->after) < 1.0e-4f)
+                        {
                             set (*c->param, c->before);
+                            if (std::abs (c->after - c->before) > 1.0e-5f) moved.add (c->param->getName (40) + " back to " + c->param->getCurrentValueAsText());
+                        }
+                    if (! moved.isEmpty()) log ("Undone: " + moved.joinIntoString (", "), MoveLog::undone);
                     history.erase (it);
                     FixBus::acknowledge (m.seq);
                     return;
                 }
+        }
+
+        void log (const juce::String& text, int kind)
+        {
+            auto& proc = apvts.processor;
+            const auto* sp = dynamic_cast<const SuiteProcessor*> (&proc);
+            MoveLog::add (proc.getName(), sp != nullptr ? sp->getTrackName() : juce::String(), text, kind);
         }
 
         static void set (juce::RangedAudioParameter& p, float normalised)

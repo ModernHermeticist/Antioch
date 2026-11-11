@@ -15,6 +15,8 @@
 #include "SuiteProcessor.h"
 #include "SuiteDSP.h"
 #include "FixBus.h"
+#include "SectionBus.h"
+#include "HostInfo.h"
 #include "Parameters.h"
 #include "Targets.h"
 
@@ -53,6 +55,8 @@ public:
 
     //==============================================================================
     static constexpr double passSeconds = 3.0;   // music heard per pass
+    static constexpr double firstPassSeconds = 1.5;   // ... for the first few passes, to settle a new track quickly
+    double passSecondsNow() const { return passes.load() < 6 ? firstPassSeconds : passSeconds; }
 
     /** Message thread: one pass if enough music has been heard since the last (the poller calls
         it; tests call it directly). Returns true if it made or undid a move. */
@@ -72,6 +76,7 @@ public:
         std::array<float, qn::numMbBands> p50Pre {}, p95Pre {}, p50Post {}, p95Post {};
         std::array<int, qn::numMbBands> windowsPost {};
         float seconds = 0.0f;
+        int group = 0;   // 0: anywhere but a breakdown, 1: a breakdown (it keeps a separate correction there)
         float swingPost (int b) const { return p95Post[(size_t) b] - p50Post[(size_t) b]; }
     };
     /** The measurement so far this pass (any thread). */
@@ -86,7 +91,14 @@ public:
 
     std::array<std::atomic<float>, qn::numMbBands> grNow {};          // gain reduction, dB (UI)
     std::array<std::atomic<float>, 10> shownDiff {};                  // measured minus target (UI)
-    std::atomic<int> roleShown { 0 };
+    std::atomic<int> roleShown { 0 }, groupShown { 0 }, learnedShown { 0 };
+
+    /** The tone it steers towards for a role: your own (from the songs you finished, once there are
+        3 or more in the style log), or the built-in one. */
+    const std::array<float, 10>& shapeFor (int role) const;
+    int learnedSongs (int role) const { return learnedCount[(size_t) juce::jlimit (0, 7, role)]; }
+    /** Reads the style log's per-role tone of your finished songs. */
+    void loadLearned();
     std::atomic<int> passes { 0 }, kept { 0 }, undone { 0 };
 
 private:
@@ -104,6 +116,9 @@ private:
     //==============================================================================
     // Audio thread
     double sr = 48000.0;
+    suite::SectionFollower follower;
+    int passGroup = -1;
+    std::atomic<int> measureGroup { 0 };
     std::array<suite::Svf, 4> lowCuts, highCuts;   // two per channel: 24 dB/oct
     float lowCutNow = -1.0f, highCutNow = -1.0f;
     std::array<std::array<suite::Biquad, 2>, qn::numSlots> peaks;
@@ -143,6 +158,8 @@ private:
     bool lowCutTried = false, lastWasEq = false;
     std::array<float, 10> longBands {};
     bool haveBands = false;
+    std::array<std::array<float, 10>, 8> learned {};
+    std::array<int, 8> learnedCount {};
     std::atomic<bool> autoWriting { false };
     std::atomic<uint32_t> pendingLocks { 0 };
     juce::CriticalSection logLock;

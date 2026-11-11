@@ -109,6 +109,7 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     barQuarters.store (host.barQuarters());
     playing.store (host.playing);
     if (host.playing) playedSinceAutosave.store (true);
+    if (host.playing && host.hasPpq) suite::MoveLog::setBar ((int) std::floor (host.ppq / host.barQuarters()) + 1);   // What changed: which bar a move happened on
     if (host.hasPpq)
         ppq.store (host.ppq);
     // Tempo changes: note each bar's tempo as the song plays, for times in the cue sheet and exports.

@@ -300,6 +300,23 @@ void MentalismProcessor::logFinishedSong (const Report& rep)
         for (const auto& e : entries)
             if (e.plugin == "Prima Materia" && (int) e.metrics[0] > 1 && e.has (suite::Status::measuring))
                 suite::StyleLog::add ("balance", { { "role", juce::String ((int) e.metrics[0]) }, { "offset", juce::String (e.metrics[1] - kick, 1) } });
+
+    // Each part's tone (relative to its loudest band): Quintessence learns your sound from these.
+    // A track's Quintessence (after its EQ) is preferred to its Prima Materia.
+    std::map<juce::String, suite::SuiteEntry> tones;
+    for (const auto& e : entries)
+    {
+        if (! e.has (suite::Status::hasBands) || e.track.isEmpty() || (int) e.metrics[0] < 1 || (int) e.metrics[0] > 7) continue;
+        if (e.plugin == "Quintessence" || (e.plugin == "Prima Materia" && tones.find (e.track) == tones.end())) tones[e.track] = e;
+    }
+    for (const auto& [track, e] : tones)
+    {
+        const auto loudest = *std::max_element (e.bands.begin(), e.bands.end());
+        if (loudest < -80.0f) continue;
+        juce::StringArray shape;
+        for (auto b : e.bands) shape.add (juce::String (b - loudest, 1));
+        suite::StyleLog::add ("tone", { { "role", juce::String ((int) e.metrics[0]) }, { "bands", shape.joinIntoString (",") } });
+    }
     refreshCoachThresholds();
 }
 
@@ -371,6 +388,13 @@ void MentalismProcessor::runAutomation()
     }
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
+    if (rep.measuredSeconds >= lastBalanceAt + balanceEverySeconds)
+    {
+        lastBalanceAt = rep.measuredSeconds;
+        balancePass (rep);
+    }
+    else if (rep.measuredSeconds < lastBalanceAt)
+        lastBalanceAt = rep.measuredSeconds;
     using T = suite::SectionType;
     auto setText = [this] (juce::String& which, const juce::String& text) { const juce::ScopedLock sl (historyLock); which = text; };
 
@@ -486,10 +510,51 @@ juce::StringArray MentalismProcessor::translationCheck() const
     return mixfix::translation (suite::Registry::list(), report().measurement.monoLossDb);
 }
 
+bool MentalismProcessor::balancePass (const Report& rep)
+{
+    if (apvts.getRawParameterValue (Params::autoBalance)->load() < 0.5f) return false;
+    // How far the master's tone is from its target now (dB, mean over 63 Hz - 8 kHz)
+    float now = -1.0f;
+    if (rep.tonalAvailable)
+    {
+        float sum = 0.0f;
+        for (int b = 1; b <= 8; ++b) sum += std::abs (rep.shortDiff[(size_t) b]);
+        now = sum / 8.0f;
+    }
+
+    if (balanceSeq != 0)
+    {
+        const auto seq = std::exchange (balanceSeq, 0u);
+        const auto tracks = suite::FixBus::acknowledgements (seq);
+        if (tracks == 0) { balanceRest = 8; return false; }   // everyone's where they should be: rest a while
+        const auto worse = now >= 0.0f && balanceBefore >= 0.0f && now > balanceBefore + 0.5f;
+        const auto measure = now >= 0.0f && balanceBefore >= 0.0f
+                                 ? " (the master's distance from its tonal target " + juce::String (balanceBefore, 1) + " -> " + juce::String (now, 1) + " dB)" : juce::String();
+        if (worse)
+        {
+            suite::FixBus::sendUndo (seq);
+            ++balanceUndone;
+            suite::MoveLog::add (getName(), getTrackName(), "Undid a balance step on " + juce::String (tracks) + (tracks == 1 ? " track" : " tracks")
+                                 + ": the master moved away from its target" + measure, suite::MoveLog::undone);
+            balanceRest = 4;
+            return true;
+        }
+        ++balanceKept;
+        keptBalance.push_back (seq);
+        suite::MoveLog::add (getName(), getTrackName(), "Kept a balance step on " + juce::String (tracks) + (tracks == 1 ? " track" : " tracks") + measure,
+                             suite::MoveLog::kept);
+    }
+    if (balanceRest > 0) { --balanceRest; return false; }
+    balanceBefore = now;
+    balanceSeq = suite::FixBus::send (suite::Fix::BalanceStep);
+    return true;
+}
+
 juce::StringArray MentalismProcessor::mixIt()
 {
     mixItStartSeq = suite::FixBus::latest();
     setParameterPlain (apvts, Params::autoMasking, 1.0f);
+    setParameterPlain (apvts, Params::autoBalance, 1.0f);
     mixItPending = true;
     {
         const juce::ScopedLock sl (historyLock);
@@ -504,7 +569,11 @@ int MentalismProcessor::undoMixIt()
     for (const auto& r : getFixHistory())
         if (r.seq > mixItStartSeq && r.undoSeq == 0) seqs.push_back (r.seq);
     for (auto it = seqs.rbegin(); it != seqs.rend(); ++it) undoFix (*it);
+    for (auto it = keptBalance.rbegin(); it != keptBalance.rend(); ++it)
+        if (*it > mixItStartSeq) suite::FixBus::sendUndo (*it);
+    keptBalance.clear();
     setParameterPlain (apvts, Params::autoMasking, 0.0f);
+    setParameterPlain (apvts, Params::autoBalance, 0.0f);
     mixItPending = false;
     const juce::ScopedLock sl (historyLock);
     mixItText = "Undid Mix it (" + juce::String ((int) seqs.size()) + " moves).";

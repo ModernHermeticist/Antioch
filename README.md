@@ -55,6 +55,11 @@ With the full suite loaded, here is everything that happens without automation c
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
 
+**Where to put everything:** [Organising the suite in FL Studio](docs/Organising-the-suite.md)
+has the track names, the plugin order on each track, the routing, and how to save it as
+your FL template. **What it did:** Ouroboros' *What changed?* lists every automatic move in
+the suite, with the track, the bar, the reason, and whether it was kept or undone.
+
 ## Correspondence: key and chord engine
 
 ![Correspondence](docs/correspondence.png)
@@ -401,6 +406,19 @@ again if the coach still isn't happy.
 
 ![Mentalism arrangement](docs/mentalism_arrangement.png)
 
+### Mix it and the balance loop
+
+**Mix it** (under the Finish button) runs everything that can be automated: gain staging,
+the rough mix once the drop has been heard, the arc coach, masking resolved automatically,
+mud and harshness dips, and the translation check. **Undo Mix it** takes all of it back.
+
+It also turns on **Balance**: every 4 s of music, each Prima Materia that's more than 1 dB
+off its rough-mix balance against the kick (your own balance, once you've finished a few
+songs) takes a 1 dB step towards it. A track that has just stepped waits until its new level
+has been heard before it steps again. On the next pass Mentalism checks the master: if it
+moved away from its tonal target by more than 0.5 dB, the step is undone. When no track
+needs a step, it rests for a while.
+
 ## Ouroboros: arrangement conductor
 
 ![Ouroboros](docs/ouroboros.png)
@@ -596,6 +614,18 @@ How it works: Ouroboros shares the section map, not the current section, through
 kind of shared memory as the key. Each plugin then works out the section from its own copy
 of FL's transport, so every reaction lands exactly on the bar line, whatever order FL
 processes the tracks in.
+
+### What changed?
+
+![What changed](docs/ouroboros_changes.png)
+
+*What changed? Every automatic move, and why* (in the *Start from a template...* menu) lists what the suite
+did by itself, newest first. That includes fixes applied and undone, with every setting
+they moved and its value before and after, Quintessence's EQ and dynamics moves with their
+reasons, and Mentalism's balance steps. Each line has its plugin, track and bar, and is
+coloured by what happened to it (kept in green, undone in red, fixes in gold). Search
+with a bar ("why did the pads get quieter at bar 64?" shows what changed in the 8 bars up
+to bar 64) or with words ("pads", "undid", "Quintessence").
 
 ## Section scenes (Antioch, Kybalion, Vibration, Solve et Coagula)
 
@@ -1092,6 +1122,15 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
   the vocal or lead plays), mud cleanup and the harshness finder go to Quintessence when
   it shares a track with Prima Materia, and Prima Materia leaves them alone. Undo works
   as usual.
+- **Your sound:** once you've finished three songs (Mentalism's Finish logs each track's
+  tone in the style log), each role's target is the average of your last 8 songs instead
+  of the built-in curve. It says so: "Steering towards: pads (your sound, 5 songs)".
+- **Breakdowns get their own correction.** A pass measures one kind of section only. In a
+  breakdown, moves go into each band's *breakdown gain*, on top of its main gain, so a pad
+  can be fuller in the breakdown without changing the drop. The low cut and dynamics are
+  set in the main sections.
+- **A new track settles fast:** the first six passes are 1.5 s, and steps go up to 2.5 dB
+  while a band is more than 4 dB off. A heavy 250 Hz on a new pad is dipped in about 9 s.
 - **Touch a band and it's yours:** it locks and the automation leaves it alone. Unlock it
   to hand it back. **Re-learn** clears the automatic moves (carves and your own bands
   stay); Ouroboros' learning pass does the same. **Auto EQ** and **Auto dynamics**
