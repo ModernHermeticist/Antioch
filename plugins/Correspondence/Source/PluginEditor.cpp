@@ -296,15 +296,34 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
         juce::PopupMenu m;
         m.addItem (1, "Export all (every clip and the all-parts file)...");
         m.addItem (2, "Song pack for a vocalist (sheet, chords, bass, lead guide, markers)...");
+        m.addItem (3, "Spire layers: lead octave, lead pluck, sub (one clip each)...");
+        m.addSeparator();
+        m.addItem (4, "Send to FL's piano roll (as scripts: Tools > Scripting)");
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&saveButton), [this] (int choice)
         {
             if (choice <= 0) return;
+            if (choice == 4)
+            {
+                const auto written = processor.sendToPianoRoll();
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Sent to FL's piano roll",
+                    written.isEmpty() ? juce::String ("Nothing to send.")
+                                      : "Wrote " + juce::String (written.size()) + " scripts to " + written[0].getParentDirectory().getFullPathName()
+                                            + ".\n\nIn FL's piano roll: Tools > Scripting > 'Antioch - Chords' (or any part), choose where, and OK. "
+                                              "If FL was open, it lists new scripts after a restart (or Tools > Scripting > Refresh, if your version has it).");
+                return;
+            }
             chooser = std::make_unique<juce::FileChooser> ("Choose a folder", juce::File::getSpecialLocation (juce::File::userMusicDirectory));
             chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                                   [this, choice] (const juce::FileChooser& fc)
                                   {
                                       const auto dir = fc.getResult();
                                       if (dir == juce::File()) return;
+                                      if (choice == 3)
+                                      {
+                                          for (auto* kind : { "Song Lead Octave", "Song Lead Pluck", "Song Sub" }) processor.exportClip (kind, dir);
+                                          dir.revealToUser();
+                                          return;
+                                      }
                                       (choice == 1 ? processor.exportEverything (dir) : processor.exportSongPack (dir)).revealToUser();
                                   });
         });
@@ -411,6 +430,12 @@ namespace
                 ed->onTextChange = [&state, ed, id] { state.state.setProperty (id, ed->getText(), nullptr); };
                 addAndMakeVisible (*editor);
             }
+            macrosBox = std::make_unique<juce::ComboBox>();
+            macrosBox->addItemList (state.getParameter (Params::songMacros)->getAllValueStrings(), 1);
+            macrosBox->setTooltip ("Spire macro rides: the song clips carry CC automation for Spire's four macros (1 brightness, 2 drive, "
+                                   "3 space, 4 movement) that follows the song. In Spire, MIDI-learn each macro to its CC once, and save the patch");
+            macrosAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::songMacros, *macrosBox);
+            addAndMakeVisible (*macrosBox);
             breakdownBox = std::make_unique<juce::ComboBox>();
             breakdownBox->addItemList (state.getParameter (Params::songBreakdown)->getAllValueStrings(), 1);
             breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder, "
@@ -457,6 +482,7 @@ namespace
             {
                 auto toggles = r.removeFromBottom (28);
                 breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
+                macrosBox->setBounds (toggles.removeFromRight (130).reduced (2));
                 counter->setBounds (toggles.removeFromRight (140));
                 lift->setBounds (toggles.removeFromLeft (toggles.getWidth() / 2));
                 vary->setBounds (toggles);
@@ -482,7 +508,8 @@ namespace
         std::unique_ptr<juce::ComboBox> leadBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> leadAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;
-        std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox;
+        std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox, macrosBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> macrosAttachment;
         std::unique_ptr<juce::ToggleButton> accent;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> grooveAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> accentAttachment;

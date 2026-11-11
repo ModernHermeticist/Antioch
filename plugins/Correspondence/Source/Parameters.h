@@ -32,7 +32,8 @@ namespace Params
     inline const juce::String songPhrase   { "song_phrase" };
     inline const juce::String leadExpression { "lead_expr" };    // exported leads: off / glide / glide + scoops (bend 2 or 12)
     inline const juce::String songClimb    { "song_climb" };     // drop 2+ chords: top note an octave up
-    inline const juce::String songDouble   { "song_double" };    // the final drop: lead doubled an octave up, bass a sub octave
+    inline const juce::String songDouble   { "song_double" };
+    inline const juce::String songMacros   { "song_macros" };    // Spire macro rides in song clips: off, CC 20-23, CC 102-105    // the final drop: lead doubled an octave up, bass a sub octave
     inline const juce::String songGhost    { "song_ghost" };     // ghost notes in bass and arp exports
     inline const juce::String songFills    { "song_fills" };     // drum fill clip
     inline const juce::String songVocalRoom { "song_vocalroom" }; // the lead thins out where the vocal sings

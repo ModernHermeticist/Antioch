@@ -947,6 +947,24 @@ with the vocal on Solve et Coagula's sidechain before exporting. The same switch
 vocal take turns*) also has the lead **answer the vocal**: in a section with no lead, the
 bar after each vocal phrase gets a short lead reply.
 
+**Spire macro rides** (Song patterns, *CC 20-23* by default, or *CC 102-105*, or *Off*): every
+song clip carries CC automation for Spire's four macros that follows the song: macro 1
+(brightness) opens through each build and is full in the drops, macro 2 (drive) grows into the
+drops and further in later ones, macro 3 (space) blooms in breakdowns, macro 4 (movement) rises
+through builds. In Spire, MIDI-learn each macro to its CC once (right-click the macro, *MIDI
+learn*, move the CC) and save the patch; from then on every song plays it.
+
+**Spire layers** (Export menu, and in Export all): the parts a typical Spire stack plays, one
+clip each for its own Spire: *Song Lead Octave* (the lead an octave up, drops only),
+*Song Lead Pluck* (the lead's on-beat notes, short, from the build) and *Song Sub* (the bass in
+C1-B1, held, out in breakdowns).
+
+**Send to FL's piano roll** (Export menu) writes each clip (chords, bass, arp, melody, and the
+song clips and layers when Ouroboros has a map) as a script for FL Studio's piano roll, in
+*Documents/Image-Line/FL Studio/Settings/Piano roll scripts*. In any pattern's piano roll,
+*Tools > Scripting > Antioch - Chords* pastes the chords in key, at the pattern's start or after
+its last note, keeping or replacing what's there. No files to drag.
+
 **Double the final drop** (on by default): in the last of two or more drops, the lead is
 doubled an octave up (down if that would go too high) and the bass gains a sub octave, so
 the end is the biggest moment. A song with one drop is left alone.
@@ -1075,6 +1093,12 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 On macOS, copy the `.vst3` folders to `~/Library/Audio/Plug-Ins/VST3/`. The CI builds are
 not code-signed, so you may need to run
 `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/*.vst3`.
+
+## Testing in FL Studio
+
+The tests below run every plugin offline. [docs/FL-test-checklist.md](docs/FL-test-checklist.md)
+is the list of things only FL can show (plugins finding each other, track names, sidechains,
+reload, the piano roll scripts, Spire): about an hour, in order.
 
 ## Building from source
 
@@ -1360,6 +1384,10 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   the reasons; Azoth logs your transitions at the final drop and a new one starts from them;
   Kybalion logs the gate you kept and starts on your favourite (per kind of track); Make
   versions uses your logged lengths; aliases keep their own folders.
+- **Spire and FL:** the four macro rides follow the song (brightness 35 in the breakdown, rising
+  through the build to 127 in the drop; space blooms in breakdowns; drive grows into the second
+  drop) and land on CC 20-23 in the Song Lead clip, none when off; the layers play where they
+  should; 11 piano roll scripts carry every note of their clip.
 - **Round 11, automation:** a clipping track, a buried vocal and a mono drop are flagged
   live; A/B plays the reference's loudest part at the mix's loudness; the closest reference
   is picked from a folder by tone, key and tempo; arrange-from-loop sets each track's

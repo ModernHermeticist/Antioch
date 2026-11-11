@@ -128,6 +128,10 @@ public:
 
     /** Writes the chords/bass/arp clip to a .mid file and returns it. */
     juce::File exportClip (const juce::String& kind, const juce::File& directory) const;
+    /** A clip's notes, grooved and humanised as exported (`available` false: nothing to export). */
+    std::vector<chords::Note> clipNotes (const juce::String& kind, std::vector<std::pair<double, bool>>& pianoPedal, bool& available) const;
+    /** FL piano roll scripts for the clips (Tools > Scripting in the piano roll), in FL's scripts folder. */
+    juce::Array<juce::File> sendToPianoRoll() const;
 
     juce::AudioProcessorValueTreeState apvts;
     PreviewSynth preview;

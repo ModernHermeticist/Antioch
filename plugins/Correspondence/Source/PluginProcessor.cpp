@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "TempoBus.h"
+#include "SpireTools.h"
 #include "StyleLog.h"
 #include "VocalBus.h"
 #include "ChordBus.h"
@@ -299,26 +300,38 @@ chords::MelodySettings CorrespondenceProcessor::melodySettings() const
     return m;
 }
 
-juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
+std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String& kind, std::vector<std::pair<double, bool>>& pianoPedal, bool& available) const
 {
     const auto s = currentSettings();
     std::vector<chords::Note> notes;
-    std::vector<std::pair<double, bool>> pianoPedal;
+    available = true;
+    auto none = [&available] { available = false; return std::vector<chords::Note> {}; };
     if (kind.startsWith ("Song "))
     {
         // Full-song clip following the Ouroboros map.
         suite::SectionMap map;
         if (! suite::SectionBus::read (map))
-            return {};
-        if (kind == "Song Fills")
+            return none();
+        if (kind == "Song Lead Octave" || kind == "Song Lead Pluck")   // Spire layers over the lead
         {
-            if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return {};
+            const auto lead = chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead);
+            notes = kind.endsWith ("Octave") ? spire::octaveLayer (lead, map) : spire::pluckLayer (lead, map);
+            if (notes.empty()) return none();
+        }
+        else if (kind == "Song Sub")   // a sub under the bass, for its own Spire
+        {
+            notes = spire::subLayer (chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Bass), map);
+            if (notes.empty()) return none();
+        }
+        else if (kind == "Song Fills")
+        {
+            if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return none();
             notes = chords::fillsClip (map);
         }
         else if (kind == "Song Piano")
         {
             notes = chords::pianoClip (s, map, pianoPedal);
-            if (notes.empty()) return {};   // no breakdown in the map
+            if (notes.empty()) return none();   // no breakdown in the map
         }
         else
         {
@@ -328,7 +341,7 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
                         : chords::SongPart::Chords;
         notes = chords::songClip (s, map, currentSongPatterns(), part);
         if (notes.empty() && (part == chords::SongPart::Harmony || part == chords::SongPart::Counter))
-            return {};   // the harmony line only exists when there's a later drop
+            return none();   // the harmony line only exists when there's a later drop
         }
     }
     else
@@ -337,6 +350,40 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
               : kind == "Melody" ? chords::melody (s, melodySettings())
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
+    return chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
+                             apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
+}
+
+juce::Array<juce::File> CorrespondenceProcessor::sendToPianoRoll() const
+{
+    // Loop clips always; the song clips too when Ouroboros has a map.
+    juce::Array<juce::File> written;
+    const auto dir = spire::pianoRollScriptFolder();
+    dir.createDirectory();
+    const auto s = currentSettings();
+    const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Lead Octave", "Song Lead Pluck", "Song Sub" })
+    {
+        std::vector<std::pair<double, bool>> pedal;
+        bool available = false;
+        const auto notes = clipNotes (kind, pedal, available);
+        if (! available || notes.empty()) continue;
+        const auto title = juce::String ("Antioch - ") + kind;
+        const auto f = dir.getChildFile (juce::File::createLegalFileName (title + ".pyscript"));
+        if (f.replaceWithText (spire::pianoRollScript (notes, title + " (" + key + ")",
+                                                       juce::String (kind) + " in " + key + " at " + juce::String (juce::roundToInt (currentBpm.load())) + " BPM, from Correspondence")))
+            written.add (f);
+    }
+    return written;
+}
+
+juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
+{
+    const auto s = currentSettings();
+    std::vector<std::pair<double, bool>> pianoPedal;
+    bool available = false;
+    const auto shaped = clipNotes (kind, pianoPedal, available);
+    if (! available) return {};
 
     juce::String progression;
     for (int i = 0; i < s.count; ++i)
@@ -347,8 +394,6 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
 
     directory.createDirectory();
     file.deleteFile();
-    const auto shaped = chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
-                                          apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
     const auto cc = apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0;
     const auto isLead = kind == "Melody" || kind == "Song Lead";   // the lead line: glides and scoops
     auto midi = isLead ? chords::toLeadMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc, leadExpression())
@@ -366,6 +411,10 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
         withPedal.addTrack (seq);
         midi = withPedal;
     }
+    // Spire macro rides in the song clips (not the drums).
+    if (kind.startsWith ("Song ") && kind != "Song Fills")
+        if (suite::SectionMap map; suite::SectionBus::read (map))
+            midi = spire::withMacroRides (midi, map, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()));
     if (auto stream = file.createOutputStream())
         midi.writeTo (*stream);
     return file;
@@ -451,7 +500,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano" })
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano",
+                       "Song Lead Octave", "Song Lead Pluck", "Song Sub" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
 
     // A song sheet for labels and DJs: title, artist, key, tempo, progression, structure.

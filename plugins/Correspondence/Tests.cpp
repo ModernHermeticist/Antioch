@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TempoBus.h"
+#include "SpireTools.h"
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
@@ -476,7 +477,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 14, "a song folder with 13 clips (incl. counter-melody, drop-2 harmony, drum fills and breakdown piano) and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 17, "a song folder with 16 clips (incl. counter-melody, drop-2 harmony, drum fills, breakdown piano and the three Spire layers) and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -1102,6 +1103,84 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
         CorrespondenceProcessor::draftFolderOverride() = juce::File();
         dir.deleteRecursively();
+    }
+
+    section ("Spire: macro rides, layers, FL piano roll scripts");
+    {
+        suite::SectionMap map;   // Breakdown 1-8, Build 9-16, Drop 17-24, Drop 25-32
+        map.totalBars = 32; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Build };
+        map.sections[2] = { 17, suite::SectionType::Drop };
+        map.sections[3] = { 25, suite::SectionType::Drop };
+        check (spire::macroValue (map, 0, 0.0) == 35 && spire::macroValue (map, 0, 32.0) == 40 && spire::macroValue (map, 0, 63.9) > 120
+                   && spire::macroValue (map, 0, 64.0) == 127,
+               "brightness: low in the breakdown, opening through the build, full in the drop");
+        check (spire::macroValue (map, 2, 4.0) == 110 && spire::macroValue (map, 2, 70.0) == 30 && spire::macroValue (map, 1, 70.0) == 100
+                   && spire::macroValue (map, 1, 100.0) == 127 && spire::macroValue (map, 0, 200.0) == -1,
+               "space blooms in the breakdown; drive grows from the first drop to the second; nothing past the end");
+
+        auto p = make();
+        p->applyPreset (0);
+        suite::SectionBus::publish (map);
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceSpire");
+        dir.deleteRecursively();
+        const auto lead = p->exportClip ("Song Lead", dir);
+        juce::MidiFile file;
+        {
+            juce::FileInputStream in (lead);
+            file.readFrom (in);
+        }
+        std::array<int, 4> ccCount {};
+        int bright = -1, brightAt64 = -1;
+        for (const auto* e : *file.getTrack (0))
+            if (e->message.isController() && e->message.getControllerNumber() >= 20 && e->message.getControllerNumber() <= 23)
+            {
+                ++ccCount[(size_t) (e->message.getControllerNumber() - 20)];
+                if (e->message.getControllerNumber() == 20 && e->message.getTimeStamp() <= 64.0 * file.getTimeFormat()) brightAt64 = e->message.getControllerValue();
+                if (e->message.getControllerNumber() == 20) bright = e->message.getControllerValue();
+            }
+        check (ccCount[0] > 10 && ccCount[1] > 1 && ccCount[2] > 1 && ccCount[3] > 10 && brightAt64 == 127 && bright == 127,
+               "the Song Lead clip carries the four macro rides on CC 20-23 (" + juce::String (ccCount[0]) + " brightness moves)");
+        set (*p, Params::songMacros, 0.0f);
+        const auto plain = p->exportClip ("Song Lead", dir.getChildFile ("plain"));
+        juce::MidiFile plainFile;
+        { juce::FileInputStream in (plain); plainFile.readFrom (in); }
+        int plainCCs = 0;
+        for (const auto* e : *plainFile.getTrack (0)) plainCCs += e->message.isController() && e->message.getControllerNumber() >= 20 && e->message.getControllerNumber() <= 23;
+        check (plainCCs == 0, "and none when the rides are off");
+
+        std::vector<std::pair<double, bool>> pedal;
+        bool available = false;
+        const auto leadNotes = p->clipNotes ("Song Lead", pedal, available);
+        const auto octave = p->clipNotes ("Song Lead Octave", pedal, available);
+        const auto pluck = p->clipNotes ("Song Lead Pluck", pedal, available);
+        const auto sub = p->clipNotes ("Song Sub", pedal, available);
+        bool octaveInDrops = ! octave.empty(), pluckShort = ! pluck.empty(), subLow = ! sub.empty();
+        for (auto& n : octave) octaveInDrops = octaveInDrops && n.start >= 64.0 - 0.05;
+        for (auto& n : pluck) pluckShort = pluckShort && n.length <= 0.25 + 1.0e-9 && n.start >= 32.0 - 0.05;
+        for (auto& n : sub) subLow = subLow && n.pitch >= 24 && n.pitch <= 35 && n.start >= 32.0 - 0.05;
+        check (octaveInDrops && pluckShort && subLow && octave.size() < leadNotes.size(),
+               "Spire layers: the lead octave plays only in the drops, the pluck is short and starts at the build, the sub sits in C1-B1 and skips the breakdown");
+
+        const auto scripts = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceScripts");
+        scripts.deleteRecursively();
+        spire::scriptFolderOverride() = scripts;
+        const auto written = p->sendToPianoRoll();
+        const auto chordsScript = scripts.getChildFile ("Antioch - Chords.pyscript").loadFileAsString();
+        check (written.size() == 11 && chordsScript.contains ("import flpianoroll as flp") && chordsScript.contains ("def apply(form):")
+                   && chordsScript.contains ("flp.score.addNote(n)"),
+               "11 piano roll scripts (loop and song clips, and the layers) for FL's Tools > Scripting");
+        int noteLines = 0;
+        for (const auto& line : juce::StringArray::fromLines (chordsScript)) noteLines += line.trim().startsWithChar ('(');
+        std::vector<std::pair<double, bool>> pedal2;
+        check (noteLines == (int) p->clipNotes ("Chords", pedal2, available).size() && noteLines > 0,
+               "with every note of the clip inside (" + juce::String (noteLines) + " for the chords)");
+        if (outDir != juce::File()) scripts.getChildFile ("Antioch - Chords.pyscript").copyFileTo (outDir.getChildFile ("Antioch - Chords.pyscript"));
+        spire::scriptFolderOverride() = juce::File();
+        scripts.deleteRecursively();
+        dir.deleteRecursively();
+        suite::SectionBus::withdraw();
     }
 
     section ("Song pack for a vocalist");
