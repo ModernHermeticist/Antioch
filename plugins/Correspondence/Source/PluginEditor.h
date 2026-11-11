@@ -83,6 +83,10 @@ private:
     suite::ui::Toggle broadcast, acceptDetected;
     juce::Label broadcastStatus, presetCaption;
     juce::ComboBox presetBox;
+    void fillPresets();
+    std::vector<std::pair<juce::String, int>> favourites;
+    std::vector<std::pair<juce::String, std::vector<chords::Note>>> hooks;
+    std::unique_ptr<juce::AlertWindow> nameWindow;
 
     std::array<std::unique_ptr<SlotView>, chords::maxSlots> slots;
     RollView roll;

@@ -640,6 +640,24 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Your own coach numbers");
+    {
+        const auto t = coach::learnThresholds ({ 10.0f, 9.0f, 11.0f }, { 4.0f, 3.0f, 5.0f });
+        check (t.personal && std::abs (t.minContrast - 7.0f) < 0.01f && std::abs (t.maxContrast - 13.0f) < 0.01f && std::abs (t.minRise - 2.0f) < 0.01f,
+               "from three finished songs: breakdowns 7-13 LU under the drop, builds rising 2 LU or more");
+        check (! coach::learnThresholds ({ 10.0f, 9.0f }, {}).personal, "two songs aren't enough");
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        std::vector<coach::SectionStat> stats (2);
+        auto setLufs = [] (coach::SectionStat& st, float lufs) { st.blocks = 20; st.power = 20.0 * std::pow (10.0, (lufs + 0.691) / 10.0); };
+        setLufs (stats[0], -15.0f); setLufs (stats[1], -9.0f);   // 6 LU: fine by the generic rule, shallow for you
+        check (coach::analyse (map, stats).problems == 0, "a 6 LU breakdown passes the generic rule");
+        const auto mine = coach::analyse (map, stats, t);
+        check (mine.problems == 1 && mine.notes[0].contains ("your usual: 10 LU"), "but not yours (" + mine.notes[0] + ")");
+    }
+
     section ("Pass-through");
     {
         auto p = make();

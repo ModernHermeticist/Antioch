@@ -108,6 +108,13 @@ public:
     };
     Report report() const;
 
+    /** Your own coach numbers and rough-mix balance, learned from finished songs: Finish the
+        song logs each finished mix's arc (breakdown contrast, build rise) and every track's level
+        against the kick; the coach judges by your arc once three songs are logged. */
+    void logFinishedSong (const Report&);
+    void refreshCoachThresholds();
+    coach::Thresholds getCoachThresholds() const { const juce::ScopedLock sl (historyLock); return coachLimits; }
+
     juce::AudioProcessorValueTreeState apvts;
     suite::AudioTap spectrumTap;
 
@@ -211,6 +218,7 @@ private:
     std::map<juce::String, int> maskingCounts;
     juce::StringArray persistentMasking;
     Pass previousPass;
+    coach::Thresholds coachLimits;
     std::vector<FixRecord> fixHistory;
 
     struct AtomicStat

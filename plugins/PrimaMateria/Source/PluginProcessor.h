@@ -60,11 +60,16 @@ public:
     static juce::StringArray myRoleParamIds();
     bool saveMyRole();
     static bool hasMyRole (int role);
+    bool joinsChains() const override { return false; }
+    /** The recipe name of a role's signature chain (the suite plugins on a track of that role). */
+    static juce::String chainName (int role) { return "Chain " + juce::String (pm::roles()[(size_t) juce::jlimit (0, (int) pm::roles().size() - 1, role)].name); }
     static void forgetMyRole (int role);
 
     /** Auto-role from the sound: for a track with no role yet (and a name that didn't say),
         once 8 s of it has been heard the role is guessed from its spectrum and how punchy it
         is (crest factor): kick, bass, hats, pads or lead. Returns -1 when unsure. */
+    /** The rough mix's level for a role against the kick: yours (from finished songs) or built in. */
+    static float roughMixOffsetFor (int role);
     static int roleFromSound (const std::array<float, analysis::numBands>& bandsDb, float crestDb);
     float averageCrestDb() const { const auto n = crestCount.load(); return n > 0 ? crestSum.load() / (float) n : 0.0f; }
     std::atomic<bool> roleGuessed { false };

@@ -718,6 +718,41 @@ int main (int argc, char** argv)
         }
     }
 
+    section ("Progression DNA and the hook bank");
+    {
+        auto s = aMinor();
+        check (identity::parseNumerals ("i-iv-VI-V", s) && s.count == 4 && s.slots[1].degree == 4 && s.slots[1].quality == chords::Quality::Auto
+                   && s.slots[3].degree == 5 && s.slots[3].quality == chords::Quality::Major,
+               "roman numerals read back as slots (V major in A minor, iv as the key's own)");
+
+        const auto log = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceProgressionDna.txt");
+        log.deleteFile();
+        suite::StyleLog::setFileForTests (log);
+        for (int k = 0; k < 2; ++k) suite::StyleLog::add ("song", { { "degrees", "i-iv-VI-V" } });
+        suite::StyleLog::add ("song", { { "degrees", "i-VI-III-VII" } });
+        const auto mine = identity::favouriteProgressions (suite::StyleLog::read());
+        check (mine.size() == 2 && mine[0].first == "i-iv-VI-V" && mine[0].second == 2, "your most used progression comes first");
+        auto p = make();
+        suite::SessionBus::send ({ 0, 9, 0, 0 });   // New song, mood "as the style"
+        p->pollSession();
+        const auto set = Params::readSettings (p->apvts);
+        check (set.count == 4 && set.slots[1].degree == 4 && set.slots[3].degree == 5, "New song starts from it (used in 2 songs)");
+        suite::StyleLog::setFileForTests (testStyleLog);
+        log.deleteFile();
+
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceHooks");
+        dir.deleteRecursively();
+        identity::hookFolderOverride() = dir;
+        check (p->saveHook ("Big hook"), "saves the melody's first two bars as a hook");
+        const auto hooks = identity::loadHooks();
+        check (hooks.size() == 1 && hooks[0].first == "Big hook" && ! hooks[0].second.empty(), "the hook bank lists it");
+        auto q = make();
+        q->useHook (hooks[0].second);
+        check (q->getMotif().size() == hooks[0].second.size(), "and a hook becomes another project's motif");
+        identity::hookFolderOverride() = juce::File();
+        dir.deleteRecursively();
+    }
+
     section ("Breakdown piano, breakdown lift, the lead answering the vocal, the chord bus");
     {
         auto s = aMinor();

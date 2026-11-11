@@ -78,6 +78,17 @@ public:
     bool loadSample (int slot, const juce::File&);
     void clearSample (int slot);
     juce::String sampleName (int slot) const;
+
+    /** Sound design presets: every Azoth setting and your samples, as a file for any project. */
+    static juce::File& presetFolderOverride() { static juce::File f; return f; }   // tests
+    static juce::File presetFolder()
+    {
+        if (presetFolderOverride() != juce::File()) return presetFolderOverride();
+        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Azoth presets");
+    }
+    bool savePreset (const juce::String& name);
+    bool loadPreset (const juce::File&);
+    static juce::Array<juce::File> presetFiles();
     float samplePitch (int slot) const;
     static constexpr double lookaheadSeconds = 3.0;
     static double reverseLengthQuarters (int i) { static const double q[] = { 2.0, 4.0, 8.0 }; return q[juce::jlimit (0, 2, i)]; }

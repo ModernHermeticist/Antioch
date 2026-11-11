@@ -5,6 +5,7 @@
 #include "Parameters.h"
 #include "PreviewSynth.h"
 #include "Glide.h"
+#include "Identity.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -46,6 +47,11 @@ public:
     {
         const auto& mood = sessionMood();
         applyPreset (mood.progression >= 0 ? mood.progression : style.progression);
+        // Your progression DNA: unless the mood asks for its own, the progression you use most
+        // (in two songs or more) comes first.
+        if (mood.progression < 0)
+            if (const auto mine = identity::favouriteProgressions (suite::StyleLog::read()); ! mine.empty() && mine.front().second >= 2)
+                applyNumerals (mine.front().first);
         setParameterPlain (apvts, Params::rootNote, (float) juce::jlimit (0, 11, root));
         setParameterPlain (apvts, Params::scale, (float) scale);   // the chosen key wins over the preset's scale
         setParameterPlain (apvts, Params::broadcast, 1.0f);
@@ -106,6 +112,12 @@ public:
         return st;
     }
     void forgetMotif();
+    /** Sets the progression from roman numerals ("i-VI-III-VII"), in the current key. */
+    bool applyNumerals (const juce::String& numerals);
+    /** Hook bank: keeps the motif (or the melody's first two bars) as a hook for every project. */
+    bool saveHook (const juce::String& name);
+    /** Uses a hook from the bank as Melodia's motif. */
+    void useHook (const std::vector<chords::Note>& notes);
     std::vector<chords::Note> getMotif() const;
     chords::MelodySettings melodySettings() const;   // parameters + learned motif
 

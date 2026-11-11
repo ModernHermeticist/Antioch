@@ -224,6 +224,10 @@ namespace suite
             e.g. a shorter map or a streaming loudness target. Return true if anything changed. */
         virtual bool applyVersion (int /*kind*/) { return false; }
 
+        /** Whether this plugin is saved in a track's signature chain (Prima Materia keeps its
+            own per-role settings instead). */
+        virtual bool joinsChains() const { return true; }
+
         /** Skips recipe messages already sent (Ouroboros, which sent them itself). */
         void ignorePendingRecipes() { lastRecipeSeen = RecipeBus::latest(); }
 
@@ -236,18 +240,28 @@ namespace suite
                 RecipeAction action {};
                 juce::String name;
                 if (! RecipeBus::read (seq, action, name)) continue;
+                // A chain ("Chain <role>@<track>"): only the plugins on that track take part, and
+                // their files don't depend on the track name, so the chain loads onto any track.
+                auto trackKey = getTrackName();
+                if (name.startsWith ("Chain ") && name.contains ("@"))
+                {
+                    const auto track = name.fromLastOccurrenceOf ("@", false, false);
+                    if (! joinsChains() || track.isEmpty() || track != getTrackName()) continue;
+                    name = name.upToLastOccurrenceOf ("@", false, false);
+                    trackKey = {};
+                }
                 if (action == RecipeAction::Save)
                 {
                     juce::MemoryBlock own;
                     getPluginState (own);
-                    const auto file = Recipes::fileFor (name, getName(), getTrackName());
+                    const auto file = Recipes::fileFor (name, getName(), trackKey);
                     file.getParentDirectory().createDirectory();
                     if (file.replaceWithData (own.getData(), own.getSize()))
                         RecipeBus::acknowledge (seq);
                 }
                 else if (action == RecipeAction::Load)
                 {
-                    const auto file = Recipes::find (name, getName(), getTrackName());
+                    const auto file = Recipes::find (name, getName(), trackKey);
                     juce::MemoryBlock data;
                     if (file.existsAsFile() && file.loadFileAsData (data) && data.getSize() > 0)
                     {

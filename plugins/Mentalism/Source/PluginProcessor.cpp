@@ -59,6 +59,7 @@ MentalismProcessor::MentalismProcessor()
       apvts (*this, nullptr, "MentalismState", Params::createLayout())
 {
     mySound = MySound::load (MySound::file());
+    refreshCoachThresholds();
     timerCallback();
     startTimerHz (4);
 }
@@ -221,6 +222,59 @@ juce::File MentalismProcessor::saveMixReport() const
     return f.replaceWithText (mixReport()) ? f : juce::File();
 }
 
+void MentalismProcessor::logFinishedSong (const Report& rep)
+{
+    using T = suite::SectionType;
+    // The arc: the first breakdown against the drop after it, and the first build's rise.
+    float contrast = 0.0f, rise = 0.0f;
+    bool haveContrast = false, haveRise = false;
+    for (int i = 0; i < rep.map.count && i < (int) rep.sections.size(); ++i)
+    {
+        const auto& st = rep.sections[(size_t) i];
+        const auto type = rep.map.sections[(size_t) i].type;
+        if (type == T::Breakdown && ! haveContrast && st.heard())
+            for (int k = i + 1; k < rep.map.count && k < (int) rep.sections.size(); ++k)
+                if (rep.map.sections[(size_t) k].type == T::Drop && rep.sections[(size_t) k].heard())
+                {
+                    contrast = rep.sections[(size_t) k].lufs() - st.lufs();
+                    haveContrast = true;
+                    break;
+                }
+        if (type == T::Build && ! haveRise && st.firstBlocks >= 5 && st.secondBlocks >= 5)
+        {
+            rise = st.secondLufs() - st.firstLufs();
+            haveRise = true;
+        }
+    }
+    if (haveContrast)
+        suite::StyleLog::add ("arc", { { "contrast", juce::String (contrast, 1) }, { "rise", haveRise ? juce::String (rise, 1) : juce::String() } });
+
+    // The balance: every Prima Materia track's level against the kick.
+    float kick = -100.0f;
+    const auto entries = suite::Registry::list();
+    for (const auto& e : entries)
+        if (e.plugin == "Prima Materia" && (int) e.metrics[0] == 1 && e.has (suite::Status::measuring)) kick = std::max (kick, e.metrics[1]);
+    if (kick > -60.0f)
+        for (const auto& e : entries)
+            if (e.plugin == "Prima Materia" && (int) e.metrics[0] > 1 && e.has (suite::Status::measuring))
+                suite::StyleLog::add ("balance", { { "role", juce::String ((int) e.metrics[0]) }, { "offset", juce::String (e.metrics[1] - kick, 1) } });
+    refreshCoachThresholds();
+}
+
+void MentalismProcessor::refreshCoachThresholds()
+{
+    std::vector<float> contrasts, rises;
+    for (const auto& e : suite::StyleLog::read())
+        if (e.kind == "arc")
+        {
+            contrasts.push_back (e.get ("contrast").getFloatValue());
+            if (e.get ("rise").isNotEmpty()) rises.push_back (e.get ("rise").getFloatValue());
+        }
+    const auto t = coach::learnThresholds (contrasts, rises);
+    const juce::ScopedLock sl (historyLock);
+    coachLimits = t;
+}
+
 void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashes)
 {
     std::map<juce::String, int> next;
@@ -287,6 +341,7 @@ void MentalismProcessor::runAutomation()
             const auto ready = checklist::readyToExport (checklist::check (rep, clippedSamples.load(), suite::Registry::list()));
             finishState.store (FinishStage::Done);
             saveMixReport();   // a report of the finished mix, next to the others
+            logFinishedSong (rep);
             if (rep.measurement.integratedLufs > -70.0f)   // the style log: one finished master
                 suite::StyleLog::add ("master", { { "lufs", juce::String (rep.measurement.integratedLufs, 1) },
                                                   { "truepeak", juce::String (rep.measurement.truePeakDb, 1) },
@@ -581,7 +636,7 @@ MentalismProcessor::Report MentalismProcessor::report() const
     if (rep.arrangementAvailable)
     {
         rep.sections = sectionStats();
-        rep.arrangement = coach::analyse (rep.map, rep.sections);
+        rep.arrangement = coach::analyse (rep.map, rep.sections, getCoachThresholds());
         if (rep.arrangement.problems > 0)
         {
             rep.advice.insert (0, "Arrangement: " + rep.arrangement.notes[0]);

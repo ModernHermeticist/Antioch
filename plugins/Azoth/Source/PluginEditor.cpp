@@ -108,8 +108,25 @@ void AzothEditor::showSamplesMenu()
     const auto where = (int) processor.apvts.getRawParameterValue (AzothProcessor::tagWhereId)->load();
     const char* places[] = { "Tag: off", "Tag: on the first drop", "Tag: on every drop" };
     for (int k = 0; k < 3; ++k) m.addItem (201 + k, places[k], true, where == k);
-    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&samplesButton), [this, tune] (int id)
+    m.addSectionHeader ("Your sound design presets");
+    const auto presets = AzothProcessor::presetFiles();
+    for (int k = 0; k < presets.size(); ++k) m.addItem (300 + k, "Load: " + presets[k].getFileNameWithoutExtension());
+    m.addItem (299, "Save everything here as a preset...");
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&samplesButton), [this, tune, presets] (int id)
     {
+        if (id >= 300 && id - 300 < presets.size()) { processor.loadPreset (presets[id - 300]); updateSamplesNote(); return; }
+        if (id == 299)
+        {
+            nameWindow = std::make_unique<juce::AlertWindow> ("Sound design preset", "Name this preset (all settings and your samples):", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My transitions");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr) processor.savePreset (nameWindow->getTextEditorContents ("name"));
+            }));
+            return;
+        }
         auto setParam = [this] (const juce::String& pid, float plain)
         {
             if (auto* p = processor.apvts.getParameter (pid))

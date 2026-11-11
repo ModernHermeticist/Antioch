@@ -598,6 +598,24 @@ int main (int argc, char** argv)
                "the riser climbs with the chords: on the VI it's a minor sixth higher (" + juce::String (offSecond, 0) + " -> " + juce::String (onSecond, 0) + " Hz)");
     }
 
+    section ("Sound design presets");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AzothPresets");
+        dir.deleteRecursively();
+        AzothProcessor::presetFolderOverride() = dir;
+        auto p = quiet();
+        set (*p, AzothProcessor::rollToId, 2.0f);
+        set (*p, AzothProcessor::impactId, 0.33f);
+        check (p->savePreset ("Hard drops") && AzothProcessor::presetFiles().size() == 1, "saves every setting as a preset");
+        auto q = make();
+        check (q->loadPreset (AzothProcessor::presetFiles()[0])
+                   && (int) q->apvts.getRawParameterValue (AzothProcessor::rollToId)->load() == 2
+                   && std::abs (q->apvts.getRawParameterValue (AzothProcessor::impactId)->load() - 0.33f) < 0.01f,
+               "and another project loads it (roll to 1/64, impact 33%)");
+        AzothProcessor::presetFolderOverride() = juce::File();
+        dir.deleteRecursively();
+    }
+
     section ("No surprises");
     {
         suite::SectionBus::publish (testMap());

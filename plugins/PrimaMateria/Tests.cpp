@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "StyleLog.h"
+#include "Recipes.h"
 #include "Registry.h"
 #include "KickBus.h"
 #include "FixBus.h"
@@ -470,6 +472,38 @@ int main (int argc, char** argv)
         p->setPlayHead (nullptr);
         p->suiteStatus();
         check (p->getRole() == 1 && p->roleGuessed.load(), "after 8 s of a kick with no role, it becomes the Kick (crest " + juce::String (p->averageCrestDb(), 1) + " dB)");
+    }
+
+    section ("Your rough-mix balance and signature chain");
+    {
+        const auto log = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PrimaMateriaBalance.txt");
+        log.deleteFile();
+        suite::StyleLog::setFileForTests (log);
+        const auto pads = roleIndex ("Pads");
+        const auto builtIn = PrimaMateriaProcessor::roughMixOffsetFor (pads);
+        suite::StyleLog::add ("balance", { { "role", juce::String (pads) }, { "offset", "-7.0" } });
+        check (std::abs (PrimaMateriaProcessor::roughMixOffsetFor (pads) - builtIn) < 0.01f, "one finished song isn't enough to change the rough mix");
+        suite::StyleLog::add ("balance", { { "role", juce::String (pads) }, { "offset", "-6.0" } });
+        check (std::abs (PrimaMateriaProcessor::roughMixOffsetFor (pads) + 6.0f) < 0.6f, "after two, the rough mix puts Pads where you do (" + juce::String (PrimaMateriaProcessor::roughMixOffsetFor (pads), 1) + " LU against the kick)");
+        suite::StyleLog::setFileForTests ({});
+        log.deleteFile();
+
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("PrimaMateriaChain");
+        dir.deleteRecursively();
+        PrimaMateriaProcessor::roleFolderOverride() = dir;
+        auto p = make (pads);
+        juce::AudioProcessor::TrackProperties props;
+        props.name = juce::String ("Big Pad");
+        p->updateTrackProperties (props);
+        const auto before = suite::RecipeBus::latest();
+        p->saveMyRole();
+        suite::RecipeAction action {};
+        juce::String name;
+        check (suite::RecipeBus::latest() == before + 1 && suite::RecipeBus::read (before + 1, action, name) && action == suite::RecipeAction::Save
+                   && name == PrimaMateriaProcessor::chainName (pads) + "@Big Pad",
+               "Save as my role also saves the track's chain of suite plugins (" + name + ")");
+        PrimaMateriaProcessor::roleFolderOverride() = juce::File();
+        dir.deleteRecursively();
     }
 
     section ("Low-end manager");

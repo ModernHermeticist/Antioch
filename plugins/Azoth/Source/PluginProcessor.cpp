@@ -551,6 +551,34 @@ bool AzothProcessor::loadSample (int slot, const juce::File& file)
     return true;
 }
 
+bool AzothProcessor::savePreset (const juce::String& name)
+{
+    if (name.trim().isEmpty()) return false;
+    presetFolder().createDirectory();
+    return presetFolder().getChildFile (juce::File::createLegalFileName (name.trim()) + ".azoth").replaceWithText (apvts.copyState().toXmlString());
+}
+
+bool AzothProcessor::loadPreset (const juce::File& file)
+{
+    const auto tree = juce::ValueTree::fromXml (file.loadFileAsString());
+    if (! tree.hasType (apvts.state.getType())) return false;
+    apvts.replaceState (tree);
+    for (int slot = 0; slot < numSampleSlots; ++slot)
+    {
+        const auto path = apvts.state[sampleProperty (slot)].toString();
+        if (path.isNotEmpty() && juce::File (path).existsAsFile()) loadSample (slot, juce::File (path));
+        else clearSample (slot);
+    }
+    return true;
+}
+
+juce::Array<juce::File> AzothProcessor::presetFiles()
+{
+    auto files = presetFolder().findChildFiles (juce::File::findFiles, false, "*.azoth");
+    files.sort();
+    return files;
+}
+
 double AzothProcessor::tuning (int slot, float rootHz) const
 {
     if (value (tuneSamplesId) < 0.5f) return 1.0;

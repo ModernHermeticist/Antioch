@@ -236,12 +236,27 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     presetCaption.setJustificationType (juce::Justification::centred);
     presetCaption.setFont (juce::FontOptions (12.0f));
     presetBox.setTextWhenNothingSelected ("Choose a preset...");
-    for (size_t i = 0; i < chords::presets().size(); ++i)
-        presetBox.addItem (chords::presets()[i].name, (int) i + 1);
+    fillPresets();
     presetBox.onChange = [this]
     {
-        if (presetBox.getSelectedId() > 0)
-            processor.applyPreset (presetBox.getSelectedId() - 1);
+        const auto id = presetBox.getSelectedId();
+        if (id <= 0) return;
+        if (id <= (int) chords::presets().size()) { processor.applyPreset (id - 1); return; }
+        presetBox.setSelectedId (0, juce::dontSendNotification);
+        if (id >= 500 && id < 600 && id - 500 < (int) favourites.size()) processor.applyNumerals (favourites[(size_t) (id - 500)].first);
+        else if (id >= 600 && id - 600 < (int) hooks.size()) processor.useHook (hooks[(size_t) (id - 600)].second);
+        else if (id == 999)
+        {
+            nameWindow = std::make_unique<juce::AlertWindow> ("Save a hook", "Name this hook (your motif, or the melody's first two bars):", juce::MessageBoxIconType::NoIcon);
+            nameWindow->addTextEditor ("name", "My hook");
+            nameWindow->addButton ("Save", 1);
+            nameWindow->addButton ("Cancel", 0);
+            nameWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int result)
+            {
+                if (result == 1 && nameWindow != nullptr) processor.saveHook (nameWindow->getTextEditorContents ("name"));
+                fillPresets();
+            }));
+        }
     };
 
     broadcastStatus.setFont (juce::FontOptions (12.0f));
@@ -580,6 +595,25 @@ void CorrespondenceEditor::filesDropped (const juce::StringArray& files, int, in
     dropMessage = processor.learnFromFiles (midiFiles);
     dropMessageUntil = juce::Time::getMillisecondCounterHiRes() + 6000.0;
     repaint();
+}
+
+void CorrespondenceEditor::fillPresets()
+{
+    presetBox.clear (juce::dontSendNotification);
+    for (size_t i = 0; i < chords::presets().size(); ++i)
+        presetBox.addItem (chords::presets()[i].name, (int) i + 1);
+    favourites = identity::favouriteProgressions (suite::StyleLog::read());
+    if (! favourites.empty())
+    {
+        presetBox.addSectionHeading ("Your progressions");
+        for (size_t i = 0; i < std::min<size_t> (5, favourites.size()); ++i)
+            presetBox.addItem ("Mine: " + favourites[i].first + " (" + juce::String (favourites[i].second) + (favourites[i].second == 1 ? " song)" : " songs)"),
+                               500 + (int) i);
+    }
+    hooks = identity::loadHooks();
+    presetBox.addSectionHeading ("Your hooks");
+    for (size_t i = 0; i < hooks.size(); ++i) presetBox.addItem ("Hook: " + hooks[i].first, 600 + (int) i);
+    presetBox.addItem ("Save the current hook...", 999);
 }
 
 void CorrespondenceEditor::paint (juce::Graphics& g)

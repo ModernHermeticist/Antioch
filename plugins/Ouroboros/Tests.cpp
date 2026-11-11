@@ -468,6 +468,32 @@ int main (int argc, char** argv)
         suite::Recipes::setFolderForTests ({});
     }
 
+    section ("Signature chains");
+    {
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AntiochChainTest");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests (folder);
+        juce::AudioProcessor::TrackProperties props;
+        auto p = std::make_unique<OuroborosProcessor>();
+        props.name = juce::String ("Lead 1");
+        p->updateTrackProperties (props);
+        auto q = std::make_unique<OuroborosProcessor>();
+        props.name = juce::String ("Lead 2");
+        q->updateTrackProperties (props);
+        const auto mine = arrangement::fromTemplate (arrangement::templates()[2]);
+        p->setMap (mine);
+        const auto save = suite::RecipeBus::send (suite::RecipeAction::Save, "Chain Lead@Lead 1");
+        p->pollRecipes();
+        q->pollRecipes();
+        check (suite::RecipeBus::acknowledgements (save) == 1, "only the plugins on the chain's track save it");
+        const auto load = suite::RecipeBus::send (suite::RecipeAction::Load, "Chain Lead@Lead 2");
+        p->pollRecipes();
+        q->pollRecipes();
+        check (suite::RecipeBus::acknowledgements (load) == 1 && q->getMap() == mine, "and it loads onto another track, whatever its name");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests ({});
+    }
+
     section ("Versions: radio edit and extended mix");
     {
         suite::SnapshotBus::reset();

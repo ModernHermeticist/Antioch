@@ -32,9 +32,10 @@ private:
     suite::ui::Toggle preLift, riserChords;
     suite::ui::Choice rollFrom, rollTo, rollCurve;
     suite::ui::Knob rollVel;
-    juce::TextButton samplesButton { "Your samples..." };
+    juce::TextButton samplesButton { "Samples and presets..." };
     juce::Label samplesNote;
     std::unique_ptr<juce::FileChooser> chooser;
+    std::unique_ptr<juce::AlertWindow> nameWindow;
     void showSamplesMenu();
     void updateSamplesNote();
     juce::Rectangle<int> elementArea, shapeArea, riserArea, reverseArea, entranceArea;

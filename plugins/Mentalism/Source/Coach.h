@@ -47,8 +47,34 @@ namespace coach
         return "bars " + juce::String (m.sections[(size_t) i].startBar) + "-" + juce::String (m.endBar (i) - 1);
     }
 
-    inline Result analyse (const suite::SectionMap& map, const std::vector<SectionStat>& stats)
+    /** The numbers the coach judges by: generic, or learned from your finished songs. */
+    struct Thresholds
     {
+        float minContrast = coach::minContrast, maxContrast = coach::maxContrast, minRise = coach::minRise;
+        bool personal = false;
+        int songs = 0;
+    };
+
+    /** Your own thresholds from finished songs (style log "arc" entries; 3 or more needed):
+        breakdown contrast within 3 LU of your usual, builds rising at least half your usual. */
+    inline Thresholds learnThresholds (const std::vector<float>& contrasts, const std::vector<float>& rises)
+    {
+        Thresholds t;
+        if (contrasts.size() < 3) return t;
+        auto median = [] (std::vector<float> v) { std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+        const auto c = median (contrasts);
+        t.minContrast = juce::jmax (1.0f, c - 3.0f);
+        t.maxContrast = juce::jmin (16.0f, c + 3.0f);
+        if (rises.size() >= 3) t.minRise = juce::jmax (0.5f, 0.5f * median (rises));
+        t.personal = true;
+        t.songs = (int) contrasts.size();
+        return t;
+    }
+
+    inline Result analyse (const suite::SectionMap& map, const std::vector<SectionStat>& stats, const Thresholds& limits = {})
+    {
+        const auto minContrast = limits.minContrast, maxContrast = limits.maxContrast, minRise = limits.minRise;
+        const juce::String yours = limits.personal ? " (your usual: " + juce::String ((limits.minContrast + limits.maxContrast) / 2.0f, 0) + " LU)" : juce::String();
         using T = suite::SectionType;
         Result r;
         juce::StringArray good;
@@ -80,14 +106,14 @@ namespace coach
                 if (contrast < minContrast)
                 {
                     r.notes.add ("Breakdown (" + barsOf (map, i) + ") is only " + fmt (contrast) + " LU below the drop: the drop won't feel "
-                                 "like a lift. Thin the breakdown out or take more of its low end away.");
+                                 "like a lift. Thin the breakdown out or take more of its low end away." + yours);
                     r.fixes.push_back (suite::Fix::BreakdownQuieter);
                     ++r.problems;
                 }
                 else if (contrast > maxContrast)
                 {
                     r.notes.add ("Breakdown (" + barsOf (map, i) + ") is " + fmt (contrast) + " LU below the drop: people turn it up and then "
-                                 "get blasted. Bring the breakdown up a little.");
+                                 "get blasted. Bring the breakdown up a little." + yours);
                     r.fixes.push_back (suite::Fix::BreakdownLouder);
                     ++r.problems;
                 }

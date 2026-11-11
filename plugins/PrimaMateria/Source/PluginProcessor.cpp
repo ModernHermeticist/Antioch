@@ -1,4 +1,6 @@
 #include "PluginProcessor.h"
+#include "StyleLog.h"
+#include "Recipes.h"
 #include "PluginEditor.h"
 
 PrimaMateriaProcessor::PrimaMateriaProcessor()
@@ -426,7 +428,7 @@ std::optional<float> PrimaMateriaProcessor::roughMixTrim() const
         return std::nullopt;
 
     const auto trim = apvts.getRawParameterValue (pm::trimId)->load();
-    const auto wanted = juce::jlimit (-24.0f, 12.0f, trim + (kick + pm::roughMixOffset (role) - lufs));
+    const auto wanted = juce::jlimit (-24.0f, 12.0f, trim + (kick + roughMixOffsetFor (role) - lufs));
     if (std::abs (wanted - trim) < 0.5f)
         return std::nullopt;
     return wanted;
@@ -461,6 +463,10 @@ void PrimaMateriaProcessor::applyRole (int index)
     setValue (pm::roleId, (float) (index + 1));
     setValue (pm::gapId, (float) role.gap);
 
+    // Your signature chain for this role: the other suite plugins on this track load it.
+    if (getTrackName().isNotEmpty() && suite::Recipes::list().contains (juce::File::createLegalFileName (chainName (index))))
+        suite::RecipeBus::send (suite::RecipeAction::Load, chainName (index) + "@" + getTrackName());
+
     // Your own settings for this role, on top.
     const auto mine = userRoleFolder().getChildFile (juce::File::createLegalFileName (role.name) + ".role");
     if (mine.existsAsFile())
@@ -469,6 +475,18 @@ void PrimaMateriaProcessor::applyRole (int index)
             const auto pid = line.upToFirstOccurrenceOf ("=", false, false).trim();
             if (myRoleParamIds().contains (pid)) setValue (pid, line.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
         }
+}
+
+float PrimaMateriaProcessor::roughMixOffsetFor (int role)
+{
+    // Your balance: where this role sat against the kick in your finished songs (2 or more),
+    // else the built-in offset.
+    std::vector<float> mine;
+    for (const auto& e : suite::StyleLog::read())
+        if (e.kind == "balance" && e.get ("role").getIntValue() == role) mine.push_back (e.get ("offset").getFloatValue());
+    if (mine.size() < 2) return pm::roughMixOffset (role);
+    std::sort (mine.begin(), mine.end());
+    return juce::jlimit (-24.0f, 6.0f, mine[mine.size() / 2]);
 }
 
 int PrimaMateriaProcessor::roleFromSound (const std::array<float, analysis::numBands>& b, float crestDb)
@@ -509,6 +527,10 @@ bool PrimaMateriaProcessor::saveMyRole()
     for (const auto& pid : myRoleParamIds())
         lines.add (pid + "=" + juce::String (apvts.getRawParameterValue (pid)->load(), 4));
     userRoleFolder().createDirectory();
+    // ...and the chain of suite plugins on this track (Vibration, Kybalion, Antioch...), as your
+    // signature chain for the role.
+    if (getTrackName().isNotEmpty())
+        suite::RecipeBus::send (suite::RecipeAction::Save, chainName (role) + "@" + getTrackName());
     return userRoleFolder().getChildFile (juce::File::createLegalFileName (pm::roles()[(size_t) role].name) + ".role")
                .replaceWithText (lines.joinIntoString ("\n") + "\n");
 }

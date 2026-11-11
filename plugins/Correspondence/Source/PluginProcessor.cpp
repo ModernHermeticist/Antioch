@@ -243,6 +243,35 @@ int CorrespondenceProcessor::learnMotif (const juce::File& file)
     return (int) learned.size();
 }
 
+bool CorrespondenceProcessor::applyNumerals (const juce::String& numerals)
+{
+    auto s = currentSettings();
+    if (! identity::parseNumerals (numerals, s)) return false;
+    setParameterPlain (apvts, Params::count, (float) s.count);
+    for (int i = 0; i < s.count; ++i)
+    {
+        setParameterPlain (apvts, Params::slotDegree (i), (float) (s.slots[(size_t) i].degree - 1));
+        setParameterPlain (apvts, Params::slotQuality (i), (float) (int) s.slots[(size_t) i].quality);
+    }
+    return true;
+}
+
+bool CorrespondenceProcessor::saveHook (const juce::String& name)
+{
+    auto notes = getMotif();
+    if (notes.empty())
+        for (const auto& n : chords::melody (currentSettings(), melodySettings()))
+            if (n.start < 8.0 - 1.0e-9) notes.push_back (n);   // the call: the melody's first two bars
+    return identity::saveHook (name, notes);
+}
+
+void CorrespondenceProcessor::useHook (const std::vector<chords::Note>& notes)
+{
+    const juce::ScopedLock sl (motifLock);
+    motif = notes;
+    dna = {};
+}
+
 void CorrespondenceProcessor::forgetMotif()
 {
     const juce::ScopedLock sl (motifLock);
