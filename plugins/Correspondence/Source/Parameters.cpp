@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "SpireTools.h"
 
 namespace Params
 {
@@ -78,6 +79,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterBool> (id (songClimb), "Climbing Chords in Later Drops", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songDouble), "Double the Final Drop", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (songMacros), "Spire Macro Rides", StringArray { "Off", "CC 20-23", "CC 102-105" }, 1));
+        layout.add (std::make_unique<AudioParameterChoice> (id (macroPlan), "Spire Macro Plan", spire::macroPlanNames(), 0));
         layout.add (std::make_unique<AudioParameterBool> (id (songGhost), "Ghost Notes", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));

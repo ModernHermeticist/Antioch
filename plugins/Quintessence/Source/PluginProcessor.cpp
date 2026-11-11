@@ -535,7 +535,13 @@ void QuintessenceProcessor::addLog (const juce::String& line)
 const std::array<float, 10>& QuintessenceProcessor::shapeFor (int role) const
 {
     const auto r = (size_t) juce::jlimit (0, 7, role);
-    return learnedCount[r] >= 3 ? learned[r] : qn::targets::roles()[r].shape;
+    const auto& base = learnedCount[r] >= 3 ? learned[r] : qn::targets::roles()[r].shape;
+    // A reference loaded in Mentalism colours every role's target the way it differs from the guide
+    std::array<float, 10> offset {};
+    if (! suite::ReferenceBus::offset (offset)) { referenceShown.store (false); return base; }
+    referenceShown.store (true);
+    for (size_t b = 0; b < 10; ++b) withReference[b] = base[b] + offset[b];
+    return withReference;
 }
 
 void QuintessenceProcessor::loadLearned()

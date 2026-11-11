@@ -300,9 +300,21 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
             m.addSubMenu (suite::sectionName ((suite::SectionType) t), sub, ! vars.empty());
         }
         m.addSeparator();
+        juce::PopupMenu clashes;
+        const auto found = processor.clashes();
+        for (size_t i = 0; i < found.size(); ++i)
+            clashes.addItem (2000 + (int) i, found[i].text + "  ->  " + found[i].fixText, found[i].paramId.isNotEmpty());
+        if (found.empty()) clashes.addItem (1999, "No clashes: every part has its own register", false);
+        m.addSubMenu ("Clash check" + (found.empty() ? juce::String() : " (" + juce::String ((int) found.size()) + ")"), clashes);
         m.addItem (1, "Undo the last variation", ! processor.beforeVariation.empty());
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&varyButton), [this] (int id)
         {
+            if (id >= 2000)
+            {
+                const auto found = processor.clashes();
+                if (id - 2000 < (int) found.size()) processor.fixClash (found[(size_t) (id - 2000)]);
+                return;
+            }
             if (id == 1) processor.undoVariation();
             else if (id >= 1000) processor.applyVariation ((suite::SectionType) ((id - 1000) / 10), (id - 1000) % 10);
         });
@@ -472,6 +484,12 @@ namespace
                                    "3 space, 4 movement) that follows the song. In Spire, MIDI-learn each macro to its CC once, and save the patch");
             macrosAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::songMacros, *macrosBox);
             addAndMakeVisible (*macrosBox);
+            planBox = std::make_unique<juce::ComboBox>();
+            planBox->addItemList (state.getParameter (Params::macroPlan)->getAllValueStrings(), 1);
+            planBox->setTooltip ("How the Spire macros move through the song: Uplifting (full moves), Progressive (gentler), "
+                                 "Big breakdowns (space wide open, brightness down, movement rising). Export all also writes them as Spire macros.mid");
+            planAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::macroPlan, *planBox);
+            addAndMakeVisible (*planBox);
             breakdownBox = std::make_unique<juce::ComboBox>();
             breakdownBox->addItemList (state.getParameter (Params::songBreakdown)->getAllValueStrings(), 1);
             breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder, "
@@ -519,6 +537,7 @@ namespace
                 auto toggles = r.removeFromBottom (28);
                 breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
                 macrosBox->setBounds (toggles.removeFromRight (130).reduced (2));
+                planBox->setBounds (toggles.removeFromRight (140).reduced (2));
                 counter->setBounds (toggles.removeFromRight (140));
                 lift->setBounds (toggles.removeFromLeft (toggles.getWidth() / 2));
                 vary->setBounds (toggles);
@@ -545,7 +564,8 @@ namespace
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> leadAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;
         std::unique_ptr<juce::ComboBox> breakdownBox, grooveBox, macrosBox;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> macrosAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> macrosAttachment, planAttachment;
+        std::unique_ptr<juce::ComboBox> planBox;
         std::unique_ptr<juce::ToggleButton> accent;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> grooveAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> accentAttachment;

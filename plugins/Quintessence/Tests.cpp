@@ -9,6 +9,7 @@
 #include "StyleLog.h"
 #include "TestUtils.h"
 #include "ConductorBus.h"
+#include "ReferenceBus.h"
 
 using namespace suite::test;
 
@@ -205,6 +206,23 @@ int main (int argc, char** argv)
         logFile.deleteFile();
         auto q = make (4);
         check (q->learnedSongs (4) == 0, "with no songs logged it uses the built-in targets");
+    }
+
+    section ("Your reference colours the targets");
+    {
+        auto p = make (4);
+        const auto plain = p->shapeFor (4);
+        // A reference 3 dB brighter than the guide from 4 kHz up (and the same elsewhere)
+        auto ref = suite::ReferenceBus::guide();
+        ref[7] += 3.0f; ref[8] += 3.0f; ref[9] += 3.0f;
+        suite::ReferenceBus::publish (ref);
+        const auto coloured = p->shapeFor (4);
+        const auto lift = (coloured[8] - coloured[4]) - (plain[8] - plain[4]);
+        check (std::abs (lift - 3.0f) < 0.1f && p->referenceShown.load(), "a brighter reference makes every pad target brighter by as much ("
+                                                                            + juce::String (lift, 2) + " dB at 8 kHz against 500 Hz)");
+        suite::ReferenceBus::withdraw();
+        const auto back = p->shapeFor (4);
+        check (std::abs (back[8] - plain[8]) < 1.0e-4f, "without a reference the targets are the role's own");
     }
 
     section ("What changed: the search");

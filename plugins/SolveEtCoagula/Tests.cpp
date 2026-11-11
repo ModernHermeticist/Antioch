@@ -4,6 +4,7 @@
 #include "TestUtils.h"
 #include "PluginEditor.h"
 #include "SectionBus.h"
+#include "KeyBus.h"
 
 using namespace suite::test;
 
@@ -350,6 +351,82 @@ int main (int argc, char** argv)
         check (buried && flagged, "loud music over a quiet vocal for 4+ bars is flagged for Mentalism");
         check (! clear && ! clearFlag, "a vocal that sits on top isn't");
         suite::VocalBus::clear();
+    }
+
+    section ("Vocal melody to MIDI, and a harmony");
+    {
+        auto p = make (true);
+        suite::KeyBus::publish (9, 0);   // A minor
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        // A3, C4, E4 a beat each, then a beat's rest, twice
+        auto vocal = [] (int64_t i)
+        {
+            const auto t = (double) i / sampleRate;
+            const auto beat = (int) std::floor (t / 0.5) % 4;
+            if (beat == 3) return 0.0f;
+            const double hz[] = { 220.0, 261.63, 329.63 };
+            const auto env = std::min (1.0, std::fmod (t, 0.5) / 0.01);
+            return (float) (0.2 * env * (std::sin (twoPi * hz[beat] * t) + 0.4 * std::sin (2.0 * twoPi * hz[beat] * t)));
+        };
+        const auto total = (int64_t) (4.0 * sampleRate);
+        juce::AudioBuffer<float> buffer (4, blockSize);
+        juce::MidiBuffer midi;
+        for (int64_t pos = 0; pos < total; pos += blockSize)
+        {
+            const auto n = (int) std::min<int64_t> (blockSize, total - pos);
+            buffer.setSize (4, n, false, false, true);
+            buffer.clear();
+            for (int i = 0; i < n; ++i) { buffer.setSample (2, i, vocal (pos + i)); buffer.setSample (3, i, vocal (pos + i)); }
+            p->processBlock (buffer, midi);
+            head.ppq += n * head.bpm / 60.0 / sampleRate;
+            p->collectMelody();
+        }
+        p->setPlayHead (nullptr);
+        p->collectMelody();
+        const auto& notes = p->melody.notes();
+        juce::StringArray seen;
+        for (const auto& nt : notes) seen.add (juce::String (nt.pitch) + "@" + juce::String (nt.start, 2));
+        auto has = [&] (int pitch, double start) { return std::any_of (notes.begin(), notes.end(), [&] (const VocalMelody::Note& nt) { return nt.pitch == pitch && std::abs (nt.start - start) < 0.3; }); };
+        check (notes.size() == 6 && has (57, 0.0) && has (60, 1.0) && has (64, 2.0) && has (57, 4.0) && has (64, 6.0),
+               "the sung notes come out as MIDI on the beat: A3, C4, E4, twice (" + seen.joinIntoString (" ") + ")");
+        const auto harmony = VocalMelody::harmony (notes, 9, 0);
+        check (harmony.size() == notes.size() && harmony[0].pitch == 60 && harmony[1].pitch == 64 && harmony[2].pitch == 67,
+               "the harmony is a diatonic third above, in A minor: C4, E4, G4");
+        const auto folder = juce::File::createTempFile ("vocalmidi");
+        const auto result = p->saveVocalMidi (folder);
+        check (folder.getChildFile ("Vocal melody.mid").existsAsFile() && folder.getChildFile ("Vocal harmony.mid").existsAsFile(), "both written as MIDI files (" + result + ")");
+        folder.deleteRecursively();
+    }
+
+    section ("Chops on the sung words, with the suite's swing");
+    {
+        VocalChops chops;
+        chops.prepare (sampleRate);
+        const auto barQ = 4.0, qPerSample = 2.0 / sampleRate;   // 120 BPM
+        // A bar with four sung words (a quarter of a beat each, then silence)
+        for (int i = 0; i < (int) (2.0 * sampleRate); ++i)
+        {
+            const auto t = i / sampleRate;
+            const auto inBeat = std::fmod (t, 0.5);
+            const auto word = (int) (t / 0.5);
+            const auto x = inBeat < 0.25 ? 0.3f * (float) std::sin (twoPi * (200.0 + 100.0 * word) * t) : 0.0f;
+            chops.listen (x, i * qPerSample, barQ, qPerSample);
+        }
+        chops.finishBar (barQ, qPerSample);
+        check (chops.wordsHeard() == 4, "it hears the four sung words in the bar (" + juce::String (chops.wordsHeard()) + ")");
+        // The Words pattern: one word per 8th, in order; the 2nd 8th starts the 2nd word (300 Hz)
+        double sn = 0.0, cs = 0.0;
+        for (int i = 0; i < (int) (0.2 * sampleRate); ++i)
+        {
+            const auto pos = 0.5 + 0.01 + i * qPerSample;
+            const auto v = chops.play (pos, barQ, qPerSample, VocalChops::Words, false);
+            sn += v * std::sin (twoPi * 300.0 * i / sampleRate); cs += v * std::cos (twoPi * 300.0 * i / sampleRate);
+        }
+        check (std::sqrt (sn * sn + cs * cs) / (0.2 * sampleRate) > 0.05, "the Words pattern plays the second word on the second 8th");
+        check (std::abs (VocalChops::unswing (0.25 * 1.3, 4.0, 0.3) - 0.25) < 1.0e-9 && std::abs (VocalChops::unswing (0.5, 4.0, 0.3) - 0.5) < 1.0e-9,
+               "16th chops land on the suite's swing");
     }
 
     section ("Layouts and state");

@@ -1399,6 +1399,50 @@ namespace chords
         return out;
     }
 
+    /** Vocal answer: a pluck or pad line in the vocal's gaps. In the bar after each sung phrase,
+        the chord there is arpeggiated in 8ths (root, third, fifth, octave and back) above the
+        vocal's usual range; if the next bar is a gap too, the chord's third holds through it.
+        Nothing plays while the vocal sings. */
+    inline std::vector<Note> vocalAnswer (const Settings& s, const suite::SectionMap& map, const std::vector<bool>& vocalBars)
+    {
+        std::vector<Note> out;
+        if (vocalBars.empty() || map.count == 0) return out;
+        auto plain = s;
+        plain.voicing = Voicing::Close;
+        plain.addBass = false;
+        const auto voiced = voiceProgression (plain);
+        if (voiced.empty()) return out;
+        const auto L = s.quartersPerChord;
+        const auto progressionQ = L * (double) voiced.size();
+        auto sung = [&] (int bar) { return bar >= 0 && bar < (int) vocalBars.size() && vocalBars[(size_t) bar]; };
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0, endQ = (map.endBar (i) - 1) * 4.0;
+            for (auto barQ = startQ; barQ < endQ - 1.0e-9; barQ += 4.0)
+            {
+                const auto bar = (int) std::lround (barQ / 4.0);
+                if (sung (bar) || ! sung (bar - 1)) continue;
+                const auto slot = (size_t) std::floor (std::fmod (barQ - startQ, progressionQ) / L + 1.0e-9) % voiced.size();
+                auto tones = voiced[slot];
+                std::sort (tones.begin(), tones.end());
+                if (tones.size() < 3) continue;
+                auto lift = 0;
+                while (tones[0] + lift < 72) lift += 12;   // above the vocal (C5 and up)
+                const int shift = map.keyShiftOf (i);
+                const int order[] = { 0, 1, 2, 3, 2, 1, 2, 3 };
+                for (int k = 0; k < 8; ++k)
+                {
+                    const auto idx = order[k];
+                    const auto pitch = (idx < 3 ? tones[(size_t) idx] : tones[0] + 12) + lift + shift;
+                    out.push_back ({ pitch, barQ + k * 0.5, 0.45, 92 - 3 * k });
+                }
+                if (! sung (bar + 1) && barQ + 4.0 < endQ - 1.0e-9)
+                    out.push_back ({ tones[1] + lift + shift, barQ + 4.0, 3.8, 70 });   // the third holds through a second gap bar
+            }
+        }
+        return out;
+    }
+
     //==============================================================================
     inline juce::MidiFile toMidiFile (const std::vector<Note>& notes, double bpm, const juce::String& trackName, int accentCC = 0)
     {

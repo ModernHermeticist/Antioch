@@ -5,6 +5,9 @@
 #include "Unmasker.h"
 #include "Scenes.h"
 #include "VocalChops.h"
+#include "VocalMelody.h"
+#include "Alias.h"
+#include "KeyBus.h"
 #include "VocalBus.h"
 #include "SuiteDSP.h"
 #include "Registry.h"
@@ -64,7 +67,48 @@ public:
     }
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
-    void pollTick() override { scenes.watchTweaks (isMorphing()); }
+    void pollTick() override
+    {
+        scenes.watchTweaks (isMorphing());
+        collectMelody();
+        float swing = 0.0f;
+        for (const auto& e : suite::Registry::list())
+            if (e.plugin == "Correspondence") swing = std::max (swing, e.metrics[0]);
+        grooveSwing.store (swing);
+    }
+
+    /** Vocal melody to MIDI: what the sidechain vocal sings, as notes (message thread). */
+    VocalMelody melody;
+    std::atomic<float> grooveSwing { 0.0f };   // Correspondence's groove: the chops swing with it
+    std::atomic<double> songBpm { 120.0 };
+    void collectMelody()
+    {
+        const auto key = suite::KeyBus::read();
+        melody.collect (key.valid ? key.root : -1, key.valid ? key.scale : 0);
+    }
+    /** Writes "Vocal melody.mid" and (with a key) "Vocal harmony.mid", a third above, into `folder`. */
+    juce::String saveVocalMidi (const juce::File& folder)
+    {
+        collectMelody();
+        const auto& notes = melody.notes();
+        if (notes.empty()) return "Nothing heard yet: play the song with the vocal on the sidechain.";
+        folder.createDirectory();
+        auto write = [&] (const std::vector<VocalMelody::Note>& n, const juce::String& name)
+        {
+            const auto file = folder.getChildFile (name + ".mid");
+            file.deleteFile();
+            juce::FileOutputStream out (file);
+            return out.openedOk() && VocalMelody::toMidi (n, songBpm.load(), name).writeTo (out);
+        };
+        const auto key = suite::KeyBus::read();
+        const auto harmony = VocalMelody::harmony (notes, key.valid ? key.root : -1, key.valid ? key.scale : 0);
+        auto ok = write (notes, "Vocal melody");
+        if (! harmony.empty()) ok = write (harmony, "Vocal harmony") && ok;
+        return ok ? juce::String ((int) notes.size()) + " notes written to " + folder.getFullPathName()
+                        + (harmony.empty() ? juce::String (" (no key set: no harmony)") : juce::String (", with a harmony a third above"))
+                  : juce::String ("Couldn't write to ") + folder.getFullPathName();
+    }
+    static juce::File vocalMidiFolder() { return suite::Alias::file ("Vocal MIDI"); }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

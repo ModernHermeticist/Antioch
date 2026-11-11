@@ -22,7 +22,7 @@ namespace
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { P::mixId, 1 }, "Mix", NormalisableRange<float> (0.0f, 100.0f), 100.0f, percent));
         l.add (std::make_unique<AudioParameterBool> (ParameterID { P::chopsOnId, 1 }, "Vocal Chops", false));
         l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::chopsWhereId, 1 }, "Chops In", StringArray { "Builds", "Drops", "Builds and drops", "Breakdowns" }, 0));
-        l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::chopsPatternId, 1 }, "Chop Pattern", StringArray { "Stutter", "Off-beats", "3-3-2", "Shuffled" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { P::chopsPatternId, 1 }, "Chop Pattern", StringArray { "Stutter", "Off-beats", "3-3-2", "Shuffled", "Words" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { P::chopsLevelId, 1 }, "Chops Level", NormalisableRange<float> (-24.0f, 6.0f), -6.0f, db));
         l.add (std::make_unique<AudioParameterBool> (ParameterID { P::chopsOctaveId, 1 }, "Chops Octave Up", false));
         suite::SceneEngine::addParameters (l);
@@ -66,6 +66,7 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
     sampleRate = newSampleRate;
     unmasker.prepare (sampleRate);
     chops.prepare (sampleRate);
+    melody.prepare (sampleRate);
     inChopSection = false;
     scenes.prepare();
     for (int i = 0; i < 4; ++i) { presence[(size_t) i].set (i % 2 == 0 ? 1000.0f : 4000.0f, 0.7f, (float) sampleRate); presence[(size_t) i].reset(); }
@@ -123,6 +124,9 @@ void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffe
     const auto barQ = host.barQuarters();
     const auto qPerSample = host.quartersPerSample (sampleRate);
     bool played = false;
+    const auto listenMelody = scActive && host.playing && host.hasPpq;
+    if (host.bpm > 1.0) songBpm.store (host.bpm);
+    const auto swing = (double) grooveSwing.load();
     auto isChopSection = [where] (suite::SectionType t)
     {
         using T = suite::SectionType;
@@ -142,6 +146,7 @@ void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffe
         auto l = left[n];
         auto r = right != nullptr ? right[n] : l;
         unmasker.process (l, r, key);
+        if (listenMelody) melody.process (key, host.ppq + qPerSample * n);
         if (chopsOn)
         {
             const auto pos = host.ppq + qPerSample * n;
@@ -153,7 +158,7 @@ void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffe
             inChopSection = chopHere;
             if (chopHere)
             {
-                const auto c = chops.play (posInBar, barQ, qPerSample, chopPattern, octaveUp) * chopGain;
+                const auto c = chops.play (posInBar, barQ, qPerSample, chopPattern, octaveUp, swing) * chopGain;
                 l += c; r += c;
                 played = played || chops.ready();
             }

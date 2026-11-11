@@ -399,6 +399,11 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
             if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return none();
             notes = chords::fillsClip (map);
         }
+        else if (kind == "Song Vocal Answer")   // a line in the vocal's gaps (needs Solve et Coagula's vocal bars)
+        {
+            notes = chords::vocalAnswer (s, map, currentSongPatterns().vocalBars);
+            if (notes.empty()) return none();
+        }
         else if (kind == "Song Piano")
         {
             notes = chords::pianoClip (s, map, pianoPedal);
@@ -448,6 +453,24 @@ juce::Array<juce::File> CorrespondenceProcessor::sendToPianoRoll() const
     return written;
 }
 
+std::vector<clash::Clash> CorrespondenceProcessor::clashes() const
+{
+    suite::SectionMap map;
+    if (! suite::SectionBus::read (map) || map.count == 0) return {};
+    return clash::find (currentSettings(), map, currentSongPatterns(), (int) apvts.getRawParameterValue (Params::melodyOctave)->load(),
+                        (int) apvts.getRawParameterValue (Params::arpOctaves)->load(), Params::melodyOctave, Params::arpOctaves);
+}
+
+bool CorrespondenceProcessor::fixClash (const clash::Clash& c)
+{
+    auto* p = apvts.getParameter (c.paramId);
+    if (p == nullptr) return false;
+    p->beginChangeGesture();
+    p->setValueNotifyingHost (p->convertTo0to1 (c.newValue));
+    p->endChangeGesture();
+    return true;
+}
+
 juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
 {
     const auto s = currentSettings();
@@ -485,7 +508,8 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     // Spire macro rides in the song clips (not the drums).
     if (kind.startsWith ("Song ") && kind != "Song Fills")
         if (suite::SectionMap map; suite::SectionBus::read (map))
-            midi = spire::withMacroRides (midi, map, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()));
+            midi = spire::withMacroRides (midi, map, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()),
+                                          (int) apvts.getRawParameterValue (Params::macroPlan)->load());
     if (auto stream = file.createOutputStream())
         midi.writeTo (*stream);
     return file;
@@ -572,8 +596,13 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder.createDirectory();
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano",
-                       "Song Lead Octave", "Song Lead Pluck", "Song Sub" })
+                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
+    // The Spire macro plan on its own (four CC lanes for the whole song)
+    if (suite::SectionMap macroMap; suite::SectionBus::read (macroMap) && macroMap.count > 0)
+        if (auto stream = folder.getChildFile ("Spire macros.mid").createOutputStream())
+            spire::macroFile (macroMap, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()),
+                              (int) apvts.getRawParameterValue (Params::macroPlan)->load(), bpm).writeTo (*stream);
 
     // A song sheet for labels and DJs: title, artist, key, tempo, progression, structure.
     {

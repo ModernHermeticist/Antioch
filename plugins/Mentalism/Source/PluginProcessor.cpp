@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "TargetBus.h"
+#include "ReferenceBus.h"
 #include "Checklist.h"
 #include "Registry.h"
 #include "StyleLog.h"
@@ -111,6 +112,13 @@ void MentalismProcessor::timerCallback()
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();
     suite::TargetBus::publish (r.targetLufs, r.ceiling);
+    // The loaded reference's tone, for every Quintessence's targets
+    if (const auto refNow = getReference(); refNow.valid)
+    {
+        std::array<float, 10> b {};
+        for (size_t i = 0; i < 10; ++i) b[i] = refNow.bands[i];
+        suite::ReferenceBus::publish (b);
+    }
     runAutomation();
 }
 

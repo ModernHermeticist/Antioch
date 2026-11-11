@@ -1044,6 +1044,22 @@ softer, for breakdowns. The **Vary...** menu has a **Breakdown writer** (held ch
 VI, no bass or arp, the hook hinted) and a **New groove** for drops (octave-offbeat bass,
 3-3-2 arp).
 
+**Spire macro plans:** how the four Spire macros move through the song. *Uplifting* makes
+the full moves, *Progressive* the same shape but gentler, and *Big breakdowns* opens the
+space all the way, pulls the brightness down and keeps the movement rising through them.
+Export all also writes **Spire macros.mid**: four CC lanes for the whole song, which you can
+turn into FL automation clips or play into Spire on its own.
+
+**Vocal answer:** with Solve et Coagula hearing the vocal, Export all writes **SONG VOCAL
+ANSWER**. In the bar after each sung phrase, the chord there is played as an 8th-note
+pattern above the vocal (C5 up), with its third held through a second gap bar. It plays
+nothing while the vocal sings. Give it a pluck or a soft pad.
+
+**Clash check** (in **Vary...**): for each kind of section, the range each written part
+plays in. Two parts that mostly share a register (the lead on the arp, the arp in the
+chords) are listed with a one-click fix, such as the lead up an octave or the arp over one
+octave fewer.
+
 **Climbing chords in drop 2+** (on by default): each chord in later drops gains its top
 note an octave higher, so the second drop is bigger and brighter with the same harmony.
 
@@ -1232,10 +1248,27 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
   for the role, plus tips from what it measures. For example, "Dull: open Filter 1's cutoff
   or add OSC 3 an octave up", "Narrow for a lead: unison 7-9 voices, detune 25-35", or "A
   ringing peak at 1234 Hz: usually Filter 1's resonance".
+- **Your reference:** with a reference track loaded in Mentalism, every role's target takes
+  on how that reference differs from the uplifting trance guide (brighter, warmer, more low
+  end; ±4 dB at most). A finished mix can't be split back into its parts, so it's the
+  reference's overall colour passed on to each part, not each part's own balance. It says
+  so: "Steering towards: pads + your reference".
 - **Touch a band and it's yours:** it locks and the automation leaves it alone. Unlock it
   to hand it back. **Re-learn** clears the automatic moves (carves and your own bands
   stay); Ouroboros' learning pass does the same. **Auto EQ** and **Auto dynamics**
   switch each half off.
+
+### Vocal to MIDI, harmonies and word chops (Solve et Coagula)
+
+- **Vocal melody to MIDI:** while the song plays, Solve et Coagula tracks the pitch of the
+  vocal on its sidechain and writes down what it sings: a steady pitch for 60 ms or more is a
+  note, on the 1/16 grid and in the song's key. Playing a part again replaces what was heard
+  there. **Save vocal MIDI** writes *Vocal melody.mid*, and with a key, *Vocal harmony.mid*,
+  a diatonic third above, into the *Vocal MIDI* folder. Use them for a lead or pad that
+  doubles or answers the vocal.
+- **Chops on the words:** the chops hear where each word starts in the bar they keep. The
+  *Words* pattern plays the sung words one per 8th, in order. Every pattern now swings with
+  Correspondence's groove.
 
 ## How the key sharing works
 

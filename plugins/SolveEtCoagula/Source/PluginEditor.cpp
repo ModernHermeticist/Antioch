@@ -34,6 +34,13 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
     addAndMakeVisible (viewTabs);
     viewTabs.setComponentID ("tabs");
     viewTabs.onChange = [this] (int i) { scenePanel->setVisible (i == 1); repaint(); };
+    saveMidi.setTooltip ("Writes what the sidechain vocal sang as MIDI (on the 1/16 grid, in key), and a harmony a third above, into the Vocal MIDI folder");
+    saveMidi.onClick = [this]
+    {
+        const auto result = processor.saveVocalMidi (SolveEtCoagulaProcessor::vocalMidiFolder());
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Vocal MIDI", result);
+    };
+    addAndMakeVisible (saveMidi);
     chopsStatus.setFont (juce::FontOptions (12.0f));
     chopsStatus.setJustificationType (juce::Justification::centredLeft);
     chopsStatus.setColour (juce::Label::textColourId, Colours::dimText);
@@ -71,6 +78,8 @@ void SolveEtCoagulaEditor::timerCallback()
                          : processor.chopsReady.load() ? "A bar of vocal is ready to chop."
                                                        : "Listens to the sidechain vocal outside the chop sections and keeps its last whole bar.",
                          juce::dontSendNotification);
+    if (! processor.melody.notes().empty())
+        chopsStatus.setText (chopsStatus.getText() + "  " + juce::String ((int) processor.melody.notes().size()) + " sung notes heard.", juce::dontSendNotification);
     suite::ui::updateSceneGhosts (*this, processor.scenes);
     repaint (bandArea);
 }
@@ -137,7 +146,11 @@ void SolveEtCoagulaEditor::resized()
     controlArea = bounds;
 
     auto ch = chopsArea.reduced (12, 8).withTrimmedTop (14);
-    chopsStatus.setBounds (ch.removeFromBottom (22));
+    {
+        auto bottom = ch.removeFromBottom (24);
+        saveMidi.setBounds (bottom.removeFromRight (150));
+        chopsStatus.setBounds (bottom);
+    }
     chopsOn.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (130, 30));
     chopsWhere.setBounds (ch.removeFromLeft (170));
     chopsPattern.setBounds (ch.removeFromLeft (150));

@@ -8,6 +8,7 @@
 #include "Identity.h"
 #include "FixBus.h"
 #include "Harmony.h"
+#include "Clash.h"
 #include <optional>
 #include "Alias.h"
 
@@ -131,6 +132,9 @@ public:
     /** Variation engine: alternatives for a kind of section; applying one keeps what was there, for Undo. */
     std::vector<harmony::Variation> sectionVariations (suite::SectionType type) const { return harmony::variations (currentSongPatterns(), type); }
     bool applyVariation (suite::SectionType type, int index);
+    /** Clash check: parts in the song clips that sit in the same register, each with a fix. */
+    std::vector<clash::Clash> clashes() const;
+    bool fixClash (const clash::Clash&);
     bool undoVariation();
     std::vector<std::pair<juce::String, float>> beforeVariation;
     /** Hook bank: keeps the motif (or the melody's first two bars) as a hook for every project. */

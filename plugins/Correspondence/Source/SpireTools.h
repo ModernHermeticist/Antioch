@@ -28,7 +28,12 @@ namespace spire
     }
 
     /** Macro `macro` (0-3) at song position `q` (quarters), 0-127; -1 outside the map. */
-    inline int macroValue (const suite::SectionMap& map, int macro, double q, double barQuarters = 4.0)
+    /** Macro plans: 0 uplifting (the full moves), 1 progressive (the same shape, gentler: 60% of
+        the way from the middle), 2 big breakdowns (the space wide open and the brightness down in
+        breakdowns, the movement rising all through them). */
+    inline const juce::StringArray& macroPlanNames() { static const juce::StringArray n { "Uplifting", "Progressive", "Big breakdowns" }; return n; }
+
+    inline int macroValue (const suite::SectionMap& map, int macro, double q, double barQuarters = 4.0, int plan = 0)
     {
         const auto bar = (int) std::floor (q / barQuarters + 1.0e-9) + 1;
         if (map.count == 0 || bar < map.sections[0].startBar || bar > map.totalBars) return -1;
@@ -50,6 +55,9 @@ namespace spire
             case T::Outro:     v = macro == 0 ? lerp (70, 40) : macro == 1 ? 30 : macro == 2 ? 60 : 20; break;
             default:           v = 64; break;
         }
+        if (plan == 1) v = 64.0f + (v - 64.0f) * 0.6f;
+        if (plan == 2 && map.sections[(size_t) i].type == T::Breakdown)
+            v = macro == 0 ? 25.0f : macro == 2 ? 127.0f : macro == 3 ? lerp (20, 90) : v;
         return juce::jlimit (0, 127, juce::roundToInt (v));
     }
 
@@ -57,7 +65,7 @@ namespace spire
     inline int macroBaseCC (int choice) { return choice == 1 ? 20 : choice == 2 ? 102 : 0; }
 
     /** Adds the macro rides to a clip's MIDI (a CC every 1/16 while it changes, otherwise on change). */
-    inline void addMacroRides (juce::MidiMessageSequence& seq, const suite::SectionMap& map, int baseCC, int channel, int ppq)
+    inline void addMacroRides (juce::MidiMessageSequence& seq, const suite::SectionMap& map, int baseCC, int channel, int ppq, int plan = 0)
     {
         if (baseCC <= 0 || map.count == 0) return;
         const auto endQ = map.totalBars * 4.0;
@@ -66,7 +74,7 @@ namespace spire
             int last = -1;
             for (double q = 0.0; q < endQ; q += 0.25)
             {
-                const auto v = macroValue (map, macro, q);
+                const auto v = macroValue (map, macro, q, 4.0, plan);
                 if (v < 0 || v == last) continue;
                 seq.addEvent (juce::MidiMessage::controllerEvent (channel, baseCC + macro, v), q * ppq);
                 last = v;
@@ -76,15 +84,30 @@ namespace spire
         seq.updateMatchedPairs();
     }
 
-    inline juce::MidiFile withMacroRides (const juce::MidiFile& file, const suite::SectionMap& map, int baseCC)
+    inline juce::MidiFile withMacroRides (const juce::MidiFile& file, const suite::SectionMap& map, int baseCC, int plan = 0)
     {
         if (baseCC <= 0 || file.getNumTracks() == 0) return file;
         juce::MidiMessageSequence seq (*file.getTrack (0));
-        addMacroRides (seq, map, baseCC, 1, file.getTimeFormat());
+        addMacroRides (seq, map, baseCC, 1, file.getTimeFormat(), plan);
         juce::MidiFile out;
         out.setTicksPerQuarterNote (file.getTimeFormat());
         out.addTrack (seq);
         return out;
+    }
+
+    /** The macro plan on its own: four CC lanes for the whole song (for FL: import the MIDI and
+        turn the CC lanes into automation clips, or play it into Spire on its own channel). */
+    inline juce::MidiFile macroFile (const suite::SectionMap& map, int baseCC, int plan, double bpm)
+    {
+        constexpr int ppq = 960;
+        juce::MidiMessageSequence seq;
+        seq.addEvent (juce::MidiMessage::textMetaEvent (3, "Spire macros"), 0.0);
+        seq.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / juce::jmax (1.0, bpm))), 0.0);
+        addMacroRides (seq, map, baseCC > 0 ? baseCC : 20, 1, ppq, plan);
+        juce::MidiFile f;
+        f.setTicksPerQuarterNote (ppq);
+        f.addTrack (seq);
+        return f;
     }
 
     //==============================================================================

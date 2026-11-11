@@ -22,6 +22,7 @@
 #include "Resonance.h"
 #include "SpireTips.h"
 #include "ConductorBus.h"
+#include "ReferenceBus.h"
 #include "Registry.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
@@ -214,6 +215,10 @@ private:
     bool haveBands = false;
     std::array<std::array<float, 10>, 8> learned {};
     std::array<int, 8> learnedCount {};
+    mutable std::array<float, 10> withReference {};
+public:
+    mutable std::atomic<bool> referenceShown { false };   // steering with Mentalism's reference
+private:
     std::atomic<bool> autoWriting { false };
     std::atomic<uint32_t> pendingLocks { 0 };
     juce::CriticalSection logLock;

@@ -118,6 +118,12 @@ between versions.
 - [ ] **6b.16** With several Quintessences playing, *What changed?* shows their moves one after another,
   never two at once. Put Antioch on the music bus: it becomes a short room. Through a build the pads
   widen and the bus glue tightens; the drop resets both.
+- [ ] **6b.17** Solve et Coagula with the vocal on its sidechain: play the song, *Save vocal MIDI*, and drop
+  *Vocal melody.mid* and *Vocal harmony.mid* on a Spire: they follow the vocal, in key. Chops on *Words*
+  play the sung words in order.
+- [ ] **6b.18** Correspondence *Export all*: *SONG VOCAL ANSWER* plays in the vocal's gaps; *Spire macros.mid*
+  has four CC lanes. *Vary... > Clash check* lists parts sharing a register. Load a reference in Mentalism:
+  Quintessence says "+ your reference".
 
 ## 7. A song end to end
 

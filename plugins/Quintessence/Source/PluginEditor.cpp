@@ -161,6 +161,7 @@ void QuintessenceEditor::paint (juce::Graphics& g)
     const auto learnedSongs = processor.learnedShown.load();
     g.drawText ("Steering towards: " + juce::String (roleNames[juce::jlimit (0, 8, processor.roleShown.load())])
                 + (learnedSongs > 0 ? " (your sound, " + juce::String (learnedSongs) + " songs)" : juce::String())
+                + (processor.referenceShown.load() ? " + your reference" : "")
                 + (processor.groupShown.load() == 1 ? ", breakdown" : ""), c.removeFromTop (20), juce::Justification::centredLeft);
     g.setColour (Colours::dimText);
     g.drawText (juce::String (processor.passes.load()) + " passes, " + juce::String (processor.kept.load()) + " moves kept, "

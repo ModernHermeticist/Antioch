@@ -4,11 +4,13 @@
 #include "TempoBus.h"
 #include "SpireTools.h"
 #include "Harmony.h"
+#include "Clash.h"
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
 #include "ChordBus.h"
+#include "VocalBus.h"
 #include "StyleLog.h"
 
 using namespace suite::test;
@@ -474,11 +476,12 @@ int main (int argc, char** argv)
         map.sections[2] = { 9, suite::SectionType::Breakdown };
         map.sections[3] = { 13, suite::SectionType::Drop };
         suite::SectionBus::publish (map);
+        suite::VocalBus::clear();   // no vocal: no vocal answer clip
         const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceExportAll");
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 17, "a song folder with 16 clips (incl. counter-melody, drop-2 harmony, drum fills, breakdown piano and the three Spire layers) and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 18, "a song folder with 16 clips (incl. counter-melody, drop-2 harmony, drum fills, breakdown piano and the three Spire layers), the Spire macros and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -1275,6 +1278,40 @@ int main (int argc, char** argv)
         const auto vars = harmony::variations (patterns, suite::SectionType::Breakdown);
         const auto writer = std::find_if (vars.begin(), vars.end(), [] (const harmony::Variation& v) { return v.name == "Breakdown writer"; });
         check (writer != vars.end() && writer->lead == 3 && writer->bass == 0 && writer->breakdownStart == 1, "the breakdown writer: held chords from VI, no bass, the hook hinted");
+    }
+
+    section ("Spire macro plans, the vocal answer, the clash check");
+    {
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        const auto uplifting = spire::macroValue (map, 2, 4.0, 4.0, 0), big = spire::macroValue (map, 2, 4.0, 4.0, 2);
+        const auto drop = spire::macroValue (map, 0, 40.0, 4.0, 0), gentle = spire::macroValue (map, 0, 40.0, 4.0, 1);
+        check (big == 127 && uplifting == 110 && gentle < drop && gentle > 64, "macro plans: big breakdowns open the space all the way; progressive moves less");
+        const auto file = spire::macroFile (map, 20, 0, 138.0);
+        int ccs = 0;
+        for (const auto* e : *file.getTrack (0)) ccs += e->message.isController() ? 1 : 0;
+        check (ccs > 8, "the macro plan as its own MIDI file: four CC lanes (" + juce::String (ccs) + " moves)");
+
+        auto s = aMinor();
+        std::vector<bool> vocal (16, false);
+        for (int b : { 0, 1, 2, 8, 9 }) vocal[(size_t) b] = true;   // phrases in bars 1-3 and 9-10
+        const auto answer = chords::vocalAnswer (s, map, vocal);
+        bool inGaps = ! answer.empty();
+        for (const auto& n : answer) inGaps = inGaps && ! vocal[(size_t) std::floor (n.start / 4.0)] && n.pitch >= 72;
+        const auto firstBar = answer.empty() ? -1 : (int) std::floor (answer.front().start / 4.0);
+        check (inGaps && firstBar == 3, "the vocal answer plays only in the gaps, from the bar after each phrase, above the vocal");
+
+        chords::SongPatterns patterns;
+        patterns.arp = { 0, 0, 0, 0, 1, 0 };
+        patterns.lead = { 0, 0, 0, 0, 1, 0 };
+        auto clashing = s;
+        clashing.arpOctaves = 3;
+        const auto found = clash::find (clashing, map, patterns, 5, 3, "mel_octave", "arpoct");
+        check (! found.empty() && found[0].text.startsWith ("Drop") && found[0].paramId == "mel_octave" && std::abs (found[0].newValue - 6.0f) < 0.01f,
+               "the clash check finds the lead on top of the arp in the drop, and offers the lead up an octave ("
+                   + (found.empty() ? juce::String ("none") : found[0].text) + ")");
     }
 
     section ("Song pack for a vocalist");
