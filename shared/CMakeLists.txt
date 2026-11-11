@@ -14,5 +14,6 @@ target_sources(suite_shared INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/MorphBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SessionBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Recipes.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/VocalBus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuiteUI.cpp)
 target_include_directories(suite_shared INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

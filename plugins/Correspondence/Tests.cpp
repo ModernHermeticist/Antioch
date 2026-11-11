@@ -471,7 +471,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 12, "a song folder with 11 clips (incl. counter-melody and drop-2 harmony) and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 13, "a song folder with 12 clips (incl. counter-melody, drop-2 harmony and drum fills) and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -479,8 +479,8 @@ int main (int argc, char** argv)
         juce::MidiFile midi;
         juce::FileInputStream in (all);
         const auto read = all.existsAsFile() && midi.readFrom (in);
-        check (read && midi.getNumTracks() == 7, "all parts: a section track plus Chords, Bass, Arp, Lead, Harmony and Counter (" + juce::String (midi.getNumTracks()) + " tracks)");
-        if (read && midi.getNumTracks() == 7)
+        check (read && midi.getNumTracks() == 8, "all parts: a section track plus Chords, Bass, Arp, Lead, Harmony, Counter and Fills (" + juce::String (midi.getNumTracks()) + " tracks)");
+        if (read && midi.getNumTracks() == 8)
         {
             juce::StringArray markers;
             for (auto* e : *midi.getTrack (0))
@@ -488,7 +488,7 @@ int main (int argc, char** argv)
                     markers.add (e->message.getTextFromTextMetaEvent() + "@" + juce::String (e->message.getTimeStamp() / 960.0, 0));
             check (markers.joinIntoString (" ") == "Groove@0 Drop@16 Breakdown@32 Drop 2@48", "sections as markers: " + markers.joinIntoString (" "));
             int notes = 0;
-            for (int t = 1; t < 7; ++t)
+            for (int t = 1; t < 8; ++t)
                 for (auto* e : *midi.getTrack (t)) notes += e->message.isNoteOn();
             check (notes > 50, "with the notes of every part (" + juce::String (notes) + ")");
         }
@@ -715,6 +715,117 @@ int main (int argc, char** argv)
                    juce::String (part == chords::SongPart::Bass ? "bass" : "arp") + ": only bar 8 turns around, an octave up ("
                        + juce::String (changedIn8) + " notes; the section's last bar is left alone)");
         }
+    }
+
+    section ("Climbing chords, ghost notes, drum fills, room for the vocal");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;   // Groove 1-8, Drop 9-24, Breakdown 25-32, Drop 33-40
+        map.totalBars = 40; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        map.sections[2] = { 25, suite::SectionType::Breakdown };
+        map.sections[3] = { 33, suite::SectionType::Drop };
+        chords::SongPatterns p;
+        p.ghostNotes = 0.0f;
+        auto inRange = [] (const std::vector<chords::Note>& v, double a, double b) { std::vector<chords::Note> o; for (auto& n : v) if (n.start >= a && n.start < b) o.push_back (n); return o; };
+        const auto chordNotes = chords::songClip (s, map, p, chords::SongPart::Chords);
+        const auto first = inRange (chordNotes, 32.0, 36.0), second = inRange (chordNotes, 128.0, 132.0);
+        int topFirst = 0, topSecond = 0;
+        for (auto& n : first) topFirst = std::max (topFirst, n.pitch);
+        for (auto& n : second) topSecond = std::max (topSecond, n.pitch);
+        check (second.size() > first.size() && topSecond >= topFirst + 9, "drop 2's chords climb: an extra top note an octave up ("
+                   + juce::String ((int) first.size()) + " -> " + juce::String ((int) second.size()) + " notes, top " + juce::String (topFirst) + " -> " + juce::String (topSecond) + ")");
+
+        p.ghostNotes = 0.35f;
+        p.bass[(size_t) suite::SectionType::Groove] = 1;   // off-beat bass: gaps to fill
+        p.bass[(size_t) suite::SectionType::Drop] = 1;
+        const auto bass = chords::songClip (s, map, p, chords::SongPart::Bass);
+        int ghostsDrop = 0, ghostsGroove = 0;
+        bool noOverlap = true;
+        for (size_t i = 0; i < bass.size(); ++i)
+        {
+            if (bass[i].velocity == 38 && bass[i].start >= 32.0 && bass[i].start < 64.0) ++ghostsDrop;   // first 8 bars of the drop
+            if (bass[i].velocity == 38 && bass[i].start < 32.0) ++ghostsGroove;
+            if (i + 1 < bass.size() && bass[i + 1].pitch == bass[i].pitch && bass[i].start + bass[i].length > bass[i + 1].start + 1.0e-6) noOverlap = false;
+        }
+        p.ghostNotes = 0.0f;
+        int none = 0;
+        for (auto& n : chords::songClip (s, map, p, chords::SongPart::Bass)) none += n.velocity == 38;
+        check (ghostsDrop > ghostsGroove && ghostsDrop > 0 && none == 0 && noOverlap, "ghost notes: soft in-between bass notes, more in 8 bars of drop ("
+                   + juce::String (ghostsDrop) + ") than 8 bars of groove (" + juce::String (ghostsGroove) + "), never overlapping; none when off");
+
+        const auto fills = chords::fillsClip (map);
+        int rollInto1 = 0, toms = 0, crashes = 0, phraseFill = 0;
+        for (auto& n : fills)
+        {
+            if (n.pitch == 38 && n.start >= 28.0 && n.start < 32.0) ++rollInto1;
+            if ((n.pitch == 43 || n.pitch == 45 || n.pitch == 48 || n.pitch == 50) && n.start >= 94.0 && n.start < 96.0) ++toms;
+            if (n.pitch == 49) ++crashes;
+            if (n.pitch == 38 && n.start >= 63.0 && n.start < 64.0) ++phraseFill;
+        }
+        check (rollInto1 == 16 && toms == 8 && crashes == 3 && phraseFill == 2,
+               "drum fills: a 16-hit roll into the drop, toms into the breakdown, a crash on each change, a small fill at the drop's 8-bar phrase end");
+
+        p.vocalBars.assign (40, false);
+        for (int b = 8; b < 12; ++b) p.vocalBars[(size_t) b] = true;   // bars 9-12
+        const auto lead = chords::songClip (s, map, p, chords::SongPart::Lead);
+        p.leaveRoomForVocal = false;
+        const auto fullLead = chords::songClip (s, map, p, chords::SongPart::Lead);
+        bool onlyStrongBeats = true;
+        for (auto& n : inRange (lead, 32.0, 48.0)) onlyStrongBeats = onlyStrongBeats && std::abs (std::fmod (n.start, 2.0)) < 1.0e-6;
+        check (onlyStrongBeats && inRange (lead, 32.0, 48.0).size() < inRange (fullLead, 32.0, 48.0).size()
+                   && inRange (lead, 48.0, 96.0).size() == inRange (fullLead, 48.0, 96.0).size(),
+               "where the vocal sings (bars 9-12) the lead keeps only beats 1 and 3; elsewhere it's unchanged ("
+                   + juce::String ((int) inRange (fullLead, 32.0, 48.0).size()) + " -> " + juce::String ((int) inRange (lead, 32.0, 48.0).size()) + " notes)");
+    }
+
+    section ("Bassline DNA and voicing DNA from MIDI");
+    {
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceBassDna");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        // Two bars of an off-beat bass with an octave jump on the last 16th of each beat.
+        std::vector<chords::Note> bassClip;
+        for (int beat = 0; beat < 8; ++beat)
+        {
+            bassClip.push_back ({ 33, beat + 0.5, 0.2, 100 });
+            bassClip.push_back ({ 45, beat + 0.75, 0.15, 90 });
+        }
+        check (chords::looksLikeBass (bassClip) && ! chords::looksLikeChords (bassClip), "a low single-note clip looks like a bassline");
+        auto p = make();
+        const auto msg = p->learnFromFiles ({ writeClip (dir.getChildFile ("bass.mid"), bassClip).getFullPathName() });
+        const auto dna = p->getBassDna();
+        check (dna.valid && (int) p->apvts.getRawParameterValue (Params::bassPattern)->load() == (int) chords::BassPattern::Mine
+                   && dna.onset[2] > 0.9f && dna.onset[3] > 0.9f && dna.octave[3] > 0.9f && dna.onset[0] < 0.1f,
+               "dropping it learns your bassline and picks the Mine pattern (" + msg + ")");
+        const auto mine = chords::bassClip (p->currentSettings());
+        bool onDna = ! mine.empty();
+        int ups = 0;
+        for (auto& n : mine)
+        {
+            const auto step = (int) std::lround (std::fmod (n.start, 1.0) * 4.0);
+            onDna = onDna && (step == 2 || step == 3);
+            ups += step == 3 && n.pitch % 12 == mine.front().pitch % 12 && n.pitch > mine.front().pitch;
+        }
+        check (onDna && ups > 0, "the Mine bass plays your steps over any chords, with your octave jumps");
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = make();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->getBassDna().valid, "the bassline DNA is saved with the project");
+
+        // A wide chord clip with the root underneath: Am F C G.
+        std::vector<chords::Note> wide;
+        const std::vector<std::vector<int>> voicings { { 45, 69, 72, 76, 81 }, { 41, 65, 69, 72, 77 }, { 36, 64, 67, 72, 76 }, { 43, 67, 71, 74, 79 } };
+        for (int i = 0; i < 4; ++i) for (auto pitch : voicings[(size_t) i]) wide.push_back ({ pitch, i * 4.0, 3.9, 90 });
+        const auto v = chords::voicingFromNotes (wide);
+        check (v.valid && v.addBass && v.registerOctave == 4, "voicing DNA: the root underneath and the register are read from the clip");
+        auto r = make();
+        r->learnFromFiles ({ writeClip (dir.getChildFile ("wide.mid"), wide).getFullPathName() });
+        check (r->apvts.getRawParameterValue (Params::addBass)->load() > 0.5f && (int) r->apvts.getRawParameterValue (Params::voicing)->load() == (int) v.voicing,
+               "and set when you drop a chord clip");
+        dir.deleteRecursively();
     }
 
     section ("Learning chords, DNA and groove from MIDI");

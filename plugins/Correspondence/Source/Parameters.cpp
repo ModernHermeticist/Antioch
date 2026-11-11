@@ -12,7 +12,7 @@ namespace Params
         const StringArray degreeNames { "I", "II", "III", "IV", "V", "VI", "VII" };
         const StringArray voicingNames { "Close", "Open", "Wide" };
         const StringArray chordPatternNames { "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
-        const StringArray bassPatternNames { "Offbeat", "Rolling", "Galloping", "Sustain", "Walking" };
+        const StringArray bassPatternNames { "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)" };
         const StringArray arpPatternNames { "Up", "Down", "Up-down", "Bounce" };
 
         int choiceIndex (const AudioProcessorValueTreeState& s, const String& pid)
@@ -75,6 +75,10 @@ namespace Params
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; })));
         layout.add (std::make_unique<AudioParameterBool> (id (songCounter), "Counter-Melody", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songPhrase), "Phrase Variation", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songClimb), "Climbing Chords in Later Drops", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songGhost), "Ghost Notes", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (leadExpression), "Lead Expression",
                                                             StringArray { "Plain lead", "Glide", "Glide + scoops (bend 2)", "Glide + scoops (bend 12)" }, 2));
         layout.add (std::make_unique<AudioParameterChoice> (id (groove), "Groove", StringArray { "Straight", "Trance shuffle", "Hard shuffle" }, 0));
@@ -130,6 +134,9 @@ namespace Params
         p.breakdownStart = (int) state.getRawParameterValue (songBreakdown)->load();
         p.counter = state.getRawParameterValue (songCounter)->load() > 0.5f;
         p.phraseVariation = state.getRawParameterValue (songPhrase)->load() > 0.5f;
+        p.climbLaterDrops = state.getRawParameterValue (songClimb)->load() > 0.5f;
+        p.ghostNotes = state.getRawParameterValue (songGhost)->load() > 0.5f ? 0.35f : 0.0f;
+        p.leaveRoomForVocal = state.getRawParameterValue (songVocalRoom)->load() > 0.5f;
         return p;
     }
 

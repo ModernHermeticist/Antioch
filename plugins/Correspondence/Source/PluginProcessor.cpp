@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "StyleLog.h"
+#include "VocalBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "KeyBus.h"
@@ -155,7 +156,18 @@ juce::String CorrespondenceProcessor::learnFromFiles (const juce::StringArray& p
         if (auto notes = readMidiNotes (juce::File (p)); ! notes.empty()) clips.push_back (std::move (notes));
     if (clips.empty()) return "No notes in that MIDI";
 
-    const auto s = Params::readSettings (apvts);
+    const auto s = currentSettings();
+    const auto allBass = std::all_of (clips.begin(), clips.end(), [] (const auto& c) { return chords::looksLikeBass (c); });
+    if (allBass)
+    {
+        // Bass clips: your bassline DNA, and the Mine bass pattern to play it.
+        const auto learnedBass = chords::learnBassDna (clips);
+        if (! learnedBass.valid) return "Not enough bass notes to learn from";
+        { const juce::ScopedLock sl (motifLock); bassDna = learnedBass; }
+        setParameterPlain (apvts, Params::bassPattern, (float) (int) chords::BassPattern::Mine);
+        return "Learned your bassline from " + juce::String (learnedBass.clips) + (learnedBass.clips == 1 ? " clip" : " clips")
+             + ": Bass pattern set to Mine";
+    }
     if (clips.size() >= 2)
     {
         auto learned = chords::learnDna (clips, s.root, s.scale);
@@ -168,7 +180,15 @@ juce::String CorrespondenceProcessor::learnFromFiles (const juce::StringArray& p
         const auto g = chords::progressionFromNotes (clips[0]);
         if (! g.valid) return "Couldn't read chords from that clip";
         applyProgression (g);
-        return "Read " + juce::String (g.count) + " chords";
+        // ...and how you voice them.
+        const auto v = chords::voicingFromNotes (clips[0]);
+        if (! v.valid) return "Read " + juce::String (g.count) + " chords";
+        setParameterPlain (apvts, Params::voicing, (float) (int) v.voicing);
+        setParameterPlain (apvts, Params::registerOct, (float) v.registerOctave);
+        setParameterPlain (apvts, Params::addBass, v.addBass ? 1.0f : 0.0f);
+        static const char* names[] = { "close", "open", "wide" };
+        return "Read " + juce::String (g.count) + " chords and your voicing (" + names[(int) v.voicing] + ", octave " + juce::String (v.registerOctave)
+             + (v.addBass ? ", root underneath)" : ")");
     }
     const auto n = learnMotif (juce::File (paths[0]));
     return n > 0 ? "Learned a " + juce::String (n) + "-note motif" : "No notes in that MIDI";
@@ -237,7 +257,7 @@ chords::MelodySettings CorrespondenceProcessor::melodySettings() const
 
 juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const juce::File& directory) const
 {
-    const auto s = Params::readSettings (apvts);
+    const auto s = currentSettings();
     std::vector<chords::Note> notes;
     if (kind.startsWith ("Song "))
     {
@@ -245,15 +265,21 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
         suite::SectionMap map;
         if (! suite::SectionBus::read (map))
             return {};
+        if (kind == "Song Fills")
+        {
+            if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return {};
+            notes = chords::fillsClip (map);
+        }
+        else
+        {
         const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp
                         : kind.endsWith ("Lead") ? chords::SongPart::Lead : kind.endsWith ("Harmony") ? chords::SongPart::Harmony
                         : kind.endsWith ("Counter") ? chords::SongPart::Counter
                         : chords::SongPart::Chords;
-        auto patterns = Params::readSongPatterns (apvts);
-        patterns.melody = melodySettings();
-        notes = chords::songClip (s, map, patterns, part);
+        notes = chords::songClip (s, map, currentSongPatterns(), part);
         if (notes.empty() && (part == chords::SongPart::Harmony || part == chords::SongPart::Counter))
             return {};   // the harmony line only exists when there's a later drop
+        }
     }
     else
     {
@@ -281,9 +307,17 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     return file;
 }
 
+chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
+{
+    auto patterns = Params::readSongPatterns (apvts);
+    patterns.melody = melodySettings();
+    patterns.vocalBars = suite::VocalBus::read();
+    return patterns;
+}
+
 juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) const
 {
-    const auto s = Params::readSettings (apvts);
+    const auto s = currentSettings();
     const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
     const auto bpm = currentBpm.load();
     const auto title = getSongTitle().trim(), artist = getArtist().trim();
@@ -294,7 +328,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter" })
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
 
     // A song sheet for labels and DJs: title, artist, key, tempo, progression, structure.
@@ -340,8 +374,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     suite::SectionMap map;
     if (suite::SectionBus::read (map) && map.count > 0)
     {
-        auto patterns = Params::readSongPatterns (apvts);
-        patterns.melody = melodySettings();
+        const auto patterns = currentSongPatterns();
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
         for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
                                           { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead },
@@ -349,6 +382,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
             if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
                                                                          || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });
+        if (apvts.getRawParameterValue (Params::songFills)->load() > 0.5f)
+            parts.push_back ({ "Fills", chords::fillsClip (map) });   // General MIDI drums: use FPC or a drum kit
 
         std::vector<std::pair<double, juce::String>> markers;
         std::array<int, (size_t) suite::SectionType::count> seen {};
@@ -395,6 +430,19 @@ void CorrespondenceProcessor::getPluginState (juce::MemoryBlock& destData)
     }
     state.appendChild (m, nullptr);
     state.removeChild (state.getChildWithName ("Dna"), nullptr);
+    state.removeChild (state.getChildWithName ("BassDna"), nullptr);
+    if (const auto b = getBassDna(); b.valid)
+    {
+        juce::ValueTree bt ("BassDna");
+        juce::StringArray onset, octave;
+        for (auto v : b.onset) onset.add (juce::String (v, 3));
+        for (auto v : b.octave) octave.add (juce::String (v, 3));
+        bt.setProperty ("onset", onset.joinIntoString (","), nullptr);
+        bt.setProperty ("octave", octave.joinIntoString (","), nullptr);
+        bt.setProperty ("clips", b.clips, nullptr);
+        bt.setProperty ("notes", b.notes, nullptr);
+        state.appendChild (bt, nullptr);
+    }
     if (const auto d = getDna(); d.valid)
     {
         juce::ValueTree dt ("Dna");
@@ -425,6 +473,21 @@ void CorrespondenceProcessor::setPluginState (const void* data, int sizeInBytes)
                 motif = loaded;
             }
             state.removeChild (state.getChildWithName ("Motif"), nullptr);
+            chords::BassDna learnedBass;
+            if (const auto bt = state.getChildWithName ("BassDna"); bt.isValid())
+            {
+                const auto onset = juce::StringArray::fromTokens (bt["onset"].toString(), ",", "");
+                const auto octave = juce::StringArray::fromTokens (bt["octave"].toString(), ",", "");
+                if (onset.size() == 16 && octave.size() == 16)
+                {
+                    for (int i = 0; i < 16; ++i) { learnedBass.onset[(size_t) i] = onset[i].getFloatValue(); learnedBass.octave[(size_t) i] = octave[i].getFloatValue(); }
+                    learnedBass.clips = (int) bt["clips"];
+                    learnedBass.notes = (int) bt["notes"];
+                    learnedBass.valid = true;
+                }
+            }
+            state.removeChild (state.getChildWithName ("BassDna"), nullptr);
+            { const juce::ScopedLock sl (motifLock); bassDna = learnedBass; }
             chords::MelodyDna learned;
             if (const auto dt = state.getChildWithName ("Dna"); dt.isValid())
             {

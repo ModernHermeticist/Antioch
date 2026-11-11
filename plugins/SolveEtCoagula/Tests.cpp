@@ -283,6 +283,37 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Tells the suite where the vocal sings");
+    {
+        suite::VocalBus::clear();
+        auto p = make (true);
+        FakePlayHead head;
+        head.bpm = 120.0;   // 2 s bars: vocal in bars 1-2, silence in 3-4
+        p->setPlayHead (&head);
+        const auto total = (int64_t) (8.2 * sampleRate);
+        juce::AudioBuffer<float> buffer (4, blockSize);
+        juce::MidiBuffer midi;
+        for (int64_t pos = 0; pos < total; pos += blockSize)
+        {
+            const auto n = (int) std::min<int64_t> (blockSize, total - pos);
+            buffer.setSize (4, n, false, false, true);
+            buffer.clear();
+            for (int i = 0; i < n; ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto v = t < 4.0 ? 0.2f * (float) std::sin (twoPi * 500.0 * t) : 0.0f;
+                buffer.setSample (2, i, v); buffer.setSample (3, i, v);
+            }
+            p->processBlock (buffer, midi);
+            head.ppq += n * head.bpm / 60.0 / sampleRate;
+        }
+        p->setPlayHead (nullptr);
+        const auto bars = suite::VocalBus::read();
+        check (bars.size() == 2 && bars[0] && bars[1], "bars 1 and 2 are marked as vocal, 3 and 4 aren't (" + juce::String ((int) bars.size()) + " bars marked)");
+        suite::VocalBus::clear();
+        check (suite::VocalBus::read().empty(), "and the marks can be cleared");
+    }
+
     section ("Layouts and state");
     {
         P p;

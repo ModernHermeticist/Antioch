@@ -149,6 +149,21 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     chopsReady.store (chops.ready());
     chopsPlaying.store (played);
     vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > s.thresholdDb);
+
+    // Tell the suite which bars the vocal sings in (Correspondence's lead leaves room there).
+    if (scActive && host.playing && host.hasPpq && host.barQuarters() > 0.0)
+    {
+        const auto bar = (int) std::floor (host.ppq / host.barQuarters() + 1.0e-9) + 1;
+        if (bar != vocalBar)
+        {
+            if (vocalBar >= 1 && barBlocks > 0) suite::VocalBus::mark (vocalBar, vocalBlocks * 4 > barBlocks);   // a quarter of the bar or more
+            vocalBar = bar; vocalBlocks = 0; barBlocks = 0;
+        }
+        ++barBlocks;
+        if (vocalPresent.load()) ++vocalBlocks;
+    }
+    else
+        vocalBar = -1;
 }
 
 juce::AudioProcessorEditor* SolveEtCoagulaProcessor::createEditor() { return new SolveEtCoagulaEditor (*this); }

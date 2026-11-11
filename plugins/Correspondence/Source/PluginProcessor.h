@@ -76,7 +76,17 @@ public:
     juce::String learnFromFiles (const juce::StringArray& paths);
     /** Sets key, chords and chord length from a detected progression. */
     void applyProgression (const chords::ProgressionGuess&);
-    void forgetDna() { const juce::ScopedLock sl (motifLock); dna = {}; }
+    void forgetDna() { const juce::ScopedLock sl (motifLock); dna = {}; bassDna = {}; }
+    chords::BassDna getBassDna() const { const juce::ScopedLock sl (motifLock); return bassDna; }
+    /** The parameters' settings plus what was learned (your bassline). */
+    chords::Settings currentSettings() const
+    {
+        auto s = Params::readSettings (apvts);
+        s.bassDna = getBassDna();
+        return s;
+    }
+    /** Song patterns for exports, with the vocal's bars from Solve et Coagula. */
+    chords::SongPatterns currentSongPatterns() const;
     chords::MelodyDna getDna() const { const juce::ScopedLock sl (motifLock); return dna; }
 
     /** Song info for exports (stored with the project). */
@@ -113,6 +123,7 @@ private:
     mutable juce::CriticalSection motifLock;
     std::vector<chords::Note> motif;
     chords::MelodyDna dna;
+    chords::BassDna bassDna;
     uint32_t lastSuggestion = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceProcessor)

@@ -17,7 +17,16 @@ namespace chords
     enum class Quality { Auto, Major, Minor, Sus2, Sus4, Seventh, Add9, Power };
     enum class Voicing { Close, Open, Wide };
     enum class ChordPattern { Sustain, OffbeatStabs, Pluck332, Gate16 };
-    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain, Walking };
+    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain, Walking, Mine };
+
+    /** Bassline DNA: where in the bar you put bass notes (16 steps) and where you jump up an
+        octave, learned from your own bass clips. */
+    struct BassDna
+    {
+        bool valid = false;
+        std::array<float, 16> onset {}, octave {};
+        int clips = 0, notes = 0;
+    };
     enum class ArpPattern { Up, Down, UpDown, Bounce };
 
     inline const juce::StringArray& qualityNames()
@@ -41,6 +50,7 @@ namespace chords
         int bassOctave = 2;
         ArpPattern arpPattern = ArpPattern::Up;
         int arpOctaves = 2;
+        BassDna bassDna;   // for BassPattern::Mine
     };
 
     struct Note
@@ -312,8 +322,27 @@ namespace chords
                 continue;
             }
 
+            if (s.bassPattern == BassPattern::Mine && s.bassDna.valid)
+            {
+                // Your bassline: the steps you usually play, with your octave jumps.
+                std::vector<int> steps;
+                for (int k = 0; k < 16; ++k) if (s.bassDna.onset[(size_t) k] >= 0.5f) steps.push_back (k);
+                for (double bar = 0.0; bar < L - 1.0e-9; bar += 4.0)
+                    for (size_t k = 0; k < steps.size(); ++k)
+                    {
+                        const auto t = bar + steps[k] * 0.25;
+                        if (t >= L - 1.0e-9) continue;
+                        const auto nextStep = k + 1 < steps.size() ? steps[k + 1] : steps.front() + 16;
+                        const auto len = juce::jlimit (0.1, 0.9, (nextStep - steps[k]) * 0.25 * 0.85);
+                        const auto up = s.bassDna.octave[(size_t) steps[k]] >= 0.5f ? 12 : 0;
+                        notes.push_back ({ pitch + up, base + t, len, steps[k] % 4 == 0 ? 110 : 100 });
+                    }
+                continue;
+            }
+
             switch (s.bassPattern)
             {
+                case BassPattern::Mine:      // no DNA learned yet: offbeat
                 case BassPattern::Offbeat:   forEachHit (L, emit, { 2, 6, 10, 14 }, 0.4); break;
                 case BassPattern::Rolling:   forEachHit (L, emit, { 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15 }, 0.2); break;
                 case BassPattern::Galloping: forEachHit (L, emit, { 2, 3, 6, 7, 10, 11, 14, 15 }, 0.2); break;
@@ -707,6 +736,178 @@ namespace chords
     enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter };
 
     //==============================================================================
+    /** Learns bassline DNA from bass clips (each rebased to the bar of its first note). */
+    inline BassDna learnBassDna (const std::vector<std::vector<Note>>& clips)
+    {
+        BassDna d;
+        int bars = 0;
+        for (const auto& clip : clips)
+        {
+            if (clip.size() < 3) continue;
+            int lowest = 127;
+            for (const auto& n : clip) lowest = std::min (lowest, n.pitch);
+            const auto first = std::floor (std::min_element (clip.begin(), clip.end(), [] (const Note& a, const Note& b) { return a.start < b.start; })->start / 4.0) * 4.0;
+            double last = first;
+            for (const auto& n : clip)
+            {
+                const auto t = n.start - first;
+                const auto step = (int) std::lround (std::fmod (t, 4.0) * 4.0) % 16;
+                d.onset[(size_t) step] += 1.0f;
+                if (n.pitch >= lowest + 10) d.octave[(size_t) step] += 1.0f;
+                last = std::max (last, n.start);
+                ++d.notes;
+            }
+            bars += std::max (1, (int) std::ceil ((last - first + 1.0e-6) / 4.0));
+            ++d.clips;
+        }
+        if (d.notes < 4) return {};
+        for (size_t k = 0; k < 16; ++k)
+        {
+            d.octave[k] = d.onset[k] > 0.0f ? d.octave[k] / d.onset[k] : 0.0f;
+            d.onset[k] /= (float) std::max (1, bars);
+        }
+        d.valid = true;
+        return d;
+    }
+
+    /** True when a clip is a bassline: one note at a time, low (median below E3). */
+    inline bool looksLikeBass (const std::vector<Note>& notes)
+    {
+        if (notes.size() < 3) return false;
+        std::vector<int> pitches;
+        for (const auto& n : notes) pitches.push_back (n.pitch);
+        std::nth_element (pitches.begin(), pitches.begin() + (long) pitches.size() / 2, pitches.end());
+        if (pitches[pitches.size() / 2] >= 52) return false;
+        int together = 0;
+        for (size_t i = 0; i < notes.size(); ++i)
+            for (size_t k = i + 1; k < notes.size(); ++k)
+                together += std::abs (notes[i].start - notes[k].start) < 0.06;
+        return together * 4 < (int) notes.size();
+    }
+
+    /** How you voice chords, from a chord clip: the voicing that matches your spread, your
+        register and whether you put the root underneath. */
+    struct VoicingGuess { bool valid = false; Voicing voicing = Voicing::Open; int registerOctave = 4; bool addBass = false; float spread = 0.0f; };
+
+    inline VoicingGuess voicingFromNotes (const std::vector<Note>& notes)
+    {
+        VoicingGuess g;
+        std::vector<std::vector<int>> groups;
+        std::vector<double> starts;
+        for (const auto& n : notes)
+        {
+            size_t k = 0;
+            while (k < starts.size() && std::abs (starts[k] - n.start) >= 0.06) ++k;
+            if (k == starts.size()) { starts.push_back (n.start); groups.push_back ({}); }
+            groups[k].push_back (n.pitch);
+        }
+        float spread = 0.0f, centre = 0.0f;
+        int counted = 0, bassUnder = 0;
+        for (auto& gr : groups)
+        {
+            if (gr.size() < 3) continue;
+            std::sort (gr.begin(), gr.end());
+            spread += (float) (gr.back() - gr.front());
+            float sum = 0.0f;
+            for (auto p : gr) sum += (float) p;
+            centre += sum / (float) gr.size();
+            if (gr[1] - gr[0] >= 10) ++bassUnder;   // a low root well under the rest
+            ++counted;
+        }
+        if (counted == 0) return g;
+        g.spread = spread / (float) counted;
+        g.addBass = bassUnder * 2 > counted;
+        const auto upper = g.addBass ? g.spread - 12.0f : g.spread;
+        g.voicing = upper <= 12.5f ? Voicing::Close : upper <= 19.5f ? Voicing::Open : Voicing::Wide;
+        g.registerOctave = juce::jlimit (3, 5, (int) std::floor ((centre / (float) counted) / 12.0f) - 1);
+        g.valid = true;
+        return g;
+    }
+
+    //==============================================================================
+    /** Later drops climb: each chord gains its top note an octave higher, wider and brighter. */
+    inline std::vector<Note> climbVoicing (const std::vector<Note>& notes)
+    {
+        auto out = notes;
+        for (size_t i = 0; i < notes.size(); ++i)
+        {
+            bool top = true;
+            for (const auto& o : notes)
+                if (std::abs (o.start - notes[i].start) < 1.0e-6 && o.pitch > notes[i].pitch) { top = false; break; }
+            if (top) out.push_back ({ notes[i].pitch + 12, notes[i].start, notes[i].length, juce::jmax (1, notes[i].velocity - 8) });
+        }
+        return out;
+    }
+
+    /** Ghost notes: soft in-between 16ths (the last pitch again) where a part leaves a gap,
+        more of them the higher the section's energy. Deterministic. */
+    inline std::vector<Note> addGhostNotes (std::vector<Note> notes, double startQ, double endQ, float amount, int seed)
+    {
+        if (amount <= 0.0f || notes.empty()) return notes;
+        std::sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.start < b.start; });
+        std::vector<Note> ghosts;
+        size_t k = 0;
+        for (auto t = std::ceil (startQ * 4.0 - 1.0e-9) / 4.0; t < endQ - 0.25 + 1.0e-9; t += 0.25)
+        {
+            while (k < notes.size() && notes[k].start < t - 1.0e-6) ++k;
+            if (k < notes.size() && std::abs (notes[k].start - t) < 1.0e-6) continue;   // a note already here
+            if (k == 0) continue;
+            auto& prev = notes[k - 1];
+            if (t - prev.start > 0.5 + 1.0e-6 || t - prev.start < 0.2) continue;   // only just after a note
+            const auto onBeat = std::abs (t - std::round (t)) < 1.0e-6;
+            if (onBeat) continue;
+            const auto h = (uint32_t) ((int64_t) std::lround (t * 4.0) * 2654435761u + (uint32_t) seed * 40503u);
+            if ((float) (h % 1000u) / 1000.0f < amount)
+            {
+                prev.length = std::min (prev.length, t - prev.start - 0.02);   // the ghost cuts the note before it short
+                ghosts.push_back ({ prev.pitch, t, 0.1, 38 });
+            }
+        }
+        notes.insert (notes.end(), ghosts.begin(), ghosts.end());
+        std::sort (notes.begin(), notes.end(), [] (const Note& a, const Note& b) { return a.start < b.start; });
+        return notes;
+    }
+
+    /** Drum fills (General MIDI: 38 snare, 43/45/48/50 toms, 49 crash) for every section change
+        and, smaller, the end of each 8-bar phrase inside a section. */
+    inline std::vector<Note> fillsClip (const suite::SectionMap& map)
+    {
+        using T = suite::SectionType;
+        std::vector<Note> out;
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0, endQ = (map.endBar (i) - 1) * 4.0;
+            const auto last = i + 1 >= map.count;
+            // Small fills at phrase ends inside the section (drops and grooves).
+            const auto type = map.sections[(size_t) i].type;
+            if (type == T::Drop || type == T::Groove)
+                for (auto phraseEnd = startQ + 32.0; phraseEnd < endQ - 1.0e-9; phraseEnd += 32.0)
+                    for (auto t : { phraseEnd - 0.5, phraseEnd - 0.25 })
+                        out.push_back ({ 38, t, 0.2, 90 });
+            if (last) continue;
+            const auto next = map.sections[(size_t) i + 1].type;
+            const auto barStart = endQ - 4.0;
+            if (next == T::Drop)
+            {
+                // A roll that speeds up through the last bar: 8ths, 16ths, then 32nds.
+                for (auto t = barStart; t < barStart + 2.0 - 1.0e-9; t += 0.5) out.push_back ({ 38, t, 0.2, 80 });
+                for (auto t = barStart + 2.0; t < barStart + 3.0 - 1.0e-9; t += 0.25) out.push_back ({ 38, t, 0.15, 95 });
+                for (auto t = barStart + 3.0; t < endQ - 1.0e-9; t += 0.125) out.push_back ({ 38, t, 0.1, (int) (100 + 20 * (t - barStart - 3.0)) });
+            }
+            else if (next == T::Breakdown)
+            {
+                const int toms[] = { 50, 50, 48, 48, 45, 45, 43, 43 };
+                for (int k = 0; k < 8; ++k) out.push_back ({ toms[k], endQ - 2.0 + k * 0.25, 0.2, 100 });
+            }
+            else
+                for (int k = 0; k < 4; ++k) out.push_back ({ 38, endQ - 1.0 + k * 0.25, 0.15, 90 + 5 * k });
+            out.push_back ({ 49, endQ, 1.0, 120 });   // crash into the next section
+        }
+        std::sort (out.begin(), out.end(), [] (const Note& a, const Note& b) { return a.start < b.start; });
+        return out;
+    }
+
+    //==============================================================================
     /** Learns melodic DNA from several clips (each rebased to the bar of its first note). */
     inline MelodyDna learnDna (const std::vector<std::vector<Note>>& clips, int root, int scale)
     {
@@ -871,12 +1072,16 @@ namespace chords
         int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV
         bool counter = true;          // a counter-melody wherever the full lead plays (SongPart::Counter)
         bool phraseVariation = true;  // the last bar of each 8-bar phrase (inside a section) turns around: bass bounces octaves, arp lifts
+        bool climbLaterDrops = true;  // drop 2+ chords gain their top note an octave up
+        float ghostNotes = 0.35f;     // in-between soft notes in bass and arp (0 = none), scaled by section energy
+        bool leaveRoomForVocal = true;
+        std::vector<bool> vocalBars;  // bars (index 0 = bar 1) the vocal sings in, from Solve et Coagula
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
     {
         static const juce::StringArray chords { "None", "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
-        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain", "Walking" };
+        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)" };
         static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce" };
         static const juce::StringArray lead   { "None", "Melody", "Teaser" };
         return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : part == SongPart::Arp ? arp : lead;
@@ -925,7 +1130,12 @@ namespace chords
             if (map.sections[(size_t) i].type == suite::SectionType::Breakdown && patterns.breakdownStart > 0)
                 s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
             std::vector<Note> cycle;
-            if (part == SongPart::Chords)    { s.chordPattern = (ChordPattern) (choice - 1); cycle = chordClip (s); }
+            if (part == SongPart::Chords)
+            {
+                s.chordPattern = (ChordPattern) (choice - 1);
+                cycle = chordClip (s);
+                if (laterDrop && patterns.climbLaterDrops) cycle = climbVoicing (cycle);   // drop 2+: higher and wider
+            }
             else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }
             else if (part == SongPart::Arp)  { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
             else
@@ -942,6 +1152,7 @@ namespace chords
 
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
+            std::vector<Note> section;
             for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
             {
                 int bounce = 0;
@@ -958,9 +1169,31 @@ namespace chords
                         if (part == SongPart::Bass && start - (startQ + bar * 4.0) >= 2.0 - 1.0e-9) turn = (bounce++ % 2 == 1) ? 12 : 0;   // octave bounce on beats 3-4
                         if (part == SongPart::Arp) turn = 12;                                                                            // the arp lifts an octave
                     }
-                    out.push_back ({ n.pitch + lift + keyChange + turn, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                    section.push_back ({ n.pitch + lift + keyChange + turn, start, std::min (n.length, endQ - start - 0.01), n.velocity });
                 }
             }
+
+            // Ghost notes in the bass and arp, more where the energy is higher.
+            if (part == SongPart::Bass || part == SongPart::Arp)
+                section = addGhostNotes (section, startQ, endQ, patterns.ghostNotes * juce::jlimit (0.0f, 1.0f, map.energyOf (i)), i * 7 + (int) part);
+
+            // Room for the vocal: where it sings, the lead keeps only its beat-1 and beat-3 notes
+            // (softer), and the harmony and counter-melody step out.
+            if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter))
+            {
+                std::vector<Note> kept;
+                for (auto n : section)
+                {
+                    const auto bar = (size_t) std::floor (n.start / 4.0 + 1.0e-9);
+                    const auto sung = bar < patterns.vocalBars.size() && patterns.vocalBars[bar];
+                    if (! sung) { kept.push_back (n); continue; }
+                    if (part != SongPart::Lead || std::abs (std::fmod (n.start, 2.0)) > 1.0e-6) continue;
+                    n.velocity = juce::jmax (1, n.velocity - 20);
+                    kept.push_back (n);
+                }
+                section = std::move (kept);
+            }
+            out.insert (out.end(), section.begin(), section.end());
         }
         return out;
     }

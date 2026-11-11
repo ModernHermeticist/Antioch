@@ -5,6 +5,7 @@
 #include "Unmasker.h"
 #include "Scenes.h"
 #include "VocalChops.h"
+#include "VocalBus.h"
 
 class SolveEtCoagulaProcessor : public suite::SuiteProcessor
 {
@@ -73,6 +74,7 @@ private:
     double sampleRate = 48000.0;
     suite::SectionFollower sections;
     bool inChopSection = false;
+    int vocalBar = -1, vocalBlocks = 0, barBlocks = 0;   // for the VocalBus: which bars the vocal sings in
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaProcessor)
 };

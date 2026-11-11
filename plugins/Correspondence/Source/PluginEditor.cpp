@@ -342,6 +342,19 @@ namespace
             counter = std::make_unique<juce::ToggleButton> ("Counter-melody");
             counterAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songCounter, *counter);
             addAndMakeVisible (*counter);
+            for (const auto& [ptr, att, text, pid, tip] : {
+                     std::tuple<std::unique_ptr<juce::ToggleButton>*, std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>*, const char*, juce::String, const char*>
+                     { &climb, &climbAttachment, "Climbing chords in drop 2+", Params::songClimb, "Later drops: each chord gains its top note an octave up" },
+                     { &ghost, &ghostAttachment, "Ghost notes", Params::songGhost, "Soft in-between 16ths in the bass and arp, more where the energy is higher" },
+                     { &fills, &fillsAttachment, "Drum fills", Params::songFills, "A SONG FILLS clip (General MIDI drums) for every section change and phrase end" },
+                     { &vocalRoom, &vocalRoomAttachment, "Lead leaves room for the vocal", Params::songVocalRoom,
+                       "Where the vocal sings (heard by Solve et Coagula), the lead keeps only beats 1 and 3 and the harmony steps out" } })
+            {
+                *ptr = std::make_unique<juce::ToggleButton> (text);
+                (*ptr)->setTooltip (tip);
+                *att = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, pid, **ptr);
+                addAndMakeVisible (**ptr);
+            }
             phrase = std::make_unique<juce::ToggleButton> ("Phrase turnarounds");
             phrase->setTooltip ("The last bar of every 8-bar phrase: the bass bounces octaves and the arp lifts an octave");
             phraseAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::songPhrase, *phrase);
@@ -381,7 +394,7 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (1200, 400);
+            setSize (1200, 430);
         }
 
         void paint (juce::Graphics& g) override
@@ -408,6 +421,14 @@ namespace
                 title.setBounds (extras.removeFromRight (260).reduced (2));
             }
             {
+                auto more = r.removeFromBottom (28);
+                const auto w = more.getWidth() / 4;
+                climb->setBounds (more.removeFromLeft (w));
+                ghost->setBounds (more.removeFromLeft (w));
+                fills->setBounds (more.removeFromLeft (w));
+                vocalRoom->setBounds (more);
+            }
+            {
                 auto toggles = r.removeFromBottom (28);
                 breakdownBox->setBounds (toggles.removeFromRight (170).reduced (2));
                 counter->setBounds (toggles.removeFromRight (140));
@@ -430,7 +451,8 @@ namespace
         std::vector<std::unique_ptr<juce::ComboBox>> boxes;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
-        std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase;
+        std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase, climb, ghost, fills, vocalRoom;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> climbAttachment, ghostAttachment, fillsAttachment, vocalRoomAttachment;
         std::unique_ptr<juce::ComboBox> leadBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> leadAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;
@@ -478,7 +500,7 @@ void CorrespondenceEditor::togglePlay()
 
 void CorrespondenceEditor::timerCallback()
 {
-    settings = Params::readSettings (processor.apvts);
+    settings = processor.currentSettings();
     voiced = chords::voiceProgression (settings);
 
     const auto now = juce::Time::getMillisecondCounterHiRes();
