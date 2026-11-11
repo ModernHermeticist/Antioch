@@ -868,6 +868,46 @@ namespace chords
         return notes;
     }
 
+    /** Breakdown piano: in every breakdown, each chord as a low root plus its chord tones
+        broken upwards in 8ths and held, with the sustain pedal (CC 64) down for each chord.
+        `pedal` receives (time, down) pairs. */
+    inline std::vector<Note> pianoClip (const Settings& base, const suite::SectionMap& map, std::vector<std::pair<double, bool>>& pedal)
+    {
+        std::vector<Note> out;
+        auto s = base;
+        s.voicing = Voicing::Close;
+        s.addBass = false;
+        s.registerOctave = 4;
+        const auto voiced = voiceProgression (s);
+        const auto L = s.quartersPerChord;
+        const auto progressionQ = L * juce::jlimit (1, maxSlots, s.count);
+        for (int i = 0; i < map.count; ++i)
+        {
+            if (map.sections[(size_t) i].type != suite::SectionType::Breakdown) continue;
+            const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0, endQ = (map.endBar (i) - 1) * 4.0;
+            const auto shift = map.keyShiftOf (i);
+            for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
+                for (size_t c = 0; c < voiced.size(); ++c)
+                {
+                    const auto t = offset + (double) c * L;
+                    if (t >= endQ - 1.0e-9) break;
+                    const auto len = std::min (L, endQ - t);
+                    out.push_back ({ 12 * 3 + chordRootPitchClass (s, (int) c) + shift, t, len - 0.05, 80 });   // the root, low
+                    auto tones = voiced[c];
+                    tones.push_back (tones.front() + 12);
+                    for (size_t k = 0; k < tones.size(); ++k)
+                    {
+                        const auto at = t + 0.5 * (double) k;
+                        if (at >= t + len - 0.1) break;
+                        out.push_back ({ tones[k] + shift, at, t + len - at - 0.05, 72 - (int) k * 2 });
+                    }
+                    pedal.push_back ({ t + 0.02, true });
+                    pedal.push_back ({ t + len - 0.06, false });
+                }
+        }
+        return out;
+    }
+
     /** Drum fills (General MIDI: 38 snare, 43/45/48/50 toms, 49 crash) for every section change
         and, smaller, the end of each 8-bar phrase inside a section. */
     inline std::vector<Note> fillsClip (const suite::SectionMap& map)
@@ -1069,7 +1109,8 @@ namespace chords
         MelodySettings melody;
         bool liftLaterDrops = true;   // the lead goes up an octave in the 2nd, 3rd... drop
         bool varyLaterDrops = true;   // ... and is embellished, with a harmony line (SongPart::Harmony)
-        int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV
+        int breakdownStart = 1;       // breakdowns: 0 = same progression, 1 = start on VI, 2 = start on IV, 3 = lift to III halfway
+        bool answerVocal = true;      // where there's no lead, short lead answers in the bar after each vocal phrase
         bool counter = true;          // a counter-melody wherever the full lead plays (SongPart::Counter)
         bool phraseVariation = true;  // the last bar of each 8-bar phrase (inside a section) turns around: bass bounces octaves, arp lifts
         bool climbLaterDrops = true;  // drop 2+ chords gain their top note an octave up
@@ -1115,7 +1156,26 @@ namespace chords
             const auto choice = part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type]
                               : part == SongPart::Arp ? patterns.arp[type] : patterns.lead[type];
             if (choice <= 0)
+            {
+                // The lead answers the vocal: in sections without a lead, the bar after each vocal
+                // phrase gets the melody's first two beats there, a little softer.
+                if (part == SongPart::Lead && patterns.answerVocal && ! patterns.vocalBars.empty())
+                {
+                    const auto answer = melody (base, patterns.melody);
+                    const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0, endQ = (map.endBar (i) - 1) * 4.0;
+                    auto sung = [&] (int bar) { return bar >= 0 && bar < (int) patterns.vocalBars.size() && patterns.vocalBars[(size_t) bar]; };
+                    for (auto barQ = startQ; barQ < endQ - 1.0e-9; barQ += 4.0)
+                    {
+                        const auto bar = (int) std::lround (barQ / 4.0);
+                        if (sung (bar) || ! sung (bar - 1)) continue;
+                        const auto inCycle = std::fmod (barQ - startQ, progressionQ);
+                        for (const auto& n : answer)
+                            if (n.start >= inCycle - 1.0e-9 && n.start < inCycle + 2.0 - 1.0e-9)
+                                out.push_back ({ n.pitch + map.keyShiftOf (i), barQ + (n.start - inCycle), std::min (n.length, 1.0), juce::jmax (1, n.velocity - 10) });
+                    }
+                }
                 continue;
+            }
 
             int earlierSame = 0;
             for (int k = 0; k < i; ++k) if (map.sections[(size_t) k].type == map.sections[(size_t) i].type) ++earlierSame;
@@ -1127,25 +1187,34 @@ namespace chords
                 continue;   // the counter-melody answers the full lead only
 
             auto s = base;
-            if (map.sections[(size_t) i].type == suite::SectionType::Breakdown && patterns.breakdownStart > 0)
+            const auto isBreakdown = map.sections[(size_t) i].type == suite::SectionType::Breakdown;
+            if (isBreakdown && (patterns.breakdownStart == 1 || patterns.breakdownStart == 2))
                 s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
-            std::vector<Note> cycle;
-            if (part == SongPart::Chords)
+            auto makeCycle = [&] (Settings cs)
             {
-                s.chordPattern = (ChordPattern) (choice - 1);
-                cycle = chordClip (s);
-                if (laterDrop && patterns.climbLaterDrops) cycle = climbVoicing (cycle);   // drop 2+: higher and wider
-            }
-            else if (part == SongPart::Bass) { s.bassPattern = (BassPattern) (choice - 1);   cycle = bassClip (s); }
-            else if (part == SongPart::Arp)  { s.arpPattern = (ArpPattern) (choice - 1);     cycle = arpClip (s); }
-            else
-            {
-                cycle = melody (s, patterns.melody);
-                if (choice == 2) cycle = teaser (cycle);
-                if (varied) cycle = embellish (cycle, s);
-                if (part == SongPart::Harmony) cycle = harmony (cycle, s);
-                if (part == SongPart::Counter) cycle = counterMelody (cycle, s);
-            }
+                std::vector<Note> c;
+                if (part == SongPart::Chords)
+                {
+                    cs.chordPattern = (ChordPattern) (choice - 1);
+                    c = chordClip (cs);
+                    if (laterDrop && patterns.climbLaterDrops) c = climbVoicing (c);   // drop 2+: higher and wider
+                }
+                else if (part == SongPart::Bass) { cs.bassPattern = (BassPattern) (choice - 1);   c = bassClip (cs); }
+                else if (part == SongPart::Arp)  { cs.arpPattern = (ArpPattern) (choice - 1);     c = arpClip (cs); }
+                else
+                {
+                    c = melody (cs, patterns.melody);
+                    if (choice == 2) c = teaser (c);
+                    if (varied) c = embellish (c, cs);
+                    if (part == SongPart::Harmony) c = harmony (c, cs);
+                    if (part == SongPart::Counter) c = counterMelody (c, cs);
+                }
+                return c;
+            };
+            const auto cycle = makeCycle (s);
+            // Breakdown lift: the second half of the breakdown moves to the relative major's home (III).
+            const auto lifting = isBreakdown && patterns.breakdownStart == 3;
+            const auto liftCycle = lifting ? makeCycle (startingOn (base, 3)) : std::vector<Note> {};
 
             const auto lift = (part == SongPart::Lead || part == SongPart::Harmony) && patterns.liftLaterDrops && laterDrop ? 12 : 0;
             const auto keyChange = map.keyShiftOf (i);   // final-drop key change: everything from the last drop on moves up
@@ -1153,10 +1222,12 @@ namespace chords
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
             std::vector<Note> section;
+            const auto liftFrom = startQ + std::floor ((endQ - startQ) / 2.0 / progressionQ + 1.0e-9) * progressionQ;   // a whole progression in
             for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
             {
                 int bounce = 0;
-                for (const auto& n : cycle)
+                const auto& thisCycle = lifting && offset >= liftFrom - 1.0e-9 && liftFrom > startQ ? liftCycle : cycle;
+                for (const auto& n : thisCycle)
                 {
                     const auto start = offset + n.start;
                     if (start >= endQ - 1.0e-9) continue;

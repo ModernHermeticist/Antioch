@@ -44,7 +44,20 @@ public:
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
         laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" },
         dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" },
-        preLiftId { "prelift" }, tuneSamplesId { "tunesamples" }, tagWhereId { "tagwhere" };
+        preLiftId { "prelift" }, tuneSamplesId { "tunesamples" }, tagWhereId { "tagwhere" },
+        riserChordsId { "riserchords" }, rollFromId { "rollfrom" }, rollToId { "rollto" }, rollCurveId { "rollcurve" }, rollVelId { "rollvel" };
+    enum RollCurve { rcSteps, rcSmooth, rcLate };
+    /** The snare roll's note length (quarters) at progress `p` through it. */
+    static double rollRate (int from, int to, int curve, double p)
+    {
+        const auto startRate = from == 0 ? 1.0 : 0.5;
+        const auto endRate = to == 0 ? 0.25 : to == 1 ? 0.125 : 0.0625;
+        const auto pc = curve == rcLate ? p * p : p;
+        if (curve == rcSmooth) return startRate * std::pow (endRate / startRate, pc);
+        const auto stages = (int) std::lround (std::log2 (startRate / endRate));
+        const auto k = juce::jmin (stages, (int) std::floor (pc * (stages + 1)));
+        return startRate / std::exp2 ((double) k);
+    }
     enum DropFx { dfOff, dfTapeStop, dfStutter };
     enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
     static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }

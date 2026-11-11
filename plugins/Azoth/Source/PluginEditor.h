@@ -29,7 +29,9 @@ private:
     juce::Label status, next;
     suite::ui::Choice dropFx, dropFxLen, buildShape;
     suite::ui::Knob buildFilter;
-    suite::ui::Toggle preLift;
+    suite::ui::Toggle preLift, riserChords;
+    suite::ui::Choice rollFrom, rollTo, rollCurve;
+    suite::ui::Knob rollVel;
     juce::TextButton samplesButton { "Your samples..." };
     juce::Label samplesNote;
     std::unique_ptr<juce::FileChooser> chooser;

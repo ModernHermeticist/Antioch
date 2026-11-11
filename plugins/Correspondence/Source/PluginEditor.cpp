@@ -347,8 +347,9 @@ namespace
                      { &climb, &climbAttachment, "Climbing chords in drop 2+", Params::songClimb, "Later drops: each chord gains its top note an octave up" },
                      { &ghost, &ghostAttachment, "Ghost notes", Params::songGhost, "Soft in-between 16ths in the bass and arp, more where the energy is higher" },
                      { &fills, &fillsAttachment, "Drum fills", Params::songFills, "A SONG FILLS clip (General MIDI drums) for every section change and phrase end" },
-                     { &vocalRoom, &vocalRoomAttachment, "Lead leaves room for the vocal", Params::songVocalRoom,
-                       "Where the vocal sings (heard by Solve et Coagula), the lead keeps only beats 1 and 3 and the harmony steps out" } })
+                     { &vocalRoom, &vocalRoomAttachment, "Lead and vocal take turns", Params::songVocalRoom,
+                       "Where the vocal sings (heard by Solve et Coagula) the lead keeps only beats 1 and 3 and the harmony steps out; "
+                       "where there's no lead, it answers in the bar after each vocal phrase" } })
             {
                 *ptr = std::make_unique<juce::ToggleButton> (text);
                 (*ptr)->setTooltip (tip);
@@ -389,7 +390,8 @@ namespace
             }
             breakdownBox = std::make_unique<juce::ComboBox>();
             breakdownBox->addItemList (state.getParameter (Params::songBreakdown)->getAllValueStrings(), 1);
-            breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder");
+            breakdownBox->setTooltip ("Breakdowns can start the progression on VI or IV, so the drop's return to i lands harder, "
+                                      "or lift to the relative major's home (III) for their second half");
             breakdownAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, Params::songBreakdown, *breakdownBox);
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));

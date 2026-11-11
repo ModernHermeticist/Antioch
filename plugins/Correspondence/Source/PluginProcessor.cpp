@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "StyleLog.h"
 #include "VocalBus.h"
+#include "ChordBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "KeyBus.h"
@@ -74,6 +75,13 @@ void CorrespondenceProcessor::publishKey()
     const auto on = apvts.getRawParameterValue (Params::broadcast)->load() > 0.5f;
     if (on)
     {
+        // The progression too, so the suite can follow the harmony (Azoth's riser, tension width).
+        const auto s = currentSettings();
+        suite::Progression prog;
+        prog.root = s.root; prog.scale = s.scale; prog.count = juce::jlimit (1, 8, s.count);
+        prog.quartersPerChord = s.quartersPerChord;
+        for (int i = 0; i < prog.count; ++i) prog.chordRoots[(size_t) i] = ((chords::chordRootPitchClass (s, i) - s.root) % 12 + 12) % 12;
+        suite::ChordBus::publish (prog);
         suite::KeyBus::publish ((int) apvts.getRawParameterValue (Params::rootNote)->load(),
                                 (int) apvts.getRawParameterValue (Params::scale)->load());
     }
@@ -259,6 +267,7 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
 {
     const auto s = currentSettings();
     std::vector<chords::Note> notes;
+    std::vector<std::pair<double, bool>> pianoPedal;
     if (kind.startsWith ("Song "))
     {
         // Full-song clip following the Ouroboros map.
@@ -269,6 +278,11 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
         {
             if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return {};
             notes = chords::fillsClip (map);
+        }
+        else if (kind == "Song Piano")
+        {
+            notes = chords::pianoClip (s, map, pianoPedal);
+            if (notes.empty()) return {};   // no breakdown in the map
         }
         else
         {
@@ -301,9 +315,23 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
                                           apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
     const auto cc = apvts.getRawParameterValue (Params::accentCC)->load() > 0.5f ? 74 : 0;
     const auto isLead = kind == "Melody" || kind == "Song Lead";   // the lead line: glides and scoops
+    auto midi = isLead ? chords::toLeadMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc, leadExpression())
+                       : chords::toMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc);
+    if (! pianoPedal.empty())
+    {
+        // The breakdown piano's sustain pedal (CC 64).
+        juce::MidiMessageSequence seq (*midi.getTrack (0));
+        for (const auto& [t, down] : pianoPedal)
+            seq.addEvent (juce::MidiMessage::controllerEvent (1, 64, down ? 127 : 0), t * midi.getTimeFormat());
+        seq.sort();
+        seq.updateMatchedPairs();
+        juce::MidiFile withPedal;
+        withPedal.setTicksPerQuarterNote (midi.getTimeFormat());
+        withPedal.addTrack (seq);
+        midi = withPedal;
+    }
     if (auto stream = file.createOutputStream())
-        (isLead ? chords::toLeadMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc, leadExpression())
-                : chords::toMidiFile (shaped, currentBpm.load(), "Correspondence " + kind, cc)).writeTo (*stream);
+        midi.writeTo (*stream);
     return file;
 }
 
@@ -328,7 +356,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills" })
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
 
     // A song sheet for labels and DJs: title, artist, key, tempo, progression, structure.

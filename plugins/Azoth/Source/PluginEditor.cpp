@@ -31,7 +31,12 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       dropFxLen (p.apvts, AzothProcessor::dropFxLenId, "Length"),
       buildShape (p.apvts, AzothProcessor::buildShapeId, "Build shape"),
       buildFilter (p.apvts, AzothProcessor::buildFilterId, "Build filter", sectionColour (suite::SectionType::Build)),
-      preLift (p.apvts, AzothProcessor::preLiftId, "Key-change pre-lift", sectionColour (suite::SectionType::Drop))
+      preLift (p.apvts, AzothProcessor::preLiftId, "Key-change pre-lift", sectionColour (suite::SectionType::Drop)),
+      riserChords (p.apvts, AzothProcessor::riserChordsId, "Riser follows chords", sectionColour (suite::SectionType::Build)),
+      rollFrom (p.apvts, AzothProcessor::rollFromId, "Roll from"),
+      rollTo (p.apvts, AzothProcessor::rollToId, "Roll to"),
+      rollCurve (p.apvts, AzothProcessor::rollCurveId, "Speed-up"),
+      rollVel (p.apvts, AzothProcessor::rollVelId, "Roll start vel.", sectionColour (suite::SectionType::Build))
 {
     setLookAndFeel (&lnf);
     const char* names[] = { "Impact", "Crash", "Downlifter", "Snare" };
@@ -48,7 +53,8 @@ AzothEditor::AzothEditor (AzothProcessor& p)
                                                              &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
                                                              &riser, &trackRiser, &riserRange, &riserNote,
-                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote, &preLift })
+                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote, &preLift,
+                                                             &riserChords, &rollFrom, &rollTo, &rollCurve, &rollVel })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
     reverseNote.setJustificationType (juce::Justification::centredLeft);
@@ -149,7 +155,7 @@ void AzothEditor::paint (juce::Graphics& g)
     drawHeader (g, { 20, 12, 700, 32 }, "AZOTH", "automatic transition FX", accent);
     drawPanel (g, elementArea, "Transitions");
     drawPanel (g, shapeArea, "Shape", accent);
-    drawPanel (g, riserArea, "Build risers", sectionColour (suite::SectionType::Build));
+    drawPanel (g, riserArea, "Build: risers and snare roll", sectionColour (suite::SectionType::Build));
     drawPanel (g, reverseArea, "Reverse swells from this track", Colours::amethyst);
     drawPanel (g, entranceArea, "Into the drop, build shape and your samples", sectionColour (suite::SectionType::Drop));
 }
@@ -189,7 +195,12 @@ void AzothEditor::resized()
     riser.setBounds (ri.removeFromLeft (120));
     riserRange.setBounds (ri.removeFromLeft (160));
     trackRiser.setBounds (ri.removeFromLeft (120));
-    riserNote.setBounds (ri.reduced (8, 0));
+    riserChords.setBounds (ri.removeFromLeft (170).withSizeKeepingCentre (160, 30));
+    rollFrom.setBounds (ri.removeFromLeft (90));
+    rollTo.setBounds (ri.removeFromLeft (90));
+    rollCurve.setBounds (ri.removeFromLeft (110));
+    rollVel.setBounds (ri.removeFromLeft (100));
+    riserNote.setVisible (false);
 
     auto rv = reverseArea.reduced (10, 6).withTrimmedTop (14);
     reverseOn.setBounds (rv.removeFromLeft (170).withSizeKeepingCentre (160, 30));

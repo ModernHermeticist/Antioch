@@ -4,6 +4,7 @@
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "ChordBus.h"
 #include "StyleLog.h"
 
 using namespace suite::test;
@@ -471,7 +472,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 13, "a song folder with 12 clips (incl. counter-melody, drop-2 harmony and drum fills) and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 14, "a song folder with 13 clips (incl. counter-melody, drop-2 harmony, drum fills and breakdown piano) and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -715,6 +716,55 @@ int main (int argc, char** argv)
                    juce::String (part == chords::SongPart::Bass ? "bass" : "arp") + ": only bar 8 turns around, an octave up ("
                        + juce::String (changedIn8) + " notes; the section's last bar is left alone)");
         }
+    }
+
+    section ("Breakdown piano, breakdown lift, the lead answering the vocal, the chord bus");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;   // Drop 1-8, Breakdown 9-24, Drop 25-32
+        map.totalBars = 32; map.count = 3;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 9, suite::SectionType::Breakdown };
+        map.sections[2] = { 25, suite::SectionType::Drop };
+        std::vector<std::pair<double, bool>> pedal;
+        const auto piano = chords::pianoClip (s, map, pedal);
+        bool inBreakdown = ! piano.empty();
+        for (auto& n : piano) inBreakdown = inBreakdown && n.start >= 32.0 && n.start < 96.0;
+        int downs = 0;
+        for (auto& [t, d] : pedal) downs += d;
+        const auto first = std::count_if (piano.begin(), piano.end(), [] (const chords::Note& n) { return n.start >= 32.0 && n.start < 36.0; });
+        check (inBreakdown && downs == 16 && first == 5, "breakdown piano: only in the breakdown, a low root and the chord broken upwards (5 notes per chord), pedal down for each of 16 chords");
+
+        chords::SongPatterns p;
+        p.breakdownStart = 3;   // lift to III halfway
+        const auto lifted = chords::songClip (s, map, p, chords::SongPart::Chords);
+        p.breakdownStart = 0;
+        const auto same = chords::songClip (s, map, p, chords::SongPart::Chords);
+        auto pcsAt = [] (const std::vector<chords::Note>& v, double q) { std::vector<int> o; for (auto& n : v) if (std::abs (n.start - q) < 1.0e-6) o.push_back (n.pitch); return pitchClasses (o); };
+        check (pcsAt (lifted, 32.0) == pcsAt (same, 32.0) && pcsAt (lifted, 64.0) == std::set<int> { 0, 4, 7 } && pcsAt (same, 64.0) == std::set<int> { 9, 0, 4 },
+               "breakdown lift: the first half as the drop, the second half starts on III (C major in A minor)");
+
+        p = {};
+        p.lead[(size_t) suite::SectionType::Breakdown] = 0;   // no lead in the breakdown
+        p.vocalBars.assign (32, false);
+        for (int b = 8; b < 10; ++b) p.vocalBars[(size_t) b] = true;   // the vocal sings bars 9-10
+        const auto lead = chords::songClip (s, map, p, chords::SongPart::Lead);
+        int answer = 0, elsewhere = 0;
+        for (auto& n : lead)
+        {
+            if (n.start >= 40.0 && n.start < 42.0) ++answer;                 // bar 11, first two beats
+            else if (n.start >= 32.0 && n.start < 96.0) ++elsewhere;
+        }
+        check (answer > 0 && elsewhere == 0, "the lead answers in the bar after the vocal phrase (" + juce::String (answer) + " notes), and nowhere else in the breakdown");
+
+        auto c = make();
+        c->applyPreset (0);
+        c->publishKey();
+        suite::Progression prog;
+        check (suite::ChordBus::read (prog) && prog.count == 4 && prog.chordRoots[0] == 0 && prog.chordRoots[1] == 8 && prog.chordRoots[2] == 3 && prog.chordRoots[3] == 10
+                   && ! prog.isTension (0) && prog.isTension (1) && ! prog.isTension (2),
+               "the progression is shared with the suite: i VI III VII, with VI and VII as tension chords");
+        suite::ChordBus::withdraw();
     }
 
     section ("Climbing chords, ghost notes, drum fills, room for the vocal");

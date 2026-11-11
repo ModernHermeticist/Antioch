@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "KeyBus.h"
 #include "TestUtils.h"
+#include "ChordBus.h"
 
 using namespace suite::test;
 using T = suite::SectionType;
@@ -544,6 +545,57 @@ int main (int argc, char** argv)
         check (everyCount == 2 && everyB > 0.1f && offCount == 0 && offA < 0.01f, "or on every drop, or not at all");
         suite::SectionBus::publish (testMap());
         dir.deleteRecursively();
+    }
+
+    section ("Riser follows the chords; roll designer");
+    {
+        check (AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.1) == 1.0 && AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.6) == 0.25
+                   && AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.9) == 0.125, "the default roll is the classic 1/4, 1/8, 1/16, 1/32 in four steps");
+        check (AzothProcessor::rollRate (1, 2, AzothProcessor::rcSteps, 0.95) == 0.0625 && AzothProcessor::rollRate (1, 2, AzothProcessor::rcSteps, 0.1) == 0.5,
+               "from 1/8 to 1/64");
+        const auto smoothMid = AzothProcessor::rollRate (0, 1, AzothProcessor::rcSmooth, 0.5);
+        check (smoothMid > 0.3 && smoothMid < 0.4 && AzothProcessor::rollRate (0, 1, AzothProcessor::rcLate, 0.6) == 0.5,
+               "smooth glides between the rates; late stays slow for longer");
+
+        auto hits = [] (int to)
+        {
+            suite::SectionBus::publish (testMap());
+            auto p = quiet();
+            set (*p, AzothProcessor::rollId, 0.6f);
+            set (*p, AzothProcessor::rollToId, (float) to);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            render (*p, 12.2, {}, nullptr, &head);
+            p->setPlayHead (nullptr);
+            return p->snareHits.load();
+        };
+        const auto to32 = hits (1), to64 = hits (2);
+        check (to32 == 30 && to64 > to32, "rolling on to 1/64 adds hits at the end (" + juce::String (to32) + " -> " + juce::String (to64) + ")");
+
+        auto riserHz = [] (bool follow)
+        {
+            suite::SectionBus::publish (testMap());
+            suite::Progression prog;
+            prog.root = 9; prog.scale = 0; prog.count = 2; prog.quartersPerChord = 4.0;
+            prog.chordRoots[0] = 0; prog.chordRoots[1] = 8;   // i, then VI: up a minor sixth
+            suite::ChordBus::publish (prog);
+            auto p = quiet();
+            set (*p, AzothProcessor::riserId, 1.0f);
+            set (*p, AzothProcessor::riserChordsId, follow ? 1.0f : 0.0f);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 10.6, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            suite::ChordBus::withdraw();
+            return std::make_pair (peakFrequency (audio, 180.0f, 700.0f, 8.15, 8.45), peakFrequency (audio, 180.0f, 700.0f, 10.15, 10.45));
+        };
+        const auto [onFirst, onSecond] = riserHz (true);
+        const auto [offFirst, offSecond] = riserHz (false);
+        check (std::abs (onFirst - offFirst) < 4.0f && std::abs (onSecond / offSecond - 1.587f) < 0.08f,
+               "the riser climbs with the chords: on the VI it's a minor sixth higher (" + juce::String (offSecond, 0) + " -> " + juce::String (onSecond, 0) + " Hz)");
     }
 
     section ("No surprises");

@@ -84,7 +84,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (groove), "Groove", StringArray { "Straight", "Trance shuffle", "Hard shuffle" }, 0));
         layout.add (std::make_unique<AudioParameterBool> (id (accentCC), "Accents as CC 74", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (songBreakdown), "Breakdown Progression",
-                                                            StringArray { "Same as the drop", "Start on VI", "Start on IV" }, 1));
+                                                            StringArray { "Same as the drop", "Start on VI", "Start on IV", "Lift to III halfway" }, 1));
 
         layout.add (std::make_unique<AudioParameterFloat> (id (preview), "Preview Volume", NormalisableRange<float> (0.0f, 1.0f), 0.5f,
                                                            AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int)
@@ -137,6 +137,7 @@ namespace Params
         p.climbLaterDrops = state.getRawParameterValue (songClimb)->load() > 0.5f;
         p.ghostNotes = state.getRawParameterValue (songGhost)->load() > 0.5f ? 0.35f : 0.0f;
         p.leaveRoomForVocal = state.getRawParameterValue (songVocalRoom)->load() > 0.5f;
+        p.answerVocal = p.leaveRoomForVocal;   // lead and vocal take turns
         return p;
     }
 

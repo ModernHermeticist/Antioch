@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include "KeyBus.h"
 #include "Music.h"
+#include "ChordBus.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 
 namespace
@@ -44,6 +45,11 @@ namespace
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::preLiftId), "Key Change Pre-lift", true));
         l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::tuneSamplesId), "Tune My Samples to the Key", true));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::tagWhereId), "Producer Tag", StringArray { "Off", "First drop", "Every drop" }, 1));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::riserChordsId), "Riser Follows the Chords", true));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollFromId), "Roll From", StringArray { "1/4", "1/8" }, 0));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollToId), "Roll To", StringArray { "1/16", "1/32", "1/64" }, 1));
+        l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollCurveId), "Roll Speed-up", StringArray { "Steps", "Smooth", "Late" }, 0));
+        l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::rollVelId), "Roll Start Velocity", NormalisableRange<float> (0.1f, 1.0f), 0.35f, percent));
         return l;
     }
 
@@ -195,6 +201,10 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto buildShape = (int) value (buildShapeId);
     const auto buildFilterAmount = value (buildFilterId);
     const auto preLift = value (preLiftId) > 0.5f;
+    const auto rollFrom = (int) value (rollFromId), rollTo = (int) value (rollToId), rollCurve = (int) value (rollCurveId);
+    const auto rollVel = value (rollVelId);
+    suite::Progression progression;
+    const auto followChords = value (riserChordsId) > 0.5f && suite::ChordBus::read (progression);
     const auto beatSamples = 1.0 / juce::jmax (1.0e-9, qPerSample);
 
     // Auditions from the UI play immediately.
@@ -231,6 +241,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         float riseKey = 1.0f; // final-drop key change: the riser aims for the key of the drop it leads into
         float dropP = -1.0f;  // progress through the drop entrance FX, or -1
         float liftSemis = -1.0f;   // key-change pre-lift: semitones this track is pitched up now, or -1
+        float chordRatio = 1.0f;   // the riser climbs through the chord roots (from Correspondence)
         bool dropSilent = false;
 
         if (follow)
@@ -258,6 +269,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 const auto end = sec.endQ - (sec.hasNext && sec.next == T::Drop ? gapQ : 0.0);
 
                 // Risers across the Build (same start as the roll), stopping for the gap.
+                if (sec.type == T::Build && followChords)
+                    chordRatio = std::exp2 ((float) progression.chordRoots[(size_t) progression.chordAt (pos - sec.startQ)] / 12.0f);
                 if (sec.type == T::Build)
                 {
                     const auto startQ = rollStart == 0 ? sec.startQ
@@ -291,13 +304,13 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                     {
                         const auto p = (double) shapeProgress (buildShape == bsStepped ? bsSmooth : buildShape,
                                                                (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ)));
-                        const auto rate = p < 0.25 ? 1.0 : p < 0.5 ? 0.5 : p < 0.75 ? 0.25 : 0.125;
+                        const auto rate = rollRate (rollFrom, rollTo, rollCurve, p);
                         // A hit whenever playback crosses a grid line at the current rate.
                         const auto crossed = rollPrevPos < pos && pos - rollPrevPos < 0.5
                                              && (int64_t) std::floor (pos / rate) != (int64_t) std::floor (rollPrevPos / rate);
                         if (crossed)
                         {
-                            snares[(size_t) nextSnare].trigger (rollLevel * (0.35f + 0.65f * (float) p),
+                            snares[(size_t) nextSnare].trigger (rollLevel * (rollVel + (1.0f - rollVel) * (float) p),
                                                                 std::exp2 (rollPitch * (float) p / 12.0f));
                             nextSnare = (nextSnare + 1) % (int) snares.size();
                             snareHits.fetch_add (1);
@@ -330,7 +343,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
         fx += (impact.process() + crash.process() + downlifter.process()) * energyGain;
         for (auto& sp : samplePlayers) fx += sp.process() * energyGain;
-        fx += riser.process (rise, riserRootHz * riseKey, riserRange, riserLevel) * riseGain;
+        fx += riser.process (rise, riserRootHz * riseKey * chordRatio, riserRange, riserLevel) * riseGain;
         for (auto& s : snares) fx += s.process() * riseGain;
 
         fx *= level;

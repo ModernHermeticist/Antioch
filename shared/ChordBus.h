@@ -5,6 +5,7 @@
 // chords). The progression restarts at every section, as Correspondence writes it.
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace suite
@@ -26,7 +27,7 @@ namespace suite
         /** True for chords that pull away from home: anything not on the tonic (or its relative). */
         bool isTension (int index) const noexcept
         {
-            const auto r = chordRoots[(size_t) (index & 7)];
+            const auto r = chordRoots[(std::size_t) (index & 7)];
             return ! (r == 0 || (scale == 0 && r == 3) || (scale == 1 && r == 9));
         }
     };
