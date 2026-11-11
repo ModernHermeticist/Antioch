@@ -500,7 +500,8 @@ int main (int argc, char** argv)
         }, &audio, &head);
         p->setPlayHead (nullptr);
         suite::SectionBus::withdraw();
-        check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f && peakBetween (audio, 3.9, 4.6) > 0.05f, "a throw moment throws the beat before its bar, and nothing else");
+        check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f && peakBetween (audio, 3.9, 4.6) > 0.05f, "a throw moment throws the beat before its bar, and nothing else ("
+                   + juce::String (peakBetween (audio, 0.0, 3.5), 4) + " before, " + juce::String (peakBetween (audio, 3.9, 4.6), 4) + " at the end)");
     }
 
     section ("Learning from your tweaks");

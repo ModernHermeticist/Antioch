@@ -23,6 +23,8 @@ namespace suite::SectionBus
             std::atomic<int32_t> intensity, liveType, livePrevType, liveIndex, dropEntrance;
             std::atomic<int64_t> liveStartMicroQ;   // live section start, in millionths of a quarter
             std::array<std::atomic<uint32_t>, SectionMap::maxSections> entries; // startBar << 8 | type
+            std::atomic<uint32_t> momentCount;
+            std::array<std::atomic<uint32_t>, SectionMap::maxMoments> moments;  // bar << 8 | kind
         };
 
         uint32_t nowSeconds() noexcept
@@ -59,6 +61,10 @@ namespace suite::SectionBus
             s.entries[(size_t) i].store (((uint32_t) sec.startBar << 16) | (energy << 8) | (uint32_t) sec.type, std::memory_order_relaxed);
         }
         s.count.store ((uint32_t) n, std::memory_order_relaxed);
+        const auto nm = map.momentCount < 0 ? 0 : std::min (map.momentCount, SectionMap::maxMoments);
+        for (int i = 0; i < nm; ++i)
+            s.moments[(size_t) i].store (((uint32_t) map.moments[(size_t) i].bar << 8) | (uint32_t) (map.moments[(size_t) i].kind & 0xff), std::memory_order_relaxed);
+        s.momentCount.store ((uint32_t) nm, std::memory_order_relaxed);
         s.totalBars.store ((uint32_t) map.totalBars, std::memory_order_relaxed);
         s.finalLift.store (map.finalLift, std::memory_order_relaxed);
         s.dropGap.store (map.dropGap, std::memory_order_relaxed);
@@ -109,6 +115,13 @@ namespace suite::SectionBus
                 m.sections[(size_t) i].startBar = (int) (e >> 16);
                 m.sections[(size_t) i].energy = ((e >> 8) & 0xffu) == 255u ? -1 : (int) ((e >> 8) & 0xffu);
                 m.sections[(size_t) i].type = (SectionType) (e & 0xffu);
+            }
+
+            m.momentCount = (int) std::min<uint32_t> (s.momentCount.load (std::memory_order_relaxed), SectionMap::maxMoments);
+            for (int i = 0; i < m.momentCount; ++i)
+            {
+                const auto e = s.moments[(size_t) i].load (std::memory_order_relaxed);
+                m.moments[(size_t) i] = { (int) (e >> 8), (int) (e & 0xffu) };
             }
 
             std::atomic_thread_fence (std::memory_order_acquire);

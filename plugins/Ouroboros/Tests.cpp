@@ -638,7 +638,7 @@ int main (int argc, char** argv)
         check (! p->continueLearningPass() && p->learning.load(), "half the song: still listening");
         render (*p, 4.0, {}, nullptr, &head);   // bars 3-4
         p->setPlayHead (nullptr);
-        check (p->barsHeard() == 4 && p->continueLearningPass() && ! p->learning.load(), "the whole song heard: the pass ends by itself");
+        check (p->learnBarsHeard() == 4 && p->continueLearningPass() && ! p->learning.load(), "the whole song heard: the pass ends by itself");
         check (suite::FixBus::read (suite::FixBus::latest(), msg) && msg.fix == suite::Fix::FinishSong && p->learnSeqs.size() == 2,
                "and sends the kick fit, the phase check and Finish the song");
         check (p->undoLearningPass() == 2, "undo sends back the Kybalion moves");

@@ -124,7 +124,7 @@ namespace harmony
         }
         {
             Variation v { "Fuller", "more energy: gated chords, an arp, the lead in full" };
-            v.chords = c <= 1 ? 4 : c;
+            v.chords = c == 0 ? 4 : c == 4 ? 3 : 4;   // gated chords (or the pluck, if they're gated already)
             v.arp = a == 0 ? 1 : a;
             v.lead = l == 0 ? 2 : 1;
             v.bass = (b == 0 && type != suite::SectionType::Breakdown) ? 1 : b;

@@ -325,7 +325,6 @@ int main (int argc, char** argv)
                "hold and release follow the kick (" + juce::String (hold, 0) + " / " + juce::String (release, 0) + " ms)");
         {
             // The learning pass sends the same as a fix, undoable.
-            suite::FixBus::reset();
             p->apvts.getParameter (Params::Duck::hold)->setValueNotifyingHost (0.0f);
             const auto seq = suite::FixBus::send (suite::Fix::KickFit);
             p->fixes->poll();

@@ -326,7 +326,7 @@ public:
         addNote ("Learning pass: play the whole song once");
         return suite::FixBus::send (suite::Fix::LearnStart);
     }
-    int barsHeard() const
+    int learnBarsHeard() const
     {
         int n = 0;
         for (const auto& w : heardBars) { auto v = w.load(); while (v) { n += (int) (v & 1u); v >>= 1; } }
@@ -337,7 +337,7 @@ public:
     {
         if (! learning.load()) return false;
         const auto m = getMap();
-        const auto atEnd = m.totalBars > 0 && lastHeardBar.load() >= m.totalBars && barsHeard() * 10 >= m.totalBars * 8;
+        const auto atEnd = m.totalBars > 0 && lastHeardBar.load() >= m.totalBars && learnBarsHeard() * 10 >= m.totalBars * 8;
         if (! force && ! atEnd) return false;
         learning.store (false);
         learnSeqs = { suite::FixBus::send (suite::Fix::KickFit), suite::FixBus::send (suite::Fix::PhaseFlip) };
