@@ -41,6 +41,15 @@ namespace suite::VocalBus
         shared().any.store (0);
     }
 
+    bool sings (int bar) noexcept
+    {
+        if (bar < 1 || bar > maxBars) return false;
+        const auto i = bar - 1;
+        return ((shared().words[i / 32].load() >> (i % 32)) & 1u) != 0;
+    }
+
+    bool any() noexcept { return shared().any.load() != 0; }
+
     std::vector<bool> read()
     {
         if (shared().any.load() == 0) return {};

@@ -101,6 +101,18 @@ int main (int argc, char** argv)
         head.ppq = 0.0;
         render (*p, 0.3, tone (440.0f), &audio, &head);
         check (channelRms (audio, 0, 0.14, 0.18) > 0.3f, "swing delays the off-step (still open at 160 ms)");
+
+        set (*p, Params::Gate::swing, 0.0f);
+        for (int i = 0; i < Params::numSteps; ++i) set (*p, Params::Gate::step (i), 1.0f);
+        set (*p, Params::Gate::pan, (float) Params::Gate::PanPingPong);
+        head.ppq = 0.0;
+        render (*p, 0.3, tone (440.0f), &audio, &head);
+        const auto l1 = channelRms (audio, 0, 0.03, 0.11), r1 = channelRms (audio, 1, 0.03, 0.11);
+        const auto l2 = channelRms (audio, 0, 0.16, 0.24), r2 = channelRms (audio, 1, 0.16, 0.24);
+        check (l1 > 0.34f && r1 < 0.1f && r2 > 0.34f && l2 < 0.1f,
+               "pan steps (ping-pong): step 1 on the left, step 2 on the right (" + juce::String (l1, 2) + "/" + juce::String (r1, 2)
+               + ", " + juce::String (l2, 2) + "/" + juce::String (r2, 2) + ")");
+        set (*p, Params::Gate::pan, 0.0f);
         p->setPlayHead (nullptr);
     }
 
@@ -342,6 +354,8 @@ int main (int argc, char** argv)
         render (*kickTrack, 4.0 * 4.0 * beat + 0.05, offbeatKick, nullptr, &head);   // 4 bars
         kickTrack->setPlayHead (nullptr);
         const auto& learned = kickTrack->kickLearner.patterns().bySection[(size_t) suite::KickPatternSet::anySection];
+        const auto bodyHz = kickTrack->kickLearner.patterns().bodyHz;
+        check (std::abs (bodyHz - 55.0f) < 5.0f, "the kick track also shares the kick's body pitch, for Azoth's impact (" + juce::String (bodyHz, 1) + " Hz)");
         bool positionsRight = learned.count == 4;
         for (int i = 0; positionsRight && i < 4; ++i)
             positionsRight = std::abs (learned.positions[(size_t) i] - (0.5f + (float) i)) < 0.03f;

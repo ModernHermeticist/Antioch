@@ -60,6 +60,9 @@ public:
     std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
     std::atomic<bool> ouroborosFound { false };
     std::atomic<float> tensionNow { 0.0f }, reverbWidthNow { 1.0f };   // tension width (tests and UI)
+    std::atomic<float> pumpNow { 1.0f };          // the reverb pump's lowest gain in the last block
+    std::atomic<bool> vocalMarksFound { false };  // Solve et Coagula has marked vocal bars
+    float reverbPump = 1.0f;
 
 private:
     juce::AudioParameterBool* boolParam (const juce::String& id);

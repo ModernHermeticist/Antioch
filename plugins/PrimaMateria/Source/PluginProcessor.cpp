@@ -179,6 +179,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto isKick = getRole() == 1;   // a kick-only bar before drops spares the kick
     const auto role = getRole();
     const auto breath = apvts.getRawParameterValue (pm::breathId)->load();
+    const auto sweep = apvts.getRawParameterValue (pm::sweepId)->load();
     const auto answer = (int) apvts.getRawParameterValue (pm::answerId)->load();
     const auto pump = apvts.getRawParameterValue (pm::pumpId)->load();
     const auto inputGain = juce::Decibels::decibelsToGain (apvts.getRawParameterValue (pm::inputGainId)->load());
@@ -257,6 +258,15 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 // Breath: a slow 8-bar swell in breakdowns and drops.
                 if (breath > 0.0f && (sec.type == T::Breakdown || sec.type == T::Drop) && target.levelDb > pm::offDb + 0.5f)
                     target.levelDb += 1.5f * breath * (float) std::sin (juce::MathConstants<double>::twoPi * intoQ / (8.0 * barQ));
+                // Breakdown sweep: a low-pass that opens slowly across the breakdown, fully open just before
+                // the build (from about 300 Hz at 100%), as if drawn by hand.
+                if (sweep > 0.0f && sec.type == T::Breakdown)
+                {
+                    const auto hi = std::min (target.highCut, 18000.0f);
+                    const auto startLog = std::log2 (hi) - sweep * std::log2 (hi / 300.0f);
+                    const auto p = (float) std::pow (juce::jlimit (0.0, 1.0, sec.progress (pos) / 0.9), 1.5);
+                    target.highCut = std::min (target.highCut, std::exp2 (startLog + p * (std::log2 (hi) - startLog)));
+                }
                 // Call and response: in breakdowns, the call leads bars 1-2 of every 4, the response bars 3-4.
                 if (answer != pm::answerOff && sec.type == T::Breakdown && target.levelDb > pm::offDb + 0.5f)
                 {
@@ -529,7 +539,7 @@ juce::StringArray PrimaMateriaProcessor::myRoleParamIds()
 {
     juce::StringArray ids;
     for (int c = 0; c < pm::numColumns; ++c) ids.addArray ({ pm::levelId (c), pm::lowCutId (c), pm::highCutId (c) });
-    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId });
+    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId, pm::sweepId });
     return ids;
 }
 

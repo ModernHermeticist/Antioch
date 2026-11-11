@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "KeyBus.h"
+#include "KickBus.h"
 #include "Music.h"
 #include "ChordBus.h"
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -50,6 +51,8 @@ namespace
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollToId), "Roll To", StringArray { "1/16", "1/32", "1/64" }, 1));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::rollCurveId), "Roll Speed-up", StringArray { "Steps", "Smooth", "Late" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::rollVelId), "Roll Start Velocity", NormalisableRange<float> (0.1f, 1.0f), 0.35f, percent));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::rollPitchSpeedId), "Roll Pitch Follows Speed", true));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::impactTuneId), "Impact Tuned to the Kick", true));
         return l;
     }
 
@@ -132,7 +135,12 @@ void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType p
         // Second and later drops hit harder (up to +50% at full "Bigger later drops").
         const auto boost = laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f;
         if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId) * boost, tuning (slotImpact, rootHz));
-        else impact.trigger (rootHz, value (impactId) * boost);
+        else
+        {
+            const auto hz = impactPitch (rootHz, value (impactTuneId) > 0.5f ? suite::KickBus::read().bodyHz : 0.0f, true);
+            lastImpactHz.store (hz);
+            impact.trigger (hz, value (impactId) * boost);
+        }
         const auto where = (int) value (tagWhereId);
         if (samplePlayers[slotTag].loaded() && (where == tagEveryDrop || (where == tagFirstDrop && ! laterDrop)))
         {
@@ -203,6 +211,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto preLift = value (preLiftId) > 0.5f;
     const auto rollFrom = (int) value (rollFromId), rollTo = (int) value (rollToId), rollCurve = (int) value (rollCurveId);
     const auto rollVel = value (rollVelId);
+    const auto rollPitchSpeed = value (rollPitchSpeedId) > 0.5f;
     suite::Progression progression;
     const auto followChords = value (riserChordsId) > 0.5f && suite::ChordBus::read (progression);
     const auto beatSamples = 1.0 / juce::jmax (1.0e-9, qPerSample);
@@ -311,7 +320,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                         if (crossed)
                         {
                             snares[(size_t) nextSnare].trigger (rollLevel * (rollVel + (1.0f - rollVel) * (float) p),
-                                                                std::exp2 (rollPitch * (float) p / 12.0f));
+                                                                std::exp2 (rollPitch * (float) rollPitchAmount (rollFrom, rollTo, rollCurve, p, rollPitchSpeed) / 12.0f));
+                            rollPitchNow.store (rollPitch * (float) rollPitchAmount (rollFrom, rollTo, rollCurve, p, rollPitchSpeed));
                             nextSnare = (nextSnare + 1) % (int) snares.size();
                             snareHits.fetch_add (1);
                         }

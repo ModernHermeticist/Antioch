@@ -60,6 +60,7 @@ namespace Params
         inline const juce::String freeze   { "rv_freeze" };        // hold the drop's last moment as a wash into breakdowns
         inline const juce::String freezeLevel { "rv_freezelvl" };
         inline const juce::String tension  { "rv_tension" };     // wider on tension chords (Correspondence's progression)
+        inline const juce::String pump     { "rv_pump" };        // the tail ducks to the shared kick pattern
         inline int freezeBars (int index) { static const int b[] = { 0, 1, 2, 4 }; return b[juce::jlimit (0, 3, index)]; }
 
         const juce::StringArray& shimmerIntervalNames();
@@ -85,6 +86,7 @@ namespace Params
         /** Auto-throw phrase length in bars for each choice (0 = off or section mode). */
         int autoBars (int index);
         constexpr int autoAtSectionEnds = 5;   // choice index: throw at the end of every Ouroboros section
+        constexpr int autoAtVocalEnds = 6;     // choice index: throw the end of every vocal phrase (Solve et Coagula's marks)
         /** Auto-throw window length in quarter notes for each choice. */
         double autoLengthQuarters (int index);
     }

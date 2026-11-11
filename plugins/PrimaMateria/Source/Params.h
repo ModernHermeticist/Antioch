@@ -18,7 +18,7 @@ namespace pm
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
     inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" },
                               carveBandId { "carve_band" }, carveDepthId { "carve_depth" },   // masking fix: a dip in one octave band
-                              breathId { "breath" }, answerId { "answer" }, pumpId { "pump" }, inputGainId { "input_gain" },
+                              breathId { "breath" }, answerId { "answer" }, pumpId { "pump" }, sweepId { "bd_sweep" }, inputGainId { "input_gain" },
                               autoStageId { "auto_stage" };   // keep the input at -18 dBFS RMS as you work
     enum Answer { answerOff = 0, answerCall, answerResponse };   // role: 0 = not set, k + 1 = roles()[k]
     inline const juce::String followId { "follow" }, morphId { "morph" }, rampId { "rampbuilds" }, gapId { "gap" }, laterOnId { "lateron" };
@@ -124,6 +124,7 @@ namespace pm
         l.add (std::make_unique<AudioParameterFloat> (id (breathId), "Breath", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
         l.add (std::make_unique<AudioParameterChoice> (id (answerId), "Call and Response", StringArray { "Off", "Call", "Response" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (id (pumpId), "Pump (Suite Kick)", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+        l.add (std::make_unique<AudioParameterFloat> (id (sweepId), "Breakdown Sweep", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
         l.add (std::make_unique<AudioParameterBool> (id (autoStageId), "Continuous Gain Staging", false));
         l.add (std::make_unique<AudioParameterFloat> (id (inputGainId), "Input Gain", NormalisableRange<float> (-24.0f, 24.0f), 0.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));

@@ -84,13 +84,13 @@ namespace Params
 
     namespace Throw
     {
-        static const StringArray autoNames { "Off", "Every 2 bars", "Every 4 bars", "Every 8 bars", "Every 16 bars", "At section ends" };
+        static const StringArray autoNames { "Off", "Every 2 bars", "Every 4 bars", "Every 8 bars", "Every 16 bars", "At section ends", "At vocal phrase ends" };
         static const StringArray autoLenNames { "Last 1/16", "Last 1/8", "Last beat", "Last 2 beats", "Last bar" };
 
         int autoBars (int index)
         {
-            static const int bars[] = { 0, 2, 4, 8, 16, 0 };   // "At section ends" (Ouroboros) has no fixed length
-            return bars[jlimit (0, 5, index)];
+            static const int bars[] = { 0, 2, 4, 8, 16, 0, 0 };   // section and vocal-phrase ends have no fixed length
+            return bars[jlimit (0, 6, index)];
         }
 
         double autoLengthQuarters (int index)
@@ -171,6 +171,7 @@ namespace Params
                                                                   juce::StringArray { "Off", "1 bar", "2 bars", "4 bars" }, 0));
         layout.add (floatParam (Verb::freezeLevel, "Reverb Freeze Level", { 0.0f, 1.0f }, 0.7f, percent()));
         layout.add (floatParam (Verb::tension, "Reverb Tension Width", { 0.0f, 1.0f }, 0.3f, percent()));
+        layout.add (floatParam (Verb::pump, "Reverb Pump", { 0.0f, 1.0f }, 0.0f, percent()));
 
         // ---- Throw ----
         layout.add (std::make_unique<AudioParameterBool> (id (Throw::on), "Throw", false));

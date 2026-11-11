@@ -1114,6 +1114,7 @@ namespace chords
         bool counter = true;          // a counter-melody wherever the full lead plays (SongPart::Counter)
         bool phraseVariation = true;  // the last bar of each 8-bar phrase (inside a section) turns around: bass bounces octaves, arp lifts
         bool climbLaterDrops = true;  // drop 2+ chords gain their top note an octave up
+        bool doubleFinalDrop = true;  // the last of several drops: the lead doubled an octave up, the bass a sub octave down
         float ghostNotes = 0.35f;     // in-between soft notes in bass and arp (0 = none), scaled by section energy
         bool leaveRoomForVocal = true;
         std::vector<bool> vocalBars;  // bars (index 0 = bar 1) the vocal sings in, from Solve et Coagula
@@ -1247,6 +1248,22 @@ namespace chords
             // Ghost notes in the bass and arp, more where the energy is higher.
             if (part == SongPart::Bass || part == SongPart::Arp)
                 section = addGhostNotes (section, startQ, endQ, patterns.ghostNotes * juce::jlimit (0.0f, 1.0f, map.energyOf (i)), i * 7 + (int) part);
+
+            // Final drop doubling: in the last of two or more drops, the lead gains an octave-up double
+            // (an octave down if that would go too high) and the bass a sub octave, so the end is the biggest.
+            if (patterns.doubleFinalDrop && i == map.lastDropIndex() && earlierSame > 0 && (part == SongPart::Lead || part == SongPart::Bass))
+            {
+                const auto count = section.size();
+                for (size_t k = 0; k < count; ++k)
+                {
+                    auto d = section[k];
+                    if (part == SongPart::Lead) d.pitch += d.pitch + 12 <= 96 ? 12 : -12;
+                    else if (d.pitch - 12 >= 24) d.pitch -= 12;
+                    else continue;
+                    d.velocity = juce::jmax (1, d.velocity - 15);
+                    section.push_back (d);
+                }
+            }
 
             // Room for the vocal: where it sings, the lead keeps only its beat-1 and beat-3 notes
             // (softer), and the harmony and counter-melody step out.

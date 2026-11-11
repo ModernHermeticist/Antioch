@@ -49,6 +49,7 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
     scTrigger.prepare (sampleRate);
     kick.prepare (sampleRate);
     kickLearner.prepare (sampleRate);
+    ownKick.prepare (sampleRate);
     outGain.reset (sampleRate, 0.03);
     outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (value (Params::output)));
     position = 0.0;
@@ -99,6 +100,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             }
         s.swing = juce::jmax (scenes.plain (sSwing), suiteSwing.load());   // Correspondence's groove, unless the gate swings more
         s.stereoOffset = (int) value (Gate::stereo);
+        s.panMode = (int) value (Gate::pan);
         s.filter = scenes.plain (sGateFilter);
         s.res = value (Gate::res);
         gate.update (s);
@@ -190,7 +192,11 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             typeHere = sec.valid ? (int) sec.type : -1;
         }
         if (sharing)
+        {
             kickLearner.process (0.5f * (l + r), position, barQ, typeHere, threshold);
+            ownKick.process (0.5f * (l + r), threshold);
+            if (n == 0) kickLearner.setBodyHz (ownKick.hits() >= kicksNeeded ? ownKick.pitchHz() : 0.0f);
+        }
 
         if (gateEnabled)
         {
@@ -306,7 +312,9 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     {
         s.flags |= suite::Status::kickSource;
         if (kickLearner.patterns().valid)
+        {
             suite::KickBus::publish (kickLearner.patterns());   // keep the shared pattern fresh while stopped
+        }
     }
     s.metrics[0] = (float) source;
     float swing = 0.0f;

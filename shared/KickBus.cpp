@@ -20,7 +20,7 @@ namespace suite::KickBus
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_kickbus_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_kickbus_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;

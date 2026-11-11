@@ -76,6 +76,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterBool> (id (songCounter), "Counter-Melody", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songPhrase), "Phrase Variation", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songClimb), "Climbing Chords in Later Drops", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songDouble), "Double the Final Drop", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songGhost), "Ghost Notes", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));
@@ -135,6 +136,7 @@ namespace Params
         p.counter = state.getRawParameterValue (songCounter)->load() > 0.5f;
         p.phraseVariation = state.getRawParameterValue (songPhrase)->load() > 0.5f;
         p.climbLaterDrops = state.getRawParameterValue (songClimb)->load() > 0.5f;
+        p.doubleFinalDrop = state.getRawParameterValue (songDouble)->load() > 0.5f;
         p.ghostNotes = state.getRawParameterValue (songGhost)->load() > 0.5f ? 0.35f : 0.0f;
         p.leaveRoomForVocal = state.getRawParameterValue (songVocalRoom)->load() > 0.5f;
         p.answerVocal = p.leaveRoomForVocal;   // lead and vocal take turns

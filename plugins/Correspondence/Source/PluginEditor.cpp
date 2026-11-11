@@ -366,6 +366,8 @@ namespace
             for (const auto& [ptr, att, text, pid, tip] : {
                      std::tuple<std::unique_ptr<juce::ToggleButton>*, std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>*, const char*, juce::String, const char*>
                      { &climb, &climbAttachment, "Climbing chords in drop 2+", Params::songClimb, "Later drops: each chord gains its top note an octave up" },
+                     { &doubling, &doublingAttachment, "Double the final drop", Params::songDouble,
+                       "The last of several drops: the lead doubled an octave up and the bass a sub octave down" },
                      { &ghost, &ghostAttachment, "Ghost notes", Params::songGhost, "Soft in-between 16ths in the bass and arp, more where the energy is higher" },
                      { &fills, &fillsAttachment, "Drum fills", Params::songFills, "A SONG FILLS clip (General MIDI drums) for every section change and phrase end" },
                      { &vocalRoom, &vocalRoomAttachment, "Lead and vocal take turns", Params::songVocalRoom,
@@ -445,8 +447,9 @@ namespace
             }
             {
                 auto more = r.removeFromBottom (28);
-                const auto w = more.getWidth() / 4;
+                const auto w = more.getWidth() / 5;
                 climb->setBounds (more.removeFromLeft (w));
+                doubling->setBounds (more.removeFromLeft (w));
                 ghost->setBounds (more.removeFromLeft (w));
                 fills->setBounds (more.removeFromLeft (w));
                 vocalRoom->setBounds (more);
@@ -474,8 +477,8 @@ namespace
         std::vector<std::unique_ptr<juce::ComboBox>> boxes;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> attachments;
         juce::Label hint;
-        std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase, climb, ghost, fills, vocalRoom;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> climbAttachment, ghostAttachment, fillsAttachment, vocalRoomAttachment;
+        std::unique_ptr<juce::ToggleButton> lift, vary, counter, phrase, climb, doubling, ghost, fills, vocalRoom;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> climbAttachment, doublingAttachment, ghostAttachment, fillsAttachment, vocalRoomAttachment;
         std::unique_ptr<juce::ComboBox> leadBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> leadAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liftAttachment, varyAttachment, counterAttachment, phraseAttachment;

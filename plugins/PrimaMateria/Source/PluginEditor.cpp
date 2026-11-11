@@ -52,15 +52,17 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
 
     breath = std::make_unique<Knob> (p.apvts, pm::breathId, "Breath", accent);
     pump = std::make_unique<Knob> (p.apvts, pm::pumpId, "Pump", Colours::ember);
+    sweep = std::make_unique<Knob> (p.apvts, pm::sweepId, "BD sweep", accent);
     inputGain = std::make_unique<Knob> (p.apvts, pm::inputGainId, "Input gain", Colours::text);
     answer = std::make_unique<Choice> (p.apvts, pm::answerId, "Call / response");
-    for (auto* k : { breath.get(), pump.get(), inputGain.get() })
+    for (auto* k : { breath.get(), pump.get(), sweep.get(), inputGain.get() })
     {
         k->maxHeight = 46;
         addAndMakeVisible (*k);
     }
     addAndMakeVisible (*answer);
     breath->slider.setTooltip ("A slow 8-bar swell in breakdowns and drops, so long chords feel alive");
+    sweep->slider.setTooltip ("Breakdown sweep: a low-pass that opens slowly across each breakdown, fully open just before the build");
     pump->slider.setTooltip ("Ducks this track to the kick pattern a Kybalion shares (Share kick), no routing needed");
     gainStageButton.setTooltip ("Sets every Prima Materia's Input gain so each track arrives at -18 dBFS RMS (play the song first); undo in Mentalism's History");
     gainStageButton.onClick = [] { suite::FixBus::send (suite::Fix::GainStage); };
@@ -185,13 +187,14 @@ void PrimaMateriaEditor::resized()
         auto row = bounds.removeFromTop (62);
         breath->setBounds (row.removeFromLeft (150));
         pump->setBounds (row.removeFromLeft (150));
-        answer->setBounds (row.removeFromLeft (180));
+        sweep->setBounds (row.removeFromLeft (130));
+        answer->setBounds (row.removeFromLeft (170));
         row.removeFromLeft (20);
         inputGain->setBounds (row.removeFromLeft (150));
-        inputLabel.setBounds (row.removeFromLeft (180));
+        inputLabel.setBounds (row.removeFromLeft (150));
         gainStageButton.setBounds (row.removeFromLeft (190).withSizeKeepingCentre (180, 30));
         autoStage->setBounds (row.removeFromLeft (140).withSizeKeepingCentre (130, 30));
-        for (auto* k : { breath.get(), pump.get(), inputGain.get() })
+        for (auto* k : { breath.get(), pump.get(), sweep.get(), inputGain.get() })
             k->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
     }
     status.setBounds (bounds.removeFromBottom (30));

@@ -176,6 +176,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       stereo (p.apvts, Params::Gate::stereo, "Stereo offset", Colours::verdigris),
       filter (p.apvts, Params::Gate::filter, "Filter", Colours::ember),
       res (p.apvts, Params::Gate::res, "Resonance", Colours::ember),
+      panSteps (p.apvts, Params::Gate::pan, "Pan steps"),
       duckView (p),
       source (p.apvts, Params::Duck::source, "Trigger"),
       duckRate (p.apvts, Params::Duck::rate, "Every"),
@@ -235,7 +236,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     sourceStatus.setJustificationType (juce::Justification::centredLeft);
 
     for (auto* c : std::initializer_list<juce::Component*> { &grid, &patternBox, &randomButton, &gateRate, &length, &attack,
-                                                             &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle, &chordFollow })
+                                                             &release, &depth, &swing, &stereo, &panSteps, &filter, &res, &fills, &fillStyle, &chordFollow })
         gatePanel.addAndMakeVisible (c);
     dynamicGate = std::make_unique<suite::ui::Toggle> (p.apvts, Params::Gate::dynamic, "Dynamic gate", Colours::amethyst);
     dynamicGate->setTooltip ("With Ouroboros: each drop starts the gate at 60% of its depth and deepens to the full depth by its end; "
@@ -406,7 +407,7 @@ void KybalionEditor::resized()
         grid.setBounds (top);
 
         auto shape = gatePanel.getLocalBounds().withTrimmedTop (310).reduced (10, 6).withTrimmedTop (12);
-        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle, &chordFollow });
+        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &panSteps, &filter, &res, &fills, &fillStyle, &chordFollow });
     }
 
     // ---- Polarity ----

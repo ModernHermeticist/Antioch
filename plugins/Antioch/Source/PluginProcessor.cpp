@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 #include "ChordBus.h"
+#include "KickBus.h"
+#include "VocalBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "Music.h"
@@ -202,6 +204,14 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const auto haveSections = sections.refresh();
     ouroborosFound.store (haveSections);
     const auto sectionThrows = autoIndex == Throw::autoAtSectionEnds && haveSections && host.playing && host.hasPpq;
+    const auto vocalThrows = autoIndex == Throw::autoAtVocalEnds && host.playing && host.hasPpq && suite::VocalBus::any();
+    vocalMarksFound.store (suite::VocalBus::any());
+    // Reverb pump: the tail ducks to the kick pattern a Kybalion shares (no routing).
+    const auto pumpDepth = value (Verb::pump);
+    const auto kickPattern = pumpDepth > 0.0f && host.playing && host.hasPpq ? suite::KickBus::read() : suite::KickPatternSet {};
+    const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
+    const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.003f * sr));
+    float minPump = 1.0f;
     const auto barQ = host.barQuarters();
     const auto phraseQ = autoBars * host.barQuarters();
     const auto lengthQ = Throw::autoLengthQuarters (choiceParam (Throw::autoLen)->getIndex());
@@ -268,6 +278,15 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             const auto sec = sections.locate (posQ, barQ);
             gateOpen = sec.valid && posQ >= sec.endQ - juce::jmin (windowQ, sec.endQ - sec.startQ);
         }
+        if (vocalThrows && ! gateOpen)
+        {
+            // Throw the last words of every vocal phrase: the end of a sung bar followed by one
+            // the vocal doesn't sing in (as Solve et Coagula marked them).
+            const auto posQ = host.ppq + qPerSample * n;
+            const auto bar = (int) std::floor (posQ / barQ + 1.0e-9) + 1;
+            const auto barEnd = bar * barQ;
+            gateOpen = posQ >= barEnd - juce::jmin (windowQ, barQ) && suite::VocalBus::sings (bar) && ! suite::VocalBus::sings (bar + 1);
+        }
         float tL, tR;
         throwDelay.process (inL, inR, gateOpen, tL, tR);
         const auto tg = throwGain.getNextValue() * tDuck;
@@ -277,7 +296,24 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         const auto es = echoSend.getNextValue(), ts = throwSend.getNextValue();
         float rL, rR;
         reverb.process (inL + es * eL + ts * tL, inR + es * eR + ts * tR, vDuck, rL, rR);
-        const auto vg = verbGain.getNextValue();
+        auto vg = verbGain.getNextValue();
+        {
+            float pumpTarget = 1.0f;
+            if (kickPattern.valid)
+            {
+                const auto posQ = host.ppq + qPerSample * n;
+                auto phase = std::fmod (posQ, barQ);
+                if (phase < 0.0) phase += barQ;
+                int type = -1;
+                if (haveSections)
+                    if (const auto sec = sections.locate (posQ, barQ); sec.valid) type = (int) sec.type;
+                const auto ms = kickPattern.msSinceHit (type, phase, barQ, msPerQ);
+                if (ms < 1.0e8f) pumpTarget = 1.0f - pumpDepth * 0.85f * std::exp (-ms / 140.0f);
+            }
+            reverbPump += (pumpTarget < reverbPump ? 0.5f : pumpRelease) * (pumpTarget - reverbPump);
+            minPump = juce::jmin (minPump, reverbPump);
+            vg *= reverbPump;
+        }
 
         // Reverb freeze: entering a breakdown, the last half second of reverb holds as a wash.
         float fL = 0.0f, fR = 0.0f;
@@ -317,6 +353,7 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     }
 
     throwGate.store (throwDelay.gateLevel());
+    pumpNow.store (minPump);
     duckAmount.store (maxDuck);
 }
 

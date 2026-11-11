@@ -71,6 +71,8 @@ public:
 
     /** On the kick track: learns the kick pattern and shares it (Share kick). */
     suite::KickLearner kickLearner;
+    /** On the kick track: its own kick's length and body pitch, shared with the pattern (Azoth tunes its impact to it). */
+    KickAnalyser ownKick;
     std::atomic<bool> suiteKickAvailable { false };   // a shared pattern is being received
     SuiteStatus suiteStatus() override;
     std::atomic<float> suiteSwing { 0.0f };

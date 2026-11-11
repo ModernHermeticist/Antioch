@@ -26,6 +26,20 @@ namespace Params
         inline const juce::String filter   { "g_filter" };
         inline const juce::String res      { "g_res" };
         inline const juce::String dynamic  { "g_dynamic" };   // the gate deepens through each drop (with Ouroboros)
+        inline const juce::String pan      { "g_pan" };       // steps move around the stereo field: off, ping-pong, L-C-R, bounce
+        enum PanMode { PanOff = 0, PanPingPong, PanLCR, PanBounce };
+        /** Where step `i` sits (-1 left .. +1 right) for a pan mode (at full width). */
+        inline float stepPan (int mode, int i)
+        {
+            static const float lcr[] = { -1.0f, 0.0f, 1.0f }, bounce[] = { -1.0f, 0.0f, 1.0f, 0.0f };
+            switch (mode)
+            {
+                case PanPingPong: return i % 2 == 0 ? -1.0f : 1.0f;
+                case PanLCR:      return lcr[i % 3];
+                case PanBounce:   return bounce[i % 4];
+                default:          return 0.0f;
+            }
+        }
 
         inline juce::String step (int i) { return "g_step" + juce::String (i + 1); }
         double rateQuarters (int index);

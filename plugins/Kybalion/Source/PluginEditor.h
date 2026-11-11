@@ -69,6 +69,7 @@ private:
     suite::ui::Choice gateRate, fills, fillStyle, chordFollow;
     std::unique_ptr<suite::ui::Toggle> dynamicGate;
     suite::ui::Knob length, attack, release, depth, swing, stereo, filter, res;
+    suite::ui::Choice panSteps;
 
     // Polarity
     juce::Component duckPanel;

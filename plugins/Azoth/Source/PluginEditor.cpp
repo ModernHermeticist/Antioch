@@ -33,6 +33,8 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       buildFilter (p.apvts, AzothProcessor::buildFilterId, "Build filter", sectionColour (suite::SectionType::Build)),
       preLift (p.apvts, AzothProcessor::preLiftId, "Key-change pre-lift", sectionColour (suite::SectionType::Drop)),
       riserChords (p.apvts, AzothProcessor::riserChordsId, "Riser follows chords", sectionColour (suite::SectionType::Build)),
+      rollPitchSpeed (p.apvts, AzothProcessor::rollPitchSpeedId, "Roll pitch with speed", sectionColour (suite::SectionType::Build)),
+      impactTune (p.apvts, AzothProcessor::impactTuneId, "Impact on the kick", suite::ui::sectionColour (suite::SectionType::Drop)),
       rollFrom (p.apvts, AzothProcessor::rollFromId, "Roll from"),
       rollTo (p.apvts, AzothProcessor::rollToId, "Roll to"),
       rollCurve (p.apvts, AzothProcessor::rollCurveId, "Speed-up"),
@@ -54,7 +56,7 @@ AzothEditor::AzothEditor (AzothProcessor& p)
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
                                                              &riser, &trackRiser, &riserRange, &riserNote,
                                                              &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote, &preLift,
-                                                             &riserChords, &rollFrom, &rollTo, &rollCurve, &rollVel })
+                                                             &riserChords, &rollPitchSpeed, &impactTune, &rollFrom, &rollTo, &rollCurve, &rollVel })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
     reverseNote.setJustificationType (juce::Justification::centredLeft);
@@ -182,6 +184,7 @@ void AzothEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
     auto header = bounds.removeFromTop (48);
     follow.setBounds (header.removeFromRight (180).reduced (4, 8));
+    impactTune.setBounds (header.removeFromRight (180).reduced (4, 8));
     auto info = bounds.removeFromTop (54);
     next.setBounds (info.removeFromTop (30));
     status.setBounds (info);
@@ -212,7 +215,11 @@ void AzothEditor::resized()
     riser.setBounds (ri.removeFromLeft (120));
     riserRange.setBounds (ri.removeFromLeft (160));
     trackRiser.setBounds (ri.removeFromLeft (120));
-    riserChords.setBounds (ri.removeFromLeft (170).withSizeKeepingCentre (160, 30));
+    {
+        auto col = ri.removeFromLeft (170);
+        riserChords.setBounds (col.removeFromTop (col.getHeight() / 2).withSizeKeepingCentre (160, 30));
+        rollPitchSpeed.setBounds (col.withSizeKeepingCentre (160, 30));
+    }
     rollFrom.setBounds (ri.removeFromLeft (90));
     rollTo.setBounds (ri.removeFromLeft (90));
     rollCurve.setBounds (ri.removeFromLeft (110));

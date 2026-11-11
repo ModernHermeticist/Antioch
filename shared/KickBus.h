@@ -28,6 +28,7 @@ namespace suite
         static constexpr int anySection = (int) SectionType::count;   // also used when there's no map
         bool valid = false;
         std::array<KickPattern, (size_t) SectionType::count + 1> bySection {};
+        float bodyHz = 0.0f;   // the kick's body pitch, measured on the kick track (0 = not known yet)
 
         /** The pattern to duck to in section `type` (-1 = unknown): that section's if it was heard, else any. */
         const KickPattern* patternFor (int type) const noexcept
@@ -105,6 +106,9 @@ namespace suite
 
         const KickPatternSet& patterns() const noexcept { return set; }
         int barsLearned() const noexcept { return learned; }
+
+        /** The kick's measured body pitch, shared with the pattern from the next bar on. */
+        void setBodyHz (float hz) noexcept { set.bodyHz = hz; }
 
     private:
         void finishBar() noexcept

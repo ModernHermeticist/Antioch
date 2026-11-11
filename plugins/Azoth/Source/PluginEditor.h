@@ -29,7 +29,7 @@ private:
     juce::Label status, next;
     suite::ui::Choice dropFx, dropFxLen, buildShape;
     suite::ui::Knob buildFilter;
-    suite::ui::Toggle preLift, riserChords;
+    suite::ui::Toggle preLift, riserChords, rollPitchSpeed, impactTune;
     suite::ui::Choice rollFrom, rollTo, rollCurve;
     suite::ui::Knob rollVel;
     juce::TextButton samplesButton { "Samples and presets..." };

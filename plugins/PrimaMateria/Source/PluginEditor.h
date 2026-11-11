@@ -23,7 +23,7 @@ private:
     suite::ui::Choice morph, gap;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;
-    std::unique_ptr<suite::ui::Knob> trim, breath, pump, inputGain;
+    std::unique_ptr<suite::ui::Knob> trim, breath, pump, sweep, inputGain;
     std::unique_ptr<suite::ui::Choice> answer;
     juce::TextButton gainStageButton { "Gain-stage all tracks" };
     std::unique_ptr<suite::ui::Toggle> autoStage;

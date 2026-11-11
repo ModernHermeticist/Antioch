@@ -1,6 +1,7 @@
 // Offline tests for Azoth. Usage: AzothTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "KickBus.h"
 #include "KeyBus.h"
 #include "TestUtils.h"
 #include "ChordBus.h"
@@ -547,12 +548,49 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Impact tuned to the kick");
+    {
+        check (AzothProcessor::impactPitch (55.0f, 0.0f, true) == 55.0f && AzothProcessor::impactPitch (55.0f, 62.0f, false) == 55.0f,
+               "without a shared kick pitch (or with it off) the impact lands on the root");
+        check (std::abs (AzothProcessor::impactPitch (55.0f, 124.0f, true) - 62.0f) < 0.01f, "a kick body at 124 Hz puts the impact on 62 Hz, under it");
+        auto drop = [] (float kickHz, bool follow)
+        {
+            suite::SectionBus::publish (testMap());
+            suite::KickPatternSet kp;
+            kp.valid = true;
+            kp.bodyHz = kickHz;
+            auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
+            any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
+            suite::KickBus::publish (kp);
+            auto p = quiet();
+            set (*p, AzothProcessor::impactId, 1.0f);
+            set (*p, AzothProcessor::impactTuneId, follow ? 1.0f : 0.0f);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> audio;
+            render (*p, 13.5, {}, &audio, &head);
+            p->setPlayHead (nullptr);
+            suite::KickBus::withdraw();
+            return std::make_pair (p->lastImpactHz.load(), peakFrequency (audio, 30.0f, 100.0f, 12.2, 13.2));
+        };
+        const auto [tunedHz, tunedPeak] = drop (64.0f, true);
+        const auto [rootHz, rootPeak] = drop (64.0f, false);
+        check (std::abs (tunedHz - 64.0f) < 0.01f && std::abs (tunedPeak - 64.0f) < 3.0f && std::abs (rootPeak - rootHz) < 3.0f && std::abs (rootHz - 64.0f) > 5.0f,
+               "the drop's impact rings at the kick's pitch (" + juce::String (tunedPeak, 1) + " Hz), not the root (" + juce::String (rootPeak, 1) + " Hz)");
+    }
+
     section ("Riser follows the chords; roll designer");
     {
         check (AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.1) == 1.0 && AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.6) == 0.25
                    && AzothProcessor::rollRate (0, 1, AzothProcessor::rcSteps, 0.9) == 0.125, "the default roll is the classic 1/4, 1/8, 1/16, 1/32 in four steps");
         check (AzothProcessor::rollRate (1, 2, AzothProcessor::rcSteps, 0.95) == 0.0625 && AzothProcessor::rollRate (1, 2, AzothProcessor::rcSteps, 0.1) == 0.5,
                "from 1/8 to 1/64");
+        check (AzothProcessor::rollPitchAmount (0, 1, AzothProcessor::rcSteps, 0.1, true) == 0.0
+                   && std::abs (AzothProcessor::rollPitchAmount (0, 1, AzothProcessor::rcSteps, 0.6, true) - 2.0 / 3.0) < 1.0e-9
+                   && AzothProcessor::rollPitchAmount (0, 1, AzothProcessor::rcSteps, 0.9, true) == 1.0
+                   && AzothProcessor::rollPitchAmount (0, 1, AzothProcessor::rcSteps, 0.6, false) == 0.6,
+               "the roll's pitch steps up with its speed (or rises steadily when that's off)");
         const auto smoothMid = AzothProcessor::rollRate (0, 1, AzothProcessor::rcSmooth, 0.5);
         check (smoothMid > 0.3 && smoothMid < 0.4 && AzothProcessor::rollRate (0, 1, AzothProcessor::rcLate, 0.6) == 0.5,
                "smooth glides between the rates; late stays slow for longer");

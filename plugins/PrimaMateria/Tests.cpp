@@ -298,6 +298,16 @@ int main (int argc, char** argv)
         check (rmsBetween (open, 4.02, 4.3) < 0.3f * rmsBetween (open, 6.0, 7.0), "filter opening: the drop starts dark and opens over the bar");
 
         const std::vector<std::pair<int, T>> longBreakdown { { 1, T::Breakdown } };
+        {
+            const auto swept = run (0, longBreakdown, 8, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::sweepId, 1.0f); }, 3000.0f, 16.0);
+            const auto plain = run (0, longBreakdown, 8, 0, {}, 3000.0f, 16.0);
+            const auto early = rmsBetween (swept, 0.5, 1.5) / rmsBetween (plain, 0.5, 1.5);
+            const auto middle = rmsBetween (swept, 7.5, 8.5) / rmsBetween (plain, 7.5, 8.5);
+            const auto late = rmsBetween (swept, 15.0, 15.8) / rmsBetween (plain, 15.0, 15.8);
+            check (early < 0.05f && middle > early * 2.0f && middle < 0.9f && late > 0.95f,
+                   "breakdown sweep: a 3 kHz tone starts filtered away (" + juce::String (early, 3) + "), opens through the middle ("
+                   + juce::String (middle, 2) + ") and is fully open before the end (" + juce::String (late, 2) + ")");
+        }
         const auto breath = run (0, longBreakdown, 8, 0, [] (PrimaMateriaProcessor& p) { set (p, pm::breathId, 1.0f); }, 440.0f, 14.0);
         const auto swell = juce::Decibels::gainToDecibels (rmsBetween (breath, 3.6, 4.4) / rmsBetween (breath, 11.6, 12.4));
         check (swell > 2.5f && swell < 3.5f, "breath: an 8-bar swell, 3 dB from peak to trough (" + juce::String (swell, 2) + " dB)");

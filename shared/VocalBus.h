@@ -15,4 +15,8 @@ namespace suite::VocalBus
     void clear() noexcept;
     /** Bars with vocal (index 0 = bar 1); empty if nothing has been marked. */
     std::vector<bool> read();
+    /** True if bar (1-based) was marked as sung in (no allocation: safe on the audio thread). */
+    bool sings (int bar) noexcept;
+    /** True if anything has been marked. */
+    bool any() noexcept;
 }

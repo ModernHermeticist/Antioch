@@ -18,6 +18,7 @@ public:
         double stepQ = 0.25;
         float length = 0.6f, attackMs = 2.0f, releaseMs = 15.0f, depth = 1.0f, swing = 0.0f;
         int stereoOffset = 0;
+        int panMode = 0;            // Params::Gate::PanMode
         float filter = 0.0f, res = 0.25f;
     };
 
@@ -32,6 +33,7 @@ public:
     {
         s = newSettings;
         attackCoeff  = 1.0f - std::exp (-1.0f / (juce::jmax (0.1f, s.attackMs)  * 0.001f * sr));
+        panCoeff = 1.0f - std::exp (-1.0f / (0.004f * sr));   // 4 ms: no clicks as steps change sides
         releaseCoeff = 1.0f - std::exp (-1.0f / (juce::jmax (0.1f, s.releaseMs) * 0.001f * sr));
     }
 
@@ -79,6 +81,9 @@ public:
         int step; double phase;
         locate (posQ, step, phase);
         currentStep = step;
+        // Pan steps: each step sits somewhere in the stereo field (balance law: the centre stays at unity).
+        const auto panTarget = s.panMode != 0 && fill == NoFill ? 0.8f * Params::Gate::stepPan (s.panMode, step) : 0.0f;
+        pan += panCoeff * (panTarget - pan);
 
         float* ch[2] = { &left, &right };
         for (size_t c = 0; c < 2; ++c)
@@ -97,7 +102,8 @@ public:
                 filters[c].set (cutoff, 0.7f + 5.0f * s.res, sr);
                 x = filters[c].lowpass (x);
             }
-            *ch[c] = x * (1.0f - s.depth * (1.0f - env[c])) * (1.0f + 0.26f * accent);
+            const auto balance = c == 0 ? juce::jmin (1.0f, 1.0f - pan) : juce::jmin (1.0f, 1.0f + pan);
+            *ch[c] = x * (1.0f - s.depth * (1.0f - env[c])) * (1.0f + 0.26f * accent) * balance;
         }
     }
 
@@ -108,7 +114,7 @@ private:
     Settings s;
     std::array<float, 2> env { 1.0f, 1.0f };
     std::array<suite::Svf, 2> filters;
-    float sr = 44100.0f, attackCoeff = 0.1f, releaseCoeff = 0.01f;
+    float sr = 44100.0f, attackCoeff = 0.1f, releaseCoeff = 0.01f, panCoeff = 0.01f, pan = 0.0f;
     int currentStep = 0;
 };
 

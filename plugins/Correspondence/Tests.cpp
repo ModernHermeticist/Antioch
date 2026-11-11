@@ -430,6 +430,7 @@ int main (int argc, char** argv)
         map.sections[1] = { 5, suite::SectionType::Breakdown };
         map.sections[2] = { 9, suite::SectionType::Drop };
         chords::SongPatterns patterns;
+        patterns.doubleFinalDrop = false;   // compared note for note with the harmony (doubling has its own test)
         const auto lead = chords::songClip (s, map, patterns, chords::SongPart::Lead);
         std::vector<chords::Note> first, second;
         for (const auto& n : lead) { if (n.start < 16.0) first.push_back (n); else if (n.start >= 32.0) second.push_back (n); }
@@ -800,6 +801,42 @@ int main (int argc, char** argv)
                    && ! prog.isTension (0) && prog.isTension (1) && ! prog.isTension (2),
                "the progression is shared with the suite: i VI III VII, with VI and VII as tension chords");
         suite::ChordBus::withdraw();
+    }
+
+    section ("Doubling the final drop");
+    {
+        auto s = aMinor();
+        suite::SectionMap map;   // Drop 1-8, Breakdown 9-16, Drop 17-24
+        map.totalBars = 24; map.count = 3;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 9, suite::SectionType::Breakdown };
+        map.sections[2] = { 17, suite::SectionType::Drop };
+        chords::SongPatterns p;
+        p.ghostNotes = 0.0f;
+        auto count = [] (const std::vector<chords::Note>& v, double a, double b) { int c = 0; for (auto& n : v) c += n.start >= a && n.start < b; return c; };
+        auto lowest = [] (const std::vector<chords::Note>& v, double a, double b) { int lo = 127; for (auto& n : v) if (n.start >= a && n.start < b) lo = std::min (lo, n.pitch); return lo; };
+        const auto lead = chords::songClip (s, map, p, chords::SongPart::Lead), bass = chords::songClip (s, map, p, chords::SongPart::Bass);
+        p.doubleFinalDrop = false;
+        const auto leadOff = chords::songClip (s, map, p, chords::SongPart::Lead), bassOff = chords::songClip (s, map, p, chords::SongPart::Bass);
+        check (count (lead, 64.0, 96.0) == 2 * count (leadOff, 64.0, 96.0) && count (lead, 0.0, 32.0) == count (leadOff, 0.0, 32.0),
+               "the final drop's lead is doubled (" + juce::String (count (leadOff, 64.0, 96.0)) + " -> " + juce::String (count (lead, 64.0, 96.0))
+               + " notes); the first drop is untouched");
+        bool octaves = true;
+        for (auto& n : leadOff)
+            if (n.start >= 64.0)
+            {
+                bool partner = false;
+                for (auto& m : lead) partner = partner || (m.start == n.start && std::abs (m.pitch - n.pitch) == 12);
+                octaves = octaves && partner;
+            }
+        check (octaves, "every double is an octave from its note");
+        check (lowest (bass, 64.0, 96.0) == lowest (bassOff, 64.0, 96.0) - 12 && count (bass, 0.0, 32.0) == count (bassOff, 0.0, 32.0),
+               "and the bass gains a sub octave there");
+        chords::SongPatterns single;
+        suite::SectionMap one = map;
+        one.count = 2; one.totalBars = 16;
+        check (chords::songClip (s, one, single, chords::SongPart::Lead).size() == chords::songClip (s, one, p, chords::SongPart::Lead).size(),
+               "a song with one drop is left alone");
     }
 
     section ("Climbing chords, ghost notes, drum fills, room for the vocal");

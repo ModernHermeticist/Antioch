@@ -52,7 +52,8 @@ public:
         laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" },
         dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" },
         preLiftId { "prelift" }, tuneSamplesId { "tunesamples" }, tagWhereId { "tagwhere" },
-        riserChordsId { "riserchords" }, rollFromId { "rollfrom" }, rollToId { "rollto" }, rollCurveId { "rollcurve" }, rollVelId { "rollvel" };
+        riserChordsId { "riserchords" }, rollFromId { "rollfrom" }, rollToId { "rollto" }, rollCurveId { "rollcurve" }, rollVelId { "rollvel" },
+        rollPitchSpeedId { "rollpitchspeed" }, impactTuneId { "impacttune" };
     enum RollCurve { rcSteps, rcSmooth, rcLate };
     /** The snare roll's note length (quarters) at progress `p` through it. */
     static double rollRate (int from, int to, int curve, double p)
@@ -65,6 +66,26 @@ public:
         const auto k = juce::jmin (stages, (int) std::floor (pc * (stages + 1)));
         return startRate / std::exp2 ((double) k);
     }
+    /** How far through the roll's pitch rise it is (0..1): with the build (steady), or in step with
+        the roll's speed, so the pitch jumps each time the roll speeds up. */
+    static double rollPitchAmount (int from, int to, int curve, double p, bool followSpeed)
+    {
+        if (! followSpeed) return p;
+        const auto startRate = from == 0 ? 1.0 : 0.5;
+        const auto endRate = to == 0 ? 0.25 : to == 1 ? 0.125 : 0.0625;
+        return juce::jlimit (0.0, 1.0, std::log2 (startRate / rollRate (from, to, curve, p)) / std::log2 (startRate / endRate));
+    }
+    /** The impact's pitch: the song's root, or the kick's own body pitch (shared by a Kybalion on
+        the kick track), folded into 35-90 Hz, so the impact lands on the kick instead of against it. */
+    static float impactPitch (float rootHz, float kickHz, bool followKick)
+    {
+        if (! followKick || kickHz < 25.0f || kickHz > 400.0f) return rootHz;
+        auto hz = kickHz;
+        while (hz > 90.0f) hz *= 0.5f;
+        while (hz < 35.0f) hz *= 2.0f;
+        return hz;
+    }
+    std::atomic<float> lastImpactHz { 0.0f };
     enum DropFx { dfOff, dfTapeStop, dfStutter };
     enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
     static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }
@@ -115,6 +136,7 @@ public:
 
     // For the UI and tests
     std::atomic<int> eventsFired { 0 }, snareHits { 0 };
+    std::atomic<float> rollPitchNow { 0.0f };   // semitones the last roll hit was raised
     std::atomic<float> lastImpactLevel { 0.0f };
     std::atomic<bool> mapAvailable { false };
     std::atomic<float> lastRise { -1.0f };   // riser progress, for tests and the UI

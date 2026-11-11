@@ -5,6 +5,8 @@
 #include "SectionBus.h"
 #include "TestUtils.h"
 #include "ChordBus.h"
+#include "KickBus.h"
+#include "VocalBus.h"
 
 using namespace suite::test;
 
@@ -355,6 +357,78 @@ int main (int argc, char** argv)
         suite::ChordBus::withdraw();
         p->setPlayHead (nullptr);
         check (std::abs (home - 1.0f) < 0.02f && away > 1.45f, "the reverb opens out on the v chord (" + juce::String (home, 2) + " -> " + juce::String (away, 2) + ")");
+    }
+
+    section ("Reverb pumps with the shared kick");
+    {
+        auto noise = [] (juce::Random& rng)
+        {
+            return [&rng] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int i = 0; i < b.getNumSamples(); ++i)
+                        b.setSample (ch, i, 0.2f * (rng.nextFloat() * 2.0f - 1.0f));
+            };
+        };
+        auto run = [&] (float pump)
+        {
+            auto p = make();
+            soloSection (*p, 0.0f, 1.0f, 0.0f);
+            set (*p, Params::Verb::duck, 0.0f);
+            set (*p, Params::Verb::pump, pump);
+            FakePlayHead head;
+            head.bpm = 120.0;   // a kick every half second
+            p->setPlayHead (&head);
+            juce::Random rng (3);
+            juce::AudioBuffer<float> audio;
+            render (*p, 4.0, noise (rng), &audio, &head);
+            p->setPlayHead (nullptr);
+            return std::make_pair (std::move (audio), p->pumpNow.load());
+        };
+        suite::KickPatternSet kp;
+        kp.valid = true;
+        auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
+        any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
+        suite::KickBus::publish (kp);
+        const auto [off, offMin] = run (0.0f);
+        const auto [on, onMin] = run (1.0f);
+        suite::KickBus::withdraw();
+        const auto [noKick, noKickMin] = run (1.0f);
+        const auto onDuck = juce::Decibels::gainToDecibels (rmsBetween (on, 3.005, 3.04) / rmsBetween (on, 3.4, 3.48));
+        const auto offDuck = juce::Decibels::gainToDecibels (rmsBetween (off, 3.005, 3.04) / rmsBetween (off, 3.4, 3.48));
+        check (onDuck < offDuck - 8.0f && onMin < 1.0f, "the tail ducks right after each kick (" + juce::String (onDuck - offDuck, 1) + " dB)");
+        check (offMin > 0.999f && noKickMin > 0.999f, "no pump when it's off, or when no kick is shared");
+    }
+
+    section ("Throws at vocal phrase ends");
+    {
+        suite::VocalBus::clear();
+        suite::VocalBus::mark (1, true);   // the vocal sings bars 1-2, rests in 3, sings 4
+        suite::VocalBus::mark (2, true);
+        suite::VocalBus::mark (3, false);
+        suite::VocalBus::mark (4, true);
+        auto p = make();
+        soloSection (*p, 0.0f, 0.0f, 1.0f);
+        set (*p, Params::Throw::autoMode, (float) Params::Throw::autoAtVocalEnds);
+        set (*p, Params::Throw::autoLen, 2.0f);    // last beat
+        set (*p, Params::Throw::feedback, 0.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;   // 2 s per bar
+        p->setPlayHead (&head);
+        juce::Random rng (5);
+        juce::AudioBuffer<float> audio;
+        render (*p, 9.0, [&] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                    b.setSample (ch, i, 0.3f * (rng.nextFloat() * 2.0f - 1.0f));
+        }, &audio, &head);
+        p->setPlayHead (nullptr);
+        suite::VocalBus::clear();
+        check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f, "nothing in the middle of the phrase (bar 1)");
+        check (peakBetween (audio, 3.9, 4.6) > 0.05f, "throws the last beat of bar 2, where the phrase ends");
+        check (peakBetween (audio, 4.8, 7.4) < 1.0e-3f, "nothing in the rest (bar 3) or before the next phrase ends");
+        check (peakBetween (audio, 7.9, 8.6) > 0.05f, "throws the end of the next phrase (bar 4)");
     }
 
     section ("Key follow via KeyBus");
