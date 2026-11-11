@@ -374,6 +374,7 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
     }
     s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
     guessRoleFromSound();
+    autoStage();
     refreshLowOwners();
     return s;
 }
@@ -487,6 +488,19 @@ float PrimaMateriaProcessor::roughMixOffsetFor (int role)
     if (mine.size() < 2) return pm::roughMixOffset (role);
     std::sort (mine.begin(), mine.end());
     return juce::jlimit (-24.0f, 6.0f, mine[mine.size() / 2]);
+}
+
+void PrimaMateriaProcessor::autoStage()
+{
+    if (apvts.getRawParameterValue (pm::autoStageId)->load() < 0.5f) { autoStageTicks = 0; return; }
+    if (++autoStageTicks < 50) return;   // every 10 s at 5 updates a second
+    autoStageTicks = 0;
+    const auto target = gainStageTarget();
+    if (! target) return;
+    const auto now = apvts.getRawParameterValue (pm::inputGainId)->load();
+    if (std::abs (*target - now) <= 1.5f) return;
+    setParameterPlain (apvts, pm::inputGainId, *target);
+    autoStageMoves.fetch_add (1);
 }
 
 int PrimaMateriaProcessor::roleFromSound (const std::array<float, analysis::numBands>& b, float crestDb)

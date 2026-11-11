@@ -188,7 +188,8 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       split (p.apvts, Params::Duck::split, "Split", Colours::verdigris),
       threshold (p.apvts, Params::Duck::threshold, "SC threshold", Colours::brass),
       breakdown (p.apvts, Params::Duck::breakdown, "BREAKDOWN", Colours::ember),
-      shareKick (p.apvts, Params::Duck::shareKick, "Share kick", Colours::ember)
+      shareKick (p.apvts, Params::Duck::shareKick, "Share kick", Colours::ember),
+      flip (p.apvts, Params::Duck::flip, "Flip polarity", Colours::ember)
 {
     setLookAndFeel (&lnf);
 
@@ -242,7 +243,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     gatePanel.addAndMakeVisible (*dynamicGate);
     for (auto* c : std::initializer_list<juce::Component*> { &duckView, &presetBox, &source, &duckRate, &nudge, &duckDepth,
                                                              &duckAttack, &hold, &duckRelease, &curve, &split, &threshold,
-                                                             &breakdown, &sourceStatus })
+                                                             &breakdown, &sourceStatus, &flip })
         duckPanel.addAndMakeVisible (c);
 
     sectionStatus.setFont (juce::FontOptions (12.0f));
@@ -312,8 +313,16 @@ void KybalionEditor::timerCallback()
     {
         const auto key = suite::KeyBus::read();
         sourceStatus.setColour (juce::Label::textColourId, Colours::text);
+        juce::String phase;
+        if (processor.phaseMeasured.load())
+        {
+            const auto c = processor.lowCorrelation.load();
+            phase = c < -0.3f ? juce::String::fromUTF8 (" \xc2\xb7 low end OUT OF PHASE with the kick (") + juce::String (c, 2) + "): turn on Flip polarity"
+                  : c > 0.3f ? juce::String::fromUTF8 (" \xc2\xb7 low end in phase with the kick")
+                             : juce::String::fromUTF8 (" \xc2\xb7 low end and kick neither help nor cancel");
+        }
         sourceStatus.setText ("Kick: " + juce::String (juce::roundToInt (processor.kick.lengthMs())) + " ms, "
-                                  + describeKickTuning (processor.kick.pitchHz(), key.valid ? key.root : -1),
+                                  + describeKickTuning (processor.kick.pitchHz(), key.valid ? key.root : -1) + phase,
                               juce::dontSendNotification);
         sourceStatus.setTooltip (sourceStatus.getText());
     }
@@ -408,6 +417,7 @@ void KybalionEditor::resized()
         presetBox.setBounds (bar.removeFromRight (200).reduced (2));
         fitButton.setBounds (bar.removeFromRight (110).reduced (2));
         shareKick.setBounds (bar.removeFromRight (120).reduced (2));
+        flip.setBounds (bar.removeFromRight (120).reduced (2));
         sourceStatus.setBounds (bar);
         top.removeFromTop (8);
         duckView.setBounds (top);

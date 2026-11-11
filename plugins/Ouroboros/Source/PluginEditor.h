@@ -39,7 +39,7 @@ private:
 class SuitePanel : public juce::Component, private juce::Timer
 {
 public:
-    explicit SuitePanel (OuroborosProcessor* p = nullptr) : processor (p) { refresh(); setSize (660, 560); startTimerHz (2); }
+    explicit SuitePanel (OuroborosProcessor* p = nullptr) : processor (p) { refresh(); setSize (660, 610); startTimerHz (2); }
     void paint (juce::Graphics&) override;
     void refresh();
 
@@ -48,7 +48,20 @@ private:
     OuroborosProcessor* processor;
     std::vector<suite::SuiteEntry> entries;
     std::vector<suitecheck::Advice> advice;
+    suitecheck::Advice next;
     juce::StringArray notes;
+};
+
+/** Snapshot per section: a snapshot slot for each section type. */
+class SectionSnapPanel : public juce::Component
+{
+public:
+    explicit SectionSnapPanel (OuroborosProcessor&);
+    void paint (juce::Graphics& g) override { g.fillAll (suite::ui::Colours::panel); }
+    void resized() override;
+private:
+    std::vector<std::unique_ptr<suite::ui::Choice>> choices;
+    juce::Label note;
 };
 
 /** Arrange: a few choices -> a generated map, shown as a preview to Apply or Discard. */

@@ -372,6 +372,66 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     return patterns;
 }
 
+juce::File CorrespondenceProcessor::exportSongPack (const juce::File& parent) const
+{
+    const auto s = currentSettings();
+    const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
+    const auto bpm = currentBpm.load();
+    const auto title = getSongTitle().trim(), artist = getArtist().trim();
+    auto folder = parent.getChildFile (juce::File::createLegalFileName ((title.isNotEmpty() ? title : key + " " + juce::String (juce::roundToInt (bpm)) + " BPM")
+                                                                        + " - song pack")).getNonexistentSibling (false);
+    folder.createDirectory();
+
+    suite::SectionMap map;
+    const auto haveMap = suite::SectionBus::read (map) && map.count > 0;
+    static const char* const songKinds[] { "Song Chords", "Song Bass", "Song Lead" };
+    static const char* const loopKinds[] { "Chords", "Bass", "Melody" };
+    for (auto* kind : haveMap ? songKinds : loopKinds)
+        exportClip (kind, folder);
+
+    // The lead guide's range, for the singer.
+    std::vector<chords::Note> lead = haveMap ? chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead)
+                                             : chords::melody (s, melodySettings());
+    int low = 127, high = 0;
+    for (const auto& n : lead) { low = std::min (low, n.pitch); high = std::max (high, n.pitch); }
+    auto noteName = [] (int p) { return suite::music::noteNames()[p % 12] + juce::String (p / 12 - 1); };
+
+    juce::StringArray text;
+    text.add ((title.isNotEmpty() ? title : juce::String ("This song")) + (artist.isNotEmpty() ? " by " + artist : juce::String()));
+    text.add ("");
+    text.add ("Key:     " + suite::music::noteNames()[s.root] + " " + suite::music::scales()[(size_t) s.scale].name);
+    text.add ("Tempo:   " + juce::String (bpm, 1) + " BPM");
+    juce::StringArray progression;
+    for (int i = 0; i < s.count; ++i) progression.add (chords::chordName (s, s.slots[(size_t) i]));
+    text.add ("Chords:  " + progression.joinIntoString (" - ") + " (" + juce::String (s.quartersPerChord / 4.0, 1) + " bar each, from the start of every section)");
+    if (! lead.empty()) text.add ("Lead guide range: " + noteName (low) + " to " + noteName (high) + " (the guide is a suggestion: the topline is yours)");
+    if (haveMap)
+    {
+        text.add ("");
+        text.add ("Where a vocal usually goes: the breakdowns (the emotional part) and over the drops.");
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto& sec = map.sections[(size_t) i];
+            const auto seconds = (sec.startBar - 1) * 4.0 * 60.0 / bpm;
+            text.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + juce::String ((int) seconds / 60) + ":"
+                      + juce::String ((int) seconds % 60).paddedLeft ('0', 2) + "  " + suite::sectionName (sec.type)
+                      + " (" + juce::String (map.endBar (i) - sec.startBar) + " bars)"
+                      + (map.keyShiftOf (i) != 0 && i == map.lastDropIndex() ? "  key up " + juce::String (map.keyShiftOf (i)) : juce::String()));
+        }
+        // Markers as a MIDI file too, for the collaborator's DAW.
+        std::vector<std::pair<double, juce::String>> markers;
+        for (int i = 0; i < map.count; ++i)
+            markers.push_back ({ (map.sections[(size_t) i].startBar - 1) * 4.0, suite::sectionName (map.sections[(size_t) i].type) });
+        if (auto stream = folder.getChildFile ("Sections (markers).mid").createOutputStream())
+            chords::toMultiTrackMidi ({}, bpm, markers).writeTo (*stream);
+    }
+    text.add ("");
+    text.add ("In this folder: the chords, bass and lead guide as MIDI (drag into any DAW at " + juce::String (juce::roundToInt (bpm)) + " BPM)"
+              + juce::String (haveMap ? ", and the sections as markers." : "."));
+    folder.getChildFile ("For the vocalist.txt").replaceWithText (text.joinIntoString ("\n") + "\n");
+    return folder;
+}
+
 juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) const
 {
     const auto s = currentSettings();

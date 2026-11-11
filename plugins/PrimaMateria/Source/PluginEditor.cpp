@@ -65,6 +65,9 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     gainStageButton.setTooltip ("Sets every Prima Materia's Input gain so each track arrives at -18 dBFS RMS (play the song first); undo in Mentalism's History");
     gainStageButton.onClick = [] { suite::FixBus::send (suite::Fix::GainStage); };
     addAndMakeVisible (gainStageButton);
+    autoStage = std::make_unique<suite::ui::Toggle> (p.apvts, pm::autoStageId, "Keep at -18", Colours::moss);
+    autoStage->setTooltip ("Continuous gain staging: every 10 s, if this track's input has drifted more than 1.5 dB from -18 dBFS RMS, Input gain follows");
+    addAndMakeVisible (*autoStage);
     inputLabel.setFont (juce::FontOptions (12.0f));
     inputLabel.setColour (juce::Label::textColourId, Colours::dimText);
     addAndMakeVisible (inputLabel);
@@ -187,6 +190,7 @@ void PrimaMateriaEditor::resized()
         inputGain->setBounds (row.removeFromLeft (150));
         inputLabel.setBounds (row.removeFromLeft (180));
         gainStageButton.setBounds (row.removeFromLeft (190).withSizeKeepingCentre (180, 30));
+        autoStage->setBounds (row.removeFromLeft (140).withSizeKeepingCentre (130, 30));
         for (auto* k : { breath.get(), pump.get(), inputGain.get() })
             k->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
     }

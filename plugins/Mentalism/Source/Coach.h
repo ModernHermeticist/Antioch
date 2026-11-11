@@ -164,6 +164,23 @@ namespace coach
             else good.add ("Drop " + juce::String ((int) k + 1) + " holds up against drop " + juce::String ((int) k) + ".");
         }
 
+        // Sections too short for their job: a build under 8 bars can't rise; a breakdown under 16
+        // can't reset the energy. The fix lengthens it in Ouroboros. Only judged on song-length maps
+        // (64 bars or more): a loop or a sketch isn't arranged yet.
+        r.fixData.resize (r.fixes.size(), 0);
+        for (int i = 0; i < (map.totalBars >= 64 ? map.count : 0); ++i)
+        {
+            const auto type = map.sections[(size_t) i].type;
+            const auto bars = map.endBar (i) - map.sections[(size_t) i].startBar;
+            const auto shortest = type == T::Build ? 8 : type == T::Breakdown ? 16 : 0;
+            if (shortest == 0 || bars >= shortest) continue;
+            r.notes.add (juce::String (suite::sectionName (type)) + " (" + barsOf (map, i) + ") is only " + juce::String (bars) + " bars: "
+                         + (type == T::Build ? "a build needs 8 or more to rise." : "a breakdown needs 16 or more to reset the energy."));
+            r.fixes.push_back (suite::Fix::ExtendSection);
+            r.fixData.push_back (suite::packArc (i, 8.0f));
+            ++r.problems;
+        }
+
         // Arc match: sections whose energy you drew on Ouroboros' curve should sit where the curve
         // puts them, relative to the first drop (12 LU from an energy of 0 to 100%).
         r.fixData.resize (r.fixes.size(), 0);
@@ -212,6 +229,7 @@ namespace coach
             case suite::Fix::ReferenceTone:    return "Lapis: low and high tone moved towards the reference";
             case suite::Fix::Carve:            return "Prima Materia: a dip carved in the less important track";
             case suite::Fix::GainStage:        return "Prima Materia: every track's input set to -18 dBFS RMS";
+            case suite::Fix::ExtendSection:    return "Ouroboros: that section 8 bars longer (the rest of the song moves along)";
             case suite::Fix::DjPhrasing:       return "Ouroboros: intro and outro to whole 16-bar phrases, sections onto the 8-bar grid";
             case suite::Fix::ArcMatch:         return "Prima Materia: that section's level moved towards your energy curve";
             case suite::Fix::None:

@@ -33,6 +33,13 @@ public:
     void changeProgramName (int, const juce::String&) override {}
 
     void getPluginState (juce::MemoryBlock& destData) override;
+    /** For the suite's key-clash check: [key (root + 12 if minor, -1 = none), confidence, seconds heard, 0]. */
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus s;
+        s.metrics = { (float) detector.best.load(), detector.confidence.load(), detector.seconds.load(), 0.0f };
+        return s;
+    }
     void setPluginState (const void* data, int sizeInBytes) override;
 
     static inline const juce::String autoSendId { "autosend" }, broadcastAloneId { "broadcastalone" };

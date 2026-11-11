@@ -658,6 +658,26 @@ int main (int argc, char** argv)
         check (mine.problems == 1 && mine.notes[0].contains ("your usual: 10 LU"), "but not yours (" + mine.notes[0] + ")");
     }
 
+    section ("Sections too short for their job");
+    {
+        suite::SectionMap song;
+        song.totalBars = 96; song.count = 4;
+        song.sections[0] = { 1, suite::SectionType::Intro };
+        song.sections[1] = { 33, suite::SectionType::Breakdown };   // 8 bars: too short
+        song.sections[2] = { 41, suite::SectionType::Build };       // 4 bars: too short
+        song.sections[3] = { 45, suite::SectionType::Drop };
+        std::vector<coach::SectionStat> none (4);
+        const auto r = coach::analyse (song, none);
+        int index = -1; float bars = 0.0f;
+        if (r.problems >= 2) suite::unpackArc (r.fixData[1], index, bars);
+        check (r.problems == 2 && r.notes[0].contains ("only 8 bars") && r.notes[1].contains ("a build needs 8 or more")
+                   && r.fixes[1] == suite::Fix::ExtendSection && index == 2 && std::abs (bars - 8.0f) < 0.01f,
+               "an 8-bar breakdown and a 4-bar build are flagged, with a fix to lengthen each in Ouroboros (" + r.notes.joinIntoString (" | ") + ")");
+        suite::SectionMap loop = song;
+        loop.totalBars = 32;
+        check (coach::analyse (loop, none).problems == 0, "a 32-bar sketch isn't judged on lengths");
+    }
+
     section ("Pass-through");
     {
         auto p = make();

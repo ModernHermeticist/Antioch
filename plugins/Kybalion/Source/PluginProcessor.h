@@ -77,7 +77,14 @@ public:
     std::atomic<float> suiteChordQ { 0.0f };   // Correspondence's chord length in quarters (0 = not running)
     std::atomic<int> chordAccents { 0 };       // chord changes accented (for tests and the UI)
     bool inChordAccent = false;
-    std::atomic<float> dynamicDepth { 1.0f };   // the dynamic gate's depth scale now (tests and UI)   // Correspondence's groove (the gate swings with it)
+    std::atomic<float> dynamicDepth { 1.0f };
+
+    /** Kick and bass phase: with the kick on the sidechain, how this track's low end lines up
+        with it while the kick sounds (-1 = cancelling, +1 = adding up). Flip polarity fixes it. */
+    std::atomic<float> lowCorrelation { 0.0f };
+    std::atomic<bool> phaseMeasured { false };
+    double phaseMS = 0.0, phaseMM = 0.0, phaseSS = 0.0;
+    float phaseLowM = 0.0f, phaseLowS = 0.0f, phaseEnv = 0.0f;   // the dynamic gate's depth scale now (tests and UI)   // Correspondence's groove (the gate swings with it)
 
     /** Your own gate patterns: saved as files, offered in every project. */
     static juce::File userPatternFolder()

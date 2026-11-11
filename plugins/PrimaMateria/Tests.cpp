@@ -506,6 +506,30 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Continuous gain staging");
+    {
+        auto p = make (roleIndex ("Pads"));
+        set (*p, pm::autoStageId, 1.0f);
+        FakePlayHead head;
+        p->setPlayHead (&head);
+        render (*p, 3.0, [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = 0.0447f * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * (double) (pos + i) / sampleRate);   // -30 dBFS RMS
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        }, nullptr, &head);
+        p->setPlayHead (nullptr);
+        for (int k = 0; k < 49; ++k) p->suiteStatus();
+        check (std::abs (p->apvts.getRawParameterValue (pm::inputGainId)->load()) < 0.01f, "nothing moves before 10 s of updates");
+        p->suiteStatus();
+        check (std::abs (p->apvts.getRawParameterValue (pm::inputGainId)->load() - 12.0f) < 0.5f && p->autoStageMoves.load() == 1,
+               "then the input gain brings a -30 dBFS track to -18 (" + juce::String (p->apvts.getRawParameterValue (pm::inputGainId)->load(), 1) + " dB)");
+        for (int k = 0; k < 50; ++k) p->suiteStatus();
+        check (p->autoStageMoves.load() == 1, "and leaves it alone once it's there");
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

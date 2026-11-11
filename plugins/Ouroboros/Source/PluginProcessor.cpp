@@ -17,6 +17,10 @@ namespace
                                                             juce::NormalisableRange<float> (0.0f, 200.0f), 100.0f,
                                                             juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + "%"; })));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::liveId, 1 }, "Live Mode", false));
+        for (int t = 0; t < (int) suite::SectionType::count; ++t)
+            l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::sectionSnapId (t), 1 },
+                                                                  juce::String ("Snapshot in ") + suite::sectionName ((suite::SectionType) t),
+                                                                  juce::StringArray { "None", "A", "B", "C", "D" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::autosaveId, 1 }, "Autosave",
                                                               juce::StringArray { "Off", "Every 5 minutes", "Every 10 minutes", "Every 20 minutes" }, 2));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::rideId, 1 }, "Intensity Ride",
@@ -39,8 +43,24 @@ OuroborosProcessor::OuroborosProcessor()
 {
     map = arrangement::fromTemplate (arrangement::templates().front());
     fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
-    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
     {
+        if (fix == suite::Fix::ExtendSection)
+        {
+            // Mentalism's coach: a section too short for its job, made longer; the rest moves along.
+            int index = 0; float bars = 0.0f;
+            suite::unpackArc (data, index, bars);
+            const auto before = getMap();
+            if (! juce::isPositiveAndBelow (index, before.count) || bars < 1.0f) return {};
+            auto after = before;
+            const auto extra = juce::roundToInt (bars);
+            for (int i = index + 1; i < after.count; ++i) after.sections[(size_t) i].startBar += extra;
+            after.totalBars += extra;
+            setMap (after);
+            addNote (juce::String (suite::sectionName (after.sections[(size_t) index].type)) + " at bar " + juce::String (after.sections[(size_t) index].startBar)
+                     + " made " + juce::String (extra) + " bars longer (Mentalism's coach)");
+            return [this, before, after] { if (getMap() == after) setMap (before); };
+        }
         if (fix != suite::Fix::DjPhrasing) return {};
         const auto before = getMap(), after = suite::dj::fixPhrasing (before);
         if (after == before) return {};
@@ -365,6 +385,52 @@ juce::String OuroborosProcessor::styleReport()
     styleReportFile().getParentDirectory().createDirectory();
     styleReportFile().replaceWithText (text);
     return text;
+}
+
+void OuroborosProcessor::followSectionSnapshots()
+{
+    if (! playing.load()) { lastSnapSection = -1; return; }
+    const auto m = getMap();
+    const auto bar = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load())) + 1;
+    const auto index = arrangement::sectionAt (m, bar);
+    if (index < 0 || index == lastSnapSection) return;
+    const auto previous = lastSnapSection;
+    lastSnapSection = index;
+    if (previous < 0) return;   // only on entering a section while playing
+    const auto slot = (int) apvts.getRawParameterValue (sectionSnapId ((int) m.sections[(size_t) index].type))->load() - 1;
+    if (slot < 0 || ! hasSnapshot (slot)) return;
+    pollSnapshots();
+    suite::SnapshotBus::send (suite::SnapshotAction::Recall, slot);
+    ignorePendingSnapshots();   // the rest of the suite recalls it; Ouroboros keeps the map it's playing
+    sectionSnapsSent.fetch_add (1);
+}
+
+juce::String OuroborosProcessor::renderPlan() const
+{
+    juce::StringArray lines;
+    lines.add ("RENDER PLAN");
+    lines.add ("");
+    struct Version { int slot; const char* name; const char* target; };
+    const Version versions[] = { { 0, "Original mix", "club master: -8 LUFS integrated, -0.3 dBTP" },
+                                 { 1, "Radio edit", "streaming: -14 LUFS, -1 dBTP" },
+                                 { 2, "Extended mix", "club master: -8 LUFS, -0.3 dBTP" },
+                                 { 3, "Club edit", "club master: -8 LUFS, -0.3 dBTP" } };
+    int step = 1;
+    bool any = false;
+    for (const auto& v : versions)
+    {
+        if (! hasSnapshot (v.slot)) continue;
+        any = true;
+        lines.add (juce::String (step++) + ". " + v.name + " (snapshot " + SuiteProcessor::slotName (v.slot) + ")");
+        lines.add ("   Click " + SuiteProcessor::slotName (v.slot) + " in Ouroboros, press Reset in Mentalism, play it through once so Lapis settles on "
+                   + v.target + ", check Mentalism's export checklist, then export from FL.");
+        lines.add ("   File name: <Artist> - <Title> (" + juce::String (v.name) + ").wav");
+    }
+    if (! any)
+        lines.add ("No versions yet: click Make versions first (original, radio edit, extended mix, club edit).");
+    lines.add ("");
+    lines.add ("For every version: WAV, 24-bit, the project's sample rate; no dither needed after Lapis at 24-bit; leave a second of silence at the end.");
+    return lines.joinIntoString ("\n") + "\n";
 }
 
 void OuroborosProcessor::applyRide()

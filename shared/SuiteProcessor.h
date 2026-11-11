@@ -192,6 +192,9 @@ namespace suite
             if (juce::isPositiveAndBelow (slot, numSnapshotSlots)) { slots[(size_t) slot].reset(); slotParams[(size_t) slot].clear(); }
         }
 
+        /** Skips snapshot commands already sent (Ouroboros' section snapshots, which it sends itself). */
+        void ignorePendingSnapshots() { lastSeen = SnapshotBus::latest(); }
+
         /** Handles new snapshot commands (message thread; the timer calls it, tests call it directly). */
         void pollSnapshots()
         {

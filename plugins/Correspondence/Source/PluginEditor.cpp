@@ -293,15 +293,21 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                            "tracks and the sections as markers: drag it into FL to get everything at once");
     saveButton.onClick = [this]
     {
-        chooser = std::make_unique<juce::FileChooser> ("Choose a folder for the MIDI clips",
-                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory));
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-                              [this] (const juce::FileChooser& fc)
-                              {
-                                  const auto dir = fc.getResult();
-                                  if (dir == juce::File()) return;
-                                  processor.exportEverything (dir).revealToUser();
-                              });
+        juce::PopupMenu m;
+        m.addItem (1, "Export all (every clip and the all-parts file)...");
+        m.addItem (2, "Song pack for a vocalist (sheet, chords, bass, lead guide, markers)...");
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&saveButton), [this] (int choice)
+        {
+            if (choice <= 0) return;
+            chooser = std::make_unique<juce::FileChooser> ("Choose a folder", juce::File::getSpecialLocation (juce::File::userMusicDirectory));
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                                  [this, choice] (const juce::FileChooser& fc)
+                                  {
+                                      const auto dir = fc.getResult();
+                                      if (dir == juce::File()) return;
+                                      (choice == 1 ? processor.exportEverything (dir) : processor.exportSongPack (dir)).revealToUser();
+                                  });
+        });
     };
 
     for (auto* c : std::initializer_list<juce::Component*> { &root, &scale, &perChord, &count, &broadcast, &acceptDetected, &broadcastStatus,

@@ -62,6 +62,9 @@ public:
     /** Export all: a song folder inside `parent` with every clip, plus "<song> - all parts.mid"
         (song parts on separate tracks, sections as markers) when Ouroboros has a map. Returns the folder. */
     juce::File exportEverything (const juce::File& parent) const;
+    /** Song pack for a collaborator (a vocalist): a folder with the song sheet, the chords,
+        bass and lead guide MIDI, the section markers and a note on key, range and structure. */
+    juce::File exportSongPack (const juce::File& parent) const;
     /** Glide and scoops for exported leads, from the Lead expression setting. */
     chords::LeadExpression leadExpression() const
     {

@@ -1036,6 +1036,28 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Song pack for a vocalist");
+    {
+        auto p = make();
+        p->applyPreset (0);
+        p->setSongInfo ("Sunrise", "Me");
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondencePack");
+        parent.deleteRecursively();
+        const auto pack = p->exportSongPack (parent);
+        const auto mids = pack.findChildFiles (juce::File::findFiles, false, "*.mid");
+        const auto note = pack.getChildFile ("For the vocalist.txt").loadFileAsString();
+        check (pack.getFileName() == "Sunrise - song pack" && mids.size() == 4 && note.contains ("Key:     A Minor") && note.contains ("Lead guide range")
+                   && note.contains ("Breakdown") && note.contains ("Am - F - C - G"),
+               "a folder with chords, bass, lead guide and section markers, and a note on key, chords, range and structure");
+        parent.deleteRecursively();
+        suite::SectionBus::withdraw();
+    }
+
     section ("Adopting a key from Emerald Tablet");
     {
         auto p = make();

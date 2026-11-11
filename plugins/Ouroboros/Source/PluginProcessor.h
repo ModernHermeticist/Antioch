@@ -121,6 +121,16 @@ public:
     void applyRide();
     std::atomic<int> pendingRide { -1 };
 
+    /** Snapshot per section: a snapshot slot (A-D) for each section type, recalled across the
+        suite as the song enters a section of that type (Ouroboros keeps its own map). */
+    static juce::String sectionSnapId (int type) { return "snap_sec_" + juce::String (type); }
+    void followSectionSnapshots();
+    int lastSnapSection = -1;
+    std::atomic<int> sectionSnapsSent { 0 };
+
+    /** Render plan: what to export, how loud, in what order (from the versions made). */
+    juce::String renderPlan() const;
+
     /** Mentalism's DJ phrasing fix (undoable). */
     std::unique_ptr<suite::FixReceiver> fixes;
 
@@ -250,7 +260,7 @@ public:
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); }
+    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

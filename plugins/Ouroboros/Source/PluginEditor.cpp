@@ -252,6 +252,9 @@ void SuitePanel::refresh()
     suite::SectionMap map;
     const auto haveMap = suite::SectionBus::read (map);
     advice = suitecheck::check (entries, haveMap ? &map : nullptr);
+    next = suitecheck::nextStep (entries, haveMap ? &map : nullptr);
+    if (const auto idle = suitecheck::unused (entries); ! idle.isEmpty())
+        advice.push_back ({ "Doing nothing (remove to keep the project light): " + idle.joinIntoString (", ") + ".", false });
     notes = processor != nullptr ? processor->getNotes() : juce::StringArray();
     repaint();
 }
@@ -263,6 +266,16 @@ void SuitePanel::paint (juce::Graphics& g)
     g.setColour (accent);
     g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     g.drawText ("SUITE: " + juce::String ((int) entries.size()) + " PLUGINS LOADED", r.removeFromTop (22), juce::Justification::centredLeft);
+    // The next step: the one most useful thing to do now.
+    {
+        auto row = r.removeFromTop (40).reduced (0, 4);
+        g.setColour ((next.problem ? Colours::ember : Colours::moss).withAlpha (0.18f));
+        g.fillRoundedRectangle (row.toFloat(), 4.0f);
+        g.setColour (Colours::text);
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawFittedText ("NEXT:  " + next.text, row.reduced (10, 2), juce::Justification::centredLeft, 2, 0.85f);
+        r.removeFromTop (4);
+    }
 
     // Two columns of plugin / track.
     const auto listHeight = juce::jmin (240, ((int) entries.size() + 1) / 2 * 20 + 6);
@@ -306,6 +319,33 @@ void SuitePanel::paint (juce::Graphics& g)
         g.drawText ("Nothing yet: fixes, snapshots, versions, recipes and new songs are noted here.", notesArea.removeFromTop (18), juce::Justification::centredLeft);
     for (int i = notes.size() - 1; i >= 0 && notesArea.getHeight() >= 16; --i)
         g.drawText (notes[i], notesArea.removeFromTop (17), juce::Justification::centredLeft);
+}
+
+//==============================================================================
+SectionSnapPanel::SectionSnapPanel (OuroborosProcessor& p)
+{
+    for (int t = 0; t < (int) suite::SectionType::count; ++t)
+    {
+        choices.push_back (std::make_unique<suite::ui::Choice> (p.apvts, OuroborosProcessor::sectionSnapId (t), suite::sectionName ((suite::SectionType) t)));
+        addAndMakeVisible (*choices.back());
+    }
+    note.setText ("As the song enters a section of a type, the whole suite recalls that snapshot (save them with A-D first). "
+                  "Ouroboros keeps playing its map.", juce::dontSendNotification);
+    note.setFont (juce::FontOptions (12.0f));
+    note.setColour (juce::Label::textColourId, Colours::dimText);
+    note.setJustificationType (juce::Justification::topLeft);
+    addAndMakeVisible (note);
+    setSize (520, 170);
+}
+
+void SectionSnapPanel::resized()
+{
+    auto r = getLocalBounds().reduced (10);
+    auto row = r.removeFromTop (60);
+    const auto w = row.getWidth() / (int) choices.size();
+    for (auto& c : choices) c->setBounds (row.removeFromLeft (w).reduced (2, 0));
+    r.removeFromTop (8);
+    note.setBounds (r);
 }
 
 //==============================================================================
@@ -592,6 +632,19 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         if (id <= 0) return;
         const auto builtIn = (int) arrangement::templates().size();
         if (id == 998) { templateBox.setSelectedId (0, juce::dontSendNotification); exportMarkers(); return; }
+        if (id == 995)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Render plan", processor.renderPlan());
+            return;
+        }
+        if (id == 994)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            auto panel = std::make_unique<SectionSnapPanel> (processor);
+            juce::CallOutBox::launchAsynchronously (std::move (panel), templateBox.getScreenBounds(), nullptr);
+            return;
+        }
         if (id == 996)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1097,6 +1150,8 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Save the current map as a template...", 999);
     templateBox.addItem ("Export section markers for FL (MIDI + cue sheet)...", 998);
     templateBox.addItem ("Style report: how you make trance...", 996);
+    templateBox.addItem ("Render plan...", 995);
+    templateBox.addItem ("Snapshots per section...", 994);
 }
 
 void OuroborosEditor::exportMarkers()

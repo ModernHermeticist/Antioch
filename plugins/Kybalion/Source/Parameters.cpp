@@ -125,6 +125,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (Fill::chords), "Gate on Chord Changes",
                                                             StringArray { "Off", "Accent", "Restart" }, 1));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::shareKick), "Share This Kick With the Suite", false));
+        layout.add (std::make_unique<AudioParameterBool> (id (Duck::flip), "Flip Polarity", false));
         suite::SceneEngine::addParameters (layout);
 
         return layout;

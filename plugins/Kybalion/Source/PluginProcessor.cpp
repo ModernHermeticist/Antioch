@@ -148,10 +148,39 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     auto* right = mainOut.getNumChannels() > 1 ? mainOut.getWritePointer (1) : nullptr;
     float lastMs = 1.0e9f;
 
+    // Kick and bass phase (sidechain kick): the low end of this track against the kick, while it sounds.
+    const auto flip = value (Params::Duck::flip) > 0.5f;
+    if (scActive)
+    {
+        const auto lowCoeff = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 120.0f / (float) sampleRate);
+        for (int n = 0; n < numSamples; ++n)
+        {
+            auto m = 0.5f * (left[n] + (right != nullptr ? right[n] : left[n]));
+            if (flip) m = -m;
+            auto k = scBuffer.getSample (0, n);
+            if (scBuffer.getNumChannels() > 1) k = 0.5f * (k + scBuffer.getSample (1, n));
+            phaseLowM += lowCoeff * (m - phaseLowM);
+            phaseLowS += lowCoeff * (k - phaseLowS);
+            phaseEnv = std::max (std::abs (phaseLowS), phaseEnv * 0.9995f);
+            if (phaseEnv > 0.02f)
+            {
+                constexpr double decay = 0.99997;   // a few seconds of memory
+                phaseMS = phaseMS * decay + (double) phaseLowM * phaseLowS;
+                phaseMM = phaseMM * decay + (double) phaseLowM * phaseLowM;
+                phaseSS = phaseSS * decay + (double) phaseLowS * phaseLowS;
+            }
+        }
+        if (phaseMM > 1.0e-3 && phaseSS > 1.0e-3)
+        {
+            lowCorrelation.store ((float) (phaseMS / std::sqrt (phaseMM * phaseSS)));
+            phaseMeasured.store (true);
+        }
+    }
+
     for (int n = 0; n < numSamples; ++n)
     {
-        auto l = left[n];
-        auto r = right != nullptr ? right[n] : l;
+        auto l = flip ? -left[n] : left[n];
+        auto r = flip ? -(right != nullptr ? right[n] : left[n]) : (right != nullptr ? right[n] : left[n]);
 
         // On the kick track: learn where the kick hits (from this track's own audio, before any processing).
         int typeHere = -1;
@@ -272,6 +301,7 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     if (sidechainConnected.load()) s.flags |= suite::Status::sidechainConnected;
     if (value (Params::follow) > 0.5f) s.flags |= suite::Status::followsOuroboros;
     if ((int) value (Params::Fill::when) != Params::Fill::Off && value (Params::gateOn) > 0.5f) s.flags |= suite::Status::fillsOn;
+    if (value (Params::gateOn) < 0.5f && value (Params::duckOn) < 0.5f) s.flags |= suite::Status::idle;   // both halves off
     if (value (Params::Duck::shareKick) > 0.5f)
     {
         s.flags |= suite::Status::kickSource;

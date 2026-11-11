@@ -26,6 +26,7 @@ private:
     std::unique_ptr<suite::ui::Knob> trim, breath, pump, inputGain;
     std::unique_ptr<suite::ui::Choice> answer;
     juce::TextButton gainStageButton { "Gain-stage all tracks" };
+    std::unique_ptr<suite::ui::Toggle> autoStage;
     juce::Label inputLabel;
     juce::Rectangle<int> gridArea;
     std::array<juce::Rectangle<int>, pm::numColumns> columns;

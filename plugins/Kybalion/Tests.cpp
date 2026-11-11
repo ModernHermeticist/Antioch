@@ -479,6 +479,44 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Kick and bass phase check");
+    {
+        auto run = [] (bool invertedBass, bool flip)
+        {
+            auto p = std::make_unique<KybalionProcessor>();
+            set (*p, Params::gateOn, 0.0f);
+            set (*p, Params::duckOn, 0.0f);
+            set (*p, Params::Duck::flip, flip ? 1.0f : 0.0f);
+            p->enableAllBuses();
+            p->setRateAndBufferSizeDetails (sampleRate, blockSize);
+            p->prepareToPlay (sampleRate, blockSize);
+            const auto channels = p->getTotalNumInputChannels();
+            juce::AudioBuffer<float> block (channels, blockSize);
+            juce::MidiBuffer midi;
+            const auto total = (int) (2.0 * sampleRate);
+            for (int pos = 0; pos < total; pos += blockSize)
+            {
+                const auto n = std::min (blockSize, total - pos);
+                block.setSize (channels, n, false, false, true);
+                for (int i = 0; i < n; ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate, beat = std::fmod (t, 0.5);
+                    const auto kick = 0.6f * (float) (std::sin (2.0 * juce::MathConstants<double>::pi * 55.0 * beat) * std::exp (-beat * 10.0));
+                    const auto bass = (invertedBass ? -0.4f : 0.4f) * (float) (std::sin (2.0 * juce::MathConstants<double>::pi * 55.0 * beat) * std::exp (-beat * 10.0));
+                    block.setSample (0, i, bass); block.setSample (1, i, bass);
+                    if (channels >= 4) { block.setSample (2, i, kick); block.setSample (3, i, kick); }
+                }
+                p->processBlock (block, midi);
+            }
+            return std::make_pair (p->phaseMeasured.load(), p->lowCorrelation.load());
+        };
+        const auto [seen, cancelling] = run (true, false);
+        const auto [seen2, fixed] = run (true, true);
+        const auto [seen3, together] = run (false, false);
+        check (seen && cancelling < -0.8f && fixed > 0.8f && together > 0.8f,
+               "a bass that cancels the kick reads out of phase (" + juce::String (cancelling, 2) + "); Flip polarity fixes it (" + juce::String (fixed, 2) + ")");
+    }
+
     section ("Presets and state");
     {
         auto p = make (true, true);

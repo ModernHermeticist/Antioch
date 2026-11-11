@@ -36,6 +36,13 @@ public:
     void changeProgramName (int, const juce::String&) override {}
 
     void getPluginState (juce::MemoryBlock& destData) override;
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus s;
+        if (value (followId) > 0.5f) s.flags |= suite::Status::followsOuroboros;
+        if (activeLatency.load() > 0) s.flags |= suite::Status::highLatency;   // reverse swells: 3 s lookahead
+        return s;
+    }
     void setPluginState (const void* data, int sizeInBytes) override;
 
     // Parameters

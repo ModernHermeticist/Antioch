@@ -58,6 +58,7 @@ namespace Params
         inline const juce::String threshold { "d_threshold" };
         inline const juce::String breakdown { "d_breakdown" };
         inline const juce::String shareKick { "d_sharekick" };   // on the kick track: share its pattern with the suite
+        inline const juce::String flip      { "d_flip" };        // flip this track's polarity (kick and bass phase check)
 
         enum Source { Tempo = 0, Sidechain = 1, SuiteKick = 2 };
         double rateQuarters (int index);

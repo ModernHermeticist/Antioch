@@ -127,6 +127,9 @@ public:
     std::vector<coach::SectionStat> sectionStats() const;
 
     /** Versions: a radio edit is mastered for streaming, an extended mix for the club. */
+    /** For Ouroboros' next-step assistant: [coach problems, checklist failures, seconds measured, ready to export]. */
+    SuiteStatus suiteStatus() override;
+
     bool applyVersion (int kind) override
     {
         setParameterPlain (apvts, Params::loudnessTarget, kind == suite::radioEdit ? 2.0f : 0.0f);

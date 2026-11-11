@@ -4,6 +4,9 @@
 // Pure logic, so it's directly testable.
 
 #include "Registry.h"
+#include "SectionBus.h"
+#include "KeyBus.h"
+#include "Music.h"
 #include <juce_core/juce_core.h>
 
 namespace suitecheck
@@ -51,6 +54,69 @@ namespace suitecheck
             out.push_back ({ "Intensity is at " + juce::String (map.intensity) + "%: most of the suite's section moves are switched off." });
     }
 
+    /** Emerald Tablets on single tracks: a loop or sample whose key doesn't fit the song's. */
+    inline void keyClashes (const std::vector<suite::SuiteEntry>& entries, std::vector<Advice>& out)
+    {
+        const auto song = suite::KeyBus::read();
+        if (! song.valid) return;
+        auto majorRoot = [] (int root, bool minor) { return minor ? (root + 3) % 12 : root % 12; };   // relative keys share notes
+        const auto songMajor = majorRoot (song.root, song.scale == 0);
+        for (const auto& e : entries)
+        {
+            if (e.plugin != "Emerald Tablet" || onMaster (e)) continue;
+            const auto best = (int) e.metrics[0];
+            if (best < 0 || e.metrics[1] < 0.5f || e.metrics[2] < 12.0f) continue;   // not sure yet
+            const auto root = best % 12;
+            const auto minor = best >= 12;
+            if (majorRoot (root, minor) == songMajor) continue;
+            out.push_back ({ where (e) + " sounds in " + suite::music::noteNames()[root] + (minor ? " minor" : " major") + ", but the song is in "
+                             + suite::music::noteNames()[song.root] + (song.scale == 0 ? " minor" : " major")
+                             + ": retune or replace that loop or sample (or check it's the right one)." });
+        }
+    }
+
+    /** Plugins loaded but doing nothing, worth removing to keep the project light. */
+    inline juce::StringArray unused (const std::vector<suite::SuiteEntry>& entries)
+    {
+        juce::StringArray out;
+        for (const auto& e : entries)
+            if (e.has (suite::Status::idle)) out.add (e.plugin + " on " + where (e));
+        return out;
+    }
+
+    /** The single most useful thing to do now (first match wins). `mentalism` = the Mentalism
+        entry if one is loaded: metrics are [coach problems, checklist failures, seconds measured, ready]. */
+    inline Advice nextStep (const std::vector<suite::SuiteEntry>& entries, const suite::SectionMap* map)
+    {
+        using namespace suite;
+        auto find = [&entries] (const char* plugin) -> const SuiteEntry* { for (auto& e : entries) if (e.plugin == plugin) return &e; return nullptr; };
+        if (map == nullptr || map->count == 0)
+            return { "Start the song: New song..., Arrange... or a template in Ouroboros." };
+        if (find ("Correspondence") == nullptr && find ("Emerald Tablet") == nullptr)
+            return { "Load Correspondence and choose the chords: the whole suite plays in its key." };
+        for (const auto& e : entries)
+            if (e.plugin == "Prima Materia" && ! e.has (Status::roleSet))
+                return { "Give Prima Materia on " + where (e) + " a role (or name the track: Kick, Bass, Pad, Lead, Vox)." };
+        std::vector<Advice> clashes;
+        keyClashes (entries, clashes);
+        if (! clashes.empty()) return clashes.front();
+        const auto* m = find ("Mentalism");
+        if (m == nullptr)
+            return { "Put Mentalism (and Lapis) on the master to measure the mix." };
+        if (m->metrics[2] < 30.0f)
+            return { "Press Reset in Mentalism and play the whole song through once." };
+        if (m->metrics[0] > 0.5f)
+            return { "Mentalism's coach has " + juce::String ((int) m->metrics[0]) + " arrangement note(s): Auto-coach or Finish the song deals with them." };
+        if (m->metrics[1] > 0.5f)
+            return { "The export checklist has " + juce::String ((int) m->metrics[1]) + " item(s) to fix: open it in Mentalism." };
+        for (const auto& e : entries)
+            if (e.has (Status::highLatency))
+                return { "Ready to render. Before recording anything new, switch off Azoth's reverse swells on " + where (e) + " (3 s latency).", false };
+        if (m->metrics[3] > 0.5f)
+            return { "Ready to export: Make versions in Ouroboros, then see the Render plan.", false };
+        return { "Keep going: the suite has nothing urgent.", false };
+    }
+
     inline std::vector<Advice> check (const std::vector<suite::SuiteEntry>& entries, const suite::SectionMap* map = nullptr)
     {
         using namespace suite;
@@ -88,6 +154,10 @@ namespace suitecheck
 
         if (map != nullptr)
             collisions (entries, *map, out);
+        keyClashes (entries, out);
+        for (const auto& e : entries)
+            if (e.has (Status::highLatency))
+                out.push_back ({ e.plugin + " on " + where (e) + " adds 3 s of latency (reverse swells): fine for mixing, but switch it off while you record." });
 
         if (out.empty())
             out.push_back ({ "Everything is set up.", false });

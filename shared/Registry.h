@@ -24,7 +24,9 @@ namespace suite
             roleSet            = 1u << 5,   // Prima Materia: a role preset is applied
             measuring          = 1u << 6,   // has a loudness reading (metric 1)
             hasBands           = 1u << 7,   // has a spectrum (bands, dB per octave band 31.5 Hz .. 16 kHz)
-            fillsOn            = 1u << 8    // Kybalion: gate fills before drops
+            fillsOn            = 1u << 8,   // Kybalion: gate fills before drops
+            highLatency        = 1u << 9,   // reports a long latency (Azoth's reverse swells: 3 s)
+            idle               = 1u << 10   // loaded but doing nothing (cleanup candidate)
         };
     }
 

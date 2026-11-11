@@ -77,7 +77,7 @@ uint32_t MentalismProcessor::applyCoachFix (suite::Fix fix, uint32_t data, const
     if (fix == suite::Fix::None) return 0;
     const auto seq = sendFix (fix, data);
     using T = suite::SectionType;
-    if (fix == suite::Fix::ArcMatch)
+    if (fix == suite::Fix::ArcMatch || fix == suite::Fix::ExtendSection)
     {
         int index = 0; float db = 0.0f;
         suite::unpackArc (data, index, db);
@@ -273,6 +273,18 @@ void MentalismProcessor::refreshCoachThresholds()
     const auto t = coach::learnThresholds (contrasts, rises);
     const juce::ScopedLock sl (historyLock);
     coachLimits = t;
+}
+
+MentalismProcessor::SuiteStatus MentalismProcessor::suiteStatus()
+{
+    SuiteStatus s;
+    const auto rep = report();
+    const auto items = checklist::check (rep, clippedSamples.load(), suite::Registry::list());
+    int failing = 0;
+    for (const auto& i : items) failing += i.state == checklist::State::Fail;
+    if (rep.measurement.integratedLufs > -70.0f) s.flags |= suite::Status::measuring;
+    s.metrics = { (float) rep.arrangement.problems, (float) failing, rep.measuredSeconds, checklist::readyToExport (items) ? 1.0f : 0.0f };
+    return s;
 }
 
 void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashes)

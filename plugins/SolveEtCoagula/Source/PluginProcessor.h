@@ -55,6 +55,7 @@ public:
     {
         SuiteStatus s;
         s.flags = suite::Status::sidechainWanted | (sidechainConnected.load() ? suite::Status::sidechainConnected : 0u);
+        if (! sidechainConnected.load() && apvts.getRawParameterValue (chopsOnId)->load() < 0.5f) s.flags |= suite::Status::idle;   // nothing to do
         return s;
     }
     suite::SceneEngine scenes;

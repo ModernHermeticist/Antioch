@@ -3,6 +3,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
+#include "SuiteCheck.h"
+#include "KeyBus.h"
 #include "MorphBus.h"
 
 using namespace suite::test;
@@ -572,6 +574,98 @@ int main (int argc, char** argv)
                "the style report: keys, tempo, progressions, length and loudness from the log");
         log.deleteFile();
         suite::StyleLog::setFileForTests ({});
+    }
+
+    section ("Next step, key clashes, unused plugins, longer sections, render plan, section snapshots");
+    {
+        using namespace suite;
+        auto entry = [] (uint32_t id, const char* plugin, const char* track, uint32_t flags, std::array<float, 4> metrics)
+        {
+            SuiteEntry e; e.id = id; e.plugin = plugin; e.track = track; e.flags = flags; e.metrics = metrics; return e;
+        };
+        const auto map = arrangement::fromTemplate (arrangement::templates().front());
+        check (suitecheck::nextStep ({}, nullptr).text.contains ("Start the song"), "no map: start the song");
+        std::vector<SuiteEntry> es { entry (1, "Ouroboros", "Master", Status::hasMap, {}) };
+        check (suitecheck::nextStep (es, &map).text.contains ("Load Correspondence"), "no key source: load Correspondence");
+        es.push_back (entry (2, "Correspondence", "Chords", 0, {}));
+        es.push_back (entry (3, "Prima Materia", "Insert 4", 0, {}));
+        check (suitecheck::nextStep (es, &map).text.contains ("Give Prima Materia on 'Insert 4' a role"), "a track without a role");
+        es.back().flags = Status::roleSet;
+        check (suitecheck::nextStep (es, &map).text.contains ("Put Mentalism"), "no Mentalism: put it on the master");
+        es.push_back (entry (4, "Mentalism", "Master", 0, { 0.0f, 0.0f, 5.0f, 0.0f }));
+        check (suitecheck::nextStep (es, &map).text.contains ("play the whole song"), "not measured: play it through");
+        es.back().metrics = { 2.0f, 0.0f, 300.0f, 0.0f };
+        check (suitecheck::nextStep (es, &map).text.contains ("2 arrangement note(s)"), "coach notes next");
+        es.back().metrics = { 0.0f, 1.0f, 300.0f, 0.0f };
+        check (suitecheck::nextStep (es, &map).text.contains ("checklist has 1"), "then the checklist");
+        es.push_back (entry (5, "Azoth", "FX", Status::highLatency, {}));
+        es[3].metrics = { 0.0f, 0.0f, 300.0f, 1.0f };
+        check (suitecheck::nextStep (es, &map).text.contains ("3 s latency") && ! suitecheck::nextStep (es, &map).problem, "ready, with a latency warning");
+        es.pop_back();
+        check (suitecheck::nextStep (es, &map).text.contains ("Ready to export"), "then: ready to export");
+
+        KeyBus::publish (9, 0);   // the song: A minor
+        es.push_back (entry (6, "Emerald Tablet", "Vox loop", 0, { (float) (6 + 12), 0.8f, 20.0f, 0.0f }));   // F# minor
+        es.push_back (entry (7, "Emerald Tablet", "Pad loop", 0, { 0.0f, 0.8f, 20.0f, 0.0f }));               // C major: relative major, fine
+        const auto clashText = suitecheck::nextStep (es, &map).text;
+        check (clashText.contains ("'Vox loop' sounds in F# minor") && ! clashText.contains ("Pad loop"),
+               "key clash: a loop in F# minor is flagged; C major (A minor's relative) isn't");
+        es.push_back (entry (8, "Kybalion", "Spare", Status::idle, {}));
+        check (suitecheck::unused (es).joinIntoString ("") == "Kybalion on 'Spare'", "unused plugins are listed");
+
+        suite::FixBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        suite::SectionMap m;
+        m.totalBars = 48; m.count = 3;
+        m.sections[0] = { 1, T::Breakdown };
+        m.sections[1] = { 17, T::Build };   // only 4 bars
+        m.sections[2] = { 21, T::Drop };
+        p->setMap (m);
+        const auto seq = suite::FixBus::send (suite::Fix::ExtendSection, suite::packArc (1, 8.0f));
+        p->fixes->poll();
+        const auto longer = p->getMap();
+        check (longer.endBar (1) - longer.sections[1].startBar == 12 && longer.sections[2].startBar == 29 && longer.totalBars == 56,
+               "the coach's fix makes the build 8 bars longer and moves the drop along");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (p->getMap() == m, "undo restores it");
+
+        check (p->renderPlan().contains ("No versions yet"), "render plan before versions: make them first");
+        p->setMap (arrangement::fromTemplate (arrangement::templates()[1]));
+        p->makeVersions();
+        const auto plan = p->renderPlan();
+        check (plan.contains ("1. Original mix") && plan.contains ("2. Radio edit") && plan.contains ("-14 LUFS") && plan.contains ("4. Club edit"),
+               "after Make versions: four renders, with their loudness");
+
+        // Section snapshots: entering a breakdown recalls snapshot B for the rest of the suite.
+        suite::SnapshotBus::reset();
+        auto o = std::make_unique<OuroborosProcessor>();
+        o->prepareToPlay (48000.0, 512);
+        suite::SectionMap sm;
+        sm.totalBars = 8; sm.count = 2;
+        sm.sections[0] = { 1, T::Drop };
+        sm.sections[1] = { 5, T::Breakdown };
+        o->setMap (sm);
+        o->captureSnapshot (1);
+        set (*o, OuroborosProcessor::sectionSnapId ((int) T::Breakdown), 2.0f);   // B
+        FakePlayHead head;
+        head.bpm = 120.0;
+        o->setPlayHead (&head);
+        for (double t : { 1.0, 7.0, 9.0 })   // in the drop, still in the drop, then the breakdown (bar 5 = 8 s)
+        {
+            head.ppq = t * 2.0;
+            juce::AudioBuffer<float> b (2, 64);
+            juce::MidiBuffer midi;
+            o->processBlock (b, midi);
+            o->followSectionSnapshots();
+        }
+        o->setPlayHead (nullptr);
+        suite::SnapshotAction action {};
+        int slot = -1;
+        check (o->sectionSnapsSent.load() == 1 && suite::SnapshotBus::read (suite::SnapshotBus::latest(), action, slot)
+                   && action == suite::SnapshotAction::Recall && slot == 1 && o->getMap() == sm,
+               "entering the breakdown recalls snapshot B across the suite, and Ouroboros keeps its map");
+        KeyBus::withdraw();
     }
 
     section ("Suite overview");

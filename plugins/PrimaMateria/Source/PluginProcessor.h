@@ -109,6 +109,11 @@ public:
         const auto n = inputCount.load();
         return n > 0 ? juce::Decibels::gainToDecibels ((float) std::sqrt (inputPower.load() / (double) n), -100.0f) : -100.0f;
     }
+    /** Continuous gain staging (message thread, every status update): while it's on, every
+        10 s the input gain moves to put the input at -18 dBFS RMS, if it's more than 1.5 dB off. */
+    void autoStage();
+    int autoStageTicks = 0;
+    std::atomic<int> autoStageMoves { 0 };
     std::optional<float> gainStageTarget() const
     {
         const auto level = inputLevelDb();
