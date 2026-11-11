@@ -132,6 +132,13 @@ public:
     /** The learning pass (Ouroboros): fit hold and release to the kick heard, and flip the
         polarity where the low end cancels against it. Undoable. */
     std::unique_ptr<suite::FixReceiver> fixes;
+    /** Ducking depth from the overlap: how loud this track's low end (below 120 Hz) is while the
+        kick hits, and the duck depth that clears it. The learning pass's kick fit sets it. */
+    float overlapDb() const;
+    static float depthForOverlap (float db);
+    suite::Svf overlapLow;
+    double overlapPower = 0.0;
+    int64_t overlapSamples = 0;
 
     /** Your gate patterns: once a song has played into its final drop with the gate on, its
         pattern goes into the style log (with the kind of track, from its name). The pattern list

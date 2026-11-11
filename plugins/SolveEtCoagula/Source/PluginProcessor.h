@@ -89,6 +89,10 @@ private:
     int vocalBar = -1, vocalBlocks = 0, barBlocks = 0;   // for the VocalBus: which bars the vocal sings in
     std::array<suite::Svf, 4> presence;   // vocal HP, vocal LP, music HP, music LP: 1-4 kHz
     double vocalPresence = 0.0, musicPresence = 0.0;
+    double shortVocal = 0.0, shortMusic = 0.0, shortCoeff = 0.0001;
+public:
+    std::atomic<float> vocalOverMusicDb { -100.0f };   // tests, UI
+private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaProcessor)
 };

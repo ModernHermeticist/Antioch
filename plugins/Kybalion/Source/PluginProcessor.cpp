@@ -23,9 +23,13 @@ KybalionProcessor::KybalionProcessor()
 
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
     {
+        std::vector<suite::FixReceiver::Change> fit;
         if (fix == suite::Fix::KickFit && kick.hits() >= kicksNeeded)
-            return { { Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * kick.lengthMs()) },
-                     { Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * kick.lengthMs()) } };
+            fit = { { Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * kick.lengthMs()) },
+                    { Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * kick.lengthMs()) } };
+        if (fix == suite::Fix::KickFit && overlapDb() > -90.0f)
+            fit.push_back ({ Params::Duck::depth, depthForOverlap (overlapDb()) });   // as deep as the collision needs
+        if (fix == suite::Fix::KickFit) return fit;
         if (fix == suite::Fix::PhaseFlip && phaseMeasured.load() && lowCorrelation.load() < -0.3f)
             return { { Params::Duck::flip, value (Params::Duck::flip) > 0.5f ? 0.0f : 1.0f } };
         return {};
@@ -123,6 +127,10 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
     kick.prepare (sampleRate);
     kickLearner.prepare (sampleRate);
     ownKick.prepare (sampleRate);
+    overlapLow.set (120.0f, 0.707f, (float) sampleRate);
+    overlapLow.reset();
+    overlapPower = 0.0;
+    overlapSamples = 0;
     outGain.reset (sampleRate, 0.03);
     outGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (value (Params::output)));
     position = 0.0;
@@ -270,6 +278,7 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
     {
         auto l = flip ? -left[n] : left[n];
         auto r = flip ? -(right != nullptr ? right[n] : left[n]) : (right != nullptr ? right[n] : left[n]);
+        const auto lowIn = overlapLow.lowpass (0.5f * (l + r));   // this track's low end, before anything (ducking depth fit)
 
         // On the kick track: learn where the kick hits (from this track's own audio, before any processing).
         int typeHere = -1;
@@ -367,6 +376,12 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
             }
         }
         lastMs = ms;
+        // Ducking depth from the overlap: this track's low end while the kick hits (its first 60 ms).
+        if (ms < 60.0f && (useSidechain || (useSuiteKick && suiteKick.valid)))
+        {
+            overlapPower += (double) lowIn * lowIn;
+            ++overlapSamples;
+        }
 
         if (duckEnabled)
             ducker.process (ms, l, r);
@@ -470,6 +485,17 @@ void KybalionProcessor::trackNameChanged (const juce::String& name)
                 if (auto* p = safe.get()) apply (*p);
             });
     }
+}
+
+float KybalionProcessor::overlapDb() const
+{
+    return overlapSamples > (int64_t) (0.5 * getSampleRate()) ? juce::Decibels::gainToDecibels ((float) std::sqrt (overlapPower / (double) overlapSamples), -100.0f) : -100.0f;
+}
+
+float KybalionProcessor::depthForOverlap (float db)
+{
+    // Strong low end under the kick (-18 dBFS RMS or more) ducks almost fully; little (-42 or less) just a touch.
+    return juce::jlimit (0.4f, 0.95f, 0.4f + (db + 42.0f) / 24.0f * 0.55f);
 }
 
 bool KybalionProcessor::fitToKick()

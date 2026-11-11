@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "LikeMe.h"
 #include "AutoReference.h"
+#include "MixFix.h"
 #include "Registry.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
@@ -906,6 +907,40 @@ int main (int argc, char** argv)
                    && ((m.target >> 12) & 0xfu) == 5u && ((m.target >> 16) & 0x3u) == 1u
                    && p->maskingSuggestions()[0].contains ("resolved, Pads gives way while the vocal sings"),
                "on: the pads give way at 1 kHz, only while the vocal sings");
+        suite::Registry::reset();
+    }
+
+    section ("Mix it: mud, harshness, translation");
+    {
+        suite::Registry::reset();
+        auto bands = [] (float low, float mud, float mid, float high)
+        {
+            std::array<float, 10> b {};
+            b[0] = low; b[1] = low; b[2] = mud; b[3] = mud; b[4] = mid; b[5] = mid; b[6] = high; b[7] = high; b[8] = high - 6; b[9] = high - 12;
+            return b;
+        };
+        suite::Registry::announce (9201, "Prima Materia", "Pads", suite::Status::roleSet | suite::Status::hasBands, { 4.0f, 0, 0, 0 }, bands (-40, -12, -20, -24));
+        suite::Registry::announce (9202, "Prima Materia", "Lead", suite::Status::roleSet | suite::Status::hasBands, { 5.0f, 0, 0, 0 }, bands (-50, -26, -18, -10));
+        suite::Registry::announce (9203, "Prima Materia", "Bass", suite::Status::roleSet | suite::Status::hasBands, { 2.0f, 0, 0, 0 }, bands (-8, -30, -60, -70));
+        suite::Registry::announce (9204, "Prima Materia", "Vox", suite::Status::roleSet | suite::Status::hasBands, { 6.0f, 0, 0, 0 }, bands (-60, -20, -60, -9));
+        advisor::Bands diff {};
+        diff[3] = 3.5f; diff[7] = 4.0f;   // the master: muddy at 250 Hz, harsh at 4 kHz
+        const auto fixes = mixfix::toneFixes (diff, true, suite::Registry::list());
+        check (fixes.size() == 2 && fixes[0].band == 3 && fixes[0].tracks.size() == 1 && fixes[0].tracks[0].track == "Pads",
+               "mud: the pads put most at 250 Hz (the bass and vocal are never touched): " + (fixes.empty() ? juce::String() : fixes[0].text));
+        check (fixes.size() == 2 && fixes[1].band == 7 && fixes[1].tracks[0].track == "Lead", "harshness at 4 kHz: the lead, not the vocal: " + (fixes.size() > 1 ? fixes[1].text : juce::String()));
+        check (mixfix::toneFixes (advisor::Bands {}, true, suite::Registry::list()).empty(), "a balanced master gets nothing");
+
+        const auto t = mixfix::translation (suite::Registry::list(), 4.0f).joinIntoString ("\n");
+        check (t.contains ("the bass ('Bass') nearly vanishes") && t.contains ("In mono") && ! t.contains ("the lead ('Lead') loses"),
+               "translation: the bass vanishes on earbuds, the mix loses level in mono; the lead holds up on a phone");
+
+        suite::FixBus::reset();
+        auto p = make();
+        p->mixIt();
+        check (p->apvts.getRawParameterValue (Params::autoMasking)->load() > 0.5f && p->mixItPending, "Mix it turns on masking and starts Finish the song");
+        p->sendFix (suite::Fix::Carve, suite::packCarve (9201, 3));
+        check (p->undoMixIt() >= 1 && p->apvts.getRawParameterValue (Params::autoMasking)->load() < 0.5f, "and Undo Mix it takes back every move it made");
         suite::Registry::reset();
     }
 

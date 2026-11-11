@@ -20,10 +20,10 @@ private:
     juce::ComboBox roleBox;
     juce::TextButton saveRole { "Save as my role" };
     suite::ui::Toggle follow, ramp, laterOn, lowManager;
-    suite::ui::Choice morph, gap;
+    suite::ui::Choice morph, gap, monoLows;
     std::vector<std::unique_ptr<suite::ui::Knob>> knobs;   // [type * 3 + row]
     juce::Label status;
-    std::unique_ptr<suite::ui::Knob> trim, breath, pump, sweep, vocalRoom, inputGain;
+    std::unique_ptr<suite::ui::Knob> trim, breath, pump, sweep, vocalRoom, rideVocal, inputGain;
     std::unique_ptr<suite::ui::Choice> answer;
     juce::TextButton gainStageButton { "Gain-stage all tracks" };
     std::unique_ptr<suite::ui::Toggle> autoStage;

@@ -603,6 +603,32 @@ int main (int argc, char** argv)
         testStyleLog.deleteFile();
     }
 
+    section ("Ducking depth from the overlap");
+    {
+        check (std::abs (KybalionProcessor::depthForOverlap (-18.0f) - 0.95f) < 0.01f && std::abs (KybalionProcessor::depthForOverlap (-42.0f) - 0.4f) < 0.01f
+                   && KybalionProcessor::depthForOverlap (-30.0f) > 0.6f && KybalionProcessor::depthForOverlap (-30.0f) < 0.75f,
+               "a strong low end under the kick ducks almost fully, a faint one just a touch");
+        suite::KickPatternSet kp;
+        kp.valid = true;
+        auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
+        any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
+        suite::KickBus::publish (kp);
+        auto p = make (false, true);
+        set (*p, Params::Duck::source, (float) Params::Duck::SuiteKick);
+        FakePlayHead h;
+        h.bpm = 120.0;
+        p->setPlayHead (&h);
+        render (*p, 6.0, tone (55.0f, 0.5f), nullptr, &h);   // a bass at about -9 dBFS RMS (12 kicks)
+        p->setPlayHead (nullptr);
+        suite::KickBus::withdraw();
+        check (std::abs (p->overlapDb() + 9.0f) < 1.5f, "the bass's low end under the kicks is measured (" + juce::String (p->overlapDb(), 1) + " dBFS)");
+        suite::FixBus::Message m;
+        const auto seq = suite::FixBus::send (suite::Fix::KickFit);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::Duck::depth)->load() - 0.95f) < 0.02f && suite::FixBus::read (seq, m),
+               "and the learning pass's kick fit sets the depth to clear it");
+    }
+
     section ("Role-aware setup");
     {
         auto named = [] (suite::SuiteProcessor& p, const char* name)

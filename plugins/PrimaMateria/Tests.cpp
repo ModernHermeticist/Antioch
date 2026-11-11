@@ -393,6 +393,50 @@ int main (int argc, char** argv)
         check (dip < -7.0f, "a carve made for the vocal opens only while it sings (" + juce::String (dip, 1) + " dB at 1 kHz then, none without it)");
     }
 
+    section ("Mono lows and the vocal rider");
+    {
+        auto antiPhase = [] (float hz)
+        {
+            return [hz] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate);
+                    b.setSample (0, i, v); b.setSample (1, i, -v);   // all side, no mid
+                }
+            };
+        };
+        auto run = [&] (float hz, int mono)
+        {
+            suite::SectionBus::withdraw();
+            auto p = make (roleIndex ("Pads"));
+            set (*p, pm::followId, 0.0f);
+            set (*p, pm::monoLowsId, (float) mono);
+            juce::AudioBuffer<float> a;
+            render (*p, 1.0, antiPhase (hz), &a);
+            return rmsBetween (a, 0.5, 1.0);
+        };
+        check (run (40.0f, 2) < 0.15f * run (40.0f, 0), "mono lows: stereo-only content at 40 Hz is folded away below 120 Hz");
+        check (run (2000.0f, 2) > 0.95f * run (2000.0f, 0), "and the stereo image above it is untouched");
+
+        auto ride = [] (float over)
+        {
+            auto p = make (roleIndex ("Vocal"));
+            set (*p, pm::followId, 0.0f);
+            set (*p, pm::rideVocalId, 3.0f);
+            render (*p, 2.0, tone (440.0f), nullptr, nullptr, [over] (int64_t)
+            {
+                if (over > -100.0f) suite::ActivityBus::writeValue (suite::ActivityBus::vocalOverMusic, over);
+            });
+            suite::ActivityBus::clear();
+            return p->riderDbNow.load();
+        };
+        const auto buried = ride (-3.0f), proud = ride (8.0f), silent = ride (-1000.0f);
+        check (buried > 1.7f && buried < 2.3f && proud < -1.7f && std::abs (silent) < 0.01f,
+               "vocal rider: up ~1 dB a second when the vocal is under its target (+" + juce::String (buried, 1) + " dB in 2 s), down when it's over ("
+               + juce::String (proud, 1) + "), and still while it doesn't sing");
+    }
+
     section ("Arrange from the loop");
     {
         suite::FixBus::reset();

@@ -75,7 +75,9 @@ public:
     float averageCrestDb() const { const auto n = crestCount.load(); return n > 0 ? crestSum.load() / (float) n : 0.0f; }
     std::atomic<bool> roleGuessed { false };
     std::atomic<bool> clippedRecently { false };
-    std::atomic<bool> learnReset { false };   // the learning pass started: measure afresh   // over 0 dBFS since the last status (live mix check)
+    std::atomic<bool> learnReset { false };
+    std::atomic<float> riderDbNow { 0.0f };   // the vocal rider's gain now (tests, UI)
+    float rideDb = 0.0f;   // the learning pass started: measure afresh   // over 0 dBFS since the last status (live mix check)
     void guessRoleFromSound();
 
     /** Club edit: DJ-friendly intro and outro: pads, leads and vocals out, the kick in. */
@@ -162,6 +164,8 @@ private:
     juce::SmoothedValue<float> trimGain;
     float lastTrim = 0.0f, lastInputGain = 0.0f;
     std::array<suite::Svf, 2> lowCut, highCut;
+    suite::Svf monoSide;   // mono lows
+    float monoHzNow = 0.0f;
     float levelDb = 0.0f, lowLog = 0.0f, highLog = 0.0f, gapGain = 1.0f;
     double sampleRate = 48000.0;
 

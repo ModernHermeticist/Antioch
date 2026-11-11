@@ -70,6 +70,8 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
     scenes.prepare();
     for (int i = 0; i < 4; ++i) { presence[(size_t) i].set (i % 2 == 0 ? 1000.0f : 4000.0f, 0.7f, (float) sampleRate); presence[(size_t) i].reset(); }
     vocalPresence = musicPresence = 0.0;
+    shortVocal = shortMusic = 0.0;
+    shortCoeff = 1.0 - std::exp (-1.0 / (0.4 * sampleRate));
     buriedBars.store (0);
     vocalBuried.store (false);
 }
@@ -166,11 +168,19 @@ void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffe
             const auto m = presence[3].lowpass (presence[2].highpass (0.5f * (l + r)));
             vocalPresence += (double) v * v;
             musicPresence += (double) m * m;
+            shortVocal += shortCoeff * ((double) v * v - shortVocal);   // ~400 ms averages, for the vocal rider
+            shortMusic += shortCoeff * ((double) m * m - shortMusic);
         }
     }
     chopsReady.store (chops.ready());
     chopsPlaying.store (played);
     vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > s.thresholdDb);
+    // Vocal rider (Prima Materia on the vocal): how far the vocal sits above the music, while it sings.
+    if (scActive && vocalPresent.load() && shortVocal > 1.0e-10 && shortMusic > 1.0e-10)
+    {
+        vocalOverMusicDb.store ((float) (10.0 * std::log10 (shortVocal / shortMusic)));
+        suite::ActivityBus::writeValue (suite::ActivityBus::vocalOverMusic, vocalOverMusicDb.load());
+    }
     // Vocal-aware levels (Prima Materia): how strongly the vocal sings now, 0 at the threshold, 1 from 12 dB above it.
     if (scActive)
         suite::ActivityBus::write (suite::ActivityBus::vocal, (juce::Decibels::gainToDecibels (keyPeak, -100.0f) - s.thresholdDb) / 12.0f);

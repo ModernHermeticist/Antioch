@@ -136,6 +136,8 @@ void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
     sampleRate = newSampleRate;
     for (auto& f : lowCut) f.reset();
     for (auto& f : highCut) f.reset();
+    monoSide.reset();
+    monoHzNow = 0.0f;
     levelDb = 0.0f;
     lowLog = std::log2 (pm::lowCutOff);
     highLog = std::log2 (pm::highCutOff);
@@ -206,10 +208,25 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto role = getRole();
     const auto breath = apvts.getRawParameterValue (pm::breathId)->load();
     const auto sweep = apvts.getRawParameterValue (pm::sweepId)->load();
+    // Mono lows: the stereo part (side) below the chosen frequency is removed, so the low end is the same in both speakers.
+    const auto monoChoice = (int) apvts.getRawParameterValue (pm::monoLowsId)->load();
+    const auto monoHz = monoChoice == 1 ? 80.0f : monoChoice == 2 ? 120.0f : monoChoice == 3 ? 160.0f : 0.0f;
+    if (monoHz > 0.0f && std::abs (monoHz - monoHzNow) > 0.5f) { monoSide.set (monoHz, 0.707f, sr); monoHzNow = monoHz; }
     // Vocal-aware levels: pads, leads and FX step back while the vocal sings (Solve et Coagula hears it).
     const auto roleNow = getRole();
     const auto vocalRoom = (roleNow == 4 || roleNow == 5 || roleNow == 7) ? apvts.getRawParameterValue (pm::vocalRoomId)->load() : 0.0f;
     const auto vocalTarget = vocalRoom > 0.0f ? juce::Decibels::decibelsToGain (-vocalRoom * suite::ActivityBus::read (suite::ActivityBus::vocal)) : 1.0f;
+    // Vocal rider: on the vocal track, the level is ridden (within 6 dB, ~1 dB a second) so the vocal sits this far above the music.
+    const auto rideTarget = roleNow == 6 ? apvts.getRawParameterValue (pm::rideVocalId)->load() : 0.0f;
+    if (rideTarget > 0.0f)
+    {
+        const auto over = suite::ActivityBus::readValue (suite::ActivityBus::vocalOverMusic, -1000.0f);
+        if (over > -900.0f)   // only while the vocal sings
+            rideDb = juce::jlimit (-6.0f, 6.0f, rideDb + juce::jlimit (-1.0f, 1.0f, rideTarget - over) * (float) getBlockSize() / (float) getSampleRate());
+    }
+    else rideDb = 0.0f;
+    riderDbNow.store (rideDb);
+    const auto rideGain = juce::Decibels::decibelsToGain (rideDb);
     const auto vocalAttack = 1.0f - std::exp (-1.0f / (0.03f * (float) getSampleRate())), vocalRelease = 1.0f - std::exp (-1.0f / (0.3f * (float) getSampleRate()));
     const auto answer = (int) apvts.getRawParameterValue (pm::answerId)->load();
     const auto pump = apvts.getRawParameterValue (pm::pumpId)->load();
@@ -362,13 +379,21 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         pumpGain += (pumpTarget < pumpGain ? 0.5f : pumpRelease) * (pumpTarget - pumpGain);
 
         vocalGain += (vocalTarget < vocalGain ? vocalAttack : vocalRelease) * (vocalTarget - vocalGain);
-        const auto t = trimGain.getNextValue() * pumpGain * vocalGain;
+        const auto t = trimGain.getNextValue() * pumpGain * vocalGain * rideGain;
         left[n] = processChannel (left[n], 0) * t;
         if (right != nullptr) right[n] = processChannel (right[n], 1) * t;
         if (carving)
         {
             left[n] = carve[0].process (left[n]);
             if (right != nullptr) right[n] = carve[1].process (right[n]);
+        }
+        if (monoHz > 0.0f && right != nullptr)
+        {
+            const auto mid = 0.5f * (left[n] + right[n]);
+            auto side = 0.5f * (left[n] - right[n]);
+            side -= monoSide.lowpass (side);   // the side's lows go: that part of the stereo image is mono
+            left[n] = mid + side;
+            right[n] = mid - side;
         }
 
         // Live check (Mentalism): did this track go over 0 dBFS?
@@ -581,7 +606,7 @@ juce::StringArray PrimaMateriaProcessor::myRoleParamIds()
 {
     juce::StringArray ids;
     for (int c = 0; c < pm::numColumns; ++c) ids.addArray ({ pm::levelId (c), pm::lowCutId (c), pm::highCutId (c) });
-    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId, pm::sweepId, pm::vocalRoomId });
+    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId, pm::sweepId, pm::vocalRoomId, pm::rideVocalId });
     return ids;
 }
 

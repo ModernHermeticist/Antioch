@@ -12,7 +12,8 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
       laterOn (p.apvts, pm::laterOnId, "Separate Drop 2+", Colours::ember),
       lowManager (p.apvts, pm::lowManagerId, "Low-end manager", Colours::verdigris),
       morph (p.apvts, pm::morphId, "Morph"),
-      gap (p.apvts, pm::gapId, "Gap before drop")
+      gap (p.apvts, pm::gapId, "Gap before drop"),
+      monoLows (p.apvts, pm::monoLowsId, "Mono lows")
 {
     setLookAndFeel (&lnf);
 
@@ -54,9 +55,12 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     pump = std::make_unique<Knob> (p.apvts, pm::pumpId, "Pump", Colours::ember);
     sweep = std::make_unique<Knob> (p.apvts, pm::sweepId, "BD sweep", accent);
     vocalRoom = std::make_unique<Knob> (p.apvts, pm::vocalRoomId, "Vox room", accent);
+    rideVocal = std::make_unique<Knob> (p.apvts, pm::rideVocalId, "Ride vox", accent);
+    rideVocal->slider.setTooltip ("Vocal rider: rides this vocal's level (within 6 dB) so it sits this far above the music in the 1-4 kHz range, "
+                                  "as Solve et Coagula hears it (send the vocal to Solve et Coagula post-fader). 0 = off");
     inputGain = std::make_unique<Knob> (p.apvts, pm::inputGainId, "Input gain", Colours::text);
     answer = std::make_unique<Choice> (p.apvts, pm::answerId, "Call / response");
-    for (auto* k : { breath.get(), pump.get(), sweep.get(), vocalRoom.get(), inputGain.get() })
+    for (auto* k : { breath.get(), pump.get(), sweep.get(), vocalRoom.get(), rideVocal.get(), inputGain.get() })
     {
         k->maxHeight = 46;
         addAndMakeVisible (*k);
@@ -78,7 +82,7 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
 
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     lowManager.setTooltip ("Where a kick or bass track is playing, this track leaves the low end to them (an automatic low cut for its role)");
-    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &monoLows, &status })
         addAndMakeVisible (c);
 
     setSize (1290, 670);
@@ -94,6 +98,11 @@ PrimaMateriaEditor::~PrimaMateriaEditor()
 
 void PrimaMateriaEditor::timerCallback()
 {
+    {
+        const auto isVocal = processor.getRole() == 6;
+        rideVocal->setVisible (isVocal);
+        vocalRoom->setVisible (! isVocal);
+    }
     const auto t = processor.currentType.load();
     if (t != shownType)
     {
@@ -183,6 +192,7 @@ void PrimaMateriaEditor::resized()
     lowManager.setBounds (controls.removeFromLeft (160).withSizeKeepingCentre (152, 30).translated (0, 8));
     morph.setBounds (controls.removeFromLeft (150));
     gap.setBounds (controls.removeFromLeft (150));
+    monoLows.setBounds (controls.removeFromLeft (150));
 
 
     {
@@ -191,13 +201,14 @@ void PrimaMateriaEditor::resized()
         pump->setBounds (row.removeFromLeft (150));
         sweep->setBounds (row.removeFromLeft (125));
         vocalRoom->setBounds (row.removeFromLeft (125));
+        rideVocal->setBounds (vocalRoom->getBounds());   // the vocal track shows the rider here instead
         answer->setBounds (row.removeFromLeft (150));
         row.removeFromLeft (20);
         inputGain->setBounds (row.removeFromLeft (150));
         inputLabel.setBounds (row.removeFromLeft (100));
         gainStageButton.setBounds (row.removeFromLeft (190).withSizeKeepingCentre (180, 30));
         autoStage->setBounds (row.removeFromLeft (140).withSizeKeepingCentre (130, 30));
-        for (auto* k : { breath.get(), pump.get(), sweep.get(), vocalRoom.get(), inputGain.get() })
+        for (auto* k : { breath.get(), pump.get(), sweep.get(), vocalRoom.get(), rideVocal.get(), inputGain.get() })
             k->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
     }
     status.setBounds (bounds.removeFromBottom (30));

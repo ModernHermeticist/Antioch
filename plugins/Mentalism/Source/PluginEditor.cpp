@@ -202,7 +202,24 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     finishButton.setTooltip ("Gain staging, DJ intro/outro, reference tone, then the rough mix once the drop is heard again, "
                              "then the auto-coach until the energy arc is right. Everything can be undone in History.");
     finishButton.setColour (juce::TextButton::buttonColourId, Colours::moss.withAlpha (0.4f));
-    finishButton.onClick = [this] { processor.finishSong(); };
+    finishButton.onClick = [this]
+    {
+        juce::PopupMenu m;
+        m.addItem (1, "Finish the song (gain staging, rough mix, coaching)");
+        m.addItem (2, "Mix it: everything automatic (also masking, mud, harshness and translation)");
+        m.addItem (3, "Undo Mix it");
+        m.addSeparator();
+        m.addItem (4, "Translation check (phone, earbuds, mono)...");
+        m.addItem (5, "Last Mix it report...", processor.mixItReport().isNotEmpty());
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&finishButton), [this] (int id)
+        {
+            if (id == 1) processor.finishSong();
+            if (id == 2) processor.mixIt();
+            if (id == 3) processor.undoMixIt();
+            if (id == 4) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Translation check", processor.translationCheck().joinIntoString ("\n\n"));
+            if (id == 5) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Mix it", processor.mixItReport());
+        });
+    };
     automationStatus.setFont (juce::FontOptions (12.0f));
     automationStatus.setJustificationType (juce::Justification::centredLeft);
     automationStatus.setColour (juce::Label::textColourId, Colours::moss);

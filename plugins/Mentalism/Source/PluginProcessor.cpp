@@ -7,6 +7,7 @@
 #include "StyleLog.h"
 #include "LikeMe.h"
 #include "AutoReference.h"
+#include "MixFix.h"
 #include "KeyBus.h"
 #include "Music.h"
 
@@ -411,6 +412,14 @@ void MentalismProcessor::runAutomation()
         {
             const auto ready = checklist::readyToExport (checklist::check (rep, clippedSamples.load(), suite::Registry::list()));
             finishState.store (FinishStage::Done);
+            if (mixItPending)
+            {
+                // Mix it: the tone fixes and the translation check, now the arc is done.
+                mixItPending = false;
+                auto done = applyToneFixes (rep);
+                done.addArray (translationCheck());
+                setText (mixItText, "MIX IT: DONE\n\n" + done.joinIntoString ("\n") + "\n\nUndo it all with Undo Mix it.");
+            }
             saveMixReport();   // a report of the finished mix, next to the others
             logFinishedSong (rep);
             if (rep.measurement.integratedLufs > -70.0f)   // the style log: one finished master
@@ -458,6 +467,48 @@ MentalismProcessor::~MentalismProcessor()
         loader.join();
     if (mySoundLoader.joinable())
         mySoundLoader.join();
+}
+
+juce::StringArray MentalismProcessor::applyToneFixes (const Report& rep)
+{
+    juce::StringArray done;
+    for (const auto& f : mixfix::toneFixes (rep.longDiff, rep.tonalAvailable && rep.measurement.haveTonal, suite::Registry::list()))
+    {
+        for (const auto& c : f.tracks) sendFix (suite::Fix::Carve, suite::packCarve (c.id, f.band));
+        done.add (f.text);
+    }
+    if (done.isEmpty()) done.add ("Tone: no mud or harshness over the target.");
+    return done;
+}
+
+juce::StringArray MentalismProcessor::translationCheck() const
+{
+    return mixfix::translation (suite::Registry::list(), report().measurement.monoLossDb);
+}
+
+juce::StringArray MentalismProcessor::mixIt()
+{
+    mixItStartSeq = suite::FixBus::latest();
+    setParameterPlain (apvts, Params::autoMasking, 1.0f);
+    mixItPending = true;
+    {
+        const juce::ScopedLock sl (historyLock);
+        mixItText = "Mix it: gain staging, then play the drop; it rough-mixes, coaches the arc, resolves masking, then fixes mud and harshness.";
+    }
+    return finishSong();
+}
+
+int MentalismProcessor::undoMixIt()
+{
+    std::vector<uint32_t> seqs;
+    for (const auto& r : getFixHistory())
+        if (r.seq > mixItStartSeq && r.undoSeq == 0) seqs.push_back (r.seq);
+    for (auto it = seqs.rbegin(); it != seqs.rend(); ++it) undoFix (*it);
+    setParameterPlain (apvts, Params::autoMasking, 0.0f);
+    mixItPending = false;
+    const juce::ScopedLock sl (historyLock);
+    mixItText = "Undid Mix it (" + juce::String ((int) seqs.size()) + " moves).";
+    return (int) seqs.size();
 }
 
 juce::StringArray MentalismProcessor::verifyLastPass (const coach::Result& now)

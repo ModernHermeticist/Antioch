@@ -12,7 +12,7 @@
 
 namespace suite::ActivityBus
 {
-    enum Source { vocal = 0, lead = 1, numSources = 4 };
+    enum Source { vocal = 0, lead = 1, vocalOverMusic = 2, numSources = 4 };   // vocalOverMusic: dB, written raw
 
     namespace detail
     {
@@ -44,6 +44,18 @@ namespace suite::ActivityBus
     {
         const auto age = detail::nowMs() - detail::shared().stampMs[s].load (std::memory_order_relaxed);
         return age < 250u ? detail::shared().level[s].load (std::memory_order_relaxed) : 0.0f;
+    }
+    /** A raw value (vocalOverMusic: how far the vocal sits above the music, dB). */
+    inline void writeValue (Source s, float value) noexcept
+    {
+        detail::shared().level[s].store (value, std::memory_order_relaxed);
+        detail::shared().stampMs[s].store (detail::nowMs(), std::memory_order_relaxed);
+    }
+    /** The raw value, or `missing` if nothing wrote it in the last 250 ms. */
+    inline float readValue (Source s, float missing) noexcept
+    {
+        const auto age = detail::nowMs() - detail::shared().stampMs[s].load (std::memory_order_relaxed);
+        return age < 250u ? detail::shared().level[s].load (std::memory_order_relaxed) : missing;
     }
     inline void clear() noexcept { for (int i = 0; i < numSources; ++i) { detail::shared().level[i].store (0.0f); detail::shared().stampMs[i].store (0); } }
 }

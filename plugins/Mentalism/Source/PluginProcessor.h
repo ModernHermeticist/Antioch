@@ -236,6 +236,18 @@ public:
         been heard again) the rough mix, then the auto-coach until the arc is right. */
     enum class FinishStage { Idle, WaitingForDrop, Coaching, Done };
     juce::StringArray finishSong();
+
+    /** Mix it: Finish the song with masking resolved automatically, then the mud and harshness
+        fixes and the translation check, as one run you can undo in one go. */
+    juce::StringArray mixIt();
+    int undoMixIt();
+    /** Mud and harshness: dips on the tracks causing them (see MixFix.h). Returns what it did. */
+    juce::StringArray applyToneFixes (const Report&);
+    juce::StringArray translationCheck() const;
+    juce::String mixItReport() const { const juce::ScopedLock sl (historyLock); return mixItText; }
+    bool mixItPending = false;
+    uint32_t mixItStartSeq = 0;
+    juce::String mixItText;
     FinishStage finishStage() const { return finishState.load(); }
     juce::String finishStatus() const { const juce::ScopedLock sl (historyLock); return finishText; }
     /** The timer's work (tests call it directly). */
