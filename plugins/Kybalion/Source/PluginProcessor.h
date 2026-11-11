@@ -1,11 +1,14 @@
 #pragma once
 
+#include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "KickBus.h"
 #include "Engines.h"
 #include "SectionBus.h"
 #include "Scenes.h"
+#include "StyleLog.h"
+#include <map>
 
 class KybalionProcessor : public suite::SuiteProcessor
 {
@@ -91,7 +94,7 @@ public:
     /** Your own gate patterns: saved as files, offered in every project. */
     static juce::File userPatternFolder()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Gate patterns");
+        return suite::Alias::file ("Gate patterns");
     }
     bool saveGatePattern (const juce::File& folder, const juce::String& name) const
     {
@@ -119,6 +122,23 @@ public:
         for (int i = 0; i < Params::numSteps; ++i) setParam (Params::Gate::step (i), steps[(size_t) i]);
     }
     void trackNameChanged (const juce::String&) override;
+
+    /** Your gate patterns: once a song has played into its final drop with the gate on, its
+        pattern goes into the style log (with the kind of track, from its name). The pattern list
+        puts your most used first, and a new Kybalion starts on your favourite (for that kind of
+        track once its name is known), once you've kept a pattern in two or more songs. */
+    using Steps = std::array<float, Params::numSteps>;
+    static juce::String stepsText (const Steps&);
+    static Steps stepsFromText (const juce::String&);
+    static juce::String trackKind (const juce::String& trackName);   // pads, plucks, leads, bass, vocals, other
+    /** Patterns by how often you kept them (most first), for a kind of track ("" = any). */
+    static std::vector<std::pair<Steps, int>> favouritePatterns (const std::vector<suite::StyleLog::Entry>&, const juce::String& kind = {});
+    Steps currentSteps() const;
+    void logPatternOnce();
+    std::atomic<bool> reachedFinalDrop { false }, patternLogged { false };
+    bool startedOnFavourite = false;
+    Steps startSteps {};   // what this instance started with: replaced by a favourite only while untouched
+    juce::String kind;
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }

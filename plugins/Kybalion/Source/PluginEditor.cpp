@@ -217,6 +217,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
             }));
             return;
         }
+        if (id >= 800 && id < 800 + (int) favourites.size()) { processor.applySteps (favourites[(size_t) (id - 800)].first); return; }
         if (id <= builtIn) processor.applyGatePattern (id - 1);
         else if (id - builtIn - 1 < (int) userPatterns.size()) processor.applySteps (userPatterns[(size_t) (id - builtIn - 1)].second);
     };
@@ -359,9 +360,30 @@ void KybalionEditor::paint (juce::Graphics& g)
 void KybalionEditor::fillPatterns()
 {
     patternBox.clear (juce::dontSendNotification);
+    userPatterns = KybalionProcessor::loadGatePatterns (KybalionProcessor::userPatternFolder());
+    // Your most used patterns first (from the songs you played to the end).
+    favourites = KybalionProcessor::favouritePatterns (suite::StyleLog::read());
+    if (favourites.size() > 3) favourites.resize (3);
+    if (! favourites.empty())
+    {
+        patternBox.addSectionHeading ("Your most used");
+        for (size_t i = 0; i < favourites.size(); ++i)
+        {
+            juce::String name = "Your pattern";
+            for (const auto& p : Params::Gate::patterns())
+            {
+                KybalionProcessor::Steps s {};
+                std::copy (p.steps.begin(), p.steps.end(), s.begin());
+                if (KybalionProcessor::stepsText (s) == KybalionProcessor::stepsText (favourites[i].first)) name = p.name;
+            }
+            for (const auto& [n, steps] : userPatterns)
+                if (KybalionProcessor::stepsText (steps) == KybalionProcessor::stepsText (favourites[i].first)) name = "Mine: " + n;
+            patternBox.addItem (name + " (" + juce::String (favourites[i].second) + (favourites[i].second == 1 ? " song)" : " songs)"), 800 + (int) i);
+        }
+        patternBox.addSeparator();
+    }
     for (size_t i = 0; i < Params::Gate::patterns().size(); ++i)
         patternBox.addItem (Params::Gate::patterns()[i].name, (int) i + 1);
-    userPatterns = KybalionProcessor::loadGatePatterns (KybalionProcessor::userPatternFolder());
     if (! userPatterns.empty())
     {
         patternBox.addSeparator();

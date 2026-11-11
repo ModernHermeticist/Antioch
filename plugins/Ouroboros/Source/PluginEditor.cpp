@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "Alias.h"
 #include "SceneUI.h"
 #include "Music.h"
 
@@ -256,6 +257,7 @@ void SuitePanel::refresh()
     if (const auto idle = suitecheck::unused (entries); ! idle.isEmpty())
         advice.push_back ({ "Doing nothing (remove to keep the project light): " + idle.joinIntoString (", ") + ".", false });
     notes = processor != nullptr ? processor->getNotes() : juce::StringArray();
+    fixButton.setVisible (suitecheck::needsSessionFix (entries));
     repaint();
 }
 
@@ -385,9 +387,24 @@ RecipePanel::RecipePanel (OuroborosProcessor& p)
     load.onClick = [this] { send (suite::RecipeAction::Load); };
     saveSignature.setTooltip ("Saves every suite plugin's settings as your signature: New song can start from it");
     saveSignature.onClick = [this] { names.setText (suite::Recipes::signature, juce::dontSendNotification); send (suite::RecipeAction::Save); };
-    for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &saveSignature, &caption, &result })
+    // Artist aliases: each keeps its own style log, recipes, signature, templates, hooks, presets and fingerprints.
+    alias.setEditableText (true);
+    alias.addItem ("Main", 1);
+    const auto aliases = suite::Alias::list();
+    for (int i = 0; i < aliases.size(); ++i) alias.addItem (aliases[i], i + 2);
+    alias.setText (suite::Alias::current().isEmpty() ? juce::String ("Main") : suite::Alias::current(), juce::dontSendNotification);
+    alias.setTooltip ("Artist alias: every alias keeps its own style log, recipes, signature, templates, hooks, presets and "
+                      "fingerprints. Choose one, or type a new name, and Switch");
+    useAlias.onClick = [this]
+    {
+        const auto name = alias.getText().trim();
+        suite::Alias::setCurrent (name == "Main" ? juce::String() : name);
+        result.setText ("Now working as " + (suite::Alias::current().isEmpty() ? juce::String ("your main name") : suite::Alias::current())
+                            + ": every suite plugin uses its recipes, style and presets", juce::dontSendNotification);
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &saveSignature, &caption, &result, &alias, &useAlias })
         addAndMakeVisible (c);
-    setSize (460, 330);
+    setSize (460, 370);
     startTimerHz (4);
 }
 
@@ -417,7 +434,13 @@ void RecipePanel::resized()
     save.setBounds (row.removeFromRight (70).reduced (2, 0));
     names.setBounds (row.withTrimmedRight (6));
     r.removeFromTop (8);
-    saveSignature.setBounds (r.removeFromTop (30).removeFromLeft (200));
+    {
+        auto row = r.removeFromTop (30);
+        saveSignature.setBounds (row.removeFromLeft (200));
+        row.removeFromLeft (10);
+        useAlias.setBounds (row.removeFromRight (70).reduced (2, 0));
+        alias.setBounds (row.withTrimmedRight (4));
+    }
     r.removeFromTop (8);
     {
         auto h = r.removeFromTop (54);
@@ -466,7 +489,15 @@ SessionPanel::SessionPanel (OuroborosProcessor& p) : processor (p)
                                            mood.getSelectedId() - 1, signature.getToggleState());
         timerCallback();
     };
-    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &mood, &signature, &go })
+    draft.setTooltip ("Sets up the song, then writes the whole song's MIDI (chords, bass, arp, lead, fills...) into the Drafts folder "
+                      "and saves the setup as a recipe: a full draft in one click");
+    draft.onClick = [this]
+    {
+        sentSeq = processor.draftSong (style.getSelectedId() - 1, root.getSelectedId() - 1, scale.getSelectedId() - 1,
+                                        mood.getSelectedId() - 1, signature.getToggleState());
+        timerCallback();
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &style, &root, &scale, &mood, &signature, &go, &draft })
         addAndMakeVisible (c);
     updateInfo();
     setSize (460, 290);
@@ -523,8 +554,9 @@ void SessionPanel::resized()
     r.removeFromTop (8);
     result.setBounds (r.removeFromBottom (22));
     auto bottom = r.removeFromBottom (32);
-    go.setBounds (bottom.removeFromRight (160));
-    signature.setBounds (bottom.removeFromLeft (220));
+    go.setBounds (bottom.removeFromRight (130));
+    draft.setBounds (bottom.removeFromRight (150).reduced (4, 0));
+    signature.setBounds (bottom.removeFromLeft (170));
     info.setBounds (r);
 }
 
@@ -632,9 +664,30 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         if (id <= 0) return;
         const auto builtIn = (int) arrangement::templates().size();
         if (id == 998) { templateBox.setSelectedId (0, juce::dontSendNotification); exportMarkers(); return; }
+        if (id == 991)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            processor.arrangeFromLoop();
+            timeline.selected = 0;
+            refreshSelection();
+            return;
+        }
+        if (id == 992)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Project tidy", suitecheck::tidyPlan (suite::Registry::list()));
+            return;
+        }
+        if (id == 993)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Stem plan", suitecheck::stemPlan (suite::Registry::list(), {}));
+            return;
+        }
         if (id == 995)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
+            processor.logVersionLengths();   // the versions as you kept them: your lengths, next time
             juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Render plan", processor.renderPlan());
             return;
         }
@@ -1151,6 +1204,9 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Export section markers for FL (MIDI + cue sheet)...", 998);
     templateBox.addItem ("Style report: how you make trance...", 996);
     templateBox.addItem ("Render plan...", 995);
+    templateBox.addItem ("Stem plan for a remix pack...", 993);
+    templateBox.addItem ("Project tidy...", 992);
+    templateBox.addItem ("Arrange from my loop (Prima Materia roles decide who plays where)", 991);
     templateBox.addItem ("Snapshots per section...", 994);
 }
 

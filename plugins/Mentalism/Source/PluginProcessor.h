@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "Advisor.h"
@@ -19,6 +20,9 @@ struct ReferenceProfile
     float lufs = -100.0f, truePeakDb = -100.0f;
     advisor::Bands bands {};
     bool valid = false;
+    /** The reference's loudest 20 s (its drop), kept for A/B at equal loudness. */
+    struct Excerpt { juce::AudioBuffer<float> audio; double sampleRate = 44100.0; float lufs = -100.0f; };
+    std::shared_ptr<const Excerpt> excerpt;
 
     /** Analyses an audio file (WAV/AIFF/FLAC/Ogg/MP3). Safe to call on any thread. */
     static ReferenceProfile analyse (const juce::File&, const std::atomic<bool>* cancel = nullptr);
@@ -72,7 +76,7 @@ public:
     static juce::File reportFolder()
     {
         if (reportFolderOverride() != juce::File()) return reportFolderOverride();
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Mix reports");
+        return suite::Alias::file ("Mix reports");
     }
     juce::File saveMixReport() const;
 
@@ -84,11 +88,20 @@ public:
     MySound getMySound() const { const juce::ScopedLock sl (referenceLock); return mySound; }
     void setMySound (const MySound& m) { const juce::ScopedLock sl (referenceLock); mySound = m; }
 
+    /** Auto-reference: analyses every track in a folder (up to 40) and loads the one closest to
+        this song (tone so far, and key and tempo where the file names say them). Background thread. */
+    void autoReference (const juce::File& folder);
+    /** The choice itself, synchronously (tests): the profile to load and why it was chosen. */
+    static std::pair<ReferenceProfile, juce::String> chooseReference (const juce::File& folder, const advisor::Bands& mix, bool haveMix,
+                                                                      int root, bool minor, float bpm, const std::atomic<bool>* cancel = nullptr);
+    juce::String autoReferenceStatus() const { const juce::ScopedLock sl (referenceLock); return autoRefText; }
+
     /** Starts analysing a reference track in the background. */
     void loadReference (const juce::File&);
     bool isLoadingReference() const { return loading.load(); }
     ReferenceProfile getReference() const;
     void setReference (const ReferenceProfile&);
+    juce::String autoRefText;
 
     /** Everything the UI shows: current numbers, chosen targets and advice. */
     struct Report
@@ -112,6 +125,27 @@ public:
         song logs each finished mix's arc (breakdown contrast, build rise) and every track's level
         against the kick; the coach judges by your arc once three songs are logged. */
     void logFinishedSong (const Report&);
+    /** Mix DNA: once two or more finished masters are in the style log, My sound learns from them
+        (unless you chose your own tracks). True if it changed. */
+    bool learnMixDna();
+    /** "Sounds like me": this song against your style log and mix DNA (see LikeMe.h). */
+    juce::String soundsLikeMe() const;
+    /** Live mix checks, while the song plays: a track going over 0 dBFS (Prima Materia), a vocal
+        buried for 4 bars (Solve et Coagula), a drop that's almost mono for 8 s. First in the suggestions. */
+    juce::StringArray liveChecks() const;
+    /** A/B (Compare switch, or automate it from a key): while it's on, Mentalism plays the reference's
+        loudest 20 s, looped, at the loudness the mix had when you switched, so you compare sound,
+        not level. Put Mentalism last on the master to hear it. */
+    std::atomic<bool> abPlaying { false };
+    std::atomic<float> abGainDb { 0.0f };
+private:
+    juce::SpinLock abLock;
+    std::shared_ptr<const ReferenceProfile::Excerpt> abShared, abExcerpt;   // abExcerpt: the audio thread's copy
+    double abPos = 0.0;
+public:
+    static constexpr float monoCorrelation = 0.97f, monoDropAfterSeconds = 8.0f;
+    std::atomic<float> monoDropSeconds { 0.0f };
+    std::atomic<float> hostBpm { 0.0f };
     void refreshCoachThresholds();
     coach::Thresholds getCoachThresholds() const { const juce::ScopedLock sl (historyLock); return coachLimits; }
 
@@ -140,6 +174,9 @@ public:
     bool applySession (const suite::SessionStyle& style, int, int) override
     {
         setParameterPlain (apvts, Params::loudnessTarget, (float) style.loudnessTarget);
+        // Mix DNA: once your finished songs taught it your tonal balance, new songs aim for it.
+        if (getMySound().valid && getMySound().learnedFromSongs())
+            setParameterPlain (apvts, Params::tonalTarget, (float) advisor::mySoundTonalIndex);
         return true;
     }
 

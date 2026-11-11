@@ -1,6 +1,8 @@
 // Offline tests for Azoth. Usage: AzothTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "StyleLog.h"
+#include "Registry.h"
 #include "KickBus.h"
 #include "KeyBus.h"
 #include "TestUtils.h"
@@ -82,6 +84,10 @@ int main (int argc, char** argv)
     if (outDir != juce::File())
         outDir.createDirectory();
 
+    // Never the real style log (Azoth logs your transitions there and starts from them).
+    const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("AzothTestsStyleLog.txt");
+    testStyleLog.deleteFile();
+    suite::StyleLog::setFileForTests (testStyleLog);
     suite::KeyBus::publish (9, 0);   // A minor: subs land on A1 (55 Hz)
 
     section ("Transitions follow the map");
@@ -652,6 +658,76 @@ int main (int argc, char** argv)
                "and another project loads it (roll to 1/64, impact 33%)");
         AzothProcessor::presetFolderOverride() = juce::File();
         dir.deleteRecursively();
+    }
+
+    section ("Your transitions");
+    {
+        auto playSong = []
+        {
+            suite::SectionBus::publish (testMap());
+            auto p = quiet();
+            set (*p, AzothProcessor::gapId, 2.0f);         // a whole beat of silence
+            set (*p, AzothProcessor::buildShapeId, 2.0f);  // late surge
+            set (*p, AzothProcessor::rollToId, 2.0f);      // on to 1/64
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            render (*p, 6.0, {}, nullptr, &head);
+            p->logTransitionsOnce();
+            const auto beforeDrop = suite::StyleLog::read().size();
+            render (*p, 7.5, {}, nullptr, &head);   // into the final drop (bar 7, 12 s)
+            p->setPlayHead (nullptr);
+            p->logTransitionsOnce();
+            p->logTransitionsOnce();
+            return std::make_pair (beforeDrop, suite::StyleLog::read().size());
+        };
+        const auto [before, after] = playSong();
+        check (before == 0 && after == 1, "the style is logged once the song reaches its final drop, and only once");
+        check (! AzothProcessor().usedYourTransitions, "one song isn't enough to change a new Azoth");
+        playSong();
+        AzothProcessor fresh;
+        check (fresh.usedYourTransitions && (int) fresh.apvts.getRawParameterValue (AzothProcessor::gapId)->load() == 2
+                   && (int) fresh.apvts.getRawParameterValue (AzothProcessor::buildShapeId)->load() == 2
+                   && (int) fresh.apvts.getRawParameterValue (AzothProcessor::rollToId)->load() == 2,
+               "after two, a new Azoth starts with your gap, build shape and roll");
+        testStyleLog.deleteFile();
+    }
+
+    section ("Session health: missing samples, an older project");
+    {
+        suite::FixBus::reset();
+        auto p = quiet();
+        p->apvts.state.setProperty ("sample0", "/nowhere/impact.wav", nullptr);
+        check (p->missingSamples() == 1 && (p->suiteStatus().flags & suite::Status::missingFiles) != 0, "a sample that was moved is reported");
+        const auto seq = suite::FixBus::send (suite::Fix::SessionHealth);
+        p->fixes->poll();
+        check (p->missingSamples() == 0 && p->apvts.state["sample0"].toString().isEmpty(), "Fix the session puts the synthesised sound back");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (p->apvts.state["sample0"].toString() == "/nowhere/impact.wav", "and undo remembers the path");
+
+        juce::MemoryBlock state;
+        quiet()->getStateInformation (state);
+        auto xml = juce::AudioProcessor::getXmlFromBinary (state.getData(), (int) state.getSize());
+        check (xml != nullptr && xml->getIntAttribute ("version") == suite::SuiteProcessor::stateVersion, "projects remember the suite version they were saved with");
+        xml->setAttribute ("version", 9);
+        juce::MemoryBlock older;
+        juce::AudioProcessor::copyXmlToBinary (*xml, older);
+        suite::Registry::reset();
+        auto q = quiet();
+        q->setStateInformation (older.getData(), (int) older.getSize());
+        q->announce();
+        auto r = quiet();
+        r->setStateInformation (state.getData(), (int) state.getSize());
+        r->announce();
+        bool olderFlagged = false, currentFlagged = false;
+        for (const auto& e : suite::Registry::list())
+        {
+            if (e.id == q->getInstanceId()) olderFlagged = e.has (suite::Status::olderState);
+            if (e.id == r->getInstanceId()) currentFlagged = e.has (suite::Status::olderState);
+        }
+        check (olderFlagged && ! currentFlagged, "one saved by an older version is flagged for the session check; a current one isn't");
+        suite::Registry::reset();
     }
 
     section ("No surprises");

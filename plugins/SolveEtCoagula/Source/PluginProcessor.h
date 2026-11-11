@@ -6,6 +6,8 @@
 #include "Scenes.h"
 #include "VocalChops.h"
 #include "VocalBus.h"
+#include "SuiteDSP.h"
+#include "Registry.h"
 
 class SolveEtCoagulaProcessor : public suite::SuiteProcessor
 {
@@ -56,6 +58,7 @@ public:
         SuiteStatus s;
         s.flags = suite::Status::sidechainWanted | (sidechainConnected.load() ? suite::Status::sidechainConnected : 0u);
         if (! sidechainConnected.load() && apvts.getRawParameterValue (chopsOnId)->load() < 0.5f) s.flags |= suite::Status::idle;   // nothing to do
+        if (vocalBuried.load()) s.flags |= suite::Status::vocalBuried;
         return s;
     }
     suite::SceneEngine scenes;
@@ -68,6 +71,11 @@ public:
     }
     enum SceneSlot { sDepth, sSensitivity, sFocus, sMix };
     std::atomic<bool> sidechainConnected { false }, vocalPresent { false };
+    /** Live mix check (Mentalism): in the presence range (1-4 kHz) the music has been more than
+        `buriedDb` above the vocal (as it arrives on the sidechain) for 4 sung bars in a row. */
+    static constexpr float buriedDb = 9.0f;
+    std::atomic<bool> vocalBuried { false };
+    std::atomic<int> buriedBars { 0 };
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -76,6 +84,8 @@ private:
     suite::SectionFollower sections;
     bool inChopSection = false;
     int vocalBar = -1, vocalBlocks = 0, barBlocks = 0;   // for the VocalBus: which bars the vocal sings in
+    std::array<suite::Svf, 4> presence;   // vocal HP, vocal LP, music HP, music LP: 1-4 kHz
+    double vocalPresence = 0.0, musicPresence = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaProcessor)
 };

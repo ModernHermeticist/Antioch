@@ -341,6 +341,25 @@ int main (int argc, char** argv)
         check (std::abs (staged->apvts.getRawParameterValue (pm::inputGainId)->load() + 8.97f) < 0.2f, "and sets Input gain to bring it to -18 dBFS");
     }
 
+    section ("Arrange from the loop");
+    {
+        suite::FixBus::reset();
+        auto lead = make (roleIndex ("Lead"));
+        auto none = make (0);
+        for (auto* p : { lead.get(), none.get() })
+            for (int t = 0; t < pm::numTypes; ++t) set (*p, pm::levelId (t), 0.0f);   // the loop: everything plays everywhere
+        const auto seq = suite::FixBus::send (suite::Fix::ArrangeFromLoop);
+        lead->fixes->poll();
+        none->fixes->poll();
+        const auto introLevel = lead->apvts.getRawParameterValue (pm::levelId ((int) T::Intro))->load();
+        const auto dropLevel = lead->apvts.getRawParameterValue (pm::levelId ((int) T::Drop))->load();
+        check (introLevel <= pm::offDb + 0.5f && dropLevel > -1.0f, "the lead sits out the intro and plays the drop, from its role");
+        check (none->apvts.getRawParameterValue (pm::levelId ((int) T::Intro))->load() == 0.0f, "a track with no role is left alone");
+        suite::FixBus::sendUndo (seq);
+        lead->fixes->poll();
+        check (lead->apvts.getRawParameterValue (pm::levelId ((int) T::Intro))->load() == 0.0f, "undo puts the loop back");
+    }
+
     section ("Energy curve");
     {
         // 120 BPM: Groove bars 1-2, Drop bars 3-4; the drop drawn at 75% energy.

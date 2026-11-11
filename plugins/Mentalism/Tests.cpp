@@ -1,6 +1,9 @@
 // Offline tests for Mentalism. Usage: MentalismTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "LikeMe.h"
+#include "AutoReference.h"
+#include "Registry.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
 #include "StyleLog.h"
@@ -39,6 +42,9 @@ int main (int argc, char** argv)
     // Never write the real style log from tests.
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");
     suite::StyleLog::setFileForTests (testStyleLog);
+    const auto testMySound = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsMySound.txt");
+    testMySound.deleteFile();
+    MySound::fileOverride() = testMySound;   // never the real My sound either
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -676,6 +682,187 @@ int main (int argc, char** argv)
         suite::SectionMap loop = song;
         loop.totalBars = 32;
         check (coach::analyse (loop, none).problems == 0, "a 32-bar sketch isn't judged on lengths");
+    }
+
+    section ("Mix DNA and 'sounds like me'");
+    {
+        testStyleLog.deleteFile();
+        auto shape = [] (float top)
+        {
+            juce::StringArray b;
+            for (int i = 0; i < analysis::numBands; ++i) b.add (juce::String (-20.0f - 2.0f * (float) i + (i >= 8 ? top : 0.0f), 2));
+            return b.joinIntoString (",");
+        };
+        suite::StyleLog::add ("master", { { "lufs", "-8.0" }, { "truepeak", "-0.3" }, { "bands", shape (0.0f) } });
+        check (! MySound::fromFinishedSongs (suite::StyleLog::read()).valid, "one finished master isn't enough");
+        suite::StyleLog::add ("master", { { "lufs", "-9.0" }, { "truepeak", "-0.5" }, { "bands", shape (1.0f) } });
+        suite::StyleLog::add ("master", { { "lufs", "-8.4" }, { "truepeak", "-0.4" }, { "bands", shape (0.4f) } });
+        suite::StyleLog::add ("master", { { "lufs", "-7.0" }, { "truepeak", "-0.2" } });   // an older entry with no tonal balance
+        const auto dna = MySound::fromFinishedSongs (suite::StyleLog::read());
+        check (dna.valid && dna.tracks == 3 && std::abs (dna.lufs + 8.4f) < 0.01f && std::abs (dna.bands[9] - (-38.0f + 0.4f)) < 0.01f && dna.learnedFromSongs(),
+               "three finished masters teach your sound: the median loudness (" + juce::String (dna.lufs, 1) + " LUFS) and balance");
+
+        auto p = make();
+        p->setMySound ({});
+        check (p->learnMixDna() && p->getMySound().learnedFromSongs() && MySound::load (testMySound).valid, "My sound learns it by itself, and keeps it");
+        MySound chosen = dna;
+        chosen.names = { "my track.wav" };
+        p->setMySound (chosen);
+        check (! p->learnMixDna() && ! p->getMySound().learnedFromSongs(), "but never replaces tracks you chose yourself");
+        p->setMySound (dna);
+        suite::SessionStyle style;
+        p->applySession (style, 9, 0);
+        check ((int) p->apvts.getRawParameterValue (Params::tonalTarget)->load() == advisor::mySoundTonalIndex, "a new song aims for your tonal balance");
+
+        suite::StyleLog::add ("song", { { "key", "Am" }, { "bpm", "138" }, { "bars", "224" }, { "structure", "Intro-Breakdown-Drop-Outro" } });
+        suite::StyleLog::add ("song", { { "key", "Am" }, { "bpm", "140" }, { "bars", "232" }, { "structure", "Intro-Breakdown-Drop-Outro" } });
+        suite::StyleLog::add ("song", { { "key", "Em" }, { "bpm", "138" }, { "bars", "224" }, { "structure", "Intro-Drop-Outro" } });
+        likeme::Song mine;
+        mine.key = "Am"; mine.bpm = 138.0f; mine.structure = "Intro-Breakdown-Drop-Outro"; mine.bars = 224; mine.lufs = -8.5f;
+        mine.haveBands = true;
+        for (size_t b = 0; b < mine.bands.size(); ++b) mine.bands[b] = dna.bands[b] - 3.0f;   // same shape, quieter
+        likeme::Song other = mine;
+        other.key = "F"; other.bpm = 128.0f; other.structure = "Drop-Breakdown-Drop"; other.bars = 128; other.lufs = -13.0f;
+        other.bands[9] += 6.0f;
+        const auto a = likeme::compare (suite::StyleLog::read(), mine, dna), b = likeme::compare (suite::StyleLog::read(), other, dna);
+        check (a.enough && a.score >= 90, "a song made your usual way scores high (" + juce::String (a.score) + "%)");
+        check (b.score <= 35 && b.text().contains ("rarely write in major") && b.text().contains ("10 slower") && b.text().contains ("new for you")
+                   && b.text().contains ("more at 16 kHz"),
+               "a song that leaves your sound scores low and says where (" + juce::String (b.score) + "%)");
+        testStyleLog.deleteFile();
+        check (! likeme::compare (suite::StyleLog::read(), mine, dna).enough, "with no history it says what it needs");
+    }
+
+    section ("Live mix checks and A/B");
+    {
+        suite::Registry::reset();
+        auto p = make();
+        check (p->liveChecks().isEmpty(), "nothing to say about a quiet suite");
+        suite::Registry::announce (9001, "Prima Materia", "Lead", suite::Status::clipping, {});
+        suite::Registry::announce (9002, "Solve et Coagula", "Vox", suite::Status::vocalBuried, {});
+        const auto live = p->liveChecks().joinIntoString ("\n");
+        check (live.contains ("'Lead' is going over 0 dBFS") && live.contains ("vocal on 'Vox' has been buried"), "a clipping track and a buried vocal are flagged");
+        check (p->report().advice[0].startsWith ("Live:"), "live problems come first in the suggestions");
+        suite::Registry::reset();
+
+        // A drop that's mono for 8 s.
+        suite::SectionMap m;
+        m.totalBars = 16; m.count = 1;
+        m.sections[0] = { 1, suite::SectionType::Drop };
+        suite::SectionBus::publish (m);
+        auto q = make();
+        FakePlayHead head;
+        q->setPlayHead (&head);
+        juce::Random rng (3);
+        auto noise = [&rng] (bool mono)
+        {
+            return [&rng, mono] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto a = 0.2f * (rng.nextFloat() * 2.0f - 1.0f), c = 0.2f * (rng.nextFloat() * 2.0f - 1.0f);
+                    b.setSample (0, i, a); b.setSample (1, i, mono ? a : c);
+                }
+            };
+        };
+        render (*q, 6.0, noise (true), nullptr, &head);
+        check (q->liveChecks().isEmpty(), "6 s of a mono drop: not yet");
+        render (*q, 6.0, noise (true), nullptr, &head);   // counted once the drop is loud enough (short-term loudness takes ~3 s)
+        check (q->liveChecks().joinIntoString ("").contains ("drop is almost mono"), "after 8 s: the drop is almost mono");
+        render (*q, 2.0, noise (false), nullptr, &head);
+        check (q->liveChecks().isEmpty(), "and it clears when the drop opens up");
+        q->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+
+        // A/B: a reference whose loudest part is a 1 kHz tone, heard at the mix's loudness.
+        const auto refFile = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("MentalismABRef.wav");
+        {
+            juce::AudioBuffer<float> b (2, (int) (sampleRate * 40.0));
+            b.clear();
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) i / sampleRate;
+                const auto loud = t >= 10.0 && t < 30.0;
+                const auto v = (float) ((loud ? 0.25 : 0.02) * std::sin (juce::MathConstants<double>::twoPi * (loud ? 1000.0 : 440.0) * t));
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+            writeWav (refFile, b);
+        }
+        const auto ref = ReferenceProfile::analyse (refFile);
+        check (ref.valid && ref.excerpt != nullptr && ref.excerpt->audio.getNumSamples() == (int) (20.0 * sampleRate),
+               "loading a reference keeps its loudest 20 s for A/B (" + juce::String (ref.excerpt != nullptr ? ref.excerpt->lufs : -100.0f, 1) + " LUFS)");
+        auto r = make();
+        r->setReference (ref);
+        juce::Random rng2 (9);
+        auto mix = [&rng2] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i) { const auto v = 0.05f * (rng2.nextFloat() * 2.0f - 1.0f); b.setSample (0, i, v); b.setSample (1, i, v); }
+        };
+        render (*r, 4.0, mix);
+        const auto mixLufs = r->report().shortTerm;
+        set (*r, Params::compareAB, 1.0f);
+        juce::AudioBuffer<float> heard;
+        render (*r, 4.0, mix, &heard);
+        analysis::LoudnessMeter lm;
+        lm.prepare (sampleRate);
+        for (int i = (int) sampleRate; i < heard.getNumSamples(); ++i) lm.process (heard.getSample (0, i), heard.getSample (1, i));
+        auto toneLevel = [&heard] (double hz)
+        {
+            double c = 0.0, sn = 0.0;
+            const auto i0 = (int) sampleRate, i1 = heard.getNumSamples();
+            for (int i = i0; i < i1; ++i)
+            {
+                const auto w = juce::MathConstants<double>::twoPi * hz * i / sampleRate;
+                c += heard.getSample (0, i) * std::cos (w); sn += heard.getSample (0, i) * std::sin (w);
+            }
+            return 2.0 * std::sqrt (c * c + sn * sn) / (i1 - i0);
+        };
+        check (toneLevel (1000.0) > 0.01 && toneLevel (1000.0) > 20.0 * toneLevel (440.0) && std::abs (lm.integrated() - mixLufs) < 1.0f,
+               "A/B plays the reference's loud part at the mix's loudness (" + juce::String (lm.integrated(), 1) + " vs " + juce::String (mixLufs, 1) + " LUFS)");
+        set (*r, Params::compareAB, 0.0f);
+        juce::AudioBuffer<float> back;
+        render (*r, 0.5, mix, &back);
+        check (! r->abPlaying.load() && peakBetween (back, 0.1, 0.5) < 0.06f, "and switching it off brings the mix back");
+        refFile.deleteFile();
+    }
+
+    section ("Auto-reference from a folder");
+    {
+        check (autoref::keyFromName ("Artist - Track (F#m, 138)") == std::make_pair (6, true) && autoref::keyFromName ("Song in Bb major") == std::make_pair (10, false)
+                   && ! autoref::keyFromName ("Breakdown Mix").has_value(),
+               "keys in file names: F#m, Bb major (and not 'Breakdown')");
+        check (autoref::bpmFromName ("Track (Am, 138)") == 138.0f && autoref::bpmFromName ("140bpm Anthem") == 140.0f && autoref::bpmFromName ("Mix 2") == 0.0f,
+               "tempos in file names");
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("MentalismAutoRef");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        auto write = [&dir] (const juce::String& name, float hz)
+        {
+            juce::AudioBuffer<float> b (2, (int) (sampleRate * 6.0));
+            juce::Random rng (2);
+            float lp = 0.0f;
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                lp += 0.05f * (rng.nextFloat() * 2.0f - 1.0f - lp);
+                const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / sampleRate) + 0.5f * lp;
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+            writeWav (dir.getChildFile (name + ".wav"), b);
+        };
+        write ("Bright one (Am, 138)", 6000.0f);
+        write ("Dark one (Am, 138)", 120.0f);
+        write ("Dark one (C#m, 128)", 120.0f);
+        // The mix so far: dark (a low tone over the same noise).
+        advisor::Bands mix {};
+        {
+            const auto p = ReferenceProfile::analyse (dir.getChildFile ("Dark one (C#m, 128).wav"));
+            mix = p.bands;
+        }
+        const auto [pick, why] = MentalismProcessor::chooseReference (dir, mix, true, 9, true, 138.0f);
+        check (pick.valid && pick.name == "Dark one (Am, 138)", "picks the track with the closest tone, key and tempo (" + why + ")");
+        const auto [noTone, why2] = MentalismProcessor::chooseReference (dir, mix, false, 9, true, 138.0f);
+        check (noTone.name.contains ("(Am, 138)"), "without a mix yet, the names' key and tempo decide (" + why2 + ")");
+        dir.deleteRecursively();
     }
 
     section ("Pass-through");

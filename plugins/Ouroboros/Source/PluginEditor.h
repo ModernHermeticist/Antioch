@@ -39,8 +39,15 @@ private:
 class SuitePanel : public juce::Component, private juce::Timer
 {
 public:
-    explicit SuitePanel (OuroborosProcessor* p = nullptr) : processor (p) { refresh(); setSize (660, 610); startTimerHz (2); }
+    explicit SuitePanel (OuroborosProcessor* p = nullptr) : processor (p)
+    {
+        fixButton.setTooltip ("Puts the synthesised sounds back where samples are missing (undo in Mentalism's History)");
+        fixButton.onClick = [] { suite::FixBus::send (suite::Fix::SessionHealth); };
+        addChildComponent (fixButton);
+        refresh(); setSize (660, 610); startTimerHz (2);
+    }
     void paint (juce::Graphics&) override;
+    void resized() override { fixButton.setBounds (getLocalBounds().reduced (14, 10).removeFromBottom (28).removeFromRight (160)); }
     void refresh();
 
 private:
@@ -50,6 +57,7 @@ private:
     std::vector<suitecheck::Advice> advice;
     suitecheck::Advice next;
     juce::StringArray notes;
+    juce::TextButton fixButton { "Fix the session" };
 };
 
 /** Snapshot per section: a snapshot slot for each section type. */
@@ -80,6 +88,8 @@ private:
     juce::TextButton save { "Save" }, load { "Load" }, saveSignature { "Save as my signature" }, rollBack { "Roll back" };
     std::unique_ptr<suite::ui::Choice> autosave;
     juce::ComboBox history;
+    juce::ComboBox alias;          // artist alias: Main, yours, or type a new name
+    juce::TextButton useAlias { "Switch" };
     juce::Label caption, result;
     uint32_t sentSeq = 0;
     juce::String sentWhat;
@@ -102,7 +112,7 @@ private:
     juce::ComboBox style, root, scale, mood;
     juce::ToggleButton signature { "Start from my signature" };
     juce::Label styleLabel, keyLabel, moodLabel, info, result;
-    juce::TextButton go { "Set up the song" };
+    juce::TextButton go { "Set up the song" }, draft { "Draft the whole song" };
     uint32_t sentSeq = 0;
 };
 

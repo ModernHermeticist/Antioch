@@ -5,6 +5,7 @@
 // length, structure); Mentalism logs each finished master (loudness, peak). Ouroboros reads
 // it for the style report. Plain text in <user app data>/Antioch Suite/Style log.txt.
 
+#include "Alias.h"
 #include <juce_core/juce_core.h>
 #include <algorithm>
 #include <map>
@@ -17,7 +18,7 @@ namespace suite::StyleLog
     inline juce::File file()
     {
         if (fileOverride() != juce::File()) return fileOverride();
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Style log.txt");
+        return suite::Alias::file ("Style log.txt");
     }
 
     struct Entry

@@ -20,6 +20,69 @@ KybalionProcessor::KybalionProcessor()
                     { T::Build, sGateLength, -0.25f }, { T::Build, sGateFilter, 0.3f },
                     { T::Drop, sGateDepth, 0.2f }, { T::Outro, sGateDepth, -0.3f },
                     { T::count, sGateDepth, 0.1f }, { T::count, sDuckDepth, 0.05f } });   // Drop 2+
+
+    // Your favourite gate pattern, for a new Kybalion (a saved project's own pattern replaces it as it loads).
+    const auto favourites = favouritePatterns (suite::StyleLog::read());
+    if (! favourites.empty() && favourites.front().second >= 2)
+    {
+        for (int i = 0; i < Params::numSteps; ++i)
+            if (auto* p = apvts.getParameter (Params::Gate::step (i))) p->setValueNotifyingHost (p->convertTo0to1 (favourites.front().first[(size_t) i]));
+        startedOnFavourite = true;
+    }
+    startSteps = currentSteps();
+}
+
+juce::String KybalionProcessor::stepsText (const Steps& s)
+{
+    juce::StringArray v;
+    for (auto x : s) v.add (juce::String (x, 2));
+    return v.joinIntoString (",");
+}
+
+KybalionProcessor::Steps KybalionProcessor::stepsFromText (const juce::String& text)
+{
+    Steps s {};
+    const auto v = juce::StringArray::fromTokens (text, ",", "");
+    for (int i = 0; i < Params::numSteps && i < v.size(); ++i) s[(size_t) i] = juce::jlimit (0.0f, 1.0f, v[i].getFloatValue());
+    return s;
+}
+
+juce::String KybalionProcessor::trackKind (const juce::String& trackName)
+{
+    const auto n = trackName.toLowerCase();
+    auto any = [&n] (std::initializer_list<const char*> words) { for (auto* w : words) if (n.contains (w)) return true; return false; };
+    if (any ({ "vox", "vocal", "voc", "acapella" })) return "vocals";
+    if (any ({ "bass", "sub" })) return "bass";
+    if (any ({ "pluck", "stab", "arp" })) return "plucks";
+    if (any ({ "lead", "saw", "synth" })) return "leads";
+    if (any ({ "pad", "chord", "string", "keys", "piano" })) return "pads";
+    return n.isEmpty() ? juce::String() : juce::String ("other");
+}
+
+std::vector<std::pair<KybalionProcessor::Steps, int>> KybalionProcessor::favouritePatterns (const std::vector<suite::StyleLog::Entry>& entries, const juce::String& kind)
+{
+    std::map<juce::String, int> counts;
+    for (const auto& e : entries)
+        if (e.kind == "gate" && e.get ("steps").isNotEmpty() && (kind.isEmpty() || e.get ("track") == kind))
+            ++counts[e.get ("steps")];
+    std::vector<std::pair<juce::String, int>> sorted (counts.begin(), counts.end());
+    std::stable_sort (sorted.begin(), sorted.end(), [] (const auto& a, const auto& b) { return a.second > b.second; });
+    std::vector<std::pair<Steps, int>> out;
+    for (const auto& [text, n] : sorted) out.push_back ({ stepsFromText (text), n });
+    return out;
+}
+
+KybalionProcessor::Steps KybalionProcessor::currentSteps() const
+{
+    Steps s {};
+    for (int i = 0; i < Params::numSteps; ++i) s[(size_t) i] = value (Params::Gate::step (i));
+    return s;
+}
+
+void KybalionProcessor::logPatternOnce()
+{
+    if (! reachedFinalDrop.load() || value (Params::gateOn) < 0.5f || patternLogged.exchange (true)) return;
+    suite::StyleLog::add ("gate", { { "steps", stepsText (currentSteps()) }, { "track", kind } });
 }
 
 bool KybalionProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -137,6 +200,10 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     const auto haveSections = sections.refresh();
     const auto followSections = value (Params::follow) > 0.5f && haveSections && host.playing && host.hasPpq;
+    if (haveSections && host.playing && host.hasPpq)
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid && sec.type == suite::SectionType::Drop
+                                                                             && sec.index == sections.getMap().lastDropIndex())
+            reachedFinalDrop.store (true);   // the song was played to its final drop: the pattern was kept
     const auto barQ = host.barQuarters();
     const auto fillWhen = (int) value (Params::Fill::when), fillStyle = (int) value (Params::Fill::style);
     const auto chordMode = (int) value (Params::Fill::chords);
@@ -302,6 +369,7 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
 {
     SuiteStatus s;
+    logPatternOnce();
     const auto source = (int) value (Params::Duck::source);
     if (source == Params::Duck::Sidechain) s.flags |= suite::Status::sidechainWanted;
     if (sidechainConnected.load()) s.flags |= suite::Status::sidechainConnected;
@@ -331,6 +399,20 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
 
 void KybalionProcessor::trackNameChanged (const juce::String& name)
 {
+    // Your favourite pattern for this kind of track, while the gate is still as it started.
+    kind = trackKind (name);
+    if (kind.isNotEmpty())
+    {
+        const auto favourites = favouritePatterns (suite::StyleLog::read(), kind);
+        if (! favourites.empty() && favourites.front().second >= 2 && currentSteps() == startSteps && favourites.front().first != startSteps)
+        {
+            auto steps = favourites.front().first;
+            auto apply = [steps] (KybalionProcessor& p) { p.applySteps (steps); p.startSteps = steps; };
+            if (juce::MessageManager::getInstance()->isThisTheMessageThread()) apply (*this);
+            else juce::MessageManager::callAsync ([safe = juce::WeakReference<KybalionProcessor> (this), apply] { if (auto* p = safe.get()) apply (*p); });
+        }
+    }
+
     // Auto-role: a Kybalion on a track called "Kick" shares its kick with the suite.
     const auto n = name.toLowerCase();
     if ((n.contains ("kick") || n.startsWith ("bd")) && value (Params::Duck::shareKick) < 0.5f)

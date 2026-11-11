@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "TempoBus.h"
 #include "PluginEditor.h"
 #include "Music.h"
 #include "HostInfo.h"
@@ -42,6 +43,7 @@ OuroborosProcessor::OuroborosProcessor()
       apvts (*this, nullptr, "OuroborosState", layout())
 {
     map = arrangement::fromTemplate (arrangement::templates().front());
+    suite::TempoBus::clear();   // a new project: its tempo is noted as it plays
     fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
     fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
     {
@@ -109,6 +111,9 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (host.playing) playedSinceAutosave.store (true);
     if (host.hasPpq)
         ppq.store (host.ppq);
+    // Tempo changes: note each bar's tempo as the song plays, for times in the cue sheet and exports.
+    if (host.playing && host.hasPpq && host.barQuarters() > 0.0)
+        suite::TempoBus::mark ((int) std::floor (host.ppq / host.barQuarters() + 1.0e-9) + 1, (float) host.bpm);
 
     // Live mode: a note picks the section that starts on the next bar line.
     if (apvts.getRawParameterValue (liveId)->load() > 0.5f && host.hasPpq)
@@ -503,6 +508,36 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     state.appendChild (notesTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
+}
+
+suite::SectionMap OuroborosProcessor::snapshotMap (int slot) const
+{
+    suite::SectionMap m;
+    const auto data = snapshotState (slot);
+    if (data.getSize() == 0) return m;
+    const auto xml = getXmlFromBinary (data.getData(), (int) data.getSize());
+    if (xml == nullptr) return m;
+    if (const auto* arr = xml->getChildByName ("Arrangement"))
+    {
+        m.totalBars = arr->getIntAttribute ("totalBars");
+        for (const auto* s : arr->getChildWithTagNameIterator ("Section"))
+            if (m.count < suite::SectionMap::maxSections)
+                m.sections[(size_t) m.count++] = { s->getIntAttribute ("start", 1), (suite::SectionType) juce::jlimit (0, (int) suite::SectionType::count - 1, s->getIntAttribute ("type")) };
+    }
+    return m;
+}
+
+bool OuroborosProcessor::logVersionLengths()
+{
+    if (versionLengthsLogged) return false;
+    const auto original = snapshotMap (0), radio = snapshotMap (suite::radioEdit), extended = snapshotMap (suite::extendedMix);
+    std::map<juce::String, juce::String> fields;
+    if (radio.count > 0) fields["radioseconds"] = juce::String (radio.totalBars * 4.0 * 60.0 / juce::jmax (1.0, (double) bpm.load()), 0);
+    if (extended.count > 0 && original.count > 0 && extended.totalBars > original.totalBars)
+        fields["extendedextra"] = juce::String (extended.totalBars - original.totalBars);
+    if (fields.empty()) return false;
+    versionLengthsLogged = true;
+    return suite::StyleLog::add ("versions", fields);
 }
 
 void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)

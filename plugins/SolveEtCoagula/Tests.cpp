@@ -314,6 +314,44 @@ int main (int argc, char** argv)
         check (suite::VocalBus::read().empty(), "and the marks can be cleared");
     }
 
+    section ("Live check: a buried vocal");
+    {
+        auto run = [] (float musicAmp)
+        {
+            auto p = make (true);
+            set (*p, P::mixId, 0.0f);   // no dips: measure what's there
+            FakePlayHead head;
+            head.bpm = 120.0;   // 2 s bars, the vocal sings all 6 bars
+            p->setPlayHead (&head);
+            const auto total = (int64_t) (12.2 * sampleRate);
+            juce::AudioBuffer<float> buffer (4, blockSize);
+            juce::MidiBuffer midi;
+            juce::Random rng (4);
+            for (int64_t pos = 0; pos < total; pos += blockSize)
+            {
+                const auto n = (int) std::min<int64_t> (blockSize, total - pos);
+                buffer.setSize (4, n, false, false, true);
+                for (int i = 0; i < n; ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto v = 0.1f * (float) std::sin (twoPi * 2000.0 * t);
+                    const auto m = musicAmp * (rng.nextFloat() * 2.0f - 1.0f);
+                    buffer.setSample (0, i, m); buffer.setSample (1, i, m);
+                    buffer.setSample (2, i, v); buffer.setSample (3, i, v);
+                }
+                p->processBlock (buffer, midi);
+                head.ppq += n * head.bpm / 60.0 / sampleRate;
+            }
+            p->setPlayHead (nullptr);
+            return std::make_pair (p->vocalBuried.load(), (p->suiteStatus().flags & suite::Status::vocalBuried) != 0);
+        };
+        const auto [buried, flagged] = run (0.9f);
+        const auto [clear, clearFlag] = run (0.02f);
+        check (buried && flagged, "loud music over a quiet vocal for 4+ bars is flagged for Mentalism");
+        check (! clear && ! clearFlag, "a vocal that sits on top isn't");
+        suite::VocalBus::clear();
+    }
+
     section ("Layouts and state");
     {
         P p;

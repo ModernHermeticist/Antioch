@@ -7,6 +7,7 @@ namespace Params
     inline const juce::String loudnessTarget { "loudtarget" };
     inline const juce::String tonalTarget    { "tonaltarget" };
     inline const juce::String autoCoach      { "autocoach" };   // apply the coach's fixes by itself after each play-through
+    inline const juce::String compareAB      { "compare_ab" };  // hear the reference's loudest part at the mix's loudness (A/B)
 
     juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 }

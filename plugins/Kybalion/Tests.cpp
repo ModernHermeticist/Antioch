@@ -58,6 +58,10 @@ namespace
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    // Never the real style log (Kybalion logs the gate patterns you keep there).
+    const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("KybalionTestsStyleLog.txt");
+    testStyleLog.deleteFile();
+    suite::StyleLog::setFileForTests (testStyleLog);
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -529,6 +533,63 @@ int main (int argc, char** argv)
         const auto [seen3, together] = run (false, false);
         check (seen && cancelling < -0.8f && fixed > 0.8f && together > 0.8f,
                "a bass that cancels the kick reads out of phase (" + juce::String (cancelling, 2) + "); Flip polarity fixes it (" + juce::String (fixed, 2) + ")");
+    }
+
+    section ("Your gate patterns");
+    {
+        using S = KybalionProcessor::Steps;
+        S offbeat {}, trancey {}, padsOnly {};
+        for (int i = 0; i < Params::numSteps; ++i)
+        {
+            offbeat[(size_t) i] = i % 4 == 2 ? 1.0f : 0.0f;
+            trancey[(size_t) i] = i % 2 == 0 ? 1.0f : 0.3f;
+            padsOnly[(size_t) i] = i % 3 == 0 ? 1.0f : 0.0f;
+        }
+        check (KybalionProcessor::stepsFromText (KybalionProcessor::stepsText (trancey)) == trancey, "a pattern round-trips as text");
+        check (KybalionProcessor::trackKind ("Big Pad 2") == "pads" && KybalionProcessor::trackKind ("Lead Saw") == "leads"
+                   && KybalionProcessor::trackKind ("Vox Chops") == "vocals" && KybalionProcessor::trackKind ("FX") == "other",
+               "the kind of track comes from its name");
+
+        // Play a song to its final drop with the gate on: the pattern is logged once.
+        {
+            suite::SectionMap m;
+            m.totalBars = 4; m.count = 2;
+            m.sections[0] = { 1, suite::SectionType::Build };
+            m.sections[1] = { 3, suite::SectionType::Drop };
+            auto p = make (true, false);
+            suite::SectionBus::publish (m);   // after make(), which clears any map
+            p->applySteps (offbeat);
+            p->trackNameChanged ("Pluck 1");
+            FakePlayHead h;
+            h.bpm = 120.0;
+            p->setPlayHead (&h);
+            render (*p, 2.0, tone (220.0f), nullptr, &h);
+            p->suiteStatus();
+            const auto before = suite::StyleLog::read().size();
+            render (*p, 2.5, tone (220.0f), nullptr, &h);   // into the drop (bar 3, 4 s)
+            p->setPlayHead (nullptr);
+            p->suiteStatus();
+            p->suiteStatus();
+            const auto entries = suite::StyleLog::read();
+            check (before == 0 && entries.size() == 1 && entries[0].get ("steps") == KybalionProcessor::stepsText (offbeat) && entries[0].get ("track") == "plucks",
+                   "the pattern you kept is logged when the song reaches its final drop, once, with the kind of track");
+            suite::SectionBus::withdraw();
+        }
+        check (! KybalionProcessor().startedOnFavourite, "one song isn't enough to change a new Kybalion");
+        suite::StyleLog::add ("gate", { { "steps", KybalionProcessor::stepsText (offbeat) }, { "track", "plucks" } });
+        suite::StyleLog::add ("gate", { { "steps", KybalionProcessor::stepsText (trancey) }, { "track", "leads" } });
+        suite::StyleLog::add ("gate", { { "steps", KybalionProcessor::stepsText (padsOnly) }, { "track", "pads" } });
+        suite::StyleLog::add ("gate", { { "steps", KybalionProcessor::stepsText (padsOnly) }, { "track", "pads" } });
+        const auto favs = KybalionProcessor::favouritePatterns (suite::StyleLog::read());
+        check (favs.size() == 3 && favs[0].first == offbeat && favs[0].second == 2, "your most used pattern comes first (kept in 2 songs)");
+        KybalionProcessor fresh;
+        check (fresh.startedOnFavourite && fresh.currentSteps() == offbeat, "a new Kybalion starts on it");
+        fresh.trackNameChanged ("Lush Pads");
+        check (fresh.currentSteps() == padsOnly, "and on a pad track, on your favourite for pads");
+        fresh.applySteps (trancey);
+        fresh.trackNameChanged ("Pluck bus");
+        check (fresh.currentSteps() == trancey, "but never over a pattern you chose");
+        testStyleLog.deleteFile();
     }
 
     section ("Presets and state");

@@ -6,6 +6,8 @@
 #include "PreviewSynth.h"
 #include "Glide.h"
 #include "Identity.h"
+#include "FixBus.h"
+#include "Alias.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -132,8 +134,24 @@ public:
     std::atomic<double> currentBpm { 138.0 };
     std::atomic<bool> adoptedDetectedKey { false };   // the current key came from Emerald Tablet
 
+    /** Song draft (Ouroboros): a moment after the new song is set up, Export all into
+        <suite folder>/Drafts, so the whole song's MIDI is ready to drag in. */
+    std::unique_ptr<suite::FixReceiver> fixes;
+    static juce::File& draftFolderOverride() { static juce::File f; return f; }   // tests
+    static juce::File draftFolder() { return draftFolderOverride() != juce::File() ? draftFolderOverride() : suite::Alias::file ("Drafts"); }
+    std::atomic<double> draftAt { 0.0 };
+    juce::File lastDraft;
+    void exportDraftIfDue (bool now = false)
+    {
+        const auto at = draftAt.load();
+        if (at <= 0.0 || (! now && juce::Time::getMillisecondCounterHiRes() < at)) return;
+        draftAt.store (0.0);
+        draftFolder().createDirectory();
+        lastDraft = exportEverything (draftFolder());
+    }
+
 private:
-    void timerCallback() override { publishKey(); }
+    void timerCallback() override { publishKey(); exportDraftIfDue(); }
 
     bool wasBroadcasting = false;
     mutable juce::CriticalSection motifLock;

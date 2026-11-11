@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "FixBus.h"
@@ -108,7 +109,7 @@ public:
     static juce::String styleReport();
     static juce::File styleReportFile()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("My style.txt");
+        return suite::Alias::file ("My style.txt");
     }
     /** Intensity ride: the controller that moves Intensity live (and FL records it as automation). */
     static int rideController (int choice) { static const int cc[] = { 0, 1, 2, 11, 16 }; return cc[juce::jlimit (0, 4, choice)]; }
@@ -140,6 +141,22 @@ public:
         std::vector<suite::SectionMap> maps;
         for (const auto& [name, m] : arrangement::loadUserTemplates (arrangement::userTemplateFolder())) maps.push_back (m);
         return arrangement::learnDna (maps);
+    }
+    /** Arrange from the loop: with an 8- or 16-bar loop playing and every track's Prima Materia given
+        a role, lays out a full song (your usual structure if you have one, else a classic layout) and
+        has every Prima Materia set which sections its track plays in from its role. Undo in Mentalism's History. */
+    uint32_t arrangeFromLoop (int totalBars = 0)
+    {
+        const auto dna = learnArrangementDna();
+        if (dna.valid) setMap (arrangement::generateLike (dna, totalBars));
+        else
+        {
+            arrangement::GenSettings g;
+            if (totalBars > 0) g.totalBars = totalBars;
+            setMap (arrangement::generate (g));
+        }
+        addNote (juce::String ("Arranged the loop into a song") + (dna.valid ? " (your usual structure)" : ""));
+        return suite::FixBus::send (suite::Fix::ArrangeFromLoop);
     }
     /** Writes the section markers as a MIDI file (drag or import into FL) plus a .txt cue sheet next to it. */
     bool exportMarkers (const juce::File& midiFile) const;
@@ -184,6 +201,30 @@ public:
 
     /** Versions: a radio edit (about 3:30, short intro and breakdown, at most two drops) or an
         extended mix (64 bars longer, DJ intro and outro) of the current map. */
+    /** Your version lengths: when you open the render plan (the versions as you kept them), the
+        radio edit's length and how much longer the extended mix is go into the style log; Make
+        versions then uses your usual ones (two or more) instead of 3:30 and +64 bars. */
+    struct VersionLengths { float radioSeconds = 0.0f; int extendedExtraBars = 0; };
+    static VersionLengths usualVersionLengths (const std::vector<suite::StyleLog::Entry>& entries)
+    {
+        std::vector<float> radio, extra;
+        for (const auto& e : entries)
+        {
+            if (e.kind != "versions") continue;
+            if (e.get ("radioseconds").getFloatValue() > 0.0f) radio.push_back (e.get ("radioseconds").getFloatValue());
+            if (e.get ("extendedextra").getIntValue() > 0) extra.push_back ((float) e.get ("extendedextra").getIntValue());
+        }
+        VersionLengths v;
+        if (radio.size() >= 2) v.radioSeconds = suite::StyleLog::median (radio);
+        if (extra.size() >= 2) v.extendedExtraBars = juce::jmax (8, (int) std::round (suite::StyleLog::median (extra) / 8.0f) * 8);
+        return v;
+    }
+    /** The map saved in a snapshot slot (count 0 if none). */
+    suite::SectionMap snapshotMap (int slot) const;
+    /** Logs the kept versions' lengths (once per session; the render plan calls it). */
+    bool logVersionLengths();
+    bool versionLengthsLogged = false;
+
     bool applyVersion (int kind) override
     {
         const auto m = getMap();
@@ -192,16 +233,18 @@ public:
         for (int i = 0; i < m.count; ++i) drops += m.sections[(size_t) i].type == suite::SectionType::Drop;
         arrangement::GenSettings g;
         g.drops = juce::jlimit (1, 3, drops);
+        const auto yours = usualVersionLengths (suite::StyleLog::read());
         if (kind == suite::radioEdit)
         {
             g.drops = juce::jmin (2, g.drops);
-            g.totalBars = juce::jmax (64, (int) std::round (3.5 * bpm.load() / 4.0 / 8.0) * 8);
+            const auto minutes = yours.radioSeconds > 0.0f ? yours.radioSeconds / 60.0 : 3.5;   // your usual radio edit, or 3:30
+            g.totalBars = juce::jmax (64, (int) std::round (minutes * bpm.load() / 4.0 / 8.0) * 8);
             g.djIntro = false;
             g.longBreakdown = false;
         }
         else
         {
-            g.totalBars = m.totalBars + 64;
+            g.totalBars = m.totalBars + (yours.extendedExtraBars > 0 ? yours.extendedExtraBars : 64);
             g.djIntro = true;
             g.longBreakdown = true;
         }
@@ -256,11 +299,30 @@ public:
         setMap (m);
         return suite::SessionBus::send ({ styleIndex, root, scale, moodIndex });
     }
+    /** Song draft: New song (map, key, chords, every plugin set up), then Correspondence writes the
+        whole song's MIDI into Drafts and every plugin saves the setup as a recipe ("Draft ..."). */
+    uint32_t draftSong (int styleIndex, int root, int scale, int moodIndex = 0, bool fromSignature = false)
+    {
+        const auto seq = startSession (styleIndex, root, scale, moodIndex, fromSignature);
+        draftDueAt = juce::Time::getMillisecondCounterHiRes() + 1500.0;   // once the suite has set up the new song
+        return seq;
+    }
+    double draftDueAt = 0.0;
+    juce::String lastDraftRecipe;
+    void continueDraft (bool now = false)
+    {
+        if (draftDueAt <= 0.0 || (! now && juce::Time::getMillisecondCounterHiRes() < draftDueAt)) return;
+        draftDueAt = 0.0;
+        suite::FixBus::send (suite::Fix::DraftSong);
+        lastDraftRecipe = "Draft " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M");
+        suite::RecipeBus::send (suite::RecipeAction::Save, lastDraftRecipe);
+        addNote ("Drafted the song: MIDI in Drafts, setup saved as the recipe '" + lastDraftRecipe + "'");
+    }
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); }
+    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

@@ -60,6 +60,14 @@ public:
     std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
     std::atomic<bool> ouroborosFound { false };
     std::atomic<float> tensionNow { 0.0f }, reverbWidthNow { 1.0f };   // tension width (tests and UI)
+    /** Project tidy: idle when no echo, reverb or throw reaches the output. */
+    SuiteStatus suiteStatus() override
+    {
+        SuiteStatus s;
+        auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
+        if (v (Params::echoLevel) < 0.001f && v (Params::verbLevel) < 0.001f && v (Params::throwLevel) < 0.001f) s.flags |= suite::Status::idle;
+        return s;
+    }
     std::atomic<float> pumpNow { 1.0f };          // the reverb pump's lowest gain in the last block
     std::atomic<bool> vocalMarksFound { false };  // Solve et Coagula has marked vocal bars
     float reverbPump = 1.0f;

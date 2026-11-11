@@ -6,6 +6,7 @@
 // ask for, in whole 8-bar phrases.
 
 #include "Arrangement.h"
+#include "TempoBus.h"
 #include <algorithm>
 #include <map>
 #include <vector>
@@ -167,6 +168,10 @@ namespace arrangement
         seq.addEvent (juce::MidiMessage::timeSignatureMetaEvent (juce::roundToInt (barQuarters), 4), 0.0);
         for (const auto& [bar, name] : markerNames (m))
             seq.addEvent (juce::MidiMessage::textMetaEvent (6, name), (bar - 1) * barQuarters * ppq);
+        // Tempo changes the song played with (Ouroboros notes them bar by bar).
+        for (const auto& [bar, tempo] : suite::TempoBus::changes (m.totalBars, (float) bpm))
+            if (bar > 1) seq.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / tempo)), (bar - 1) * barQuarters * ppq);
+        seq.sort();
         seq.addEvent (juce::MidiMessage::endOfTrack(), m.totalBars * barQuarters * ppq);
         juce::MidiFile file;
         file.setTicksPerQuarterNote (ppq);
@@ -177,11 +182,18 @@ namespace arrangement
     inline juce::String cueSheet (const SectionMap& m, double bpm, double barQuarters = 4.0)
     {
         juce::StringArray lines;
-        const auto secondsPerBar = barQuarters * 60.0 / juce::jmax (1.0, bpm);
-        auto time = [] (double s) { return juce::String ((int) s / 60) + ":" + juce::String ((int) s % 60).paddedLeft ('0', 2); };
+        // Times follow any tempo changes the song played with (bars not heard yet use `bpm`).
+        const auto fallback = (float) juce::jmax (1.0, bpm);
         for (const auto& [bar, name] : markerNames (m))
-            lines.add ("Bar " + juce::String (bar).paddedLeft (' ', 4) + "  " + time ((bar - 1) * secondsPerBar) + "  " + name);
-        lines.add ("End " + juce::String (m.totalBars + 1).paddedLeft (' ', 4) + "  " + time (m.totalBars * secondsPerBar));
+            lines.add ("Bar " + juce::String (bar).paddedLeft (' ', 4) + "  " + suite::TempoBus::clock (suite::TempoBus::secondsTo (bar, fallback, barQuarters)) + "  " + name);
+        lines.add ("End " + juce::String (m.totalBars + 1).paddedLeft (' ', 4) + "  " + suite::TempoBus::clock (suite::TempoBus::secondsTo (m.totalBars + 1, fallback, barQuarters)));
+        const auto tempos = suite::TempoBus::changes (m.totalBars, fallback);
+        if (tempos.size() > 1)
+        {
+            juce::StringArray t;
+            for (const auto& [bar, tempo] : tempos) t.add ("bar " + juce::String (bar) + ": " + juce::String (tempo, 1) + " BPM");
+            lines.add ("Tempo changes: " + t.joinIntoString (", "));
+        }
         return lines.joinIntoString ("\n") + "\n";
     }
 }

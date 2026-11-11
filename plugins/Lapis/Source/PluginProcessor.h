@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "Limiter.h"
@@ -7,6 +8,7 @@
 #include "TargetBus.h"
 #include "FixBus.h"
 #include "SuiteDSP.h"
+#include "HostInfo.h"
 #include <map>
 
 class LapisProcessor : public suite::SuiteProcessor
@@ -42,7 +44,8 @@ public:
     // Parameters
     static inline const juce::String targetId { "target" }, modeId { "mode" }, ceilingId { "ceiling" }, clipId { "clip" },
                                      releaseId { "release" }, manualGainId { "manualgain" },
-                                     toneLowId { "tone_low" }, toneHighId { "tone_high" };   // gentle shelves (100 Hz / 8 kHz); Mentalism's reference match sets them
+                                     toneLowId { "tone_low" }, toneHighId { "tone_high" },
+                                     bitDepthId { "bitdepth" };   // 24-bit (no dither) or 16-bit (TPDF dither)   // gentle shelves (100 Hz / 8 kHz); Mentalism's reference match sets them
     enum Mode { Auto = 0, Hold, Manual };
     static constexpr int followMentalism = 0;
     static float targetLufsFor (int index) { static const float t[] = { -8.0f, -8.0f, -6.0f, -14.0f }; return t[juce::jlimit (0, 3, index)]; }
@@ -84,7 +87,7 @@ public:
     analysis::BandAnalyzer outBands;
     static juce::File fingerprintFolder()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Master fingerprints");
+        return suite::Alias::file ("Master fingerprints");
     }
     bool fingerprintReady() const { return outBands.longSeconds.load() >= 10.0f; }
     std::array<float, analysis::numBands> measuredShape() const;
@@ -97,6 +100,19 @@ public:
     std::atomic<float> outShortTerm { -100.0f }, effectiveTarget { -8.0f }, effectiveCeiling { -0.3f };
     std::atomic<bool> followingMentalism { false }, limitedByReduction { false }, settled { false };
     analysis::TruePeakMeter outputPeak;
+
+    /** Export notes: every play-through of 30 s or more (an FL export plays the song through too)
+        is measured on its own: integrated loudness, true peak, length, the most gain reduction.
+        When it stops, a note goes into <suite folder>/Export notes with the target and the
+        dither used, and whether it hit them. */
+    struct PassResult { float lufs = -100.0f, truePeakDb = -100.0f, maxGrDb = 0.0f, seconds = 0.0f, targetLufs = -8.0f, ceilingDb = -0.3f; bool dithered = false; };
+    static juce::String exportNotes (const PassResult&);
+    static juce::File& notesFolderOverride() { static juce::File f; return f; }   // tests
+    static juce::File notesFolder() { return notesFolderOverride() != juce::File() ? notesFolderOverride() : suite::Alias::file ("Export notes"); }
+    juce::File writeExportNotes();   // message thread; the newest finished pass, if any
+    SuiteStatus suiteStatus() override { writeExportNotes(); return {}; }
+    std::atomic<bool> passReady { false };
+    juce::File lastNotes;
 
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // Mentalism's reference match
@@ -117,6 +133,15 @@ private:
     int stHistoryPos = 0;   // short-term loudness over the last second (100 ms steps)
     int samplesSinceUpdate = 0, updateInterval = 4800, settledUpdates = 0;
     double sampleRate = 44100.0;
+
+    // The current play-through, for the export notes.
+    analysis::LoudnessMeter passLoudness;
+    analysis::TruePeakMeter passPeak;
+    bool wasPlaying = false;
+    int64_t passSamples = 0;
+    float passMaxGr = 0.0f;
+    PassResult finished;   // written on the audio thread before passReady is set
+    juce::Random ditherRng { 0x5eed };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LapisProcessor)
 };

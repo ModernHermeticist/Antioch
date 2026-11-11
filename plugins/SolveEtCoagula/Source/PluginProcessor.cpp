@@ -67,6 +67,10 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
     chops.prepare (sampleRate);
     inChopSection = false;
     scenes.prepare();
+    for (int i = 0; i < 4; ++i) { presence[(size_t) i].set (i % 2 == 0 ? 1000.0f : 4000.0f, 0.7f, (float) sampleRate); presence[(size_t) i].reset(); }
+    vocalPresence = musicPresence = 0.0;
+    buriedBars.store (0);
+    vocalBuried.store (false);
 }
 
 void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -145,6 +149,13 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         }
         left[n] = l;
         if (right != nullptr) right[n] = r;
+        if (scActive)
+        {
+            const auto v = presence[1].lowpass (presence[0].highpass (key));
+            const auto m = presence[3].lowpass (presence[2].highpass (0.5f * (l + r)));
+            vocalPresence += (double) v * v;
+            musicPresence += (double) m * m;
+        }
     }
     chopsReady.store (chops.ready());
     chopsPlaying.store (played);
@@ -157,6 +168,14 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
         if (bar != vocalBar)
         {
             if (vocalBar >= 1 && barBlocks > 0) suite::VocalBus::mark (vocalBar, vocalBlocks * 4 > barBlocks);   // a quarter of the bar or more
+            // Live check: was the vocal buried in that bar? Four sung bars in a row and it's flagged.
+            if (vocalBar >= 1 && barBlocks > 0 && vocalBlocks * 2 > barBlocks)
+            {
+                const auto buried = musicPresence > vocalPresence * std::pow (10.0, buriedDb / 10.0) && vocalPresence > 0.0;
+                buriedBars.store (buried ? buriedBars.load() + 1 : 0);
+                vocalBuried.store (buriedBars.load() >= 4);
+            }
+            vocalPresence = musicPresence = 0.0;
             vocalBar = bar; vocalBlocks = 0; barBlocks = 0;
         }
         ++barBlocks;

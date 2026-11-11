@@ -20,6 +20,8 @@ private:
     suite::ui::LookAndFeel lnf;
     suite::ui::Choice target, mode;
     suite::ui::Knob ceiling, clip, release, manualGain, toneLow, toneHigh;
+    suite::ui::Choice bitDepth;
+    juce::File notesShown;
     juce::TextButton resetButton { "Reset learning" }, fingerprintButton { "Master fingerprint..." };
     std::unique_ptr<juce::AlertWindow> nameWindow;
     void showFingerprintMenu();

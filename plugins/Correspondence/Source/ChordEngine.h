@@ -6,6 +6,7 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "Music.h"
+#include "TempoBus.h"
 #include "SectionBus.h"
 #include <vector>
 #include <algorithm>
@@ -1346,6 +1347,10 @@ namespace chords
         conductor.addEvent (juce::MidiMessage::timeSignatureMetaEvent (4, 4), 0.0);
         for (const auto& [quarters, name] : markers)
             conductor.addEvent (juce::MidiMessage::textMetaEvent (6, name), quarters * ppq);
+        // Tempo changes the song played with (Ouroboros notes them bar by bar).
+        if (! markers.empty())
+            for (const auto& [bar, tempo] : suite::TempoBus::changes ((int) std::ceil (markers.back().first / 4.0) + 64, (float) bpm))
+                if (bar > 1) conductor.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / tempo)), (bar - 1) * 4.0 * ppq);
         conductor.sort();
         file.addTrack (conductor);
 

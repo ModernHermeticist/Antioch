@@ -4,6 +4,7 @@
 // Invariants kept by every operation: sections sorted, first starts at bar 1,
 // every section at least 1 bar long, all starts <= totalBars.
 
+#include "Alias.h"
 #include "SectionBus.h"
 #include <juce_core/juce_core.h>
 #include <vector>
@@ -50,7 +51,7 @@ namespace arrangement
 
     inline juce::File userTemplateFolder()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Templates");
+        return suite::Alias::file ("Templates");
     }
 
     inline juce::String toText (const SectionMap& m)

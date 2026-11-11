@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "FixBus.h"
@@ -7,6 +8,8 @@
 #include "SectionBus.h"
 #include "HostInfo.h"
 #include "ReverseSwell.h"
+#include "StyleLog.h"
+#include <map>
 
 class AzothProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -41,9 +44,17 @@ public:
         SuiteStatus s;
         if (value (followId) > 0.5f) s.flags |= suite::Status::followsOuroboros;
         if (activeLatency.load() > 0) s.flags |= suite::Status::highLatency;   // reverse swells: 3 s lookahead
+        if (missingSamples() > 0) s.flags |= suite::Status::missingFiles;
+        // Project tidy: idle when every sound is at zero, reverse swells are off and nothing plays into the drops.
+        bool silent = value (reverseOnId) < 0.5f && (int) value (dropFxId) == 0;
+        for (const auto& id : { impactId, crashId, swellId, downId, rollId, riserId, trackRiserId }) silent = silent && value (id) < 0.001f;
+        if (silent) s.flags |= suite::Status::idle;
+        s.metrics[0] = (float) missingSamples();
         return s;
     }
     void setPluginState (const void* data, int sizeInBytes) override;
+    /** Session health: samples the project uses that can't be found (moved or deleted). */
+    int missingSamples() const;
 
     // Parameters
     static inline const juce::String followId { "follow" }, levelId { "level" }, toneId { "tone" },
@@ -86,6 +97,15 @@ public:
         return hz;
     }
     std::atomic<float> lastImpactHz { 0.0f };
+
+    /** Your transitions: once a song has played into its final drop, this Azoth's transition
+        style (roll, gap, build shape, into-the-drop effect) goes into the style log, as the
+        style you kept. A new Azoth starts from your most common choices (two or more songs). */
+    static juce::StringArray transitionParamIds() { return { rollStartId, rollFromId, rollToId, rollCurveId, gapId, buildShapeId, dropFxId, dropFxLenId }; }
+    static std::map<juce::String, float> usualTransitions (const std::vector<suite::StyleLog::Entry>& entries);
+    void logTransitionsOnce();
+    std::atomic<bool> reachedFinalDrop { false }, transitionsLogged { false };
+    bool usedYourTransitions = false;
     enum DropFx { dfOff, dfTapeStop, dfStutter };
     enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
     static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }
@@ -112,7 +132,7 @@ public:
     static juce::File presetFolder()
     {
         if (presetFolderOverride() != juce::File()) return presetFolderOverride();
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Azoth presets");
+        return suite::Alias::file ("Azoth presets");
     }
     bool savePreset (const juce::String& name);
     bool loadPreset (const juce::File&);
@@ -184,7 +204,7 @@ private:
     std::atomic<int> pendingAudition { 0 };
 
     // Reverse swells: fixed lookahead (when on), dry delay, and the swell engine.
-    void timerCallback() override { updateLatency(); }
+    void timerCallback() override { updateLatency(); logTransitionsOnce(); }
     ReverseSwell swell;
     std::array<std::vector<float>, 2> dryDelay;
     int dryDelayPos = 0;

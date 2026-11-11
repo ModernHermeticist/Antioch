@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 // Suite overview: what's loaded where, and setup advice from the registry.
 // Pure logic, so it's directly testable.
 
@@ -84,6 +86,117 @@ namespace suitecheck
         return out;
     }
 
+    /** Project tidy: what can go, to keep the project light, as a plan. */
+    inline juce::String tidyPlan (const std::vector<suite::SuiteEntry>& entries)
+    {
+        juce::StringArray lines { "PROJECT TIDY", "" };
+        const auto idle = unused (entries);
+        std::map<juce::String, juce::StringArray> perTrack;
+        for (const auto& e : entries) perTrack[e.plugin + "|" + e.track].add (where (e));
+        juce::StringArray doubled;
+        for (const auto& [key, places] : perTrack)
+            if (places.size() > 1) doubled.add (key.upToFirstOccurrenceOf ("|", false, false) + " twice on " + places[0]);
+        int masters = 0;
+        for (const auto& e : entries) masters += e.plugin == "Lapis";
+        if (idle.isEmpty() && doubled.isEmpty() && masters <= 1)
+        {
+            lines.add ("Nothing to remove: every suite plugin in the project is doing something.");
+            return lines.joinIntoString ("\n") + "\n";
+        }
+        if (! idle.isEmpty())
+        {
+            lines.add ("Remove (loaded, but doing nothing):");
+            for (const auto& i : idle) lines.add ("  - " + i);
+        }
+        if (! doubled.isEmpty())
+        {
+            lines.add ("Doubled up (one is enough):");
+            for (const auto& d : doubled) lines.add ("  - " + d);
+        }
+        if (masters > 1) lines.add ("More than one Lapis: keep the one on the master.");
+        lines.add ("");
+        lines.add ("Save a recipe first (Recipes...) if you might want them back. Plugins that are bypassed in FL can't be seen from here: check the mixer for those.");
+        return lines.joinIntoString ("\n") + "\n";
+    }
+
+    /** Stem plan for a remix pack: which tracks go into which stem, from Prima Materia's roles
+        (and track names where a track has no role), with the file names to export them as. */
+    inline juce::String stemPlan (const std::vector<suite::SuiteEntry>& entries, const juce::String& songName)
+    {
+        // Prima Materia roles: 0 Neutral, 1 Kick, 2 Bass, 3 Hats, 4 Pads, 5 Lead, 6 Vocal, 7 FX
+        static const char* stemOfRole[] = { "", "Drums", "Bass", "Drums", "Music", "Leads", "Vocals", "FX" };
+        static const char* order[] = { "Drums", "Bass", "Music", "Leads", "Vocals", "FX", "Unassigned" };
+        auto fromName = [] (const juce::String& track)
+        {
+            const auto n = track.toLowerCase();
+            auto any = [&n] (std::initializer_list<const char*> words) { for (auto* w : words) if (n.contains (w)) return true; return false; };
+            if (any ({ "kick", "snare", "clap", "hat", "perc", "drum", "ride", "crash", "top" })) return "Drums";
+            if (any ({ "bass", "sub" })) return "Bass";
+            if (any ({ "vox", "vocal", "voc" })) return "Vocals";
+            if (any ({ "lead", "saw" })) return "Leads";
+            if (any ({ "pad", "chord", "pluck", "arp", "string", "piano", "keys", "stab" })) return "Music";
+            if (any ({ "fx", "riser", "impact", "sweep", "atmos", "noise" })) return "FX";
+            return "Unassigned";
+        };
+        std::map<juce::String, juce::StringArray> stems;
+        juce::StringArray seen;
+        for (const auto& e : entries)
+        {
+            if (e.track.isEmpty() || e.plugin == "Lapis" || e.plugin == "Mentalism" || e.plugin == "Ouroboros") continue;
+            if (seen.contains (e.track)) continue;   // one line per track
+            const auto role = e.plugin == "Prima Materia" ? (int) e.metrics[0] : -1;
+            const juce::String stem = role >= 1 && role <= 7 ? stemOfRole[role] : fromName (e.track);
+            if (e.plugin != "Prima Materia" && stem == "Unassigned") continue;   // only tracks we can place (or that have a role)
+            stems[stem].addIfNotAlreadyThere (e.track);
+            seen.add (e.track);
+        }
+        // Tracks a Prima Materia gave a role to override what another plugin's name guess said.
+        juce::StringArray lines;
+        const auto base = songName.isNotEmpty() ? songName : juce::String ("Song");
+        lines.add ("STEM PLAN" + (songName.isNotEmpty() ? " - " + songName : juce::String()));
+        lines.add ("");
+        if (stems.empty())
+        {
+            lines.add ("No tracks to place yet: give each track's Prima Materia a role (or name the tracks Kick, Bass, Pad, Lead, Vox, FX).");
+            return lines.joinIntoString ("\n") + "\n";
+        }
+        for (auto* stem : order)
+        {
+            const auto it = stems.find (stem);
+            if (it == stems.end()) continue;
+            lines.add (juce::String (stem) + ": " + it->second.joinIntoString (", "));
+            if (juce::String (stem) != "Unassigned")
+                lines.add ("   file: " + juce::File::createLegalFileName (base + " - " + stem + ".wav"));
+        }
+        lines.add ("");
+        lines.add ("Export each stem from the start of the song to the end, with the master chain (Lapis) bypassed and the "
+                   "master fader at 0 dB, so the stems add up to the mix. 24-bit WAV at the project's sample rate.");
+        if (stems.count ("Unassigned") > 0)
+            lines.add ("Unassigned tracks: give them a role in Prima Materia, or add them to the nearest stem by hand.");
+        return lines.joinIntoString ("\n") + "\n";
+    }
+
+    /** Session health, from opening a project: plugins saved by an older version, missing samples. */
+    inline std::vector<Advice> health (const std::vector<suite::SuiteEntry>& entries)
+    {
+        std::vector<Advice> out;
+        for (const auto& e : entries)
+        {
+            if (e.has (suite::Status::missingFiles))
+                out.push_back ({ e.plugin + " on " + where (e) + " can't find " + juce::String (juce::jmax (1, (int) e.metrics[0]))
+                                     + " of its samples (moved or deleted): Fix the session puts the synthesised sounds back (undo in Mentalism's History), or load them again." });
+            if (e.has (suite::Status::olderState))
+                out.push_back ({ e.plugin + " on " + where (e) + " was saved by an older version of the suite: it loads fine, and its new options start "
+                                     "at their defaults (save the project to bring it up to date).", false });
+        }
+        return out;
+    }
+    inline bool needsSessionFix (const std::vector<suite::SuiteEntry>& entries)
+    {
+        for (const auto& e : entries) if (e.has (suite::Status::missingFiles)) return true;
+        return false;
+    }
+
     /** The single most useful thing to do now (first match wins). `mentalism` = the Mentalism
         entry if one is loaded: metrics are [coach problems, checklist failures, seconds measured, ready]. */
     inline Advice nextStep (const std::vector<suite::SuiteEntry>& entries, const suite::SectionMap* map)
@@ -92,6 +205,9 @@ namespace suitecheck
         auto find = [&entries] (const char* plugin) -> const SuiteEntry* { for (auto& e : entries) if (e.plugin == plugin) return &e; return nullptr; };
         if (map == nullptr || map->count == 0)
             return { "Start the song: New song..., Arrange... or a template in Ouroboros." };
+        for (const auto& e : entries)
+            if (e.has (Status::missingFiles))
+                return { "Fix the session: " + e.plugin + " on " + where (e) + " can't find its samples (Fix the session, below)." };
         if (find ("Correspondence") == nullptr && find ("Emerald Tablet") == nullptr)
             return { "Load Correspondence and choose the chords: the whole suite plays in its key." };
         for (const auto& e : entries)
@@ -123,6 +239,7 @@ namespace suitecheck
         std::vector<Advice> out;
         auto count = [&entries] (const char* plugin) { int n = 0; for (auto& e : entries) n += e.plugin == plugin; return n; };
 
+        for (const auto& h : health (entries)) out.push_back (h);
         if (count ("Ouroboros") > 1)
             out.push_back ({ "More than one Ouroboros is loaded: keep one, so the suite follows a single song map." });
         for (const auto& e : entries)

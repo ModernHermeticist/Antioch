@@ -65,6 +65,7 @@ private:
     std::vector<std::pair<juce::String, std::array<float, Params::numSteps>>> userPatterns;
     std::unique_ptr<juce::AlertWindow> nameWindow;
     void fillPatterns();
+    std::vector<std::pair<KybalionProcessor::Steps, int>> favourites;
     juce::TextButton randomButton { "Randomise" };
     suite::ui::Choice gateRate, fills, fillStyle, chordFollow;
     std::unique_ptr<suite::ui::Toggle> dynamicGate;

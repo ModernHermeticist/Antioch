@@ -24,6 +24,23 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
 
         switch (fix)
         {
+            case suite::Fix::ArrangeFromLoop:
+            {
+                // Arrange from the loop (Ouroboros): this track's role decides which sections it plays in.
+                const auto role = getRole();
+                if (role <= 0 || role >= (int) pm::roles().size()) return {};
+                const auto& r = pm::roles()[(size_t) role];
+                std::vector<suite::FixReceiver::Change> out;
+                for (int t = 0; t < pm::numTypes; ++t)
+                {
+                    out.push_back ({ pm::levelId (t), r.settings[(size_t) t].levelDb });
+                    out.push_back ({ pm::lowCutId (t), r.settings[(size_t) t].lowCut });
+                    out.push_back ({ pm::highCutId (t), r.settings[(size_t) t].highCut });
+                }
+                out.push_back ({ pm::levelId (pm::laterDrop), r.later.levelDb });
+                out.push_back ({ pm::laterOnId, r.useLater ? 1.0f : 0.0f });
+                return out;
+            }
             case suite::Fix::BreakdownQuieter: return shift (T::Breakdown, -2.0f);
             case suite::Fix::BreakdownLouder:  return shift (T::Breakdown, 2.0f);
             case suite::Fix::IntroQuieter:     return shift (T::Intro, -2.0f);
@@ -333,6 +350,9 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (right != nullptr) right[n] = carve[1].process (right[n]);
         }
 
+        // Live check (Mentalism): did this track go over 0 dBFS?
+        if (std::abs (left[n]) >= 1.0f || (right != nullptr && std::abs (right[n]) >= 1.0f)) clippedRecently.store (true, std::memory_order_relaxed);
+
         // Loudness for the rough mix: the drops (where everything plays), or all playback without a map.
         if (host.playing && (! follow || typeNow == (int) T::Drop))
         {
@@ -374,6 +394,7 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
     SuiteStatus s;
     const auto role = getRole();
     if (role >= 0) s.flags |= suite::Status::roleSet;
+    if (clippedRecently.exchange (false)) s.flags |= suite::Status::clipping;
     if (apvts.getRawParameterValue (pm::followId)->load() > 0.5f) s.flags |= suite::Status::followsOuroboros;
     const auto lufs = measuredLufs();
     if (lufs > -70.0f) s.flags |= suite::Status::measuring;

@@ -72,13 +72,19 @@ namespace suite
         }
 
         juce::String getTrackName() const { const juce::ScopedLock sl (nameLock); return trackName; }
+
+        /** Session health: the suite's saved-state version. A project saved by an older version
+            loads fine (new options start at their defaults); Ouroboros says so. */
+        static constexpr int stateVersion = 11;
+        int loadedVersion = -1;   // -1: not loaded from a project; 0: saved before versions were kept
         uint32_t getInstanceId() const noexcept { return instanceId; }
 
         /** Announces this instance now (the timer does it every second; tests call it directly). */
         void announce()
         {
             const auto status = suiteStatus();
-            Registry::announce (instanceId, getName(), getTrackName(), status.flags, status.metrics, status.bands);
+            const auto older = loadedVersion >= 0 && loadedVersion < stateVersion ? Status::olderState : 0u;
+            Registry::announce (instanceId, getName(), getTrackName(), status.flags | older, status.metrics, status.bands);
         }
 
         /** The plugin's own settings (what it saved before snapshots existed). */
@@ -90,6 +96,7 @@ namespace suite
             juce::MemoryBlock own;
             getPluginState (own);
             juce::XmlElement xml ("AntiochSuiteState");
+            xml.setAttribute ("version", stateVersion);
             xml.createNewChildElement ("Plugin")->addTextElement (own.toBase64Encoding());
             {
                 const juce::ScopedLock sl (slotLock);
@@ -118,9 +125,11 @@ namespace suite
             const auto xml = getXmlFromBinary (data, sizeInBytes);
             if (xml == nullptr || ! xml->hasTagName ("AntiochSuiteState"))
             {
+                loadedVersion = 0;
                 setPluginState (data, sizeInBytes);   // a project from before snapshots
                 return;
             }
+            loadedVersion = xml->getIntAttribute ("version", 0);
             {
                 const juce::ScopedLock sl (slotLock);
                 for (auto& s : slots) s.reset();
@@ -158,6 +167,13 @@ namespace suite
         {
             const juce::ScopedLock sl (slotLock);
             return juce::isPositiveAndBelow (slot, numSnapshotSlots) && slots[(size_t) slot].getSize() > 0;
+        }
+
+        /** The plugin's own state saved in a snapshot slot (empty if none). */
+        juce::MemoryBlock snapshotState (int slot) const
+        {
+            const juce::ScopedLock sl (slotLock);
+            return juce::isPositiveAndBelow (slot, numSnapshotSlots) ? slots[(size_t) slot] : juce::MemoryBlock();
         }
 
         void captureSnapshot (int slot)

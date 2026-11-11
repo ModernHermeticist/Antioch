@@ -3,6 +3,7 @@
 // Your identity in Correspondence: the progressions you use most (from the style log), and a
 // bank of hooks you keep for every project.
 
+#include "Alias.h"
 #include "ChordEngine.h"
 #include "StyleLog.h"
 
@@ -51,7 +52,7 @@ namespace identity
     inline juce::File hookFolder()
     {
         if (hookFolderOverride() != juce::File()) return hookFolderOverride();
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Hooks");
+        return suite::Alias::file ("Hooks");
     }
 
     inline bool saveHook (const juce::String& name, const std::vector<chords::Note>& notes)

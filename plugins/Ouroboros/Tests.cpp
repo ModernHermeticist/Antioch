@@ -4,6 +4,8 @@
 #include "PluginEditor.h"
 #include "TestUtils.h"
 #include "SuiteCheck.h"
+#include "Alias.h"
+#include "TempoBus.h"
 #include "KeyBus.h"
 #include "MorphBus.h"
 
@@ -14,6 +16,10 @@ using T = suite::SectionType;
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    // Never the real style log (Make versions reads your version lengths from it).
+    const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosTestsStyleLog.txt");
+    testStyleLog.deleteFile();
+    suite::StyleLog::setFileForTests (testStyleLog);
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -524,6 +530,110 @@ int main (int argc, char** argv)
         check (p->getMap() == original, "A is the song as it was");
     }
 
+    section ("Your version lengths, and artist aliases");
+    {
+        testStyleLog.deleteFile();
+        suite::SnapshotBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        const auto original = arrangement::fromTemplate (arrangement::templates()[1]);
+        p->setMap (original);
+        p->makeVersions();
+        check (p->snapshotMap (1).totalBars == [&] { p->recallSnapshot (1); return p->getMap().totalBars; }(), "a snapshot's map can be read back");
+        p->recallSnapshot (0);
+        check (p->logVersionLengths() && ! p->logVersionLengths(), "the render plan logs the versions' lengths, once");
+        const auto logged = suite::StyleLog::read();
+        check (logged.size() == 1 && logged[0].get ("extendedextra") == "64" && logged[0].get ("radioseconds").getIntValue() > 150,
+               "the radio edit's length and the extended mix's extra bars (" + logged[0].get ("radioseconds") + " s, +" + logged[0].get ("extendedextra") + ")");
+        check (OuroborosProcessor::usualVersionLengths (logged).radioSeconds == 0.0f, "one song isn't enough to change Make versions");
+
+        testStyleLog.deleteFile();
+        suite::StyleLog::add ("versions", { { "radioseconds", "240" }, { "extendedextra", "32" } });
+        suite::StyleLog::add ("versions", { { "radioseconds", "246" }, { "extendedextra", "32" } });
+        suite::SnapshotBus::reset();
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setMap (original);
+        q->makeVersions();
+        q->recallSnapshot (1);
+        const auto radio = q->getMap();
+        q->recallSnapshot (2);
+        const auto extended = q->getMap();
+        const auto radioSeconds = radio.totalBars * 4.0 * 60.0 / 138.0;
+        check (std::abs (radioSeconds - 243.0) < 10.0 && extended.totalBars == original.totalBars + 32,
+               "Make versions uses your usual lengths: a " + juce::String ((int) radioSeconds / 60) + ":" + juce::String ((int) radioSeconds % 60).paddedLeft ('0', 2)
+               + " radio edit, an extended mix 32 bars longer");
+        testStyleLog.deleteFile();
+
+        const auto root = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteAliasTest");
+        root.deleteRecursively();
+        suite::Alias::rootOverride() = root;
+        check (suite::Alias::current().isEmpty() && suite::Alias::file ("Recipes") == root.getChildFile ("Recipes"), "the main alias uses the suite folder");
+        suite::Alias::setCurrent ("Solar Wind");
+        check (suite::Alias::current() == "Solar Wind" && suite::Alias::file ("Style log.txt") == root.getChildFile ("Aliases/Solar Wind/Style log.txt")
+                   && suite::Alias::list() == juce::StringArray { "Solar Wind" },
+               "an alias keeps everything in its own folder");
+        suite::Recipes::setFolderForTests ({});
+        check (suite::Recipes::folder() == root.getChildFile ("Aliases/Solar Wind/Recipes"), "recipes (and every other saved thing) follow the alias");
+        suite::Alias::setCurrent ("");
+        check (suite::Recipes::folder() == root.getChildFile ("Recipes"), "and back to the main name");
+        suite::Alias::rootOverride() = juce::File();
+        root.deleteRecursively();
+    }
+
+    section ("Song draft in one click");
+    {
+        suite::FixBus::reset();
+        suite::SessionBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        const auto before = suite::RecipeBus::latest();
+        const auto seq = p->draftSong (0, 9, 0);
+        p->continueDraft();
+        check (seq != 0 && suite::FixBus::latest() == 0, "it sets up the new song first");
+        p->continueDraft (true);
+        suite::FixBus::Message m;
+        suite::RecipeAction action {};
+        juce::String name;
+        check (suite::FixBus::read (suite::FixBus::latest(), m) && m.fix == suite::Fix::DraftSong
+                   && suite::RecipeBus::read (before + 1, action, name) && action == suite::RecipeAction::Save && name.startsWith ("Draft "),
+               "then asks Correspondence for the whole song's MIDI and saves the setup as a recipe (" + name + ")");
+        p->continueDraft (true);
+        check (suite::RecipeBus::latest() == before + 1, "once");
+    }
+
+    section ("Tempo changes");
+    {
+        auto p = std::make_unique<OuroborosProcessor>();   // a new project clears the tempo map
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 2;
+        m.sections[0] = { 1, T::Groove };
+        m.sections[1] = { 3, T::Breakdown };
+        p->setMap (m);
+        p->prepareToPlay (48000.0, 512);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        // Bars 1-2 at 120 BPM, then the breakdown slows to 100 BPM.
+        render (*p, 6.3, {}, nullptr, &head, [&head] (int64_t) { if (head.ppq >= 8.0) head.bpm = 100.0; });
+        p->setPlayHead (nullptr);
+        check (std::abs (suite::TempoBus::bpmOf (1, 0.0f) - 120.0f) < 0.01f && std::abs (suite::TempoBus::bpmOf (3, 0.0f) - 100.0f) < 0.01f
+                   && suite::TempoBus::bpmOf (4, 0.0f) == 0.0f,
+               "each bar's tempo is noted as it plays (bar 4 not reached yet)");
+        const auto cue = arrangement::cueSheet (m, 100.0);
+        std::cout << "    " << cue.replace ("\n", "\n    ") << std::endl;
+        check (cue.contains ("3  0:04  Breakdown") && cue.contains ("End    5  0:08") && cue.contains ("Tempo changes: bar 1: 120.0 BPM, bar 3: 100.0 BPM"),
+               "the cue sheet's times follow the tempo change (bar 3 at 0:04, not 0:04.8)");
+        juce::MemoryOutputStream midi;
+        arrangement::markerMidi (m, 120.0).writeTo (midi);
+        juce::MidiFile file;
+        juce::MemoryInputStream in (midi.getData(), midi.getDataSize(), false);
+        file.readFrom (in);
+        juce::MidiMessageSequence tempos;
+        file.findAllTempoEvents (tempos);
+        check (tempos.getNumEvents() == 2 && std::abs (tempos.getEventPointer (1)->message.getTempoSecondsPerQuarterNote() - 0.6) < 1.0e-6,
+               "and the marker MIDI carries the tempo change");
+        auto q = std::make_unique<OuroborosProcessor>();
+        check (suite::TempoBus::bpmOf (1, 0.0f) == 0.0f, "a new project starts with no tempo map");
+    }
+
     section ("DJ phrasing fix, autosave and style report");
     {
         suite::FixBus::reset();
@@ -573,7 +683,7 @@ int main (int argc, char** argv)
                    && report.contains ("i-VI-III-VII (2)") && report.contains ("usually 224 bars") && report.contains ("-8.2 LUFS"),
                "the style report: keys, tempo, progressions, length and loudness from the log");
         log.deleteFile();
-        suite::StyleLog::setFileForTests ({});
+        suite::StyleLog::setFileForTests (testStyleLog);
     }
 
     section ("Next step, key clashes, unused plugins, longer sections, render plan, section snapshots");
@@ -612,6 +722,25 @@ int main (int argc, char** argv)
                "key clash: a loop in F# minor is flagged; C major (A minor's relative) isn't");
         es.push_back (entry (8, "Kybalion", "Spare", Status::idle, {}));
         check (suitecheck::unused (es).joinIntoString ("") == "Kybalion on 'Spare'", "unused plugins are listed");
+        {
+            std::vector<suite::SuiteEntry> st { entry (20, "Prima Materia", "Kick", 0, { 1.0f, 0, 0, 0 }), entry (21, "Prima Materia", "Big Pads", 0, { 4.0f, 0, 0, 0 }),
+                                                entry (22, "Kybalion", "Big Pads", 0, {}), entry (23, "Vibration", "Lead Saw", 0, {}),
+                                                entry (24, "Prima Materia", "Insert 9", 0, { 0.0f, 0, 0, 0 }), entry (25, "Lapis", "Master", 0, {}) };
+            const auto plan = suitecheck::stemPlan (st, "Sunrise");
+            std::cout << "    " << plan.replace ("\n", "\n    ") << std::endl;
+            check (plan.contains ("Drums: Kick") && plan.contains ("Music: Big Pads") && plan.contains ("Leads: Lead Saw") && plan.contains ("Unassigned: Insert 9")
+                       && plan.contains ("Sunrise - Drums.wav") && ! plan.contains ("Master"),
+                   "stem plan: tracks grouped into stems by role (or name), with file names");
+            st.push_back (entry (26, "Kybalion", "Spare", Status::idle, {}));
+            st.push_back (entry (27, "Vibration", "Lead Saw", 0, {}));
+            const auto tidy = suitecheck::tidyPlan (st);
+            check (tidy.contains ("Kybalion on 'Spare'") && tidy.contains ("Vibration twice on 'Lead Saw'"), "project tidy: idle and doubled-up plugins");
+            check (suitecheck::tidyPlan ({ entry (30, "Lapis", "Master", 0, {}) }).contains ("Nothing to remove"), "a tidy project says so");
+            st.push_back (entry (28, "Azoth", "FX", Status::missingFiles | Status::olderState, { 2.0f, 0, 0, 0 }));
+            const auto h = suitecheck::health (st);
+            check (h.size() == 2 && h[0].text.contains ("can't find 2 of its samples") && h[1].text.contains ("older version") && suitecheck::needsSessionFix (st),
+                   "session health: missing samples and an older saved state");
+        }
 
         suite::FixBus::reset();
         auto p = std::make_unique<OuroborosProcessor>();

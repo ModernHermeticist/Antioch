@@ -169,6 +169,12 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<FixHistoryPanel> (processor), historyButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (historyButton);
+    likeMeButton.setTooltip ("How close this song is to the way you usually make trance: key, tempo, structure, length, loudness and tone");
+    likeMeButton.onClick = [this]
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Sounds like me?", processor.soundsLikeMe());
+    };
+    addAndMakeVisible (likeMeButton);
     for (int i = 0; i < (int) carveButtons.size(); ++i)
     {
         auto& b = carveButtons[(size_t) i];
@@ -219,15 +225,23 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         addAndMakeVisible (c);
     loadButton.onClick = [this]
     {
-        chooser = std::make_unique<juce::FileChooser> ("Choose a reference track",
-                                                       juce::File::getSpecialLocation (juce::File::userMusicDirectory),
-                                                       "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
-        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                              [this] (const juce::FileChooser& fc)
-                              {
-                                  if (fc.getResult().existsAsFile())
-                                      processor.loadReference (fc.getResult());
-                              });
+        juce::PopupMenu m;
+        m.addItem (1, "Choose a reference track...");
+        m.addItem (2, "Pick the closest from a folder... (tone, and key and tempo in the file names)");
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&loadButton), [this] (int choice)
+        {
+            if (choice == 0) return;
+            chooser = std::make_unique<juce::FileChooser> (choice == 1 ? "Choose a reference track" : "Choose a folder of reference tracks",
+                                                           juce::File::getSpecialLocation (juce::File::userMusicDirectory),
+                                                           choice == 1 ? "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3" : "*");
+            const auto flags = juce::FileBrowserComponent::openMode
+                             | (choice == 1 ? juce::FileBrowserComponent::canSelectFiles : juce::FileBrowserComponent::canSelectDirectories);
+            chooser->launchAsync (flags, [this, choice] (const juce::FileChooser& fc)
+            {
+                if (choice == 1 && fc.getResult().existsAsFile()) processor.loadReference (fc.getResult());
+                if (choice == 2 && fc.getResult().isDirectory()) processor.autoReference (fc.getResult());
+            });
+        });
     };
 
     mySoundButton.setTooltip ("Choose a few of your finished tracks: their average loudness, ceiling and tonal balance "
@@ -249,12 +263,17 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     referenceLabel.setFont (juce::FontOptions (12.0f));
     referenceLabel.setJustificationType (juce::Justification::centredLeft);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs, &matchButton, &mySoundButton })
+    compareAB = std::make_unique<suite::ui::Toggle> (p.apvts, Params::compareAB, "A/B", Colours::brass);
+    compareAB->setTooltip ("Hear the reference's loudest 20 s at your mix's loudness, to compare sound, not level "
+                           "(Mentalism must be last on the master). Automate it or map it to a key to flip quickly.");
+    for (auto* c : std::initializer_list<juce::Component*> { &loudTarget, &tonalTarget, &resetButton, &loadButton, &referenceLabel, &balanceTabs, &matchButton, &mySoundButton,
+                                                             static_cast<juce::Component*> (compareAB.get()) })
         addAndMakeVisible (c);
     balanceTabs.setComponentID ("tabs");
     balanceTabs.onChange = [this] (int i)
     {
-        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton, &mySoundButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &tonalTarget, &loadButton, &referenceLabel, &matchButton, &mySoundButton,
+                                                                 static_cast<juce::Component*> (compareAB.get()) })
             c->setVisible (i == 0);
         undoFixButton.setVisible (i == 1 || i == 2);
         fixStatus.setVisible (i == 1 || i == 2);
@@ -700,7 +719,8 @@ void MentalismEditor::resized()
     roughUndoButton.setBounds (header.removeFromRight (70).reduced (4, 8));
     roughMixButton.setBounds (header.removeFromRight (110).reduced (4, 8));
     historyButton.setBounds (header.removeFromRight (90).reduced (4, 8));
-    roughStatus.setBounds (header.removeFromRight (250).reduced (4, 8));
+    likeMeButton.setBounds (header.removeFromRight (90).reduced (4, 8));
+    roughStatus.setBounds (header.removeFromRight (190).reduced (4, 8));
 
     auto top = bounds.removeFromTop (190);
     loudArea = top.removeFromLeft (top.getWidth() * 62 / 100);
@@ -724,6 +744,7 @@ void MentalismEditor::resized()
     loadButton.setBounds (controls.removeFromLeft (150).withTrimmedTop (18).reduced (4, 2));
     matchButton.setBounds (controls.removeFromLeft (200).withTrimmedTop (18).reduced (4, 2));
     mySoundButton.setBounds (controls.removeFromLeft (150).withTrimmedTop (18).reduced (4, 2));
+    compareAB->setBounds (controls.removeFromLeft (70).withTrimmedTop (18).reduced (4, 2));
     referenceLabel.setBounds (controls.withTrimmedTop (18).withTrimmedLeft (8));
     b.removeFromTop (6);
     balanceContent = b;

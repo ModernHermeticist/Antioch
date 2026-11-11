@@ -83,11 +83,11 @@ private:
     suite::ui::LookAndFeel lnf;
 
     suite::ui::Choice loudTarget, tonalTarget;
-    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, checklistButton { "Export checklist" },
+    juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, likeMeButton { "Like me?" }, checklistButton { "Export checklist" },
                      matchButton { "Match reference" }, mySoundButton { "Learn my sound..." };
     uint32_t matchSeq = 0;
     juce::TextButton finishButton { "Finish the song" };
-    std::unique_ptr<suite::ui::Toggle> autoCoach;
+    std::unique_ptr<suite::ui::Toggle> autoCoach, compareAB;
     juce::Label automationStatus;
     juce::Label roughStatus;
     juce::Label referenceLabel;

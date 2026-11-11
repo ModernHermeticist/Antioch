@@ -6,6 +6,7 @@
 // mean, from 125 Hz up). Matching recalls the character and moves Mud, Presence and Air so
 // the new lead's tone heads for the stored shape, whatever synth it comes from.
 
+#include "Alias.h"
 #include <juce_core/juce_core.h>
 #include "Analysis.h"
 #include "Parameters.h"
@@ -45,7 +46,7 @@ namespace fingerprint
 
     inline juce::File folder()
     {
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Lead fingerprints");
+        return suite::Alias::file ("Lead fingerprints");
     }
 
     inline bool save (const juce::File& dir, const Fingerprint& f)

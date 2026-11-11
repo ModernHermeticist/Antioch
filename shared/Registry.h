@@ -26,7 +26,11 @@ namespace suite
             hasBands           = 1u << 7,   // has a spectrum (bands, dB per octave band 31.5 Hz .. 16 kHz)
             fillsOn            = 1u << 8,   // Kybalion: gate fills before drops
             highLatency        = 1u << 9,   // reports a long latency (Azoth's reverse swells: 3 s)
-            idle               = 1u << 10   // loaded but doing nothing (cleanup candidate)
+            idle               = 1u << 10,  // loaded but doing nothing (cleanup candidate)
+            clipping           = 1u << 11,  // this track's output went over 0 dBFS in the last couple of seconds
+            vocalBuried        = 1u << 12,  // the vocal has been buried under the music for 4 bars or more
+            olderState         = 1u << 13,  // loaded from a project saved by an older version of the suite
+            missingFiles       = 1u << 14   // files the project uses (samples) can't be found
         };
     }
 

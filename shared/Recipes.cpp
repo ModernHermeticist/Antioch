@@ -1,3 +1,4 @@
+#include "Alias.h"
 #include "Recipes.h"
 #include "CommandRing.h"
 #include "SharedMemory.h"
@@ -53,7 +54,7 @@ namespace suite
     juce::File Recipes::folder()
     {
         if (folderOverride() != juce::File()) return folderOverride();
-        return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Antioch Suite").getChildFile ("Recipes");
+        return suite::Alias::file ("Recipes");
     }
     void Recipes::setFolderForTests (const juce::File& f) { folderOverride() = f; }
 

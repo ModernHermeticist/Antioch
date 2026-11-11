@@ -5,6 +5,10 @@
 #include "Checklist.h"
 #include "Registry.h"
 #include "StyleLog.h"
+#include "LikeMe.h"
+#include "AutoReference.h"
+#include "KeyBus.h"
+#include "Music.h"
 
 //==============================================================================
 ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::atomic<bool>* cancel)
@@ -27,8 +31,10 @@ ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::a
 
     constexpr int chunk = 1 << 15;
     juce::AudioBuffer<float> buffer (2, chunk);
+    std::vector<float> chunkLoudness;   // short-term loudness at the end of each chunk
     for (juce::int64 pos = 0; pos < reader->lengthInSamples; pos += chunk)
     {
+        if (pos > 0) chunkLoudness.push_back (meterL->shortTerm.load());
         if (cancel != nullptr && cancel->load())
             return profile;
         const auto n = (int) std::min<juce::int64> (chunk, reader->lengthInSamples - pos);
@@ -48,6 +54,34 @@ ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::a
     for (size_t b = 0; b < (size_t) analysis::numBands; ++b)
         profile.bands[b] = meterBands->longDb[b].load();
     profile.valid = profile.lufs > -70.0f;
+
+    // The loudest 20 s (ending a little after the loudest short-term reading), for A/B.
+    if (profile.valid)
+    {
+        auto ex = std::make_shared<ReferenceProfile::Excerpt>();
+        chunkLoudness.push_back (meterL->shortTerm.load());
+        const auto length = (juce::int64) std::min<double> ((double) reader->lengthInSamples, 20.0 * reader->sampleRate);
+        // The 20 s window with the highest average short-term loudness (each reading covers the 3 s before it).
+        const auto span = juce::jmax<size_t> (1, (size_t) (length / chunk));
+        double best = -1.0e9;
+        juce::int64 bestEnd = length;
+        for (size_t k = 0; k + span <= chunkLoudness.size(); ++k)
+        {
+            double sum = 0.0;
+            for (size_t j = k; j < k + span; ++j) sum += juce::jmax (-70.0f, chunkLoudness[j]);
+            if (sum > best) { best = sum; bestEnd = (juce::int64) (k + span) * chunk; }
+        }
+        const auto start = juce::jlimit<juce::int64> (0, reader->lengthInSamples - length, bestEnd - length);
+        ex->audio.setSize (2, (int) length);
+        reader->read (&ex->audio, 0, (int) length, start, true, true);
+        if (reader->numChannels < 2) ex->audio.copyFrom (1, 0, ex->audio, 0, 0, (int) length);
+        ex->sampleRate = reader->sampleRate;
+        analysis::LoudnessMeter m;
+        m.prepare (reader->sampleRate);
+        for (int i = 0; i < (int) length; ++i) m.process (ex->audio.getSample (0, i), ex->audio.getSample (1, i));
+        ex->lufs = m.integrated();
+        if (ex->lufs > -70.0f) profile.excerpt = ex;
+    }
     return profile;
 }
 
@@ -355,9 +389,15 @@ void MentalismProcessor::runAutomation()
             saveMixReport();   // a report of the finished mix, next to the others
             logFinishedSong (rep);
             if (rep.measurement.integratedLufs > -70.0f)   // the style log: one finished master
+            {
+                juce::StringArray shape;
+                for (size_t b = 0; b < (size_t) analysis::numBands; ++b) shape.add (juce::String (bands.longDb[b].load(), 2));
                 suite::StyleLog::add ("master", { { "lufs", juce::String (rep.measurement.integratedLufs, 1) },
                                                   { "truepeak", juce::String (rep.measurement.truePeakDb, 1) },
-                                                  { "target", rep.targetName } });
+                                                  { "target", rep.targetName },
+                                                  { "bands", bands.longSeconds.load() >= 20.0f ? shape.joinIntoString (",") : juce::String() } });
+                learnMixDna();
+            }
             setText (finishText, juce::String (happy ? "Finished: the arc is right. " : "Finished what can be automated. ")
                                      + (ready ? "Ready to export." : "See the checklist before you export."));
         }
@@ -390,6 +430,54 @@ MentalismProcessor::~MentalismProcessor()
         loader.join();
     if (mySoundLoader.joinable())
         mySoundLoader.join();
+}
+
+juce::StringArray MentalismProcessor::liveChecks() const
+{
+    juce::StringArray out;
+    for (const auto& e : suite::Registry::list())
+    {
+        const auto where = e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track");
+        if (e.has (suite::Status::clipping))
+            out.add ("Live: " + where + " is going over 0 dBFS: turn its Prima Materia Input gain down (or Gain-stage all tracks).");
+        if (e.has (suite::Status::vocalBuried))
+            out.add ("Live: the vocal on " + where + " has been buried under the music for 4 bars: deepen Solve et Coagula's dips, or bring the vocal up.");
+    }
+    if (monoDropSeconds.load() >= monoDropAfterSeconds)
+        out.add ("Live: the drop is almost mono (correlation over " + juce::String (monoCorrelation, 2) + "): widen the pads or leads (Vibration's Width) for a bigger drop.");
+    return out;
+}
+
+juce::String MentalismProcessor::soundsLikeMe() const
+{
+    likeme::Song song;
+    if (const auto key = suite::KeyBus::read(); key.valid)
+        song.key = suite::music::noteNames()[juce::jlimit (0, 11, key.root)] + (key.scale == 1 ? "" : "m");
+    song.bpm = hostBpm.load();
+    suite::SectionMap map;
+    if (suite::SectionBus::read (map) && map.count > 0)
+    {
+        juce::StringArray structure;
+        for (int i = 0; i < map.count; ++i) structure.add (suite::sectionName (map.sections[(size_t) i].type));
+        song.structure = structure.joinIntoString ("-");
+        song.bars = map.totalBars;
+    }
+    song.lufs = report().measurement.integratedLufs;
+    song.haveBands = bands.longSeconds.load() >= 20.0f;
+    for (size_t b = 0; b < song.bands.size(); ++b) song.bands[b] = bands.longDb[b].load();
+    return likeme::compare (suite::StyleLog::read(), song, getMySound()).text();
+}
+
+bool MentalismProcessor::learnMixDna()
+{
+    // Your own choice of tracks (Learn my sound) wins; otherwise your finished songs teach it.
+    const auto current = getMySound();
+    if (current.valid && ! current.learnedFromSongs()) return false;
+    const auto learned = MySound::fromFinishedSongs (suite::StyleLog::read());
+    if (! learned.valid) return false;
+    learned.save (MySound::file());
+    setMySound (learned);
+    return true;
 }
 
 MySound MentalismProcessor::analyseMySound (const juce::Array<juce::File>& tracks, const std::atomic<bool>* cancel)
@@ -454,6 +542,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     // Arrangement coach: attribute each 400 ms loudness reading to the section it falls in.
     const auto host = suite::HostInfo::read (getPlayHead());
+    if (host.bpm > 0.0) hostBpm.store ((float) host.bpm);
     const auto haveMap = sections.refresh();
     if (haveMap && sections.getMap() != statsMap)
     {
@@ -462,8 +551,17 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
     const auto followSections = haveMap && host.playing && host.hasPpq;
     const auto qPerSample = host.quartersPerSample (sampleRate);
+    // Live check: a drop that has been almost mono for 8 s (measured with the previous block's correlation).
+    if (followSections)
+    {
+        const auto sec = sections.locate (host.ppq, host.barQuarters());
+        if (sec.valid && sec.type == suite::SectionType::Drop && loudness.shortTerm.load() > -40.0f)
+            monoDropSeconds.store (stereo.correlation.load() > monoCorrelation ? monoDropSeconds.load() + (float) (buffer.getNumSamples() / sampleRate) : 0.0f);
+        else if (sec.valid && sec.type != suite::SectionType::Drop)
+            monoDropSeconds.store (0.0f);
+    }
 
-    // Measure only: the audio passes through untouched.
+    // Measure the mix (always the mix, even while A/B plays the reference).
     const auto n = buffer.getNumSamples();
     const auto* l = buffer.getReadPointer (0);
     const auto* r = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : l;
@@ -507,6 +605,82 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         mono[(size_t) i] = 0.5f * (l[i] + r[i]);
     }
     spectrumTap.push (mono.data(), n);
+
+    // A/B: the reference's loudest part, looped, at the loudness the mix had when you switched.
+    const auto ab = apvts.getRawParameterValue (Params::compareAB)->load() > 0.5f;
+    if (ab)
+    {
+        if (const juce::SpinLock::ScopedTryLockType tl (abLock); tl.isLocked()) abExcerpt = abShared;
+        if (abExcerpt != nullptr && abExcerpt->audio.getNumSamples() > 0)
+        {
+            if (! abPlaying.load())   // just switched: match the mix's loudness now
+            {
+                const auto mixNow = loudness.shortTerm.load() > -70.0f ? loudness.shortTerm.load() : abExcerpt->lufs;
+                abGainDb.store (juce::jlimit (-40.0f, 20.0f, mixNow - abExcerpt->lufs));
+                abPlaying.store (true);
+            }
+            const auto g = juce::Decibels::decibelsToGain (abGainDb.load());
+            const auto step = abExcerpt->sampleRate / sampleRate;
+            const auto len = abExcerpt->audio.getNumSamples();
+            auto* outL = buffer.getWritePointer (0);
+            auto* outR = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
+            for (int i = 0; i < n; ++i)
+            {
+                const auto i0 = (int) abPos, i1 = (i0 + 1) % len;
+                const auto f = (float) (abPos - i0);
+                const auto a = abExcerpt->audio.getSample (0, i0) + f * (abExcerpt->audio.getSample (0, i1) - abExcerpt->audio.getSample (0, i0));
+                const auto b = abExcerpt->audio.getSample (1, i0) + f * (abExcerpt->audio.getSample (1, i1) - abExcerpt->audio.getSample (1, i0));
+                outL[i] = a * g;
+                if (outR != nullptr) outR[i] = b * g;
+                abPos += step;
+                if (abPos >= len) abPos -= len;
+            }
+        }
+    }
+    else
+        abPlaying.store (false);
+}
+
+std::pair<ReferenceProfile, juce::String> MentalismProcessor::chooseReference (const juce::File& folder, const advisor::Bands& mix, bool haveMix,
+                                                                               int root, bool minor, float bpm, const std::atomic<bool>* cancel)
+{
+    auto files = folder.findChildFiles (juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+    files.sort();
+    std::vector<ReferenceProfile> profiles;
+    std::vector<autoref::Candidate> candidates;
+    for (int i = 0; i < juce::jmin (40, files.size()); ++i)
+    {
+        if (cancel != nullptr && cancel->load()) break;
+        auto p = ReferenceProfile::analyse (files[i], cancel);
+        candidates.push_back ({ files[i].getFileNameWithoutExtension(), p.bands, p.valid });
+        profiles.push_back (std::move (p));
+    }
+    const auto pick = autoref::choose (candidates, mix, haveMix, root, minor, bpm);
+    if (pick.index < 0) return { {}, "No usable tracks in " + folder.getFileName() };
+    return { profiles[(size_t) pick.index], "Chose '" + candidates[(size_t) pick.index].name + "' of " + juce::String ((int) candidates.size())
+                                                + (pick.why.isNotEmpty() ? " (" + pick.why + ")" : juce::String()) };
+}
+
+void MentalismProcessor::autoReference (const juce::File& folder)
+{
+    if (loading.load())
+        return;
+    if (loader.joinable())
+        loader.join();
+    advisor::Bands mix {};
+    for (size_t b = 0; b < mix.size(); ++b) mix[b] = bands.longDb[b].load();
+    const auto haveMix = bands.longSeconds.load() >= 10.0f;
+    const auto key = suite::KeyBus::read();
+    const auto bpm = hostBpm.load();
+    loading.store (true);
+    cancelLoad.store (false);
+    loader = std::thread ([this, folder, mix, haveMix, key, bpm]
+    {
+        const auto [profile, why] = chooseReference (folder, mix, haveMix, key.valid ? key.root : -1, key.scale != 1, bpm, &cancelLoad);
+        if (profile.valid) setReference (profile);
+        { const juce::ScopedLock sl (referenceLock); autoRefText = why; }
+        loading.store (false);
+    });
 }
 
 void MentalismProcessor::loadReference (const juce::File& file)
@@ -553,6 +727,8 @@ void MentalismProcessor::setReference (const ReferenceProfile& p)
 {
     const juce::ScopedLock sl (referenceLock);
     reference = p;
+    const juce::SpinLock::ScopedLockType al (abLock);
+    abShared = p.excerpt;
 }
 
 uint32_t MentalismProcessor::matchReference()
@@ -588,8 +764,9 @@ MentalismProcessor::Report MentalismProcessor::report() const
     {
         rep.targetLufs = mine.valid ? mine.lufs : advisor::loudnessTargets()[0].lufs;
         rep.ceiling = mine.valid ? mine.ceiling() : rep.ceiling;
-        rep.targetName = mine.valid ? "your sound (" + juce::String (mine.lufs, 1) + " LUFS, from " + juce::String (mine.tracks) + " tracks)"
-                                    : juce::String ("the club target (learn your sound from your tracks first)");
+        rep.targetName = mine.valid ? "your sound (" + juce::String (mine.lufs, 1) + " LUFS, from " + juce::String (mine.tracks)
+                                          + (mine.learnedFromSongs() ? " finished songs)" : " tracks)")
+                                    : juce::String ("the club target (learn your sound from your tracks first, or finish two songs)");
     }
     else if (loudIndex == advisor::matchReferenceIndex && ref.valid)
     {
@@ -656,6 +833,7 @@ MentalismProcessor::Report MentalismProcessor::report() const
         }
     }
     for (const auto& m : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), m);
+    for (const auto& m : liveChecks()) rep.advice.insert (0, m);   // live problems first
     {
         Pass before;
         { const juce::ScopedLock sl (historyLock); before = previousPass; }

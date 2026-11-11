@@ -27,6 +27,8 @@ namespace
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::toneHighId, 1 }, "High Tone", NormalisableRange<float> (-6.0f, 6.0f), 0.0f, db));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::manualGainId, 1 }, "Manual Gain",
                                                       NormalisableRange<float> (-6.0f, 24.0f), 0.0f, db));
+        l.add (std::make_unique<AudioParameterChoice> (ParameterID { LapisProcessor::bitDepthId, 1 }, "Export Bit Depth",
+                                                       StringArray { "24-bit (no dither)", "16-bit (dither)" }, 0));
         return l;
     }
 }
@@ -140,6 +142,10 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
     loudness.prepare (sampleRate);
     outBands.prepare (sampleRate);
     outputPeak.reset();
+    passLoudness.prepare (sampleRate);
+    passPeak.reset();
+    wasPlaying = false;
+    passSamples = 0;
     updateInterval = juce::jmax (1, (int) (sampleRate * 0.1));
     samplesSinceUpdate = 0;
     appliedGainDb = 0.0f;
@@ -204,6 +210,20 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     auto* R = buffer.getWritePointer (1);
     float maxGr = 0.0f;
 
+    // Export notes: a play-through starts when the transport starts and ends when it stops.
+    const auto playing = suite::HostInfo::read (getPlayHead()).playing;
+    if (playing && ! wasPlaying) { passLoudness.reset(); passPeak.reset(); passSamples = 0; passMaxGr = 0.0f; }
+    if (! playing && wasPlaying && passSamples >= (int64_t) (30.0 * sampleRate) && ! passReady.load())
+    {
+        finished = { passLoudness.integrated(), passPeak.peakDb(), passMaxGr, (float) ((double) passSamples / sampleRate), target, ceilingDb,
+                     (int) value (bitDepthId) == 1 };
+        passReady.store (true);
+    }
+    wasPlaying = playing;
+    // 16-bit exports: TPDF dither of one 16-bit step (24-bit needs none).
+    const auto dither = (int) value (bitDepthId) == 1;
+    constexpr float lsb16 = 1.0f / 32768.0f;
+
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         // Smooth gain changes (they come in small steps from the learning loop).
@@ -225,9 +245,21 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
         limiter.process (l, r);
 
+        if (dither)
+        {
+            l += (ditherRng.nextFloat() - ditherRng.nextFloat()) * lsb16;
+            r += (ditherRng.nextFloat() - ditherRng.nextFloat()) * lsb16;
+        }
+
         // Final safety: never exceed the ceiling by more than rounding.
         L[n] = juce::jlimit (-ceiling, ceiling, l);
         R[n] = juce::jlimit (-ceiling, ceiling, r);
+        if (playing)
+        {
+            passLoudness.process (L[n], R[n]);
+            passPeak.process (L[n], R[n]);
+            ++passSamples;
+        }
 
         loudness.process (L[n], R[n]);
         outBands.process (L[n], R[n]);
@@ -266,8 +298,43 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     gainDb.store (appliedGainDb);
     gainReductionDb.store (maxGr);
+    if (playing) passMaxGr = std::max (passMaxGr, maxGr);
     if (maxGr > maxReductionDb.load()) maxReductionDb.store (maxGr);
     outShortTerm.store (loudness.shortTerm.load());
+}
+
+juce::String LapisProcessor::exportNotes (const PassResult& p)
+{
+    const auto offTarget = p.lufs - p.targetLufs;
+    juce::StringArray lines;
+    lines.add ("EXPORT NOTES  " + juce::Time::getCurrentTime().toString (true, true, false, true));
+    lines.add ("");
+    lines.add ("Length:      " + juce::String ((int) p.seconds / 60) + ":" + juce::String ((int) p.seconds % 60).paddedLeft ('0', 2));
+    lines.add ("Loudness:    " + juce::String (p.lufs, 1) + " LUFS integrated (target " + juce::String (p.targetLufs, 1) + ")");
+    lines.add ("True peak:   " + juce::String (p.truePeakDb, 1) + " dBTP (ceiling " + juce::String (p.ceilingDb, 1) + ")");
+    lines.add ("Limiting:    up to " + juce::String (p.maxGrDb, 1) + " dB");
+    lines.add ("Format:      " + juce::String (p.dithered ? "16-bit WAV, TPDF dither on (in Lapis: don't add more in FL)"
+                                                         : "24-bit WAV, no dither (Lapis: 24-bit)"));
+    lines.add ("");
+    // The integrated target sits below the drops (breakdowns pull it down), so allow the usual spread.
+    lines.add (std::abs (offTarget) <= 2.0f ? "Loudness: on target." : offTarget > 0 ? "Loudness: " + juce::String (offTarget, 1) + " LU over the target."
+                                                                                    : "Loudness: " + juce::String (-offTarget, 1) + " LU under the target.");
+    lines.add (p.truePeakDb <= p.ceilingDb + 0.1f ? "Peak: within the ceiling." : "Peak: over the ceiling by " + juce::String (p.truePeakDb - p.ceilingDb, 1) + " dB.");
+    return lines.joinIntoString ("\n") + "\n";
+}
+
+juce::File LapisProcessor::writeExportNotes()
+{
+    if (! passReady.load()) return {};
+    const auto p = finished;
+    passReady.store (false);
+    const auto dir = notesFolder();
+    dir.createDirectory();
+    const auto name = juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S") + " - " + juce::String (p.lufs, 1) + " LUFS.txt";
+    const auto f = dir.getChildFile (juce::File::createLegalFileName (name));
+    f.replaceWithText (exportNotes (p));
+    lastNotes = f;
+    return f;
 }
 
 juce::AudioProcessorEditor* LapisProcessor::createEditor()

@@ -198,6 +198,48 @@ int main (int argc, char** argv)
         check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::toneLowId)->load()) < 0.01f, "undo flattens them again");
     }
 
+    section ("Dither and export notes");
+    {
+        auto silentOut = [] (int bitDepth)
+        {
+            auto p = make (1);
+            set (*p, LapisProcessor::modeId, (float) LapisProcessor::Manual);
+            set (*p, LapisProcessor::bitDepthId, (float) bitDepth);
+            juce::AudioBuffer<float> audio;
+            render (*p, 0.5, {}, &audio);
+            return peakBetween (audio, 0.1, 0.5);
+        };
+        const auto none = silentOut (0), dithered = silentOut (1);
+        check (none == 0.0f && dithered > 0.0f && dithered <= 2.0f / 32768.0f + 1.0e-7f,
+               "24-bit: no dither; 16-bit: TPDF dither of one 16-bit step (" + juce::String (dithered * 32768.0f, 2) + " LSB peak)");
+
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("LapisExportNotes");
+        dir.deleteRecursively();
+        LapisProcessor::notesFolderOverride() = dir;
+        auto p = make (1);
+        FakePlayHead head;
+        p->setPlayHead (&head);
+        render (*p, 20.0, music ([] (double) { return -14.0f; }), nullptr, &head);
+        head.playing = false;
+        render (*p, 0.2, {}, nullptr, &head);
+        p->suiteStatus();
+        check (! dir.isDirectory() || dir.getNumberOfChildFiles (juce::File::findFiles) == 0, "a short play (20 s) writes no notes");
+        head.playing = true;
+        render (*p, 45.0, music ([] (double) { return -14.0f; }), nullptr, &head);
+        head.playing = false;
+        render (*p, 0.2, {}, nullptr, &head);
+        p->setPlayHead (nullptr);
+        const auto f = p->writeExportNotes();
+        const auto text = f.loadFileAsString();
+        std::cout << "    " << text.replace ("\n", "\n    ") << std::endl;
+        check (f.existsAsFile() && text.contains ("Length:      0:45") && text.contains ("LUFS integrated (target -8.0)") && text.contains ("dBTP (ceiling -0.3)")
+                   && text.contains ("24-bit WAV") && text.contains ("Peak: within the ceiling."),
+               "a full play-through (an export) writes notes: length, loudness against the target, true peak, format");
+        check (! p->writeExportNotes().existsAsFile(), "once per play-through");
+        LapisProcessor::notesFolderOverride() = juce::File();
+        dir.deleteRecursively();
+    }
+
     section ("Follows Mentalism's target");
     {
         auto p = make (LapisProcessor::followMentalism);

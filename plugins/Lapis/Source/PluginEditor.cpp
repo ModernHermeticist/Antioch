@@ -13,7 +13,8 @@ LapisEditor::LapisEditor (LapisProcessor& p)
       release (p.apvts, LapisProcessor::releaseId, "Release", accent),
       manualGain (p.apvts, LapisProcessor::manualGainId, "Manual gain", Colours::brass),
       toneLow (p.apvts, LapisProcessor::toneLowId, "Low tone", accent),
-      toneHigh (p.apvts, LapisProcessor::toneHighId, "High tone", accent)
+      toneHigh (p.apvts, LapisProcessor::toneHighId, "High tone", accent),
+      bitDepth (p.apvts, LapisProcessor::bitDepthId, "Export as")
 {
     setLookAndFeel (&lnf);
     resetButton.onClick = [this] { processor.resetLearning(); };
@@ -21,7 +22,7 @@ LapisEditor::LapisEditor (LapisProcessor& p)
     fingerprintButton.onClick = [this] { showFingerprintMenu(); };
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &resetButton, &fingerprintButton, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth, &resetButton, &fingerprintButton, &status })
         addAndMakeVisible (c);
     setSize (1000, 520);
     startTimerHz (20);
@@ -35,6 +36,11 @@ LapisEditor::~LapisEditor()
 
 void LapisEditor::timerCallback()
 {
+    if (processor.lastNotes != juce::File() && processor.lastNotes != notesShown)
+    {
+        notesShown = processor.lastNotes;
+        showNote ("Export notes saved: " + notesShown.getFileName());
+    }
     const auto m = (int) processor.apvts.getRawParameterValue (LapisProcessor::modeId)->load();
     manualGain.setEnabled (m == LapisProcessor::Manual);
     ceiling.setEnabled (! processor.followingMentalism.load());
@@ -150,5 +156,5 @@ void LapisEditor::resized()
     resetButton.setBounds (statusRow.removeFromRight (140).reduced (2));
     fingerprintButton.setBounds (statusRow.removeFromRight (170).reduced (2));
     status.setBounds (statusRow);
-    layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh });
+    layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth });
 }

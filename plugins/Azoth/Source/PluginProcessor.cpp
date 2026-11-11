@@ -75,6 +75,55 @@ AzothProcessor::AzothProcessor()
         if (fix == suite::Fix::LaterDropBigger) return { R::nudge (apvts, laterDropsId, 0.25f) };
         return {};
     });
+    // Session health (Ouroboros): missing samples go back to the synthesised sounds (undo puts the paths back).
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    {
+        if (fix != suite::Fix::SessionHealth || missingSamples() == 0) return {};
+        std::vector<std::pair<int, juce::String>> forgot;
+        for (int slot = 0; slot < numSampleSlots; ++slot)
+        {
+            const auto path = apvts.state[sampleProperty (slot)].toString();
+            if (path.isNotEmpty() && ! juce::File (path).existsAsFile()) { forgot.push_back ({ slot, path }); clearSample (slot); }
+        }
+        return [this, forgot] { for (const auto& [slot, path] : forgot) apvts.state.setProperty (sampleProperty (slot), path, nullptr); };
+    });
+
+    // Your transitions: a new Azoth starts from the style you usually keep.
+    const auto usual = usualTransitions (suite::StyleLog::read());
+    for (const auto& [id, v] : usual)
+        if (auto* p = apvts.getParameter (id)) p->setValueNotifyingHost (p->convertTo0to1 (v));
+    usedYourTransitions = ! usual.empty();
+}
+
+std::map<juce::String, float> AzothProcessor::usualTransitions (const std::vector<suite::StyleLog::Entry>& entries)
+{
+    std::map<juce::String, std::map<int, int>> counts;
+    int songs = 0;
+    for (const auto& e : entries)
+    {
+        if (e.kind != "transitions") continue;
+        ++songs;
+        for (const auto& id : transitionParamIds())
+            if (e.get (id).isNotEmpty()) ++counts[id][e.get (id).getIntValue()];
+    }
+    std::map<juce::String, float> out;
+    if (songs < 2) return out;
+    for (const auto& [id, values] : counts)
+    {
+        int best = 0, bestCount = 0;
+        for (const auto& [v, c] : values) if (c > bestCount) { best = v; bestCount = c; }
+        out[id] = (float) best;
+    }
+    return out;
+}
+
+void AzothProcessor::logTransitionsOnce()
+{
+    if (! reachedFinalDrop.load() || transitionsLogged.exchange (true)) return;
+    std::map<juce::String, juce::String> fields;
+    for (const auto& id : transitionParamIds())
+        fields[id] = juce::String (juce::roundToInt (apvts.getRawParameterValue (id)->load()));
+    suite::StyleLog::add ("transitions", fields);
 }
 
 void AzothProcessor::updateLatency()
@@ -264,6 +313,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             {
                 energyGain = juce::jlimit (0.0f, 3.0f, sec.energyRatio * sections.getMap().intensityScale());   // energy curve and Intensity
                 enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop());
+                if (sec.type == T::Drop && sec.index == sections.getMap().lastDropIndex()) reachedFinalDrop.store (true);
             }
             if (sec.valid) riseGain = juce::jlimit (0.0f, 3.0f, (sec.type == T::Build ? sec.nextEnergyRatio : 1.0f) * sections.getMap().intensityScale());
             if (sec.valid) riseKey = std::exp2 ((float) sec.nextKeyShift / 12.0f);
@@ -598,6 +648,17 @@ double AzothProcessor::tuning (int slot, float rootHz) const
 float AzothProcessor::samplePitch (int slot) const
 {
     return juce::isPositiveAndBelow (slot, (int) numSampleSlots) ? samplePlayers[(size_t) slot].pitch() : 0.0f;
+}
+
+int AzothProcessor::missingSamples() const
+{
+    int n = 0;
+    for (int slot = 0; slot < numSampleSlots; ++slot)
+    {
+        const auto path = apvts.state[sampleProperty (slot)].toString();
+        n += path.isNotEmpty() && ! juce::File (path).existsAsFile();
+    }
+    return n;
 }
 
 void AzothProcessor::clearSample (int slot)

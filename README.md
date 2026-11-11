@@ -94,11 +94,15 @@ three tabs:
   that pull away from home (anything but i and its relative major), up to half again as
   wide at 100%, and brings it back on the home chord, so the space breathes with the
   harmony.
+  **Pump to kick** (off by default) ducks the reverb tail on every kick of the pattern a
+  Kybalion shares (Share kick), so the space pumps with the groove without a ducker.
 - **Throw:** a dub-style delay that only takes in audio while the **THROW** pad is held
   (or latched, or automated). The tail keeps ringing after you let go. **Auto Throw**
   catches the last 1/16th to 1 bar of every 2, 4, 8 or 16 bars while FL is playing, so
   phrase-end throws happen without any automation. It has ping-pong, drive, filters,
-  ducking and a send to the reverb.
+  ducking and a send to the reverb. **At vocal phrase ends** throws the last beat (or
+  the length you choose) of every sung phrase: put Antioch on the vocal and play the song once
+  with Solve et Coagula hearing the vocal, and its last words echo out wherever a phrase ends.
 
 ![Antioch reverb tab](docs/antioch_reverb.png)
 ![Antioch throw tab](docs/antioch_throw.png)
@@ -163,6 +167,13 @@ the last few bars.
 - **Dynamic gate** (off by default): the gate's depth follows the song: in drops it grows
   from 60% to full over the drop; elsewhere it follows the section's energy, so a quiet
   breakdown gates gently and a hot groove hard.
+- **Pan steps** (off by default): each step moves in the stereo field: *Ping-pong*
+  (left, right), *Left-centre-right* or *Bounce* (left, centre, right, centre).
+- **Your patterns rise to the top:** a song played into its final drop logs the gate
+  pattern you kept (and the kind of track, from its name). The pattern list starts with your
+  three most used, and once a pattern has been kept in two songs, a new Kybalion starts on it,
+  and on your favourite for pads, plucks, leads... as soon as the track's name says what it
+  is (never over a pattern you chose).
 
 ![Kybalion polarity tab](docs/kybalion_polarity.png)
 
@@ -189,6 +200,8 @@ the last few bars.
   track's low end (below 120 Hz) with the kick's. If they cancel, the status line says
   *"low end OUT OF PHASE with the kick"*: turn on **Flip polarity** (next to Breakdown),
   which inverts this track.
+- **Share kick** also shares the kick's body pitch (measured on the kick track), for Azoth's
+  impact.
 - **Split** ducks only below a chosen frequency, using a Linkwitz-Riley crossover, so the
   bass pumps and the top stays put.
 - **BREAKDOWN** switches ducking off. Automate it for breakdowns where the kick drops
@@ -292,6 +305,29 @@ whole song through first.
 tracks and averages their loudness, true peak and tonal balance. Choose **My sound** as the
 loudness target and the tonal target, in any project, to mix towards your own records
 instead of a genre guide. Lapis follows the loudness and ceiling when it follows Mentalism.
+
+**Mix DNA.** Every master *Finish the song* completes also logs its tonal balance. Once two
+or more are logged, My sound learns itself from them (the median of each band and of the
+loudness), unless you chose your own tracks, and new songs aim for that tonal balance.
+
+**Like me?** (header) scores how close this song is to the way you usually make trance, out
+of 100: key, tempo, structure and length against the songs you exported, loudness against
+your finished masters, and tone against your mix DNA, with a line for each saying where it's
+like you and where it isn't (*"Tempo 128 BPM: 10 slower than your usual 138"*).
+
+**Live checks.** While the song plays, the top of the suggestions warns about a track going
+over 0 dBFS (from its Prima Materia), a vocal buried under the music for 4 bars in a row
+(Solve et Coagula compares the vocal on its sidechain with the music between 1 and 4 kHz),
+and a drop that has been almost mono for 8 s.
+
+**A/B** (Tonal Balance tab, next to the reference) plays the reference's loudest 20 s, looped,
+at the loudness your mix had when you switched, so you compare sound, not level. Map it to a
+key or automate it to flip quickly. Mentalism has to be last on the master to be heard.
+
+**Pick the closest from a folder** (in *Load reference…*): point it at a folder of reference
+tracks; Mentalism analyses them (up to 40) and loads the one closest to this song: its tonal
+shape against the mix so far, and its key and tempo where the file name says them
+(*"Track (Am, 138).wav"*).
 
 **Arc match.** Where you've drawn a section's energy on Ouroboros' curve, the coach holds
 the song to it: relative to the first drop, each drawn section should sit 12 LU lower per
@@ -467,7 +503,9 @@ top. Ouroboros keeps the new song's map.
 an **extended mix** in C (64 bars longer, DJ intro and outro, club target) and a **club
 edit** in D (the same song with a 32-bar intro and outro; Prima Materia takes the pads,
 leads and vocals out of them and keeps the kick in, so DJs get beat-only ends; club
-target), and returns to A. Click the slots to switch between versions.
+target), and returns to A. Click the slots to switch between versions. Once you've
+opened the render plan for two or more songs, Make versions uses **your** usual lengths: the
+radio edit's length and how much longer your extended mixes are, as you kept them.
 
 **Autosave and version history.** Every 10 minutes (or 5 or 20, or off: *Autosave* in
 Recipes…), once the song has played since the last one, Ouroboros saves the whole suite as
@@ -515,6 +553,39 @@ put the breakdown sound in C and the drop sound in B.
 **Render plan…** (template list) lists the versions you made with *Make versions*, with
 what to do for each (which slot, reset Mentalism, play through so Lapis settles on its
 loudness target, check the checklist, export), its file name and the export settings.
+
+**Draft the whole song** (New song…) does New song and then, a moment later, has
+Correspondence write the whole song's MIDI (Export all) into *Antioch Suite/Drafts* and every
+plugin save the setup as a recipe named *Draft* with the date: a complete draft to drag in.
+
+**Arrange from my loop** (template list): with an 8- or 16-bar loop playing and every
+track's Prima Materia given a role, Ouroboros lays out a full song (your usual structure if
+you've saved templates, otherwise a classic one) and every Prima Materia sets which sections
+its track plays in from its role. Undo it in Mentalism's History.
+
+**Stem plan for a remix pack** (template list) groups the tracks into stems (Drums, Bass,
+Music, Leads, Vocals, FX) from Prima Materia's roles, or the track names, with file names
+and how to export them so they add up to the mix.
+
+**Project tidy** (template list) lists suite plugins that are loaded but doing nothing (an
+Antioch with no echo, reverb or throw; an Azoth with every sound at zero; a Kybalion with gate
+and duck off...) and plugins doubled up on a track.
+
+**Session health.** When a project opens, the Suite panel says if a plugin can't find its
+samples (moved or deleted; **Fix the session** puts the synthesised sounds back, undoable) or
+was saved by an older version of the suite (it loads fine; new options start at their
+defaults).
+
+**Tempo changes.** Ouroboros notes each bar's tempo as the song plays, so a song that slows
+for the breakdown or ramps up gets the right times in the cue sheet, the song sheet and the
+vocalist's pack, and tempo changes in the exported marker and all-parts MIDI. (Everything
+that follows sections counts in beats, so it already stays on the bar.)
+
+**Artist aliases.** *Recipes…* has an alias box: choose one, or type a new name, and
+**Switch**. Each alias keeps its own style log, recipes and signature, templates, hooks, gate
+patterns, role settings, presets, fingerprints, My sound, drafts and notes (in
+*Antioch Suite/Aliases/<name>*), so each of your names learns its own sound. *Main* is the
+suite folder as always.
 
 ![Suite overview](docs/ouroboros_suite.png)
 
@@ -615,6 +686,12 @@ integrated target, because breakdowns pull the song average down by about that m
   its chain (target, ceiling, clip, release, tone) and its tonal shape. On a new song,
   *Match* recalls the chain and moves the low and high tone half-way towards the stored
   shape (at most 3 dB a time; match again to refine).
+- **Export as** 24-bit (no dither) or 16-bit (TPDF dither of one 16-bit step, added by Lapis,
+  so don't add more in FL).
+- **Export notes:** every play-through of 30 s or more (an FL export plays the song too) is
+  measured on its own, and when it stops Lapis writes a note in *Antioch Suite/Export notes*:
+  length, integrated loudness against the target, true peak against the ceiling, the most
+  limiting, the format, and whether it hit them.
 - **Clip** shaves the sharpest peaks with a soft clipper before the limiter.
 - The **limiter** is a lookahead true-peak design that detects inter-sample peaks, adds
   77 samples of latency (FL compensates for it automatically), and holds the ceiling.
@@ -685,6 +762,14 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
 - **Roll designer:** **Roll from** (1/4 or 1/8) and **Roll to** (1/16, 1/32 or 1/64) set
   the snare roll's first and last speed, **Curve** how it speeds up (steps, smooth or late),
   and the start velocity how quietly it begins before growing into the drop.
+  **Roll pitch with speed** (on by default) raises the roll's pitch in steps as it speeds up,
+  instead of a steady rise.
+- **Impact on the kick** (on by default): with a Kybalion sharing the kick, the drop's impact
+  is tuned to the kick's body pitch (folded into 35-90 Hz), so the impact lands with the kick
+  rather than against it. Without one it stays on the song's root.
+- **Your transitions:** when a song reaches its final drop, Azoth logs the transition style
+  you kept (roll speeds and start, gap, build shape, into-the-drop effect). Once two songs
+  are logged, a new Azoth starts from your most common choices.
 - **Play** buttons audition each sound (your sample if you've loaded one).
 - Jumping the playhead into the middle of a section never fires its transition. Everything
   is synthesised (no samples), so it stays in key.
@@ -755,6 +840,9 @@ name or from its sound), in any project, starts from your settings.
   before processing. Undo it in Mentalism's History. **Keep at -18** keeps doing
   it while the song plays: every 10 s, if the input has drifted more than 1.5 dB from
   -18 dBFS, the input gain follows.
+
+**BD sweep** (off by default): a low-pass that opens slowly across each breakdown, from
+about 300 Hz at 100% to fully open just before the build, as if you'd drawn it.
 
 **Drop entrance** (Ouroboros, Perform row) decides how every drop arrives: **Slam** (all
 at once), **Staggered** (kick on beat 1, bass on beat 2, everything else on beat 3), or
@@ -858,6 +946,10 @@ notes (softer) and the harmony and counter-melody step out. Play the song throug
 with the vocal on Solve et Coagula's sidechain before exporting. The same switch (*Lead and
 vocal take turns*) also has the lead **answer the vocal**: in a section with no lead, the
 bar after each vocal phrase gets a short lead reply.
+
+**Double the final drop** (on by default): in the last of two or more drops, the lead is
+doubled an octave up (down if that would go too high) and the bass gains a sub octave, so
+the end is the biggest moment. A song with one drop is left alone.
 
 **Phrase turnarounds** (Song patterns, on by default): in the last bar of every 8-bar
 phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp lifts an
@@ -1258,6 +1350,23 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   inverted bass; continuous gain staging moves a drifting input back to -18 dBFS; the song
   pack has the clips, the markers and a note with key, chords, range and structure; a
   snapshot is recalled as its section starts; the render plan lists the versions.
+- **Round 11, expression:** the reverb tail ducks 8+ dB after each shared kick; vocal-phrase
+  throws catch only the ends of sung phrases; the roll's pitch steps with its speed; the
+  impact rings at the kick's pitch, which the kick track shares; pan steps put step 1 left
+  and step 2 right; the breakdown sweep opens a 3 kHz tone from almost nothing to fully open;
+  the final drop's lead and bass are doubled an octave apart, and a one-drop song isn't.
+- **Round 11, identity:** three finished masters teach My sound (but never over your own
+  tracks) and new songs aim for it; a song made your way scores 98%, one that isn't 20%, with
+  the reasons; Azoth logs your transitions at the final drop and a new one starts from them;
+  Kybalion logs the gate you kept and starts on your favourite (per kind of track); Make
+  versions uses your logged lengths; aliases keep their own folders.
+- **Round 11, automation:** a clipping track, a buried vocal and a mono drop are flagged
+  live; A/B plays the reference's loudest part at the mix's loudness; the closest reference
+  is picked from a folder by tone, key and tempo; arrange-from-loop sets each track's
+  sections from its role (undoable); the stem plan, project tidy and session health (missing
+  samples, fixed and undone; older projects) say the right things; Lapis dithers only at
+  16-bit and writes export notes after a full pass; the draft exports the whole song after
+  New song; tempo changes reach the cue sheet and the marker MIDI.
 
 They also write example WAVs and UI snapshots to `test-output/`.
 

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "TempoBus.h"
 #include "StyleLog.h"
 #include "VocalBus.h"
 #include "ChordBus.h"
@@ -16,6 +17,12 @@ CorrespondenceProcessor::CorrespondenceProcessor()
     lastSuggestion = suite::KeyBus::readSuggestion().sequence;
     publishKey();
     startTimerHz (4);
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    {
+        if (fix == suite::Fix::DraftSong) draftAt.store (juce::Time::getMillisecondCounterHiRes() + 1000.0);   // after the new song's key and chords
+        return {};
+    });
 }
 
 CorrespondenceProcessor::~CorrespondenceProcessor()
@@ -412,9 +419,8 @@ juce::File CorrespondenceProcessor::exportSongPack (const juce::File& parent) co
         for (int i = 0; i < map.count; ++i)
         {
             const auto& sec = map.sections[(size_t) i];
-            const auto seconds = (sec.startBar - 1) * 4.0 * 60.0 / bpm;
-            text.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + juce::String ((int) seconds / 60) + ":"
-                      + juce::String ((int) seconds % 60).paddedLeft ('0', 2) + "  " + suite::sectionName (sec.type)
+            text.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + suite::TempoBus::clock (suite::TempoBus::secondsTo (sec.startBar, (float) bpm))
+                      + "  " + suite::sectionName (sec.type)
                       + " (" + juce::String (map.endBar (i) - sec.startBar) + " bars)"
                       + (map.keyShiftOf (i) != 0 && i == map.lastDropIndex() ? "  key up " + juce::String (map.keyShiftOf (i)) : juce::String()));
         }
@@ -461,17 +467,20 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         suite::SectionMap shared;
         if (suite::SectionBus::read (shared) && shared.count > 0)
         {
-            const auto seconds = shared.totalBars * 4.0 * 60.0 / bpm;
-            sheet.add ("Length: " + juce::String (shared.totalBars) + " bars (" + juce::String ((int) seconds / 60) + ":"
-                       + juce::String ((int) seconds % 60).paddedLeft ('0', 2) + ")");
+            sheet.add ("Length: " + juce::String (shared.totalBars) + " bars (" + suite::TempoBus::clock (suite::TempoBus::secondsTo (shared.totalBars + 1, (float) bpm)) + ")");
+            if (const auto tempos = suite::TempoBus::changes (shared.totalBars, (float) bpm); tempos.size() > 1)
+            {
+                juce::StringArray t;
+                for (const auto& [bar, tempo] : tempos) t.add ("bar " + juce::String (bar) + " " + juce::String (tempo, 1));
+                sheet.add ("Tempo changes: " + t.joinIntoString (", ") + " BPM");
+            }
             sheet.add ("");
             sheet.add ("Structure:");
             for (int i = 0; i < shared.count; ++i)
             {
                 const auto& sec = shared.sections[(size_t) i];
-                const auto startSeconds = (sec.startBar - 1) * 4.0 * 60.0 / bpm;
-                sheet.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + juce::String ((int) startSeconds / 60) + ":"
-                           + juce::String ((int) startSeconds % 60).paddedLeft ('0', 2) + "  " + suite::sectionName (sec.type)
+                sheet.add ("  bar " + juce::String (sec.startBar).paddedLeft (' ', 3) + "  " + suite::TempoBus::clock (suite::TempoBus::secondsTo (sec.startBar, (float) bpm))
+                           + "  " + suite::sectionName (sec.type)
                            + " (" + juce::String (shared.endBar (i) - sec.startBar) + " bars)"
                            + (shared.keyShiftOf (i) != 0 && i == shared.lastDropIndex() ? "  key +" + juce::String (shared.keyShiftOf (i)) : juce::String()));
             }

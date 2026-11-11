@@ -1,6 +1,8 @@
 // Offline tests for Correspondence. Usage: CorrespondenceTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "TempoBus.h"
+#include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
@@ -56,6 +58,7 @@ namespace
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    suite::TempoBus::clear();   // no tempo map left over from another test run
     // Never write the real style log from tests.
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");
     suite::StyleLog::setFileForTests (testStyleLog);
@@ -1071,6 +1074,34 @@ int main (int argc, char** argv)
         log.deleteFile();
         suite::StyleLog::setFileForTests (testStyleLog);
         suite::SectionBus::withdraw();
+    }
+
+    section ("Song draft (from Ouroboros)");
+    {
+        suite::FixBus::reset();
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceDrafts");
+        dir.deleteRecursively();
+        CorrespondenceProcessor::draftFolderOverride() = dir;
+        auto p = make();
+        p->applyPreset (0);
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        p->exportDraftIfDue (true);
+        check (! dir.exists(), "nothing is drafted until Ouroboros asks");
+        suite::FixBus::send (suite::Fix::DraftSong);
+        p->fixes->poll();
+        p->exportDraftIfDue();
+        check (! dir.exists(), "it waits a moment, for the new song to be set up");
+        p->exportDraftIfDue (true);
+        const auto mids = p->lastDraft.findChildFiles (juce::File::findFiles, false, "*.mid");
+        check (p->lastDraft.isDirectory() && p->lastDraft.isAChildOf (dir) && mids.size() >= 10,
+               "then the whole song's MIDI is written into Drafts (" + juce::String (mids.size()) + " files)");
+        suite::SectionBus::withdraw();
+        CorrespondenceProcessor::draftFolderOverride() = juce::File();
+        dir.deleteRecursively();
     }
 
     section ("Song pack for a vocalist");
