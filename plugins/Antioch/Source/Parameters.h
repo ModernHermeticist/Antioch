@@ -11,6 +11,7 @@ namespace Params
     inline const juce::String rootNote  { "root" };
     inline const juce::String rootOct   { "octave" };
     inline const juce::String followKey { "followkey" };
+    inline const juce::String followChords { "followchords" };   // the resonators move with the chords (Correspondence)
     inline const juce::String dry       { "dry" };
     inline const juce::String echoLevel { "echo" };
     inline const juce::String verbLevel { "verb" };
@@ -61,6 +62,7 @@ namespace Params
         inline const juce::String freezeLevel { "rv_freezelvl" };
         inline const juce::String tension  { "rv_tension" };     // wider on tension chords (Correspondence's progression)
         inline const juce::String pump     { "rv_pump" };        // the tail ducks to the shared kick pattern
+        inline const juce::String leadRoom { "rv_leadroom" };    // reverb, echo and throws duck while the lead plays (Vibration)
         inline int freezeBars (int index) { static const int b[] = { 0, 1, 2, 4 }; return b[juce::jlimit (0, 3, index)]; }
 
         const juce::StringArray& shimmerIntervalNames();

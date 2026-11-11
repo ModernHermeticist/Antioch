@@ -45,8 +45,12 @@ namespace suite::ui
     {
     public:
         ScenePanel (SceneEngine& e, juce::AudioProcessorValueTreeState& state)
-            : engine (e), enabled (state, SceneEngine::enabledId, "Scenes on", Colours::ember), morph (state, SceneEngine::morphId, "Morph")
+            : engine (e), enabled (state, SceneEngine::enabledId, "Scenes on", Colours::ember), morph (state, SceneEngine::morphId, "Morph"),
+              levelNeutral (state, SceneEngine::levelId, "Level-neutral", Colours::moss)
         {
+            levelNeutral.setTooltip ("Scenes change the sound, not the volume: where a scene makes this plugin louder or quieter than in the drop, "
+                                     "its output is brought back to the drop's level (up to 4 dB). Level changes you want come from Prima Materia");
+            addAndMakeVisible (levelNeutral);
             for (int t = 0; t < numSceneSlots; ++t)
             {
                 const auto later = t == laterDropSlot;
@@ -126,6 +130,7 @@ namespace suite::ui
             suggested.setBounds (top.removeFromRight (110).withSizeKeepingCentre (104, 30).translated (0, 8));
             morph.setBounds (top.removeFromRight (150));
             enabled.setBounds (top.removeFromRight (130).withSizeKeepingCentre (120, 30).translated (0, 8));
+            levelNeutral.setBounds (top.removeFromRight (140).withSizeKeepingCentre (132, 30).translated (0, 8));
             status.setBounds (top.translated (0, 8));
             r.removeFromTop (8);
 
@@ -169,6 +174,7 @@ namespace suite::ui
         SceneEngine& engine;
         Toggle enabled;
         Choice morph;
+        Toggle levelNeutral;
         juce::TextButton suggested { "Suggested" }, clear { "Clear all" }, print { "Print to FL automation" };
         juce::Label status, hint;
         std::vector<std::unique_ptr<juce::TextButton>> typeButtons;

@@ -889,6 +889,26 @@ int main (int argc, char** argv)
         check (p->verifyLastPass (now).joinIntoString ("").contains ("kept 1"), "a fix whose problem remains but the arc improved overall stays");
     }
 
+    section ("Masking resolved automatically");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        auto p = make();
+        suite::Registry::announce (9101, "Prima Materia", "Vox", suite::Status::roleSet, { 6.0f, 0, 0, 0 });
+        masking::Clash c;
+        c.carveId = 0x123; c.band = 5; c.carveTrack = "Pads"; c.keepTrack = "Vox"; c.text = "pads and vocal at 1 kHz";
+        for (int i = 0; i < 3; ++i) p->watchMasking ({ c });
+        check (suite::FixBus::latest() == 0 && p->maskingSuggestions()[0].contains ("try Carve"), "off: lasting masking is only suggested");
+        set (*p, Params::autoMasking, 1.0f);
+        p->watchMasking ({ c });
+        suite::FixBus::Message m;
+        check (suite::FixBus::read (suite::FixBus::latest(), m) && m.fix == suite::Fix::Carve && (m.target & 0xfffu) == 0x123u
+                   && ((m.target >> 12) & 0xfu) == 5u && ((m.target >> 16) & 0x3u) == 1u
+                   && p->maskingSuggestions()[0].contains ("resolved, Pads gives way while the vocal sings"),
+               "on: the pads give way at 1 kHz, only while the vocal sings");
+        suite::Registry::reset();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

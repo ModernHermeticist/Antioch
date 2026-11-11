@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ActivityBus.h"
 #include "ChordBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
@@ -141,7 +142,17 @@ void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBloc
     monoScratch.assign ((size_t) samplesPerBlock, 0.0f);
 }
 
-void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
+    const auto n = buffer.getNumSamples();
+    const auto inPower = suite::SceneEngine::blockPower (buffer, n);
+    processSuiteBlock (buffer, midi);
+    const auto g = scenes.levelKeepGain (inPower, suite::SceneEngine::blockPower (buffer, n));
+    if (std::abs (g - 1.0f) > 1.0e-4f) buffer.applyGain (0, n, g);
+}
+
+void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
     using namespace Params;
@@ -164,6 +175,9 @@ void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto e = effective();
     auto* L = buffer.getWritePointer (0);
     auto* R = buffer.getWritePointer (1);
+    // Lead-aware space (Antioch on other tracks): how much the lead is playing now.
+    if (host.playing && isLeadTrack.load())
+        suite::ActivityBus::write (suite::ActivityBus::lead, buffer.getRMSLevel (0, 0, n) / 0.05f);
 
     // ---- Input analysis ----
     for (int i = 0; i < n; ++i)

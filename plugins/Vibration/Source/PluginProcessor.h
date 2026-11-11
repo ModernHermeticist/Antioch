@@ -19,6 +19,7 @@ public:
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processSuiteBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&);
     using AudioProcessor::processBlock;
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -72,7 +73,13 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
-    void pollTick() override { scenes.watchTweaks (isMorphing()); }
+    void pollTick() override
+    {
+        scenes.watchTweaks (isMorphing());
+        const auto role = roleForTrack();
+        isLeadTrack.store (role == suite::roleLead || role < 0);   // lead-aware space: this is the lead (or most likely is)
+    }
+    std::atomic<bool> isLeadTrack { true };
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

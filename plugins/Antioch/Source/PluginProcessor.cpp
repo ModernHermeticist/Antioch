@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "ChordBus.h"
 #include "KickBus.h"
+#include "ActivityBus.h"
 #include "VocalBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
@@ -95,7 +96,17 @@ void AntiochProcessor::prepareToPlay (double newSampleRate, int)
     firstBlock = true;
 }
 
-void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
+    const auto n = buffer.getNumSamples();
+    const auto inPower = suite::SceneEngine::blockPower (buffer, n);
+    processSuiteBlock (buffer, midi);
+    const auto g = scenes.levelKeepGain (inPower, suite::SceneEngine::blockPower (buffer, n));
+    if (std::abs (g - 1.0f) > 1.0e-4f) buffer.applyGain (0, n, g);
+}
+
+void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
     using namespace Params;
@@ -122,7 +133,23 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     if (sections.refresh() && host.playing && host.hasPpq)
         if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid)
             root += sec.keyShift;
-    effectiveRoot.store (root % 12);
+    // Chord-aware: the resonators ring on the current chord's root (from Correspondence), counted from the section start.
+    if (boolParam (Params::followChords)->get() && host.playing && host.hasPpq)
+    {
+        suite::Progression prog;
+        if (suite::ChordBus::read (prog))
+        {
+            double origin = 0.0;
+            if (sections.refresh())
+                if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) origin = sec.startQ;
+            auto r = prog.chordRoots[(size_t) (prog.chordAt (host.ppq - origin) & 7)];
+            if (r > 6) r -= 12;   // the nearest way: up to a tritone either side
+            root += r;
+            chordShift.store (r);
+        }
+    }
+    else chordShift.store (0);
+    effectiveRoot.store (((root % 12) + 12) % 12);
     followingBus.store (follow);
     busScale.store (bus.scale);
 
@@ -212,6 +239,10 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
     const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.003f * sr));
     float minPump = 1.0f;
+    // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
+    const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
+    const auto leadTarget = 1.0f - 0.6f * leadAmount * suite::ActivityBus::read (suite::ActivityBus::lead);
+    const auto leadAttack = 1.0f - std::exp (-1.0f / (0.02f * sr)), leadRelease = 1.0f - std::exp (-1.0f / (0.25f * sr));
     const auto barQ = host.barQuarters();
     const auto phraseQ = autoBars * host.barQuarters();
     const auto lengthQ = Throw::autoLengthQuarters (choiceParam (Throw::autoLen)->getIndex());
@@ -303,7 +334,9 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         const auto es = echoSend.getNextValue(), ts = throwSend.getNextValue();
         float rL, rR;
         reverb.process (inL + es * eL + ts * tL, inR + es * eR + ts * tR, vDuck, rL, rR);
-        auto vg = verbGain.getNextValue();
+        leadRoomGain += (leadTarget < leadRoomGain ? leadAttack : leadRelease) * (leadTarget - leadRoomGain);
+        eL *= leadRoomGain; eR *= leadRoomGain; tL *= leadRoomGain; tR *= leadRoomGain;
+        auto vg = verbGain.getNextValue() * leadRoomGain;
         {
             float pumpTarget = 1.0f;
             if (kickPattern.valid)
@@ -361,6 +394,7 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
 
     throwGate.store (throwDelay.gateLevel());
     pumpNow.store (minPump);
+    leadRoomNow.store (leadRoomGain);
     duckAmount.store (maxDuck);
 }
 

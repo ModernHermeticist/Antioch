@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ActivityBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 
@@ -73,7 +74,17 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
     vocalBuried.store (false);
 }
 
-void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
+    const auto n = buffer.getNumSamples();
+    const auto inPower = suite::SceneEngine::blockPower (buffer, n);
+    processSuiteBlock (buffer, midi);
+    const auto g = scenes.levelKeepGain (inPower, suite::SceneEngine::blockPower (buffer, n));
+    if (std::abs (g - 1.0f) > 1.0e-4f) buffer.applyGain (0, n, g);
+}
+
+void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
@@ -160,6 +171,9 @@ void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     chopsReady.store (chops.ready());
     chopsPlaying.store (played);
     vocalPresent.store (juce::Decibels::gainToDecibels (keyPeak, -100.0f) > s.thresholdDb);
+    // Vocal-aware levels (Prima Materia): how strongly the vocal sings now, 0 at the threshold, 1 from 12 dB above it.
+    if (scActive)
+        suite::ActivityBus::write (suite::ActivityBus::vocal, (juce::Decibels::gainToDecibels (keyPeak, -100.0f) - s.thresholdDb) / 12.0f);
 
     // Tell the suite which bars the vocal sings in (Correspondence's lead leaves room there).
     if (scActive && host.playing && host.hasPpq && host.barQuarters() > 0.0)

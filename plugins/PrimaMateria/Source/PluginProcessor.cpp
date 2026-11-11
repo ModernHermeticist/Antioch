@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ActivityBus.h"
 #include "StyleLog.h"
 #include "Recipes.h"
 #include "PluginEditor.h"
@@ -85,7 +86,8 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 const auto current = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
                 const auto depth = apvts.getRawParameterValue (pm::carveDepthId)->load();
                 return { { pm::carveBandId, (float) (band + 1) },
-                         { pm::carveDepthId, current == band ? juce::jmax (-9.0f, depth - 1.5f) : -3.0f } };   // again: deeper
+                         { pm::carveDepthId, current == band ? juce::jmax (-9.0f, depth - 1.5f) : -3.0f },   // again: deeper
+                         { pm::carveWhenId, (float) ((data >> 16) & 0x3u) } };                              // always, or only while the vocal / lead plays
             }
             case suite::Fix::RoughMix:
             {
@@ -176,7 +178,10 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     // Carve (the masking fix): a peaking dip in one octave band.
     const auto carveBand = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
-    const auto carveDepth = apvts.getRawParameterValue (pm::carveDepthId)->load();
+    auto carveDepth = apvts.getRawParameterValue (pm::carveDepthId)->load();
+    // Moving dips: a carve made for the vocal or the lead opens only while it plays (in 1 dB steps, so it isn't recalculated every block).
+    if (const auto when = (int) apvts.getRawParameterValue (pm::carveWhenId)->load(); when > 0)
+        carveDepth = std::round (carveDepth * suite::ActivityBus::read (when == 1 ? suite::ActivityBus::vocal : suite::ActivityBus::lead));
     if (carveBand != carveBandNow || std::abs (carveDepth - carveDepthNow) > 1.0e-3f)
     {
         if (carveBand >= 0)
@@ -201,6 +206,11 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto role = getRole();
     const auto breath = apvts.getRawParameterValue (pm::breathId)->load();
     const auto sweep = apvts.getRawParameterValue (pm::sweepId)->load();
+    // Vocal-aware levels: pads, leads and FX step back while the vocal sings (Solve et Coagula hears it).
+    const auto roleNow = getRole();
+    const auto vocalRoom = (roleNow == 4 || roleNow == 5 || roleNow == 7) ? apvts.getRawParameterValue (pm::vocalRoomId)->load() : 0.0f;
+    const auto vocalTarget = vocalRoom > 0.0f ? juce::Decibels::decibelsToGain (-vocalRoom * suite::ActivityBus::read (suite::ActivityBus::vocal)) : 1.0f;
+    const auto vocalAttack = 1.0f - std::exp (-1.0f / (0.03f * (float) getSampleRate())), vocalRelease = 1.0f - std::exp (-1.0f / (0.3f * (float) getSampleRate()));
     const auto answer = (int) apvts.getRawParameterValue (pm::answerId)->load();
     const auto pump = apvts.getRawParameterValue (pm::pumpId)->load();
     const auto inputGain = juce::Decibels::decibelsToGain (apvts.getRawParameterValue (pm::inputGainId)->load());
@@ -351,7 +361,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
         pumpGain += (pumpTarget < pumpGain ? 0.5f : pumpRelease) * (pumpTarget - pumpGain);
 
-        const auto t = trimGain.getNextValue() * pumpGain;
+        vocalGain += (vocalTarget < vocalGain ? vocalAttack : vocalRelease) * (vocalTarget - vocalGain);
+        const auto t = trimGain.getNextValue() * pumpGain * vocalGain;
         left[n] = processChannel (left[n], 0) * t;
         if (right != nullptr) right[n] = processChannel (right[n], 1) * t;
         if (carving)
@@ -570,7 +581,7 @@ juce::StringArray PrimaMateriaProcessor::myRoleParamIds()
 {
     juce::StringArray ids;
     for (int c = 0; c < pm::numColumns; ++c) ids.addArray ({ pm::levelId (c), pm::lowCutId (c), pm::highCutId (c) });
-    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId, pm::sweepId });
+    ids.addArray ({ pm::laterOnId, pm::rampId, pm::gapId, pm::breathId, pm::pumpId, pm::sweepId, pm::vocalRoomId });
     return ids;
 }
 

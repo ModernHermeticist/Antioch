@@ -245,6 +245,7 @@ public:
         three checks in a row (a minute and a half) becomes a suggestion. Nothing is changed. */
     static constexpr int maskingChecksToSuggest = 3;
     void watchMasking (const std::vector<masking::Clash>& clashes);
+    std::map<juce::String, int> autoCarves;   // masking resolved automatically: carves sent per clash (at most 3, each deeper)
     juce::StringArray maskingSuggestions() const { const juce::ScopedLock sl (historyLock); return persistentMasking; }
 
     /** After a fix: forget what was measured for sections of `type`, so the coach re-checks them. */

@@ -338,7 +338,22 @@ void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashe
         const auto count = (maskingCounts.count (key) > 0 ? maskingCounts[key] : 0) + 1;
         next[key] = count;
         if (count >= maskingChecksToSuggest)
-            lasting.add ("Masking: " + c.text + " (for over a minute): try Carve on the Masking tab.");
+        {
+            if (apvts.getRawParameterValue (Params::autoMasking)->load() > 0.5f && (autoCarves[key] < 3))
+            {
+                // Resolve it: the track that matters less here gives way, while the vocal or lead it clashes with plays.
+                int keepRole = -1;
+                for (const auto& e : suite::Registry::list())
+                    if (e.plugin == "Prima Materia" && e.track == c.keepTrack) keepRole = (int) e.metrics[0];
+                const auto when = keepRole == 6 ? 1 : keepRole == 5 ? 2 : 0;
+                sendFix (suite::Fix::Carve, suite::packCarve (c.carveId, c.band, when));
+                ++autoCarves[key];
+                lasting.add ("Masking: " + c.text + ": resolved, " + c.carveTrack + " gives way"
+                             + (when == 1 ? " while the vocal sings" : when == 2 ? " while the lead plays" : juce::String()) + " (undo in History)");
+            }
+            else
+                lasting.add ("Masking: " + c.text + " (for over a minute): try Carve on the Masking tab.");
+        }
     }
     maskingCounts = std::move (next);   // a clash that went away starts again from zero
     const juce::ScopedLock sl (historyLock);

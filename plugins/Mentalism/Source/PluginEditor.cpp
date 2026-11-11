@@ -206,7 +206,10 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     automationStatus.setFont (juce::FontOptions (12.0f));
     automationStatus.setJustificationType (juce::Justification::centredLeft);
     automationStatus.setColour (juce::Label::textColourId, Colours::moss);
-    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), &finishButton, &automationStatus })
+    autoMasking = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoMasking, "Resolve masking", Colours::ember);
+    autoMasking->setTooltip ("Clashes that last over a minute are resolved by themselves: the track that matters less gives way in that band, "
+                             "only while the vocal or lead it clashes with plays (undo in History)");
+    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), autoMasking.get(), &finishButton, &automationStatus })
         addAndMakeVisible (c);
     matchButton.setTooltip ("Moves Lapis' low and high tone half-way towards the reference (at most 4 dB) and sets the loudness "
                             "target to match it. Undo it in History.");
@@ -762,5 +765,6 @@ void MentalismEditor::resized()
     checklistButton.setBounds (adviceArea.getRight() - 162, adviceArea.getY() + 6, 150, 26);
     finishButton.setBounds (adviceArea.getRight() - 324, adviceArea.getY() + 6, 150, 26);
     autoCoach->setBounds (adviceArea.getRight() - 456, adviceArea.getY() + 6, 124, 26);
+    autoMasking->setBounds (adviceArea.getRight() - 608, adviceArea.getY() + 6, 146, 26);
     automationStatus.setBounds (adviceContent.removeFromBottom (20));
 }

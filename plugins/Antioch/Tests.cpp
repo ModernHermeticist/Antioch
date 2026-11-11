@@ -7,6 +7,7 @@
 #include "ChordBus.h"
 #include "KickBus.h"
 #include "VocalBus.h"
+#include "ActivityBus.h"
 
 using namespace suite::test;
 
@@ -538,6 +539,73 @@ int main (int argc, char** argv)
                    && std::abs (p->scenes.getOffset ((int) suite::SectionType::Breakdown, verb) - (breakdownOffset + 0.2f)) < 0.01f,
                "accepting moves the change into the breakdown scene and puts the knob back for the other sections");
         check (! p->scenes.getProposal().valid, "and the offer goes away");
+    }
+
+    section ("Lead-aware space, chord-aware resonators, level-neutral scenes");
+    {
+        auto runLead = [] (float lead)
+        {
+            auto p = make();
+            soloSection (*p, 0.0f, 1.0f, 0.0f);
+            set (*p, Params::Verb::duck, 0.0f);
+            juce::Random rng (3);
+            juce::AudioBuffer<float> a;
+            render (*p, 2.0, [&rng] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (ch, i, 0.2f * (rng.nextFloat() * 2.0f - 1.0f));
+            }, &a, nullptr, [lead] (int64_t) { suite::ActivityBus::write (suite::ActivityBus::lead, lead); });
+            suite::ActivityBus::clear();
+            return std::make_pair (rmsBetween (a, 1.5, 2.0), p->leadRoomNow.load());
+        };
+        const auto [quiet, quietGain] = runLead (0.0f);
+        const auto [playing, playingGain] = runLead (1.0f);
+        check (std::abs (quietGain - 1.0f) < 0.01f && std::abs (playingGain - 0.7f) < 0.02f && playing < quiet * 0.8f,
+               "while the lead plays the reverb steps back (x" + juce::String (playingGain, 2) + "), and blooms when it rests");
+
+        suite::Progression prog;
+        prog.root = 9; prog.scale = 0; prog.count = 2; prog.quartersPerChord = 4.0;
+        prog.chordRoots[0] = 0; prog.chordRoots[1] = 8;   // i, then VI
+        auto p = make();
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::ChordBus::publish (prog);
+        render (*p, 1.0, {}, nullptr, &head);
+        const auto onI = p->chordShift.load();
+        render (*p, 2.0, {}, nullptr, &head);
+        const auto onVI = p->chordShift.load();
+        suite::ChordBus::withdraw();
+        p->setPlayHead (nullptr);
+        check (onI == 0 && onVI == -4, "the resonators follow the chord: on VI they ring 4 semitones down (" + juce::String (onVI) + ")");
+
+        auto neutral = [] (bool on)
+        {
+            suite::SectionMap m;
+            m.totalBars = 4; m.count = 2;
+            m.sections[0] = { 1, suite::SectionType::Drop };
+            m.sections[1] = { 3, suite::SectionType::Breakdown };
+            auto q = make();
+            suite::SectionBus::publish (m);
+            int verb = -1;
+            for (int i = 0; i < q->scenes.getCount(); ++i) if (q->scenes.getParamId (i) == Params::verbLevel) verb = i;
+            q->scenes.clearAll();
+            q->scenes.setOffset ((int) suite::SectionType::Breakdown, verb, 0.5f);   // the breakdown scene: much more reverb
+            set (*q, suite::SceneEngine::levelId, on ? 1.0f : 0.0f);
+            FakePlayHead h;
+            h.bpm = 120.0;
+            q->setPlayHead (&h);
+            juce::Random rng (8);
+            render (*q, 7.5, [&rng] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (ch, i, 0.2f * (rng.nextFloat() * 2.0f - 1.0f));
+            }, nullptr, &h);
+            q->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return q->scenes.levelGainNow.load();
+        };
+        const auto offGain = neutral (false), onGain = neutral (true);
+        check (std::abs (offGain) < 0.01f && onGain < -0.5f,
+               "level-neutral scenes: the louder breakdown scene is brought back towards the drop's level (" + juce::String (onGain, 1) + " dB); off, nothing");
     }
 
     section ("Role-aware setup");

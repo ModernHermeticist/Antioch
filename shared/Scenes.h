@@ -27,6 +27,7 @@ namespace suite
         static constexpr int maxParams = 12;
         static inline const juce::String enabledId { "scenes_on" };
         static inline const juce::String morphId { "scene_morph" };
+        static inline const juce::String levelId { "scene_level" };   // level-neutral scenes
 
         /** A suggested offset. Use SectionType::count as the type for the "Drop 2+" scene. */
         struct Default { SectionType type; int param; float offset; };
@@ -37,6 +38,7 @@ namespace suite
             layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { enabledId, 1 }, "Section Scenes", true));
             layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { morphId, 1 }, "Scene Morph",
                                                                       juce::StringArray { "Instant", "1/4 beat", "1/2 beat", "1 beat", "2 beats", "1 bar" }, 3));
+            layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { levelId, 1 }, "Level-neutral Scenes", false));
         }
 
         static double morphQuarters (int index) { static const double q[] = { 0.0, 0.25, 0.5, 1.0, 2.0, 4.0 }; return q[juce::jlimit (0, 5, index)]; }
@@ -57,6 +59,7 @@ namespace suite
             defaults = std::move (suggested);
             enabled = state.getRawParameterValue (enabledId);
             morph = state.getRawParameterValue (morphId);
+            levelKeep = state.getRawParameterValue (levelId);
             applySuggested();
         }
 
@@ -238,6 +241,43 @@ namespace suite
             }
             lastSeen = now;
         }
+        //==============================================================================
+        // Level-neutral scenes (audio thread): a scene changes the sound, not the volume. The
+        // plugin's output against its input is measured per kind of section; where it differs
+        // from the drop's, the output is brought back to the drop's level (up to 4 dB, gently).
+        // Level changes you mean (energy, breath, entrances) come from Prima Materia, after this.
+
+        static float blockPower (const juce::AudioBuffer<float>& b, int numSamples) noexcept
+        {
+            double sum = 0.0;
+            for (int ch = 0; ch < juce::jmin (2, b.getNumChannels()); ++ch)
+                for (int i = 0; i < numSamples; ++i) { const auto v = b.getSample (ch, i); sum += (double) v * v; }
+            return (float) (sum / juce::jmax (1, numSamples));
+        }
+        /** Call after processing, before the output gain: returns the gain to apply this block. */
+        float levelKeepGain (float inPower, float outPower) noexcept
+        {
+            const auto type = activeType.load();
+            if (levelKeep == nullptr || levelKeep->load() < 0.5f || ! isEnabled() || type < 0)
+            {
+                levelGainDb += 0.05f * (0.0f - levelGainDb);
+                return juce::Decibels::decibelsToGain (levelGainDb);
+            }
+            if (inPower > 1.0e-7f && outPower > 1.0e-9f)
+            {
+                const auto r = 10.0f * std::log10 (outPower / inPower);
+                auto& slot = ratioDb[(size_t) type];
+                slot = measured[(size_t) type] ? slot + 0.05f * (r - slot) : r;
+                measured[(size_t) type] = true;
+            }
+            const auto drop = (size_t) SectionType::Drop;
+            const auto target = measured[drop] && measured[(size_t) type] ? juce::jlimit (-4.0f, 4.0f, ratioDb[drop] - ratioDb[(size_t) type]) : 0.0f;
+            levelGainDb += 0.05f * (target - levelGainDb);
+            levelGainNow.store (levelGainDb);
+            return juce::Decibels::decibelsToGain (levelGainDb);
+        }
+        std::atomic<float> levelGainNow { 0.0f };   // dB, for tests and the UI
+
         const Proposal& getProposal() const noexcept { return proposal; }
         bool isEnabled() const noexcept { return enabled != nullptr && enabled->load() > 0.5f; }
         juce::String proposalText() const
@@ -353,6 +393,10 @@ namespace suite
         std::atomic<bool> activeLaterDrop { false };
         std::vector<Default> defaults;
         SectionFollower follower;
+        std::atomic<float>* levelKeep = nullptr;
+        std::array<float, numSceneSlots> ratioDb {};
+        std::array<bool, numSceneSlots> measured {};
+        float levelGainDb = 0.0f;
         // Learning from your tweaks
         bool watching = false;
         int tweakType = -1;

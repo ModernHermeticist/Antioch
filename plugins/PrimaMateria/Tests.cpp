@@ -1,6 +1,7 @@
 // Offline tests for Prima Materia. Usage: PrimaMateriaTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "ActivityBus.h"
 #include "TestUtils.h"
 #include "StyleLog.h"
 #include "Recipes.h"
@@ -360,6 +361,36 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
         check (rmsBetween (a, 3.0, 3.45) > 0.1f && rmsBetween (a, 3.55, 3.95) < 0.01f && rmsBetween (a, 4.1, 4.9) > 0.1f,
                "a stop moment silences the beat before its bar, even on the kick, then everything returns");
+    }
+
+    section ("Vocal-aware levels and moving carves");
+    {
+        auto run = [] (int role, float vocal, std::function<void (PrimaMateriaProcessor&)> setup = {}, float hz = 440.0f)
+        {
+            suite::SectionBus::withdraw();
+            auto p = make (role);
+            set (*p, pm::followId, 0.0f);
+            if (setup) setup (*p);
+            juce::AudioBuffer<float> a;
+            render (*p, 1.5, tone (hz), &a, nullptr, [vocal] (int64_t) { suite::ActivityBus::write (suite::ActivityBus::vocal, vocal); });
+            suite::ActivityBus::clear();
+            return rmsBetween (a, 1.0, 1.5);
+        };
+        const auto padsQuiet = run (roleIndex ("Pads"), 0.0f), padsSinging = run (roleIndex ("Pads"), 1.0f);
+        const auto kickQuiet = run (roleIndex ("Kick"), 0.0f), kickSinging = run (roleIndex ("Kick"), 1.0f);
+        const auto stepBack = juce::Decibels::gainToDecibels (padsSinging / padsQuiet);
+        check (std::abs (stepBack + 1.5f) < 0.2f && std::abs (kickSinging - kickQuiet) < 1.0e-4f,
+               "while the vocal sings, the pads step back 1.5 dB (" + juce::String (stepBack, 2) + "); the kick doesn't move");
+
+        auto carve = [] (PrimaMateriaProcessor& p)
+        {
+            set (p, pm::carveBandId, 6.0f);     // 1 kHz
+            set (p, pm::carveDepthId, -9.0f);
+            set (p, pm::carveWhenId, 1.0f);     // only while the vocal sings
+        };
+        const auto open = run (roleIndex ("Kick"), 0.0f, carve, 1000.0f), dipped = run (roleIndex ("Kick"), 1.0f, carve, 1000.0f);
+        const auto dip = juce::Decibels::gainToDecibels (dipped / open);
+        check (dip < -7.0f, "a carve made for the vocal opens only while it sings (" + juce::String (dip, 1) + " dB at 1 kHz then, none without it)");
     }
 
     section ("Arrange from the loop");

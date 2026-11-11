@@ -156,7 +156,7 @@ private:
     int windowSamples = 0;
     std::atomic<double> inputPower { 0.0 };
     std::atomic<int64_t> inputCount { 0 };
-    float pumpGain = 1.0f;   // the track's spectrum in the drops, for the masking map
+    float pumpGain = 1.0f, vocalGain = 1.0f;   // the track's spectrum in the drops, for the masking map
     std::array<suite::Biquad, 2> carve;
     int carveBandNow = -1; float carveDepthNow = 0.0f;
     juce::SmoothedValue<float> trimGain;

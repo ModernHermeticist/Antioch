@@ -159,10 +159,11 @@ public:
           freeze (p.apvts, Params::Verb::freeze, "Freeze into breakdowns"),
           freezeLevel (p.apvts, Params::Verb::freezeLevel, "Freeze level", verbColour),
           tension (p.apvts, Params::Verb::tension, "Tension width", verbColour),
-          pump (p.apvts, Params::Verb::pump, "Pump to kick", Colours::ember)
+          pump (p.apvts, Params::Verb::pump, "Pump to kick", Colours::ember),
+          leadRoom (p.apvts, Params::Verb::leadRoom, "Room for lead", Colours::ember)
     {
         for (auto* c : std::initializer_list<juce::Component*> { &decay, &size, &predelay, &mod, &width, &damping, &lowCut,
-                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel, &freeze, &freezeLevel, &tension, &pump })
+                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel, &freeze, &freezeLevel, &tension, &pump, &leadRoom })
             addAndMakeVisible (c);
     }
 
@@ -205,10 +206,11 @@ public:
         layoutRow (inner (toneArea), { &damping, &lowCut, &highCut, &shimmer, &shimInt });
 
         auto d = inner (duckArea);
-        const auto cell = d.getWidth() / 6;
+        const auto cell = d.getWidth() / 7;
         duck.setBounds (d.removeFromLeft (cell));
         duckRel.setBounds (d.removeFromLeft (cell));
         pump.setBounds (d.removeFromLeft (cell));
+        leadRoom.setBounds (d.removeFromLeft (cell));
         freeze.setBounds (d.removeFromLeft (cell));
         freezeLevel.setBounds (d.removeFromLeft (cell));
         meterArea = d.reduced (24, 0).withSizeKeepingCentre (d.getWidth() - 48, 10).translated (0, -6);
@@ -220,7 +222,7 @@ private:
     Choice shimInt;
     Knob duck, duckRel;
     Choice freeze;
-    Knob freezeLevel, tension, pump;
+    Knob freezeLevel, tension, pump, leadRoom;
     juce::Rectangle<int> spaceArea, toneArea, duckArea, meterArea;
     float meter = 0.0f;
 };

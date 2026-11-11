@@ -128,7 +128,17 @@ void KybalionProcessor::prepareToPlay (double newSampleRate, int)
     position = 0.0;
 }
 
-void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
+    const auto n = buffer.getNumSamples();
+    const auto inPower = suite::SceneEngine::blockPower (buffer, n);
+    processSuiteBlock (buffer, midi);
+    const auto g = scenes.levelKeepGain (inPower, suite::SceneEngine::blockPower (buffer, n));
+    if (std::abs (g - 1.0f) > 1.0e-4f) buffer.applyGain (0, n, g);
+}
+
+void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
     using namespace Params;

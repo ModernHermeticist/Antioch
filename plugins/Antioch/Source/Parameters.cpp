@@ -110,6 +110,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (rootNote), "Root Key", noteNames(), 0));
         layout.add (std::make_unique<AudioParameterInt> (id (rootOct), "Root Octave", 1, 6, 2));
         layout.add (std::make_unique<AudioParameterBool> (id (followKey), "Follow Key", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (followChords), "Resonators Follow Chords", true));
         layout.add (floatParam (dry,        "Dry",          { 0.0f, 1.0f }, 1.0f, percent()));
         layout.add (floatParam (echoLevel,  "Echo Level",   { 0.0f, 1.0f }, 0.5f, percent()));
         layout.add (floatParam (verbLevel,  "Reverb Level", { 0.0f, 1.0f }, 0.3f, percent()));
@@ -172,6 +173,7 @@ namespace Params
         layout.add (floatParam (Verb::freezeLevel, "Reverb Freeze Level", { 0.0f, 1.0f }, 0.7f, percent()));
         layout.add (floatParam (Verb::tension, "Reverb Tension Width", { 0.0f, 1.0f }, 0.3f, percent()));
         layout.add (floatParam (Verb::pump, "Reverb Pump", { 0.0f, 1.0f }, 0.0f, percent()));
+        layout.add (floatParam (Verb::leadRoom, "Room for the Lead", { 0.0f, 1.0f }, 0.5f, percent()));
 
         // ---- Throw ----
         layout.add (std::make_unique<AudioParameterBool> (id (Throw::on), "Throw", false));

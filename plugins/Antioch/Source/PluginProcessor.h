@@ -18,6 +18,7 @@ public:
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processSuiteBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&);
     using AudioProcessor::processBlock;
 
     juce::AudioProcessorEditor* createEditor() override;
@@ -41,7 +42,15 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
-    void pollTick() override { scenes.watchTweaks (isMorphing()); }
+    void pollTick() override
+    {
+        scenes.watchTweaks (isMorphing());
+        onLeadTrack.store (roleForTrack() == suite::roleLead);
+    }
+    std::atomic<bool> onLeadTrack { false };   // on the lead itself, lead-aware space stays out of the way
+    std::atomic<float> leadRoomNow { 1.0f };
+    std::atomic<int> chordShift { 0 };   // semitones the resonators follow the chord (tests, UI)    // the wet gain lead-aware space is applying (tests, UI)
+    float leadRoomGain = 1.0f;
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {
