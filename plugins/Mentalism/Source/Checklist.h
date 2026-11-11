@@ -5,6 +5,7 @@
 
 #include "PluginProcessor.h"
 #include "Registry.h"
+#include "DjPhrasing.h"
 
 namespace checklist
 {
@@ -112,6 +113,13 @@ namespace checklist
                 introOrOutro = introOrOutro || rep.map.sections[(size_t) i].type == suite::SectionType::Intro
                                             || rep.map.sections[(size_t) i].type == suite::SectionType::Outro;
             out.push_back (djCheck (suiteEntries, introOrOutro));
+            {
+                const auto issues = suite::dj::phrasingIssues (rep.map);
+                Item phr { "DJ phrasing", issues.isEmpty() ? juce::String ("Intro and outro in whole 16-bar phrases; sections on the 8-bar grid")
+                                                          : "Off for DJs: " + issues.joinIntoString ("; "),
+                           issues.isEmpty() ? State::Pass : State::Warn, issues.isEmpty() ? suite::Fix::None : suite::Fix::DjPhrasing, true };
+                out.push_back (phr);
+            }
             add ("Energy arc", ! rep.arrangement.complete ? State::Unknown : rep.arrangement.problems == 0 ? State::Pass : State::Warn,
                  ! rep.arrangement.complete ? juce::String ("Play every section once")
                  : rep.arrangement.problems == 0 ? juce::String ("The coach is happy")

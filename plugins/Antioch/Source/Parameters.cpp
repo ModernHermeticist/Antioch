@@ -167,6 +167,9 @@ namespace Params
         layout.add (floatParam (Verb::duckRel,  "Reverb Duck Release", skewed (50.0f, 2000.0f, 300.0f), 350.0f, millis()));
         layout.add (floatParam (Verb::width,    "Reverb Width",     { 0.0f, 1.5f }, 1.2f, percent()));
         layout.add (floatParam (Verb::mod,      "Reverb Modulation",{ 0.0f, 1.0f }, 0.4f, percent()));
+        layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { Verb::freeze, 1 }, "Reverb Freeze Into Breakdowns",
+                                                                  juce::StringArray { "Off", "1 bar", "2 bars", "4 bars" }, 0));
+        layout.add (floatParam (Verb::freezeLevel, "Reverb Freeze Level", { 0.0f, 1.0f }, 0.7f, percent()));
 
         // ---- Throw ----
         layout.add (std::make_unique<AudioParameterBool> (id (Throw::on), "Throw", false));

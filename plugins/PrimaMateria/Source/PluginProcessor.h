@@ -47,6 +47,22 @@ public:
     /** This track's loudness (LUFS, gated), measured in Drop sections (or all playback without a map). */
     float measuredLufs() const { return loudness.integrated(); }
     SuiteStatus suiteStatus() override;
+
+    /** Club edit: DJ-friendly intro and outro: pads, leads and vocals out, the kick in. */
+    bool applyVersion (int kind) override
+    {
+        if (kind != suite::clubEdit) return false;
+        const auto role = getRole();
+        bool changed = false;
+        for (auto t : { suite::SectionType::Intro, suite::SectionType::Outro })
+        {
+            const auto id = pm::levelId ((int) t);
+            const auto level = apvts.getRawParameterValue (id)->load();
+            if ((role == 4 || role == 5 || role == 6) && level > pm::offDb + 0.5f) { setParameterPlain (apvts, id, pm::offDb); changed = true; }
+            if (role == 1 && level <= pm::offDb + 0.5f) { setParameterPlain (apvts, id, 0.0f); changed = true; }
+        }
+        return changed;
+    }
     void trackNameChanged (const juce::String&) override;
     /** Rough mix: the trim that puts this track at its role's level relative to the kick (nullopt = no change). */
     std::optional<float> roughMixTrim() const;

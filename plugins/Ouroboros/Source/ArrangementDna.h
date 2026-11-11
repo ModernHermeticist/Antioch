@@ -119,6 +119,29 @@ namespace arrangement
     }
 
     //==============================================================================
+    /** Club edit: the song with a 32-bar intro and outro for DJs (beat-only is up to the
+        mixer: Prima Materia takes the melodic parts out of them). The body is unchanged. */
+    inline SectionMap clubEdit (const SectionMap& m)
+    {
+        if (m.count == 0) return m;
+        const auto hasIntro = m.sections[0].type == SectionType::Intro;
+        const auto hasOutro = m.count > 1 && m.sections[(size_t) m.count - 1].type == SectionType::Outro;
+        const auto first = hasIntro ? 1 : 0, last = m.count - (hasOutro ? 1 : 0);   // body: [first, last)
+        SectionMap c = m;
+        c.count = 0;
+        c.sections[(size_t) c.count++] = { 1, SectionType::Intro, hasIntro ? m.sections[0].energy : -1 };
+        int bar = 33;
+        for (int i = first; i < last && c.count < SectionMap::maxSections - 1; ++i)
+        {
+            c.sections[(size_t) c.count++] = { bar, m.sections[(size_t) i].type, m.sections[(size_t) i].energy };
+            bar += m.endBar (i) - m.sections[(size_t) i].startBar;
+        }
+        c.sections[(size_t) c.count++] = { bar, SectionType::Outro, hasOutro ? m.sections[(size_t) m.count - 1].energy : -1 };
+        c.totalBars = bar + 32 - 1;
+        return c;
+    }
+
+    //==============================================================================
     // Section markers for FL Studio: a MIDI file with a marker at every section, and a
     // plain cue sheet with bars and times.
 

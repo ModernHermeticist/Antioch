@@ -29,6 +29,7 @@ private:
     juce::Label status, next;
     suite::ui::Choice dropFx, dropFxLen, buildShape;
     suite::ui::Knob buildFilter;
+    suite::ui::Toggle preLift;
     juce::TextButton samplesButton { "Your samples..." };
     juce::Label samplesNote;
     std::unique_ptr<juce::FileChooser> chooser;

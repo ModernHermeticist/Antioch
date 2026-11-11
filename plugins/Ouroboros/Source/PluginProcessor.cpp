@@ -36,6 +36,16 @@ OuroborosProcessor::OuroborosProcessor()
       apvts (*this, nullptr, "OuroborosState", layout())
 {
     map = arrangement::fromTemplate (arrangement::templates().front());
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    {
+        if (fix != suite::Fix::DjPhrasing) return {};
+        const auto before = getMap(), after = suite::dj::fixPhrasing (before);
+        if (after == before) return {};
+        setMap (after);
+        addNote ("DJ phrasing: intro and outro set to whole 16-bar phrases, sections onto the 8-bar grid");
+        return [this, before, after] { if (getMap() == after) setMap (before); };
+    });
     publish();
     startTimerHz (20);   // live sections must reach the suite well before the next bar line
 }

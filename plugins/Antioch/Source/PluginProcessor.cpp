@@ -80,6 +80,9 @@ void AntiochProcessor::prepareToPlay (double newSampleRate, int)
     echo.prepare (sampleRate, maxDelaySeconds);
     scenes.prepare();
     reverb.prepare (sampleRate);
+    freeze.prepare (sampleRate);
+    freezeSectionIndex = -1;
+    freezeLastPos = -1.0e9;
     throwDelay.prepare (sampleRate, maxDelaySeconds);
     dryEnvelope.reset();
 
@@ -189,6 +192,9 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
     const auto lengthQ = Throw::autoLengthQuarters (choiceParam (Throw::autoLen)->getIndex());
     const auto windowQ = autoOn ? juce::jmin (phraseQ, lengthQ) : lengthQ;
     const auto qPerSample = host.quartersPerSample (sampleRate);
+    const auto freezeBarsNow = host.hasPpq ? Verb::freezeBars (choiceParam (Verb::freeze)->getIndex()) : 0;
+    const auto freezeLevelNow = value (Verb::freezeLevel);
+    if (freezeBarsNow == 0) freeze.stop();
 
     // ---- Levels ----
     const auto out = juce::Decibels::decibelsToGain (value (output));
@@ -258,10 +264,31 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         reverb.process (inL + es * eL + ts * tL, inR + es * eR + ts * tR, vDuck, rL, rR);
         const auto vg = verbGain.getNextValue();
 
+        // Reverb freeze: entering a breakdown, the last half second of reverb holds as a wash.
+        float fL = 0.0f, fR = 0.0f;
+        if (freezeBarsNow > 0)
+        {
+            freeze.push (rL * vg, rR * vg);
+            if (host.playing && haveSections)
+            {
+                const auto posQ = host.ppq + qPerSample * n;
+                const auto sec = sections.locate (posQ, barQ);
+                const auto jumped = posQ < freezeLastPos - 1.0e-6 || posQ > freezeLastPos + 0.5;
+                if (sec.valid && sec.index != freezeSectionIndex && freezeSectionIndex >= 0 && ! jumped && sec.type == suite::SectionType::Breakdown)
+                {
+                    freeze.trigger ((int) (freezeBarsNow * barQ / qPerSample), freezeLevelNow);
+                    freezesPlayed.fetch_add (1);
+                }
+                freezeSectionIndex = sec.valid ? sec.index : -1;
+                freezeLastPos = posQ;
+            }
+            freeze.process (fL, fR);
+        }
+
         const auto d = dryGain.getNextValue();
         const auto o = outGain.getNextValue();
-        const auto oL = (inL * d + eL + tL + rL * vg) * o;
-        const auto oR = (inR * d + eR + tR + rR * vg) * o;
+        const auto oL = (inL * d + eL + tL + rL * vg + fL) * o;
+        const auto oR = (inR * d + eR + tR + rR * vg + fR) * o;
 
         if (right != nullptr)
         {

@@ -66,7 +66,7 @@ public:
     bool applyVersion (int kind) override
     {
         if ((int) apvts.getRawParameterValue (targetId)->load() == followMentalism) return false;   // Mentalism decides
-        setParameterPlain (apvts, targetId, kind == suite::radioEdit ? 3.0f : 1.0f);
+        setParameterPlain (apvts, targetId, kind == suite::radioEdit ? 3.0f : 1.0f);   // extended mix and club edit: club
         resetLearning();
         return true;
     }

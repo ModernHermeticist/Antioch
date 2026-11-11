@@ -727,9 +727,9 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     {
         juce::CallOutBox::launchAsynchronously (std::make_unique<RecipePanel>(), recipesButton.getScreenBounds(), nullptr);
     };
-    versionsButton.setTooltip ("Keeps this song in snapshot A and makes a radio edit in B and an extended mix in C "
-                               "(map and loudness target); then click the slots to compare");
-    versionsButton.onClick = [this] { versionsSeq = processor.makeVersions(); lastSnapshotSeq = versionsSeq; lastSnapshotVerb = "Made A/B/C (back on A)"; refreshSnapshots(); };
+    versionsButton.setTooltip ("Keeps this song in snapshot A and makes a radio edit in B, an extended mix in C and a club edit "
+                               "in D (32-bar beat-only intro and outro); then click the slots to compare");
+    versionsButton.onClick = [this] { versionsSeq = processor.makeVersions(); lastSnapshotSeq = versionsSeq; lastSnapshotVerb = "Made A/B/C/D (back on A)"; refreshSnapshots(); };
     addAndMakeVisible (recipesButton);
     addAndMakeVisible (versionsButton);
     suiteButton.setTooltip ("Every suite plugin loaded, on which track, and what still needs setting up");

@@ -30,7 +30,8 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       dropFx (p.apvts, AzothProcessor::dropFxId, "Into the drop"),
       dropFxLen (p.apvts, AzothProcessor::dropFxLenId, "Length"),
       buildShape (p.apvts, AzothProcessor::buildShapeId, "Build shape"),
-      buildFilter (p.apvts, AzothProcessor::buildFilterId, "Build filter", sectionColour (suite::SectionType::Build))
+      buildFilter (p.apvts, AzothProcessor::buildFilterId, "Build filter", sectionColour (suite::SectionType::Build)),
+      preLift (p.apvts, AzothProcessor::preLiftId, "Key-change pre-lift", sectionColour (suite::SectionType::Drop))
 {
     setLookAndFeel (&lnf);
     const char* names[] = { "Impact", "Crash", "Downlifter", "Snare" };
@@ -47,7 +48,7 @@ AzothEditor::AzothEditor (AzothProcessor& p)
                                                              &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
                                                              &riser, &trackRiser, &riserRange, &riserNote,
-                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote })
+                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote, &preLift })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
     reverseNote.setJustificationType (juce::Justification::centredLeft);
@@ -159,7 +160,11 @@ void AzothEditor::resized()
     dropFxLen.setBounds (en.removeFromLeft (130));
     buildShape.setBounds (en.removeFromLeft (150));
     buildFilter.setBounds (en.removeFromLeft (110));
-    samplesButton.setBounds (en.removeFromLeft (150).withSizeKeepingCentre (140, 30));
+    {
+        auto col = en.removeFromLeft (170);
+        samplesButton.setBounds (col.removeFromTop (col.getHeight() / 2).withSizeKeepingCentre (160, 30));
+        preLift.setBounds (col.withSizeKeepingCentre (160, 30));
+    }
     samplesNote.setBounds (en.reduced (8, 0));
 
     auto ri = riserArea.reduced (10, 6).withTrimmedTop (14);

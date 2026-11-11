@@ -208,6 +208,57 @@ private:
 };
 
 //==============================================================================
+/** Reverb freeze: keeps the last half second of the reverb and, when triggered, plays it as
+    an endless wash (two crossfading, sin²-windowed read heads) that fades out over a set time. */
+class FreezeWash
+{
+public:
+    void prepare (double sampleRate)
+    {
+        grain = juce::jmax (64, (int) (0.5 * sampleRate));
+        for (auto* b : { &histL, &histR, &frozenL, &frozenR }) b->assign ((size_t) grain, 0.0f);
+        write = 0; pos = 0; total = 0; fadeIn = juce::jmax (1, (int) (0.02 * sampleRate));
+    }
+
+    void push (float l, float r) noexcept
+    {
+        histL[(size_t) write] = l; histR[(size_t) write] = r;
+        write = (write + 1) % grain;
+    }
+
+    void trigger (int lengthSamples, float level) noexcept
+    {
+        for (int i = 0; i < grain; ++i)
+        {
+            const auto src = (size_t) ((write + i) % grain);   // oldest first
+            frozenL[(size_t) i] = histL[src]; frozenR[(size_t) i] = histR[src];
+        }
+        pos = 0; total = juce::jmax (1, lengthSamples); gain = level;
+    }
+
+    void stop() noexcept { total = 0; }
+    bool active() const noexcept { return pos < total; }
+
+    void process (float& outL, float& outR) noexcept
+    {
+        outL = outR = 0.0f;
+        if (pos >= total) return;
+        const auto a = pos % grain, b = (pos + grain / 2) % grain;
+        const auto wa = std::sin (juce::MathConstants<float>::pi * (float) a / (float) grain);
+        const auto wb = std::sin (juce::MathConstants<float>::pi * (float) b / (float) grain);
+        const auto env = gain * juce::jmin (1.0f, (float) pos / (float) fadeIn) * (1.0f - (float) pos / (float) total);
+        outL = (frozenL[(size_t) a] * wa * wa + frozenL[(size_t) b] * wb * wb) * env;
+        outR = (frozenR[(size_t) a] * wa * wa + frozenR[(size_t) b] * wb * wb) * env;
+        ++pos;
+    }
+
+private:
+    std::vector<float> histL, histR, frozenL, frozenR;
+    int grain = 24000, write = 0, pos = 0, total = 0, fadeIn = 960;
+    float gain = 0.0f;
+};
+
+//==============================================================================
 /** Dub-style throw delay: only audio arriving while the throw gate is open
     enters the delay, and its tail keeps ringing after the gate closes. */
 class ThrowDelay

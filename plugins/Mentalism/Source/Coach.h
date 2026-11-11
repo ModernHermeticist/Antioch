@@ -171,6 +171,7 @@ namespace coach
             case suite::Fix::ReferenceTone:    return "Lapis: low and high tone moved towards the reference";
             case suite::Fix::Carve:            return "Prima Materia: a dip carved in the less important track";
             case suite::Fix::GainStage:        return "Prima Materia: every track's input set to -18 dBFS RMS";
+            case suite::Fix::DjPhrasing:       return "Ouroboros: intro and outro to whole 16-bar phrases, sections onto the 8-bar grid";
             case suite::Fix::ArcMatch:         return "Prima Materia: that section's level moved towards your energy curve";
             case suite::Fix::None:
             default:                           return {};

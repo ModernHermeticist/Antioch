@@ -43,7 +43,8 @@ public:
         impactId { "impact" }, crashId { "crash" }, swellId { "swell" }, downId { "downlifter" }, rollId { "roll" },
         swellLenId { "swelllen" }, rollStartId { "rollstart" }, rollPitchId { "rollpitch" }, gapId { "gap" }, grooveCrashId { "groovecrash" },
         laterDropsId { "laterdrops" }, riserId { "riser" }, riserRangeId { "riserrange" }, trackRiserId { "trackriser" }, reverseOnId { "rev_on" }, reverseLevelId { "rev_level" }, reverseTargetId { "rev_target" }, reverseLengthId { "rev_length" },
-        dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" };
+        dropFxId { "dropfx" }, dropFxLenId { "dropfxlen" }, buildShapeId { "buildshape" }, buildFilterId { "buildfilter" },
+        preLiftId { "prelift" };
     enum DropFx { dfOff, dfTapeStop, dfStutter };
     enum BuildShape { bsSmooth, bsStepped, bsLateSurge };
     static double dropFxQuarters (int i) { static const double q[] = { 0.5, 1.0, 2.0 }; return q[juce::jlimit (0, 2, i)]; }
@@ -112,7 +113,7 @@ private:
     int buildFilterCounter = 0;
     azoth::Riser riser;
     std::array<suite::PitchShifter, 2> trackShift;   // the track's own audio, pitched up through builds
-    float trackRiseMix = 0.0f;
+    float trackRiseMix = 0.0f, liftMix = 0.0f;
     float energyGain = 1.0f, riseGain = 1.0f;   // from Ouroboros' energy curve
     int trackShiftCounter = 0;
     int nextSnare = 0;

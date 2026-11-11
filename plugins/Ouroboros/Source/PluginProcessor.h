@@ -5,6 +5,7 @@
 #include "FixBus.h"
 #include "Arrangement.h"
 #include "ArrangementDna.h"
+#include "DjPhrasing.h"
 #include "Listen.h"
 #include "SuiteDSP.h"
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -100,6 +101,9 @@ public:
     void applyRide();
     std::atomic<int> pendingRide { -1 };
 
+    /** Mentalism's DJ phrasing fix (undoable). */
+    std::unique_ptr<suite::FixReceiver> fixes;
+
     /** Arrangement DNA from your saved templates. */
     static arrangement::ArrangementDna learnArrangementDna()
     {
@@ -153,6 +157,7 @@ public:
     bool applyVersion (int kind) override
     {
         const auto m = getMap();
+        if (kind == suite::clubEdit) { setMap (arrangement::clubEdit (m)); return true; }
         int drops = 0;
         for (int i = 0; i < m.count; ++i) drops += m.sections[(size_t) i].type == suite::SectionType::Drop;
         arrangement::GenSettings g;
@@ -175,7 +180,7 @@ public:
     }
 
     /** Makes the versions in one go: A = the current song, B = radio edit, C = extended mix,
-        then back to A. Every suite plugin captures each slot in order. */
+        D = club edit (32-bar beat-only intro and outro), then back to A. Every suite plugin captures each slot in order. */
     uint32_t makeVersions()
     {
         using suite::SnapshotAction;
@@ -185,6 +190,9 @@ public:
         suite::SnapshotBus::send (SnapshotAction::Recall, 0);
         suite::SnapshotBus::send (SnapshotAction::ApplyVersion, suite::extendedMix);
         suite::SnapshotBus::send (SnapshotAction::Capture, 2);
+        suite::SnapshotBus::send (SnapshotAction::Recall, 0);
+        suite::SnapshotBus::send (SnapshotAction::ApplyVersion, suite::clubEdit);
+        suite::SnapshotBus::send (SnapshotAction::Capture, 3);
         const auto last = suite::SnapshotBus::send (SnapshotAction::Recall, 0);
         pollSnapshots();
         return last;

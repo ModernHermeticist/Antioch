@@ -155,10 +155,12 @@ public:
           shimmer (p.apvts, Params::Verb::shimmer, "Shimmer", Colours::amethyst),
           shimInt (p.apvts, Params::Verb::shimInt, "Shimmer Interval"),
           duck (p.apvts, Params::Verb::duck, "Duck", Colours::ember),
-          duckRel (p.apvts, Params::Verb::duckRel, "Duck Release", Colours::ember)
+          duckRel (p.apvts, Params::Verb::duckRel, "Duck Release", Colours::ember),
+          freeze (p.apvts, Params::Verb::freeze, "Freeze into breakdowns"),
+          freezeLevel (p.apvts, Params::Verb::freezeLevel, "Freeze level", verbColour)
     {
         for (auto* c : std::initializer_list<juce::Component*> { &decay, &size, &predelay, &mod, &width, &damping, &lowCut,
-                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel })
+                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel, &freeze, &freezeLevel })
             addAndMakeVisible (c);
     }
 
@@ -173,7 +175,7 @@ public:
     {
         drawPanel (g, spaceArea, "Space", verbColour);
         drawPanel (g, toneArea, "Tone & shimmer", Colours::amethyst);
-        drawPanel (g, duckArea, "Ducking", Colours::ember);
+        drawPanel (g, duckArea, "Ducking and freeze", Colours::ember);
 
         // Gain-reduction meter
         const auto r = meterArea.toFloat();
@@ -204,6 +206,8 @@ public:
         const auto cell = d.getWidth() / 5;
         duck.setBounds (d.removeFromLeft (cell));
         duckRel.setBounds (d.removeFromLeft (cell));
+        freeze.setBounds (d.removeFromLeft (cell));
+        freezeLevel.setBounds (d.removeFromLeft (cell));
         meterArea = d.reduced (24, 0).withSizeKeepingCentre (d.getWidth() - 48, 10).translated (0, -6);
     }
 
@@ -212,6 +216,8 @@ private:
     Knob decay, size, predelay, mod, width, damping, lowCut, highCut, shimmer;
     Choice shimInt;
     Knob duck, duckRel;
+    Choice freeze;
+    Knob freezeLevel;
     juce::Rectangle<int> spaceArea, toneArea, duckArea, meterArea;
     float meter = 0.0f;
 };

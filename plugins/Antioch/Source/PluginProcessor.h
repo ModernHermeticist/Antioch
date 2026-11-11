@@ -81,6 +81,12 @@ private:
 
     HarmonicEcho echo;
     EuphoricReverb reverb;
+public:
+    FreezeWash freeze;
+    std::atomic<int> freezesPlayed { 0 };
+private:
+    int freezeSectionIndex = -1;
+    double freezeLastPos = -1.0e9;
     ThrowDelay throwDelay;
     suite::EnvelopeFollower dryEnvelope;
     suite::SectionFollower sections;

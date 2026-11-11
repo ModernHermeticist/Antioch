@@ -41,6 +41,7 @@ namespace
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::dropFxLenId), "Drop Entrance FX Length", StringArray { "1/2 beat", "1 beat", "2 beats" }, 1));
         l.add (std::make_unique<AudioParameterChoice> (id (AzothProcessor::buildShapeId), "Build Shape", StringArray { "Smooth", "Stepped", "Late surge" }, 0));
         l.add (std::make_unique<AudioParameterFloat> (id (AzothProcessor::buildFilterId), "Build Filter", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+        l.add (std::make_unique<AudioParameterBool> (id (AzothProcessor::preLiftId), "Key Change Pre-lift", true));
         return l;
     }
 
@@ -109,6 +110,7 @@ void AzothProcessor::prepareToPlay (double newSampleRate, int)
     riser.prepare (sr);
     for (auto& t : trackShift) t.prepare (sampleRate, 0.06f);
     trackRiseMix = 0.0f;
+    liftMix = 0.0f;
     swellFilter.reset();
     previousIndex = -1;
     rollPos = -1.0e9;
@@ -184,6 +186,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto dropFxQ = dropFxQuarters ((int) value (dropFxLenId));
     const auto buildShape = (int) value (buildShapeId);
     const auto buildFilterAmount = value (buildFilterId);
+    const auto preLift = value (preLiftId) > 0.5f;
     const auto beatSamples = 1.0 / juce::jmax (1.0e-9, qPerSample);
 
     // Auditions from the UI play immediately.
@@ -219,6 +222,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         float rise = -1.0f;   // progress through this build's riser, or -1
         float riseKey = 1.0f; // final-drop key change: the riser aims for the key of the drop it leads into
         float dropP = -1.0f;  // progress through the drop entrance FX, or -1
+        float liftSemis = -1.0f;   // key-change pre-lift: semitones this track is pitched up now, or -1
         bool dropSilent = false;
 
         if (follow)
@@ -254,6 +258,11 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                     if (pos >= startQ && pos < end)
                         rise = shapeProgress (buildShape, (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ)));
                 }
+
+                // Key-change pre-lift: over the last beat before the drop that changes key, this
+                // track glides up to the new key, announcing the lift.
+                if (preLift && sec.hasNext && sec.next == T::Drop && sec.nextKeyShift != sec.keyShift && pos >= end - 1.0 && pos < end)
+                    liftSemis = (float) (sec.nextKeyShift - sec.keyShift) * (float) ((pos - (end - 1.0)) / 1.0);
 
                 // Drop entrance: tape stop or stutter on this track's audio just before the drop.
                 if (dropFx != dfOff && sec.hasNext && sec.next == T::Drop)
@@ -367,11 +376,18 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             if (trackShiftCounter-- <= 0)
             {
                 trackShiftCounter = 32;
-                for (auto& t : trackShift) t.setSemitones (rise >= 0.0f ? 12.0f * rise : 0.0f);
+                for (auto& t : trackShift) t.setSemitones (liftSemis >= 0.0f ? liftSemis : rise >= 0.0f ? 12.0f * rise : 0.0f);
             }
             const auto shiftedL = trackShift[0].process (left[n]);
             const auto shiftedR = trackShift[1].process (right != nullptr ? right[n] : left[n]);
-            if (trackRiseMix > 1.0e-5f)
+            // The pre-lift replaces the track with its pitched copy (a quick crossfade either side).
+            liftMix += (liftSemis >= 0.0f ? 0.01f : 0.004f) * ((liftSemis >= 0.0f ? 1.0f : 0.0f) - liftMix);
+            if (liftMix > 1.0e-4f)
+            {
+                left[n] += liftMix * (shiftedL - left[n]);
+                if (right != nullptr) right[n] += liftMix * (shiftedR - right[n]);
+            }
+            else if (trackRiseMix > 1.0e-5f)
             {
                 left[n] += shiftedL * trackRiseMix;
                 if (right != nullptr) right[n] += shiftedR * trackRiseMix;

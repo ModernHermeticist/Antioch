@@ -14,7 +14,7 @@
 
 namespace suite
 {
-    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch };
+    enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch, DjPhrasing };
 
     /** Carve: which Prima Materia (low 12 bits of its instance id) and which octave band. */
     inline uint32_t packCarve (uint32_t instanceId, int band) noexcept { return ((uint32_t) (band & 0xf) << 12) | (instanceId & 0xfffu); }

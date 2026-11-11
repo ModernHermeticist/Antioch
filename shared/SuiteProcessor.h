@@ -21,7 +21,7 @@ namespace suite
     enum class SnapshotAction : uint8_t { Capture = 1, Recall = 2, Clear = 3, ApplyVersion = 4 };   // ApplyVersion: "slot" = version kind
 
     /** Song versions made from the current one (Ouroboros "Versions"). */
-    enum SongVersion { radioEdit = 1, extendedMix = 2 };
+    enum SongVersion { radioEdit = 1, extendedMix = 2, clubEdit = 3 };
 
     namespace SnapshotBus
     {
