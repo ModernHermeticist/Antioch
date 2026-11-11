@@ -24,6 +24,9 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
 
         switch (fix)
         {
+            case suite::Fix::LearnStart:
+                learnReset.store (true);   // measure this track afresh (the audio thread resets)
+                return {};
             case suite::Fix::ArrangeFromLoop:
             {
                 // Arrange from the loop (Ouroboros): this track's role decides which sections it plays in.
@@ -187,6 +190,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     if (std::abs (trim - lastTrim) > 0.05f) { loudness.reset(); lastTrim = trim; }
     const auto inputGainDb = apvts.getRawParameterValue (pm::inputGainId)->load();
     if (std::abs (inputGainDb - lastInputGain) > 0.05f) { loudness.reset(); lastInputGain = inputGainDb; }   // gain staging: measure again
+    if (learnReset.exchange (false)) { loudness.reset(); inputPower.store (0.0); inputCount.store (0); crestSum.store (0.0f); crestCount.store (0); }
     trimGain.setTargetValue (juce::Decibels::decibelsToGain (trim));
 
     auto* left = buffer.getWritePointer (0);
@@ -257,6 +261,12 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 const auto trackGap = juce::jmin (gapQ, barQ);
                 const auto thisGap = juce::jmax (trackGap, suiteGap);
                 inGap = thisGap > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - thisGap && sec.endQ - sec.startQ > thisGap;
+                // A stop moment (Ouroboros): the beat before its bar is silent on every track.
+                if (! inGap && sections.getMap().momentCount > 0)
+                {
+                    const auto bar = (int) std::floor (pos / barQ + 1.0e-9) + 1;
+                    inGap = sections.getMap().hasMoment (bar + 1, suite::momentStop) && pos >= bar * barQ - 1.0;
+                }
                 gapNow = gapNow || inGap;
 
                 // Expression ------------------------------------------------------------

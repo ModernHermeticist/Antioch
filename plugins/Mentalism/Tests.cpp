@@ -865,6 +865,30 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Fixes that check themselves");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        const auto quieter = p->sendFix (suite::Fix::BreakdownQuieter), rise = p->sendFix (suite::Fix::BuildRise);
+        p->lastApplied = { { suite::Fix::BreakdownQuieter, 0u, quieter }, { suite::Fix::BuildRise, 0u, rise } };
+        p->problemsBeforeLastPass = 2;
+        coach::Result now;   // the next pass: the breakdown is still too close, the build is fine now, something else came up
+        now.problems = 2;
+        now.fixes = { suite::Fix::BreakdownQuieter, suite::Fix::IntroQuieter };
+        now.fixData = { 0u, 0u };
+        now.notes = { "breakdown", "intro" };
+        const auto verdict = p->verifyLastPass (now).joinIntoString ("; ");
+        uint32_t undoneQuieter = 0, undoneRise = 0;
+        for (const auto& r : p->getFixHistory()) { if (r.seq == quieter) undoneQuieter = r.undoSeq; if (r.seq == rise) undoneRise = r.undoSeq; }
+        check (undoneQuieter != 0 && undoneRise == 0 && verdict.contains ("kept 1 fix that helped") && verdict.contains ("didn't help"),
+               "the fix that didn't help is undone, the one that did is kept (" + verdict + ")");
+        check (p->revertedFixes.size() == 1 && p->revertedFixes[0].first == suite::Fix::BreakdownQuieter && p->lastApplied.empty(),
+               "and it won't be tried again");
+        p->lastApplied = { { suite::Fix::IntroQuieter, 0u, p->sendFix (suite::Fix::IntroQuieter) } };
+        p->problemsBeforeLastPass = 3;
+        check (p->verifyLastPass (now).joinIntoString ("").contains ("kept 1"), "a fix whose problem remains but the arc improved overall stays");
+    }
+
     section ("Pass-through");
     {
         auto p = make();

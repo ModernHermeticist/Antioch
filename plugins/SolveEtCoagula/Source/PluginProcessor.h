@@ -62,6 +62,8 @@ public:
         return s;
     }
     suite::SceneEngine scenes;
+    /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    void pollTick() override { scenes.watchTweaks (isMorphing()); }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

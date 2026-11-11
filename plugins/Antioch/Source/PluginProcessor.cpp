@@ -287,6 +287,13 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
             const auto barEnd = bar * barQ;
             gateOpen = posQ >= barEnd - juce::jmin (windowQ, barQ) && suite::VocalBus::sings (bar) && ! suite::VocalBus::sings (bar + 1);
         }
+        if (! gateOpen && haveSections && host.playing && host.hasPpq && sections.getMap().momentCount > 0)
+        {
+            // A throw moment (Ouroboros): the beat (or the chosen length) before its bar.
+            const auto posQ = host.ppq + qPerSample * n;
+            const auto bar = (int) std::floor (posQ / barQ + 1.0e-9) + 1;
+            gateOpen = sections.getMap().hasMoment (bar + 1, suite::momentThrow) && posQ >= bar * barQ - juce::jmin (lengthQ, barQ);
+        }
         float tL, tR;
         throwDelay.process (inL, inR, gateOpen, tL, tR);
         const auto tg = throwGain.getNextValue() * tDuck;

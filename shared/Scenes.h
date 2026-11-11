@@ -117,6 +117,8 @@ namespace suite
         int getNumParams() const noexcept { return count; }
         const juce::String& getLabel (int i) const { return labels[(size_t) i]; }
         const juce::String& getParamId (int i) const { return ids[(size_t) i]; }
+        int getCount() const noexcept { return count; }
+        const juce::String& getParamId (int i) const { return ids[(size_t) i]; }
         /** Normalised value in use: the knob's current value plus the current (gliding) offset. */
         float getEffective (int i) const noexcept
         {
@@ -193,6 +195,77 @@ namespace suite
 
         float getOffset (int type, int i) const noexcept { return offsets[(size_t) type][(size_t) i].load(); }
         void setOffset (int type, int i, float v) noexcept { offsets[(size_t) type][(size_t) i].store (juce::jlimit (-1.0f, 1.0f, v)); }
+
+        //==============================================================================
+        // Learning from your tweaks (message thread): a knob you move by hand while a section
+        // plays becomes a proposal when that section ends: "make it the <section> scene?".
+        // Accepting moves the change into that section's scene and puts the knob back, so the
+        // other sections sound as before.
+
+        struct Proposal
+        {
+            bool valid = false;
+            int type = -1;
+            std::array<float, maxParams> delta {};
+        };
+        /** Call a few times a second. `ignore`: the plugin is moving its own knobs (morph, print). */
+        void watchTweaks (bool ignore = false)
+        {
+            if (apvts == nullptr || count == 0) return;
+            const auto type = hostPlaying.load() && isEnabled() && printState.load() == 0 ? activeType.load() : -1;
+            std::array<float, maxParams> now {};
+            for (int i = 0; i < count; ++i) now[(size_t) i] = params[(size_t) i]->getValue();
+            if (! watching || ignore)
+            {
+                lastSeen = now;
+                watching = true;
+                if (ignore) return;
+            }
+            if (type >= 0 && type == tweakType)
+                for (int i = 0; i < count; ++i)
+                    pending[(size_t) i] += now[(size_t) i] - lastSeen[(size_t) i];
+            if (type != tweakType)
+            {
+                float total = 0.0f;
+                for (int i = 0; i < count; ++i) total += std::abs (pending[(size_t) i]);
+                if (tweakType >= 0 && total > 0.02f)
+                {
+                    proposal.valid = true;
+                    proposal.type = tweakType;
+                    proposal.delta = pending;
+                }
+                pending.fill (0.0f);
+                tweakType = type;
+            }
+            lastSeen = now;
+        }
+        const Proposal& getProposal() const noexcept { return proposal; }
+        bool isEnabled() const noexcept { return enabled != nullptr && enabled->load() > 0.5f; }
+        juce::String proposalText() const
+        {
+            if (! proposal.valid) return {};
+            juce::StringArray what;
+            for (int i = 0; i < count; ++i)
+                if (std::abs (proposal.delta[(size_t) i]) > 0.005f)
+                    what.add (labels[(size_t) i] + (proposal.delta[(size_t) i] > 0 ? " up" : " down"));
+            const auto name = juce::String (sectionName ((SectionType) proposal.type)).toLowerCase();
+            return "You turned " + what.joinIntoString (", ") + " in the " + name + ": do it in every " + name + "?";
+        }
+        /** Makes the tweak the section's scene, and puts the knobs back for the other sections. */
+        void acceptProposal()
+        {
+            if (! proposal.valid) return;
+            for (int i = 0; i < count; ++i)
+            {
+                const auto d = proposal.delta[(size_t) i];
+                if (std::abs (d) < 1.0e-4f) continue;
+                setOffset (proposal.type, i, getOffset (proposal.type, i) + d);
+                params[(size_t) i]->setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, params[(size_t) i]->getValue() - d));
+                lastSeen[(size_t) i] = params[(size_t) i]->getValue();
+            }
+            proposal = {};
+        }
+        void dismissProposal() { proposal = {}; }
 
         void clearAll() noexcept
         {
@@ -281,5 +354,10 @@ namespace suite
         std::atomic<bool> activeLaterDrop { false };
         std::vector<Default> defaults;
         SectionFollower follower;
+        // Learning from your tweaks
+        bool watching = false;
+        int tweakType = -1;
+        std::array<float, maxParams> lastSeen {}, pending {};
+        Proposal proposal;
     };
 }

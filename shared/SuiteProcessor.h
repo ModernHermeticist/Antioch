@@ -11,6 +11,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Registry.h"
+#include "Roles.h"
 #include "MorphBus.h"
 #include "Session.h"
 #include "Recipes.h"
@@ -59,6 +60,58 @@ namespace suite
         virtual SuiteStatus suiteStatus() { return {}; }
         /** Called when the host tells us the track's name (FL: the mixer track). */
         virtual void trackNameChanged (const juce::String&) {}
+
+        /** Role-aware setup: a plugin on a track whose role is known (from its name, or from the
+            Prima Materia on the same track) sets itself up for that role, once, and only while
+            nobody has touched it (a new instance, not a saved project). Override to do it;
+            return true if anything changed. Message thread. */
+        virtual bool applyRoleSetup (int /*role*/, const juce::String& /*trackName*/) { return false; }
+        bool roleSetupDone = false;
+        int roleSetupApplied = -1;   // the role it set up for (-1 = none yet)
+
+        /** True while every parameter is as the plugin started (not loaded from a project). */
+        bool untouched() const
+        {
+            if (loadedVersion >= 0 || freshValues.empty()) return false;
+            const auto& params = getParameters();
+            if ((size_t) params.size() != freshValues.size()) return false;
+            for (int i = 0; i < params.size(); ++i)
+                if (std::abs (params[i]->getValue() - freshValues[(size_t) i]) > 1.0e-5f) return false;
+            return true;
+        }
+        /** Remembers the current values as "as it started" (the poller does it on its first tick). */
+        void captureFreshValues()
+        {
+            freshValues.clear();
+            for (auto* p : getParameters()) freshValues.push_back (p->getValue());
+        }
+        /** The role for this track: Prima Materia's on the same track if it has one, else from the name. */
+        int roleForTrack() const
+        {
+            const auto track = getTrackName();
+            if (track.isEmpty()) return -1;
+            for (const auto& e : Registry::list())
+                if (e.plugin == "Prima Materia" && e.track == track && e.has (Status::roleSet) && e.metrics[0] >= 1.0f)
+                    return (int) e.metrics[0];
+            return roleFromTrackName (track);
+        }
+        /** A few times a second on the message thread (plugins with section scenes watch your tweaks here). */
+        virtual void pollTick() {}
+        bool isMorphing() const noexcept { return morphing; }
+
+        /** Applies the role setup if it's due (the poller calls it; tests call it directly). */
+        bool tryRoleSetup()
+        {
+            if (roleSetupDone || getTrackName().isEmpty()) return false;
+            const auto role = roleForTrack();
+            if (role < 0) return false;
+            roleSetupDone = true;   // one chance: a plugin someone has set up keeps its settings
+            if (! untouched()) return false;
+            if (! applyRoleSetup (role, getTrackName())) return false;
+            roleSetupApplied = role;
+            captureFreshValues();
+            return true;
+        }
 
         void updateTrackProperties (const TrackProperties& properties) override
         {
@@ -391,6 +444,9 @@ namespace suite
             explicit Poller (SuiteProcessor& p) : owner (p) {}
             void timerCallback() override
             {
+                if (ticks == 0 && owner.loadedVersion < 0) owner.captureFreshValues();
+                if (ticks % 5 == 3) owner.tryRoleSetup();
+                owner.pollTick();
                 owner.pollSnapshots();
                 owner.pollRecipes();   // before sessions: a new song can load your signature, then set its key
                 owner.pollSession();
@@ -400,6 +456,7 @@ namespace suite
             SuiteProcessor& owner;
         };
 
+        std::vector<float> freshValues;
         juce::CriticalSection slotLock, nameLock;
         juce::String trackName;
         const uint32_t instanceId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) + 1u;

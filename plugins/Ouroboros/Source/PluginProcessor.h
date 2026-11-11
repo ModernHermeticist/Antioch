@@ -53,6 +53,10 @@ public:
         return s;
     }
     void setMap (const suite::SectionMap&);
+    /** Moments, one per line: "33 impact", "64 stop", "96 throw" (bar, then what). Returns how many were kept. */
+    int setMomentsText (const juce::String&);
+    juce::String momentsText() const;
+    std::vector<suite::Moment> moments;
 
     /** Starts a section of `type` at the playhead's bar, snapped to the Snap setting. */
     void markAtPlayhead (suite::SectionType type);
@@ -308,6 +312,51 @@ public:
         return seq;
     }
     double draftDueAt = 0.0;
+
+    /** Learning pass: one play-through and the suite sets itself up. Every plugin starts
+        measuring afresh; once the song has been heard (80% of its bars, up to the last), Kybalion
+        fits its ducking to the kick and flips where the low end cancels, and Mentalism runs Finish
+        the song (gain staging, DJ check, rough mix, coaching). Undo puts the Kybalion moves back;
+        Mentalism's History has the rest. */
+    uint32_t startLearningPass()
+    {
+        for (auto& w : heardBars) w.store (0);
+        learning.store (true);
+        learnSeqs.clear();
+        addNote ("Learning pass: play the whole song once");
+        return suite::FixBus::send (suite::Fix::LearnStart);
+    }
+    int barsHeard() const
+    {
+        int n = 0;
+        for (const auto& w : heardBars) { auto v = w.load(); while (v) { n += (int) (v & 1u); v >>= 1; } }
+        return n;
+    }
+    /** Ends the pass once the song has been heard (tests: `force`). True when it ended. */
+    bool continueLearningPass (bool force = false)
+    {
+        if (! learning.load()) return false;
+        const auto m = getMap();
+        const auto atEnd = m.totalBars > 0 && lastHeardBar.load() >= m.totalBars && barsHeard() * 10 >= m.totalBars * 8;
+        if (! force && ! atEnd) return false;
+        learning.store (false);
+        learnSeqs = { suite::FixBus::send (suite::Fix::KickFit), suite::FixBus::send (suite::Fix::PhaseFlip) };
+        suite::FixBus::send (suite::Fix::FinishSong);
+        addNote ("Learning pass done: ducking fitted to the kick, phase checked, Finish the song started in Mentalism");
+        return true;
+    }
+    int undoLearningPass()
+    {
+        int n = 0;
+        for (auto seq : learnSeqs) if (seq != 0) { suite::FixBus::sendUndo (seq); ++n; }
+        learnSeqs.clear();
+        if (n > 0) addNote ("Undid the learning pass's Kybalion moves (Mentalism's History has the rest)");
+        return n;
+    }
+    std::atomic<bool> learning { false };
+    std::array<std::atomic<uint32_t>, 32> heardBars {};
+    std::atomic<int> lastHeardBar { 0 };
+    std::vector<uint32_t> learnSeqs;
     juce::String lastDraftRecipe;
     void continueDraft (bool now = false)
     {
@@ -322,7 +371,7 @@ public:
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); }
+    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

@@ -323,6 +323,18 @@ int main (int argc, char** argv)
         const auto release = p->apvts.getRawParameterValue (Params::Duck::release)->load();
         check (std::abs (hold - 0.15f * len) < 2.0f && std::abs (release - 0.85f * len) < 3.0f,
                "hold and release follow the kick (" + juce::String (hold, 0) + " / " + juce::String (release, 0) + " ms)");
+        {
+            // The learning pass sends the same as a fix, undoable.
+            suite::FixBus::reset();
+            p->apvts.getParameter (Params::Duck::hold)->setValueNotifyingHost (0.0f);
+            const auto seq = suite::FixBus::send (suite::Fix::KickFit);
+            p->fixes->poll();
+            const auto learned = p->apvts.getRawParameterValue (Params::Duck::hold)->load();
+            suite::FixBus::sendUndo (seq);
+            p->fixes->poll();
+            check (std::abs (learned - 0.15f * len) < 2.0f && p->apvts.getRawParameterValue (Params::Duck::hold)->load() < 0.5f,
+                   "the learning pass's kick fit does the same, and undoes");
+        }
 
         const auto inTune = describeKickTuning (hz, 9);
         check (inTune.contains ("in tune with the root"), "an A kick in A minor is in tune: " + inTune);
@@ -590,6 +602,38 @@ int main (int argc, char** argv)
         fresh.trackNameChanged ("Pluck bus");
         check (fresh.currentSteps() == trancey, "but never over a pattern you chose");
         testStyleLog.deleteFile();
+    }
+
+    section ("Role-aware setup");
+    {
+        auto named = [] (suite::SuiteProcessor& p, const char* name)
+        {
+            juce::AudioProcessor::TrackProperties props;
+            props.name = juce::String (name);
+            p.updateTrackProperties (props);
+        };
+        suite::Registry::reset();
+        KybalionProcessor bass;
+        bass.captureFreshValues();
+        named (bass, "Sub Bass");
+        check (bass.tryRoleSetup() && (int) bass.apvts.getRawParameterValue (Params::Duck::source)->load() == Params::Duck::SuiteKick
+                   && bass.apvts.getRawParameterValue (Params::duckOn)->load() > 0.5f && bass.apvts.getRawParameterValue (Params::gateOn)->load() < 0.5f,
+               "a new Kybalion on 'Sub Bass' ducks tight to the suite kick, no gate");
+        KybalionProcessor pads;
+        pads.captureFreshValues();
+        named (pads, "Big Pads");
+        check (pads.tryRoleSetup() && pads.apvts.getRawParameterValue (Params::gateOn)->load() > 0.5f, "on 'Big Pads' it gates and ducks deep");
+        KybalionProcessor touched;
+        touched.captureFreshValues();
+        touched.apvts.getParameter (Params::Duck::depth)->setValueNotifyingHost (0.1f);
+        named (touched, "Sub Bass");
+        check (! touched.tryRoleSetup() && touched.roleSetupApplied < 0, "but never over one you've already set up");
+        KybalionProcessor fromRole;
+        fromRole.captureFreshValues();
+        named (fromRole, "Insert 7");
+        suite::Registry::announce (777, "Prima Materia", "Insert 7", suite::Status::roleSet, { 2.0f, 0, 0, 0 });
+        check (fromRole.tryRoleSetup() && fromRole.roleSetupApplied == suite::roleBass, "a track named 'Insert 7' takes the role its Prima Materia was given");
+        suite::Registry::reset();
     }
 
     section ("Presets and state");

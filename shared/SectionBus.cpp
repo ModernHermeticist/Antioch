@@ -36,7 +36,7 @@ namespace suite::SectionBus
             static Shared local {};
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v6", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_sectionbus_v7", sizeof (Shared)));
                 return m != nullptr ? m : &local;
             }();
             return *s;

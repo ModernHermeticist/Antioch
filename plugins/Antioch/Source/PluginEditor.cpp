@@ -393,6 +393,8 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
     tabs.onChange (0);
     tabs.setComponentID ("tabs");
 
+    tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
+    addChildComponent (*tweakBanner);
     setSize (960, 740);
     timerCallback();
     startTimerHz (20);

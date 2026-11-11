@@ -21,6 +21,16 @@ KybalionProcessor::KybalionProcessor()
                     { T::Drop, sGateDepth, 0.2f }, { T::Outro, sGateDepth, -0.3f },
                     { T::count, sGateDepth, 0.1f }, { T::count, sDuckDepth, 0.05f } });   // Drop 2+
 
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    {
+        if (fix == suite::Fix::KickFit && kick.hits() >= kicksNeeded)
+            return { { Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * kick.lengthMs()) },
+                     { Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * kick.lengthMs()) } };
+        if (fix == suite::Fix::PhaseFlip && phaseMeasured.load() && lowCorrelation.load() < -0.3f)
+            return { { Params::Duck::flip, value (Params::Duck::flip) > 0.5f ? 0.0f : 1.0f } };
+        return {};
+    });
+
     // Your favourite gate pattern, for a new Kybalion (a saved project's own pattern replaces it as it loads).
     const auto favourites = favouritePatterns (suite::StyleLog::read());
     if (! favourites.empty() && favourites.front().second >= 2)
@@ -395,6 +405,26 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     suiteChordQ.store (chordQ);
     s.metrics[1] = suiteKickAvailable.load() ? 1.0f : 0.0f;
     return s;
+}
+
+bool KybalionProcessor::applyRoleSetup (int role, const juce::String&)
+{
+    int preset = -1;
+    bool gate = false;
+    switch (role)
+    {
+        case suite::roleBass:  preset = 0; gate = false; break;
+        case suite::rolePads:  preset = 1; gate = true;  break;
+        case suite::roleLead:  preset = 2; gate = false; break;
+        case suite::roleVocal: preset = 2; gate = false; break;
+        default: return false;   // the kick shares itself (by name); hats and FX are left alone
+    }
+    applyDuckPreset (preset);
+    setParam (Params::duckOn, 1.0f);
+    setParam (Params::Duck::source, (float) Params::Duck::SuiteKick);
+    setParam (Params::gateOn, gate ? 1.0f : 0.0f);
+    if (gate && ! startedOnFavourite) applyGatePattern (1);   // Trance classic, unless your favourite is already there
+    return true;
 }
 
 void KybalionProcessor::trackNameChanged (const juce::String& name)

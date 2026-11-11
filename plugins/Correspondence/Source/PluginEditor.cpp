@@ -271,6 +271,42 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     roll.onSlotClicked = [this] (int i) { auditionSlot (i, 1.6); };
 
     songButton.onClick = [this] { showSongPatterns(); };
+    colourButton.setTooltip ("Harmony explorer: colour for this progression (a major V, a Dorian IV, sus and add9...), each with what it does. Press Play to hear it");
+    colourButton.onClick = [this]
+    {
+        juce::PopupMenu m;
+        const auto ideas = processor.harmonyIdeas();
+        m.addSectionHeader ("Colour for this progression");
+        for (size_t i = 0; i < ideas.size(); ++i)
+            m.addItem ((int) i + 1, ideas[i].name + ":  " + ideas[i].effect);
+        m.addSeparator();
+        m.addItem (100, "Undo the last colour", processor.beforeIdea.has_value());
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&colourButton), [this] (int id)
+        {
+            if (id == 100) processor.undoHarmonyIdea();
+            else if (id > 0) processor.applyHarmonyIdea (id - 1);
+        });
+    };
+    varyButton.setTooltip ("Variation engine: alternatives for any kind of section (re-rhythmed, thinned out, fuller, re-harmonised) in the song clips");
+    varyButton.onClick = [this]
+    {
+        juce::PopupMenu m;
+        for (int t = 0; t < (int) suite::SectionType::count; ++t)
+        {
+            juce::PopupMenu sub;
+            const auto vars = processor.sectionVariations ((suite::SectionType) t);
+            for (size_t i = 0; i < vars.size(); ++i)
+                sub.addItem (1000 + t * 10 + (int) i, vars[i].name + ":  " + vars[i].effect);
+            m.addSubMenu (suite::sectionName ((suite::SectionType) t), sub, ! vars.empty());
+        }
+        m.addSeparator();
+        m.addItem (1, "Undo the last variation", ! processor.beforeVariation.empty());
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&varyButton), [this] (int id)
+        {
+            if (id == 1) processor.undoVariation();
+            else if (id >= 1000) processor.applyVariation ((suite::SectionType) ((id - 1000) / 10), (id - 1000) % 10);
+        });
+    };
     newMelodyButton.onClick = [this]
     {
         if (! processor.getMotif().empty() || processor.getDna().valid)
@@ -335,7 +371,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                                                              &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile,
                                                              &arpTile, &songChordTile, &songBassTile, &songArpTile,
                                                              &melodyTile, &songLeadTile, &melodyStyle, &newMelodyButton,
-                                                             &playButton, &saveButton, &songButton })
+                                                             &playButton, &saveButton, &songButton, &colourButton, &varyButton })
         addAndMakeVisible (c);
 
     setSize (1160, 740);
@@ -745,8 +781,10 @@ void CorrespondenceEditor::resized()
     placeTiles (ex.removeFromTop (tileRow), { &chordTile, &bassTile, &arpTile, &melodyTile });
     placeTiles (ex.removeFromTop (tileRow), { &songChordTile, &songBassTile, &songArpTile, &songLeadTile });
     auto buttons = ex.withTrimmedTop (4);
-    const auto bw = buttons.getWidth() / 3;
+    const auto bw = buttons.getWidth() / 5;
     playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
+    colourButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
+    varyButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     saveButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     songButton.setBounds (buttons.reduced (3, 0));
 }

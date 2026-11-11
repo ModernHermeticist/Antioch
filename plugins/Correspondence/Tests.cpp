@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "TempoBus.h"
 #include "SpireTools.h"
+#include "Harmony.h"
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
@@ -1181,6 +1182,42 @@ int main (int argc, char** argv)
         scripts.deleteRecursively();
         dir.deleteRecursively();
         suite::SectionBus::withdraw();
+    }
+
+    section ("Harmony explorer and variation engine");
+    {
+        auto s = aMinor();   // i VI III VII in A minor
+        const auto ideas = harmony::ideas (s);
+        juce::StringArray names;
+        for (auto& i : ideas) names.add (i.name);
+        check (names.contains ("End on a major V") && names.contains ("Picardy I") && names.contains ("Sus4 before the loop") && ! names.contains ("Borrowed iv"),
+               "ideas for a minor progression: " + names.joinIntoString (", "));
+        bool oneChange = true;
+        for (auto& i : ideas)
+            if (i.name == "Picardy I") oneChange = i.result.slots[0].quality == chords::Quality::Major && i.result.slots[1].degree == s.slots[1].degree;
+        check (oneChange, "Picardy I turns only the home chord major");
+        auto major = s; major.scale = 1; major.slots[1] = { 4 };
+        juce::StringArray majorNames;
+        for (auto& i : harmony::ideas (major)) majorNames.add (i.name);
+        check (majorNames.contains ("Borrowed iv") && ! majorNames.contains ("Picardy I"), "a major one gets a borrowed iv instead");
+
+        auto p = make();
+        p->applyPreset (0);
+        const auto before = p->currentSettings();
+        int sus = -1;
+        const auto list = p->harmonyIdeas();
+        for (size_t i = 0; i < list.size(); ++i) if (list[i].name == "Sus4 before the loop") sus = (int) i;
+        check (p->applyHarmonyIdea (sus) && p->currentSettings().slots[(size_t) before.count - 1].quality == chords::Quality::Sus4, "applying an idea changes the progression");
+        check (p->undoHarmonyIdea() && p->currentSettings().slots[(size_t) before.count - 1].quality == before.slots[(size_t) before.count - 1].quality, "and Undo puts it back");
+
+        const auto vars = p->sectionVariations (suite::SectionType::Drop);
+        check (vars.size() == 3 && vars[0].name == "Re-rhythmed" && vars[1].name == "Thinned out", "three variations for the drop");
+        check (p->sectionVariations (suite::SectionType::Breakdown).back().name == "Re-harmonised", "and the breakdown can be re-harmonised");
+        const auto dropChords = p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop];
+        check (p->applyVariation (suite::SectionType::Drop, 1) && p->currentSongPatterns().arp[(size_t) suite::SectionType::Drop] == 0
+                   && p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop] == 1,
+               "thinned out: the drop's arp goes and its chords sustain");
+        check (p->undoVariation() && p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop] == dropChords, "and Undo brings the drop back");
     }
 
     section ("Song pack for a vocalist");

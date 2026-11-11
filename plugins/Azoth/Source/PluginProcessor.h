@@ -97,6 +97,7 @@ public:
         return hz;
     }
     std::atomic<float> lastImpactHz { 0.0f };
+    std::atomic<int> momentImpacts { 0 };   // impact moments played (Ouroboros)
 
     /** Your transitions: once a song has played into its final drop, this Azoth's transition
         style (roll, gap, build shape, into-the-drop effect) goes into the style log, as the

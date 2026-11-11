@@ -476,6 +476,88 @@ int main (int argc, char** argv)
         suite::KeyBus::withdraw();
     }
 
+    section ("Throw moments");
+    {
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 1;
+        m.sections[0] = { 1, suite::SectionType::Groove };
+        m.momentCount = 1;
+        m.moments[0] = { 3, suite::momentThrow };   // bar 3 at 4 s (120 BPM): throw the last beat before it
+        auto p = make();
+        soloSection (*p, 0.0f, 0.0f, 1.0f);
+        set (*p, Params::Throw::autoLen, 2.0f);
+        set (*p, Params::Throw::feedback, 0.0f);
+        suite::SectionBus::publish (m);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::Random rng (13);
+        juce::AudioBuffer<float> audio;
+        render (*p, 4.8, [&] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (ch, i, 0.3f * (rng.nextFloat() * 2.0f - 1.0f));
+        }, &audio, &head);
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (peakBetween (audio, 0.0, 3.5) < 1.0e-3f && peakBetween (audio, 3.9, 4.6) > 0.05f, "a throw moment throws the beat before its bar, and nothing else");
+    }
+
+    section ("Learning from your tweaks");
+    {
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 2;
+        m.sections[0] = { 1, suite::SectionType::Breakdown };
+        m.sections[1] = { 3, suite::SectionType::Drop };
+        auto p = make();
+        suite::SectionBus::publish (m);
+        int verb = -1;
+        for (int i = 0; i < p->scenes.getCount(); ++i) if (p->scenes.getParamId (i) == Params::verbLevel) verb = i;
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        render (*p, 1.0, {}, nullptr, &head);   // in the breakdown
+        p->pollTick();
+        auto* param = p->apvts.getParameter (Params::verbLevel);
+        const auto before = param->getValue();
+        const auto breakdownOffset = p->scenes.getOffset ((int) suite::SectionType::Breakdown, verb);
+        param->setValueNotifyingHost (before + 0.2f);   // you turn the reverb up in the breakdown
+        render (*p, 0.5, {}, nullptr, &head);
+        p->pollTick();
+        check (! p->scenes.getProposal().valid, "nothing is offered while the section is still playing");
+        render (*p, 3.0, {}, nullptr, &head);   // into the drop
+        p->pollTick();
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (verb >= 0 && p->scenes.getProposal().valid && p->scenes.getProposal().type == (int) suite::SectionType::Breakdown
+                   && p->scenes.proposalText().contains ("in every breakdown"),
+               "at the end of the breakdown: " + p->scenes.proposalText());
+        p->scenes.acceptProposal();
+        check (std::abs (param->getValue() - before) < 0.01f
+                   && std::abs (p->scenes.getOffset ((int) suite::SectionType::Breakdown, verb) - (breakdownOffset + 0.2f)) < 0.01f,
+               "accepting moves the change into the breakdown scene and puts the knob back for the other sections");
+        check (! p->scenes.getProposal().valid, "and the offer goes away");
+    }
+
+    section ("Role-aware setup");
+    {
+        auto named = [] (suite::SuiteProcessor& p, const char* name)
+        {
+            juce::AudioProcessor::TrackProperties props;
+            props.name = juce::String (name);
+            p.updateTrackProperties (props);
+        };
+        AntiochProcessor vox;
+        vox.captureFreshValues();
+        named (vox, "Lead Vox");
+        check (vox.tryRoleSetup() && (int) vox.apvts.getRawParameterValue (Params::Throw::autoMode)->load() == Params::Throw::autoAtVocalEnds,
+               "a new Antioch on a vocal throws the end of every sung phrase");
+        AntiochProcessor pad;
+        pad.captureFreshValues();
+        named (pad, "Pads");
+        check (! pad.tryRoleSetup() && (int) pad.apvts.getRawParameterValue (Params::Throw::autoMode)->load() == 0, "on pads it stays as it is");
+    }
+
     section ("State save/restore");
     {
         auto a = make();

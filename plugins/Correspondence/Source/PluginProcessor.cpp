@@ -127,6 +127,77 @@ void CorrespondenceProcessor::applyPreset (int index)
     }
 }
 
+void CorrespondenceProcessor::applySlots (const chords::Settings& s)
+{
+    auto setChoice = [this] (const juce::String& id, int value)
+    {
+        if (auto* param = apvts.getParameter (id))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 ((float) value));
+            param->endChangeGesture();
+        }
+    };
+    setChoice (Params::count, s.count);
+    for (int i = 0; i < chords::maxSlots; ++i)
+    {
+        setChoice (Params::slotDegree (i), s.slots[(size_t) i].degree - 1);
+        setChoice (Params::slotQuality (i), (int) s.slots[(size_t) i].quality);
+    }
+}
+
+bool CorrespondenceProcessor::applyHarmonyIdea (int index)
+{
+    const auto list = harmonyIdeas();
+    if (! juce::isPositiveAndBelow (index, (int) list.size())) return false;
+    beforeIdea = currentSettings();
+    applySlots (list[(size_t) index].result);
+    return true;
+}
+
+bool CorrespondenceProcessor::applyVariation (suite::SectionType type, int index)
+{
+    const auto list = sectionVariations (type);
+    if (! juce::isPositiveAndBelow (index, (int) list.size())) return false;
+    const auto& v = list[(size_t) index];
+    beforeVariation.clear();
+    auto set = [this] (const juce::String& id, int value)
+    {
+        if (value < 0) return;
+        if (auto* param = apvts.getParameter (id))
+        {
+            beforeVariation.push_back ({ id, param->convertFrom0to1 (param->getValue()) });
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 ((float) value));
+            param->endChangeGesture();
+        }
+    };
+    const auto t = (int) type;
+    set (Params::songId (chords::SongPart::Chords, t), v.chords);
+    set (Params::songId (chords::SongPart::Bass, t), v.bass);
+    set (Params::songId (chords::SongPart::Arp, t), v.arp);
+    set (Params::songId (chords::SongPart::Lead, t), v.lead);
+    set (Params::songBreakdown, v.breakdownStart);
+    return true;
+}
+
+bool CorrespondenceProcessor::undoVariation()
+{
+    if (beforeVariation.empty()) return false;
+    for (const auto& [id, value] : beforeVariation)
+        if (auto* param = apvts.getParameter (id)) param->setValueNotifyingHost (param->convertTo0to1 (value));
+    beforeVariation.clear();
+    return true;
+}
+
+bool CorrespondenceProcessor::undoHarmonyIdea()
+{
+    if (! beforeIdea) return false;
+    applySlots (*beforeIdea);
+    beforeIdea.reset();
+    return true;
+}
+
 std::vector<chords::Note> CorrespondenceProcessor::readMidiNotes (const juce::File& file)
 {
     juce::MidiFile midi;

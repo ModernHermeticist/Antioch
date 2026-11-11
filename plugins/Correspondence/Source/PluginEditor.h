@@ -100,7 +100,8 @@ private:
     juce::TextButton newMelodyButton { "New melody" };
     std::vector<chords::Note> melodyNotes;
     size_t nextMelodyNote = 0;
-    juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." };
+    juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." },
+                     colourButton { "Colour..." }, varyButton { "Vary..." };
     void showSongPatterns();
     std::unique_ptr<juce::FileChooser> chooser;
 

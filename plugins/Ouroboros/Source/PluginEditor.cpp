@@ -351,6 +351,56 @@ void SectionSnapPanel::resized()
 }
 
 //==============================================================================
+namespace
+{
+    /** Moments: one per line, "bar what" (impact, stop or throw). */
+    class MomentsPanel : public juce::Component
+    {
+    public:
+        explicit MomentsPanel (OuroborosProcessor& p) : processor (p)
+        {
+            editor.setMultiLine (true);
+            editor.setReturnKeyStartsNewLine (true);
+            editor.setText (p.momentsText(), false);
+            editor.setFont (juce::FontOptions (15.0f));
+            note.setText ("One per line: a bar and what happens there.\n"
+                          "  impact - Azoth's impact and crash on that bar\n"
+                          "  stop - a beat of silence before it, on every track\n"
+                          "  throw - every Antioch throws the beat before it\n"
+                          "e.g.  64 stop   (then 65 impact)", juce::dontSendNotification);
+            note.setFont (juce::FontOptions (12.0f));
+            note.setColour (juce::Label::textColourId, Colours::dimText);
+            note.setJustificationType (juce::Justification::topLeft);
+            apply.onClick = [this]
+            {
+                const auto n = processor.setMomentsText (editor.getText());
+                result.setText (juce::String (n) + (n == 1 ? " moment" : " moments") + " in the song", juce::dontSendNotification);
+                editor.setText (processor.momentsText(), false);
+            };
+            result.setColour (juce::Label::textColourId, Colours::moss);
+            for (auto* c : std::initializer_list<juce::Component*> { &editor, &note, &apply, &result }) addAndMakeVisible (c);
+            setSize (380, 330);
+        }
+        void paint (juce::Graphics& g) override { g.fillAll (Colours::panel); }
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (10);
+            note.setBounds (r.removeFromTop (84));
+            auto bottom = r.removeFromBottom (30);
+            apply.setBounds (bottom.removeFromRight (90));
+            result.setBounds (bottom);
+            r.removeFromBottom (6);
+            editor.setBounds (r);
+        }
+    private:
+        OuroborosProcessor& processor;
+        juce::TextEditor editor;
+        juce::Label note, result;
+        juce::TextButton apply { "Apply" };
+    };
+}
+
+//==============================================================================
 RecipePanel::RecipePanel (OuroborosProcessor& p)
 {
     names.setEditableText (true);
@@ -664,6 +714,27 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         if (id <= 0) return;
         const auto builtIn = (int) arrangement::templates().size();
         if (id == 998) { templateBox.setSelectedId (0, juce::dontSendNotification); exportMarkers(); return; }
+        if (id == 989)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            processor.startLearningPass();
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Learning pass",
+                "Play the whole song once, start to end. Every suite plugin is measuring: at the end the suite fits the ducking to "
+                "your kick, fixes any low end that cancels, and Mentalism runs Finish the song (gain staging, rough mix, coaching).");
+            return;
+        }
+        if (id == 988)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            processor.undoLearningPass();
+            return;
+        }
+        if (id == 990)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<MomentsPanel> (processor), templateBox.getScreenBounds(), nullptr);
+            return;
+        }
         if (id == 991)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1207,6 +1278,9 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Stem plan for a remix pack...", 993);
     templateBox.addItem ("Project tidy...", 992);
     templateBox.addItem ("Arrange from my loop (Prima Materia roles decide who plays where)", 991);
+    templateBox.addItem ("Moments (an impact, a stop or a throw on any bar)...", 990);
+    templateBox.addItem ("Learning pass: play the song once and the suite sets itself up", 989);
+    templateBox.addItem ("Undo the learning pass", 988);
     templateBox.addItem ("Snapshots per section...", 994);
 }
 

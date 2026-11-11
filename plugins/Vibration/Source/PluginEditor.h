@@ -39,5 +39,7 @@ private:
 
     juce::Rectangle<int> macroArea, spectrumArea, eqArea, satArea, mbArea, widthArea;
 
+    std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VibrationEditor)
 };

@@ -39,5 +39,7 @@ private:
 
     juce::Rectangle<int> masterArea, panelArea;
 
+    std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AntiochEditor)
 };

@@ -40,6 +40,19 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyPreset (int index);
+    /** Role-aware setup: the preset for the track (supersaw lead, pluck, arp, pad, vocal chop). */
+    bool applyRoleSetup (int role, const juce::String& trackName) override
+    {
+        int preset = -1;
+        if (suite::isPluckName (trackName)) preset = 1;
+        else if (suite::isArpName (trackName)) preset = 4;
+        else if (role == suite::roleLead) preset = 0;
+        else if (role == suite::rolePads) preset = 2;
+        else if (role == suite::roleVocal) preset = 3;
+        if (preset < 0) return false;
+        applyPreset (preset);
+        return true;
+    }
 
     /** Lead fingerprint: measured on this plugin's output (needs ~5 s of the lead playing). */
     analysis::BandAnalyzer outBands;
@@ -58,6 +71,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
+    /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    void pollTick() override { scenes.watchTweaks (isMorphing()); }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

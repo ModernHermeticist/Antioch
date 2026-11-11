@@ -37,9 +37,19 @@ namespace suite
         return e[(int) t < (int) SectionType::count ? (int) t : 0];
     }
 
+    /** Moments: marks you place on a bar, for the suite to act on: an impact and crash there
+        (Azoth), a beat of silence before it (every Prima Materia), a throw into it (every Antioch). */
+    enum MomentKind { momentNone = 0, momentImpact, momentStop, momentThrow, numMomentKinds };
+    inline const char* momentName (int kind)
+    {
+        static const char* n[] = { "", "impact", "stop", "throw" };
+        return n[kind > 0 && kind < numMomentKinds ? kind : 0];
+    }
+    struct Moment { int bar = 0; int kind = momentNone; };
+
     struct SectionMap
     {
-        static constexpr int maxSections = 32;
+        static constexpr int maxSections = 32, maxMoments = 16;
         int count = 0;
         int totalBars = 0;                     // song length; the last section ends after this bar
         int finalLift = 0;                     // semitones the key moves up from the last drop on (0 = no key change)
@@ -52,6 +62,15 @@ namespace suite
         bool isLive() const noexcept { return liveType >= 0; }
         float intensityScale() const noexcept { return (float) intensity / 100.0f; }
         std::array<Section, maxSections> sections {};
+        int momentCount = 0;
+        std::array<Moment, maxMoments> moments {};
+        /** True if a moment of `kind` is on bar (1-based). */
+        bool hasMoment (int bar, int kind) const noexcept
+        {
+            for (int i = 0; i < momentCount; ++i)
+                if (moments[(size_t) i].bar == bar && moments[(size_t) i].kind == kind) return true;
+            return false;
+        }
 
         /** Energy of section `index` (0..1): drawn, or the type's default. */
         float energyOf (int index) const noexcept
@@ -83,6 +102,9 @@ namespace suite
                 if (sections[(size_t) i].startBar != o.sections[(size_t) i].startBar || sections[(size_t) i].type != o.sections[(size_t) i].type
                     || sections[(size_t) i].energy != o.sections[(size_t) i].energy)
                     return false;
+            if (momentCount != o.momentCount) return false;
+            for (int i = 0; i < momentCount; ++i)
+                if (moments[(size_t) i].bar != o.moments[(size_t) i].bar || moments[(size_t) i].kind != o.moments[(size_t) i].kind) return false;
             return true;
         }
         bool operator!= (const SectionMap& o) const noexcept { return ! (*this == o); }

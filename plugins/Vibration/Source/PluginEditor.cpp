@@ -65,6 +65,8 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
     fingerprintStatus.setColour (juce::Label::textColourId, Colours::dimText);
     addAndMakeVisible (fingerprintButton);
     addAndMakeVisible (fingerprintStatus);
+    tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
+    addChildComponent (*tweakBanner);
     setSize (1200, 660);
     timerCallback();
     startTimerHz (30);

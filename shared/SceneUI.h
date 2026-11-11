@@ -175,4 +175,52 @@ namespace suite::ui
         std::vector<std::unique_ptr<Row>> rows;
         int selected = 0;
     };
+
+    //==============================================================================
+    /** "You turned X up in the breakdown: do it in every breakdown?" with Yes / No, along the
+        bottom of the plugin window while a proposal waits. Add it with addChildComponent. */
+    class TweakBanner : public juce::Component, private juce::Timer
+    {
+    public:
+        explicit TweakBanner (SceneEngine& e) : engine (e)
+        {
+            text.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+            text.setColour (juce::Label::textColourId, Colours::text);
+            yes.onClick = [this] { engine.acceptProposal(); setVisible (false); };
+            no.onClick = [this] { engine.dismissProposal(); setVisible (false); };
+            for (auto* c : std::initializer_list<juce::Component*> { &text, &yes, &no }) addAndMakeVisible (c);
+            startTimerHz (4);
+        }
+        void paint (juce::Graphics& g) override
+        {
+            g.setColour (Colours::brass.withAlpha (0.92f));
+            g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+            g.setColour (Colours::background.withAlpha (0.85f));
+            g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (2.0f), 5.0f);
+        }
+        void resized() override
+        {
+            auto r = getLocalBounds().reduced (8, 5);
+            no.setBounds (r.removeFromRight (90));
+            r.removeFromRight (6);
+            yes.setBounds (r.removeFromRight (150));
+            text.setBounds (r);
+        }
+    private:
+        void timerCallback() override
+        {
+            const auto show = engine.getProposal().valid;
+            if (show)
+            {
+                text.setText (engine.proposalText(), juce::dontSendNotification);
+                if (auto* parent = getParentComponent())
+                    setBounds (parent->getLocalBounds().removeFromBottom (48).reduced (16, 4));
+                toFront (false);
+            }
+            if (show != isVisible()) setVisible (show);
+        }
+        SceneEngine& engine;
+        juce::Label text;
+        juce::TextButton yes { "Yes, make it a scene" }, no { "No" };
+    };
 }

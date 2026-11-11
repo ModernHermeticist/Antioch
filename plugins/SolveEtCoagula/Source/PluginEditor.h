@@ -31,5 +31,7 @@ private:
     juce::Rectangle<int> bandArea, controlArea, chopsArea;
     std::array<float, Unmasker::numBands> cutShown {}, keyShown {};
 
+    std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SolveEtCoagulaEditor)
 };

@@ -599,6 +599,51 @@ int main (int argc, char** argv)
         check (suite::RecipeBus::latest() == before + 1, "once");
     }
 
+    section ("Moments");
+    {
+        auto p = std::make_unique<OuroborosProcessor>();
+        check (p->setMomentsText ("64 stop\n65 impact\nnonsense\n 33 Throw ") == 3 && p->momentsText() == "33 throw\n64 stop\n65 impact",
+               "moments are typed as 'bar what', sorted, nonsense ignored");
+        suite::SectionMap shared;
+        check (suite::SectionBus::read (shared) && shared.momentCount == 3 && shared.hasMoment (65, suite::momentImpact) && ! shared.hasMoment (64, suite::momentImpact),
+               "and shared with the suite in the song map");
+        p->setMap (arrangement::fromTemplate (arrangement::templates()[1]));
+        check (p->momentsText().contains ("65 impact"), "a new arrangement keeps them");
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (q->momentsText() == p->momentsText(), "and they're saved with the project");
+        q->setMomentsText ("");
+        suite::SectionBus::withdraw();
+    }
+
+    section ("Learning pass");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 2;
+        m.sections[0] = { 1, T::Groove };
+        m.sections[1] = { 3, T::Drop };
+        p->setMap (m);
+        p->prepareToPlay (48000.0, 512);
+        p->startLearningPass();
+        suite::FixBus::Message msg;
+        check (suite::FixBus::read (suite::FixBus::latest(), msg) && msg.fix == suite::Fix::LearnStart, "starting it tells every plugin to measure afresh");
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        render (*p, 4.0, {}, nullptr, &head);   // bars 1-2
+        check (! p->continueLearningPass() && p->learning.load(), "half the song: still listening");
+        render (*p, 4.0, {}, nullptr, &head);   // bars 3-4
+        p->setPlayHead (nullptr);
+        check (p->barsHeard() == 4 && p->continueLearningPass() && ! p->learning.load(), "the whole song heard: the pass ends by itself");
+        check (suite::FixBus::read (suite::FixBus::latest(), msg) && msg.fix == suite::Fix::FinishSong && p->learnSeqs.size() == 2,
+               "and sends the kick fit, the phase check and Finish the song");
+        check (p->undoLearningPass() == 2, "undo sends back the Kybalion moves");
+    }
+
     section ("Tempo changes");
     {
         auto p = std::make_unique<OuroborosProcessor>();   // a new project clears the tempo map

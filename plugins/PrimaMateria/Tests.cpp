@@ -341,6 +341,27 @@ int main (int argc, char** argv)
         check (std::abs (staged->apvts.getRawParameterValue (pm::inputGainId)->load() + 8.97f) < 0.2f, "and sets Input gain to bring it to -18 dBFS");
     }
 
+    section ("Stop moments");
+    {
+        suite::SectionMap m;
+        m.totalBars = 4; m.count = 1;
+        m.sections[0] = { 1, T::Groove };
+        m.momentCount = 1;
+        m.moments[0] = { 3, suite::momentStop };   // bar 3 starts at 4 s (120 BPM): silence from 3.5 s
+        auto p = make (roleIndex ("Kick"));
+        set (*p, pm::morphId, 0.0f);
+        suite::SectionBus::publish (m);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> a;
+        render (*p, 5.0, tone (440.0f), &a, &head);
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (rmsBetween (a, 3.0, 3.45) > 0.1f && rmsBetween (a, 3.55, 3.95) < 0.01f && rmsBetween (a, 4.1, 4.9) > 0.1f,
+               "a stop moment silences the beat before its bar, even on the kick, then everything returns");
+    }
+
     section ("Arrange from the loop");
     {
         suite::FixBus::reset();

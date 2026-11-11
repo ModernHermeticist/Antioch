@@ -8,6 +8,7 @@
 #include "SectionBus.h"
 #include "Scenes.h"
 #include "StyleLog.h"
+#include "FixBus.h"
 #include <map>
 
 class KybalionProcessor : public suite::SuiteProcessor
@@ -47,6 +48,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
+    /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    void pollTick() override { scenes.watchTweaks (isMorphing()); }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {
@@ -122,6 +125,12 @@ public:
         for (int i = 0; i < Params::numSteps; ++i) setParam (Params::Gate::step (i), steps[(size_t) i]);
     }
     void trackNameChanged (const juce::String&) override;
+    /** Role-aware setup: bass ducks tight to the suite kick (no gate), pads gate and duck deep,
+        leads duck gently, vocals duck gently with no gate. */
+    bool applyRoleSetup (int role, const juce::String& trackName) override;
+    /** The learning pass (Ouroboros): fit hold and release to the kick heard, and flip the
+        polarity where the low end cancels against it. Undoable. */
+    std::unique_ptr<suite::FixReceiver> fixes;
 
     /** Your gate patterns: once a song has played into its final drop with the gate on, its
         pattern goes into the style log (with the kind of track, from its name). The pattern list

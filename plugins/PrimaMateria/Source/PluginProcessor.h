@@ -74,7 +74,8 @@ public:
     static int roleFromSound (const std::array<float, analysis::numBands>& bandsDb, float crestDb);
     float averageCrestDb() const { const auto n = crestCount.load(); return n > 0 ? crestSum.load() / (float) n : 0.0f; }
     std::atomic<bool> roleGuessed { false };
-    std::atomic<bool> clippedRecently { false };   // over 0 dBFS since the last status (live mix check)
+    std::atomic<bool> clippedRecently { false };
+    std::atomic<bool> learnReset { false };   // the learning pass started: measure afresh   // over 0 dBFS since the last status (live mix check)
     void guessRoleFromSound();
 
     /** Club edit: DJ-friendly intro and outro: pads, leads and vocals out, the kick in. */

@@ -113,7 +113,15 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         ppq.store (host.ppq);
     // Tempo changes: note each bar's tempo as the song plays, for times in the cue sheet and exports.
     if (host.playing && host.hasPpq && host.barQuarters() > 0.0)
-        suite::TempoBus::mark ((int) std::floor (host.ppq / host.barQuarters() + 1.0e-9) + 1, (float) host.bpm);
+    {
+        const auto bar = (int) std::floor (host.ppq / host.barQuarters() + 1.0e-9) + 1;
+        suite::TempoBus::mark (bar, (float) host.bpm);
+        if (learning.load() && bar >= 1 && bar <= 1024)   // the learning pass: which bars have been heard
+        {
+            heardBars[(size_t) ((bar - 1) / 32)].fetch_or (1u << ((bar - 1) % 32));
+            lastHeardBar.store (bar);
+        }
+    }
 
     // Live mode: a note picks the section that starts on the next bar line.
     if (apvts.getRawParameterValue (liveId)->load() > 0.5f && host.hasPpq)
@@ -241,6 +249,34 @@ void OuroborosProcessor::setMap (const suite::SectionMap& newMap)
         map = newMap;
     }
     publish();
+}
+
+juce::String OuroborosProcessor::momentsText() const
+{
+    const juce::ScopedLock sl (lock);
+    juce::StringArray lines;
+    for (const auto& m : moments) lines.add (juce::String (m.bar) + " " + suite::momentName (m.kind));
+    return lines.joinIntoString ("\n");
+}
+
+int OuroborosProcessor::setMomentsText (const juce::String& text)
+{
+    std::vector<suite::Moment> parsed;
+    for (const auto& line : juce::StringArray::fromLines (text))
+    {
+        const auto tokens = juce::StringArray::fromTokens (line.trim().toLowerCase(), " ,\t", "");
+        if (tokens.size() < 2 || tokens[0].getIntValue() < 1) continue;
+        for (int k = 1; k < suite::numMomentKinds; ++k)
+            if (tokens[1].startsWith (suite::momentName (k)) && (int) parsed.size() < suite::SectionMap::maxMoments)
+                parsed.push_back ({ tokens[0].getIntValue(), k });
+    }
+    std::sort (parsed.begin(), parsed.end(), [] (const auto& a, const auto& b) { return a.bar < b.bar; });
+    {
+        const juce::ScopedLock sl (lock);
+        moments = parsed;
+    }
+    publish();
+    return (int) parsed.size();
 }
 
 void OuroborosProcessor::markAtPlayhead (suite::SectionType type)
@@ -467,6 +503,11 @@ void OuroborosProcessor::publish()
         m.dropGap = (int) apvts.getRawParameterValue (dropGapId)->load();   // Prima Materia on every track mutes before drops
         m.intensity = juce::roundToInt (apvts.getRawParameterValue (intensityId)->load());
         m.dropEntrance = (int) apvts.getRawParameterValue (entranceId)->load();
+        {
+            const juce::ScopedLock sl (lock);
+            m.momentCount = juce::jmin ((int) moments.size(), suite::SectionMap::maxMoments);
+            for (int i = 0; i < m.momentCount; ++i) m.moments[(size_t) i] = moments[(size_t) i];
+        }
         if (liveType.load() >= 0)
         {
             m.liveType = liveType.load();
@@ -502,6 +543,10 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     }
     state.removeChild (state.getChildWithName ("Arrangement"), nullptr);
     state.appendChild (arr, nullptr);
+    state.removeChild (state.getChildWithName ("Moments"), nullptr);
+    juce::ValueTree momentsTree ("Moments");
+    momentsTree.setProperty ("text", momentsText(), nullptr);
+    state.appendChild (momentsTree, nullptr);
     state.removeChild (state.getChildWithName ("Notes"), nullptr);
     juce::ValueTree notesTree ("Notes");
     notesTree.setProperty ("text", getNotes().joinIntoString ("\n"), nullptr);
@@ -547,6 +592,11 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         return;
 
     auto state = juce::ValueTree::fromXml (*xml);
+    if (const auto mt = state.getChildWithName ("Moments"); mt.isValid())
+    {
+        setMomentsText (mt["text"].toString());
+        state.removeChild (mt, nullptr);
+    }
     if (const auto n = state.getChildWithName ("Notes"); n.isValid())
     {
         const juce::ScopedLock sl (notesLock);

@@ -37,6 +37,8 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
     chopsStatus.setFont (juce::FontOptions (12.0f));
     chopsStatus.setJustificationType (juce::Justification::centredLeft);
     chopsStatus.setColour (juce::Label::textColourId, Colours::dimText);
+    tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
+    addChildComponent (*tweakBanner);
     setSize (860, 780);
     timerCallback();
     startTimerHz (30);

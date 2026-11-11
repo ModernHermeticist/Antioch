@@ -7,6 +7,8 @@
 #include "Glide.h"
 #include "Identity.h"
 #include "FixBus.h"
+#include "Harmony.h"
+#include <optional>
 #include "Alias.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
@@ -119,6 +121,18 @@ public:
     void forgetMotif();
     /** Sets the progression from roman numerals ("i-VI-III-VII"), in the current key. */
     bool applyNumerals (const juce::String& numerals);
+    /** Harmony explorer: colour ideas for the current progression; applying one keeps the
+        progression before it, for Undo. */
+    std::vector<harmony::Idea> harmonyIdeas() const { return harmony::ideas (currentSettings()); }
+    void applySlots (const chords::Settings& s);
+    bool applyHarmonyIdea (int index);
+    bool undoHarmonyIdea();
+    std::optional<chords::Settings> beforeIdea;
+    /** Variation engine: alternatives for a kind of section; applying one keeps what was there, for Undo. */
+    std::vector<harmony::Variation> sectionVariations (suite::SectionType type) const { return harmony::variations (currentSongPatterns(), type); }
+    bool applyVariation (suite::SectionType type, int index);
+    bool undoVariation();
+    std::vector<std::pair<juce::String, float>> beforeVariation;
     /** Hook bank: keeps the motif (or the melody's first two bars) as a hook for every project. */
     bool saveHook (const juce::String& name);
     /** Uses a hook from the bank as Melodia's motif. */

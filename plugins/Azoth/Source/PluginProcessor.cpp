@@ -315,6 +315,19 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop());
                 if (sec.type == T::Drop && sec.index == sections.getMap().lastDropIndex()) reachedFinalDrop.store (true);
             }
+            // An impact moment (Ouroboros): the impact and crash on its bar, as on a drop.
+            if (! jumped && previousIndex >= 0 && sections.getMap().momentCount > 0)
+            {
+                const auto bar = (int) std::floor (pos / barQ + 1.0e-9) + 1, prevBar = (int) std::floor (previousPos / barQ + 1.0e-9) + 1;
+                if (bar != prevBar && sections.getMap().hasMoment (bar, suite::momentImpact))
+                {
+                    if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId), tuning (slotImpact, rootHz));
+                    else impact.trigger (impactPitch (rootHz, value (impactTuneId) > 0.5f ? suite::KickBus::read().bodyHz : 0.0f, true), juce::jmax (0.5f, value (impactId)));
+                    if (samplePlayers[slotCrash].loaded()) samplePlayers[slotCrash].trigger (value (crashId), tuning (slotCrash, rootHz));
+                    else crash.trigger (value (crashId), value (toneId));
+                    momentImpacts.fetch_add (1);
+                }
+            }
             if (sec.valid) riseGain = juce::jlimit (0.0f, 3.0f, (sec.type == T::Build ? sec.nextEnergyRatio : 1.0f) * sections.getMap().intensityScale());
             if (sec.valid) riseKey = std::exp2 ((float) sec.nextKeyShift / 12.0f);
             previousIndex = sec.valid ? sec.index : -1;

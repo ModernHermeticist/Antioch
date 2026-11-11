@@ -355,6 +355,26 @@ int main (int argc, char** argv)
         suite::MorphBus::withdraw();
     }
 
+    section ("Role-aware setup");
+    {
+        auto named = [] (suite::SuiteProcessor& p, const char* name)
+        {
+            juce::AudioProcessor::TrackProperties props;
+            props.name = juce::String (name);
+            p.updateTrackProperties (props);
+        };
+        auto presetOn = [&] (const char* name)
+        {
+            VibrationProcessor p;
+            p.captureFreshValues();
+            named (p, name);
+            p.tryRoleSetup();
+            return p.roleSetupApplied >= 0 ? (float) p.apvts.getRawParameterValue (Params::euphoria)->load() : -1.0f;
+        };
+        check (std::abs (presetOn ("Lead Saw") - 0.5f) < 0.01f && std::abs (presetOn ("Pluck 2") - 0.4f) < 0.01f && presetOn ("FX") < 0.0f,
+               "a new Vibration on a lead track loads the supersaw lead, on a pluck the pluck; FX tracks are left alone");
+    }
+
     section ("Stress: everything maxed on full-scale noise");
     {
         auto p = std::make_unique<VibrationProcessor>();

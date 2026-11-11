@@ -40,6 +40,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
+    /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    void pollTick() override { scenes.watchTweaks (isMorphing()); }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {
@@ -60,6 +62,16 @@ public:
     std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
     std::atomic<bool> ouroborosFound { false };
     std::atomic<float> tensionNow { 0.0f }, reverbWidthNow { 1.0f };   // tension width (tests and UI)
+    /** Role-aware setup: on a vocal, throws at the end of every sung phrase; on a lead, at the
+        end of every section (into the next). */
+    bool applyRoleSetup (int role, const juce::String&) override
+    {
+        if (role != suite::roleVocal && role != suite::roleLead) return false;
+        setParameterPlain (apvts, Params::Throw::autoMode, (float) (role == suite::roleVocal ? Params::Throw::autoAtVocalEnds : Params::Throw::autoAtSectionEnds));
+        setParameterPlain (apvts, Params::Throw::autoLen, role == suite::roleVocal ? 1.0f : 2.0f);   // last 1/8, or the last beat
+        return true;
+    }
+
     /** Project tidy: idle when no echo, reverb or throw reaches the output. */
     SuiteStatus suiteStatus() override
     {

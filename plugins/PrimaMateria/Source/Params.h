@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Analysis.h"
+#include "Roles.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SectionBus.h"
 
@@ -55,23 +56,7 @@ namespace pm
     }
 
     /** Auto-role: a role index from a track name ("Kick", "Sub Bass", "Lead 2", "Vox chop"...), or -1. */
-    inline int roleFromTrackName (const juce::String& trackName)
-    {
-        const auto n = " " + trackName.toLowerCase().replaceCharacters ("_-.", "   ") + " ";
-        auto any = [&n] (std::initializer_list<const char*> words)
-        {
-            for (auto* w : words) if (n.contains (w)) return true;
-            return false;
-        };
-        if (any ({ "kick", " bd ", "bassdrum" }))                                              return 1;
-        if (any ({ "vox", "vocal", "voc ", "acap", "voice", "chop" }))                        return 6;
-        if (any ({ "bass", " sub", "reese" }))                                                 return 2;
-        if (any ({ "hat", " hh", "perc", "clap", "snare", "ride", "shaker", "top", "cymbal", "tamb" })) return 3;
-        if (any ({ "fx", "atmos", "riser", "sweep", "noise", "impact", "crash", "downlift", "texture" })) return 7;
-        if (any ({ "lead", "saw", "melody", "arp", "hook", "synth" }))                        return 5;
-        if (any ({ "pad", "chord", "string", "keys", "piano", "pluck", "stab" }))             return 4;
-        return -1;
-    }
+    inline int roleFromTrackName (const juce::String& trackName) { return suite::roleFromTrackName (trackName); }
 
     /** Low-end manager: the low cut a role gets wherever a kick or bass track is playing
         (0 = the role owns the low end, or isn't managed). */

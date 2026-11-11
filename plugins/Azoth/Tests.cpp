@@ -660,6 +660,25 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Impact moments");
+    {
+        auto m = testMap();
+        m.momentCount = 1;
+        m.moments[0] = { 4, suite::momentImpact };   // bar 4: in the breakdown, 6 s at 120 BPM
+        suite::SectionBus::publish (m);
+        auto p = quiet();
+        set (*p, AzothProcessor::impactId, 1.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 7.0, {}, &audio, &head);
+        p->setPlayHead (nullptr);
+        check (p->momentImpacts.load() == 1 && peakBetween (audio, 5.5, 5.95) < 0.01f && peakBetween (audio, 6.0, 6.5) > 0.1f,
+               "an impact moment plays the impact on its bar (6 s), and only there");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Your transitions");
     {
         auto playSong = []

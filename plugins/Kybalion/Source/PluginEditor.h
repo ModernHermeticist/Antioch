@@ -85,5 +85,7 @@ private:
     std::unique_ptr<suite::ui::ScenePanel> scenePanel;
     juce::Rectangle<int> masterArea;
 
+    std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KybalionEditor)
 };

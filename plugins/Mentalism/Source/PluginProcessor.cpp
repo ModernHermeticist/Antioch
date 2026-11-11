@@ -94,6 +94,13 @@ MentalismProcessor::MentalismProcessor()
 {
     mySound = MySound::load (MySound::file());
     refreshCoachThresholds();
+    learnReceiver = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
+    learnReceiver->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    {
+        if (fix == suite::Fix::LearnStart) resetMeasurements();
+        if (fix == suite::Fix::FinishSong && finishStage() != FinishStage::WaitingForDrop && finishStage() != FinishStage::Coaching) finishSong();
+        return {};
+    });
     timerCallback();
     startTimerHz (4);
 }
@@ -377,6 +384,9 @@ void MentalismProcessor::runAutomation()
             setText (finishText, "Coaching: play the whole song (pass " + juce::String (autoPasses.load() + 1) + ").");
         return;
     }
+    // Check the last pass's fixes against this pass: keep what helped, undo what didn't.
+    const auto verdict = verifyLastPass (rep.arrangement);
+
     if (rep.arrangement.problems == 0 || autoPasses.load() >= maxAutoPasses)
     {
         const auto happy = rep.arrangement.problems == 0;
@@ -413,12 +423,15 @@ void MentalismProcessor::runAutomation()
         const auto data = i < (int) rep.arrangement.fixData.size() ? rep.arrangement.fixData[(size_t) i] : 0u;
         if (fix == suite::Fix::None) continue;
         if (std::find (sent.begin(), sent.end(), std::make_pair (fix, data)) != sent.end()) continue;
+        if (std::find (revertedFixes.begin(), revertedFixes.end(), std::make_pair (fix, data)) != revertedFixes.end()) continue;   // tried: didn't help
         sent.push_back ({ fix, data });
-        applyCoachFix (fix, data, rep.map);
+        lastApplied.push_back ({ fix, data, applyCoachFix (fix, data, rep.map) });
         applied.add (coach::describe (fix).fromFirstOccurrenceOf (": ", false, false));
     }
     autoPasses.fetch_add (1);
-    setText (autoStatus, "Auto-coach pass " + juce::String (autoPasses.load()) + ": " + applied.joinIntoString ("; ") + ". Play the song again.");
+    problemsBeforeLastPass = rep.arrangement.problems;
+    setText (autoStatus, "Auto-coach pass " + juce::String (autoPasses.load()) + ": " + (applied.isEmpty() ? juce::String ("nothing left to try") : applied.joinIntoString ("; "))
+                             + (verdict.isEmpty() ? juce::String() : " (" + verdict.joinIntoString ("; ") + ")") + ". Play the song again.");
 }
 
 MentalismProcessor::~MentalismProcessor()
@@ -430,6 +443,31 @@ MentalismProcessor::~MentalismProcessor()
         loader.join();
     if (mySoundLoader.joinable())
         mySoundLoader.join();
+}
+
+juce::StringArray MentalismProcessor::verifyLastPass (const coach::Result& now)
+{
+    juce::StringArray verdict;
+    if (lastApplied.empty()) return verdict;
+    int kept = 0;
+    for (const auto& a : lastApplied)
+    {
+        bool stillFlagged = false;
+        for (int i = 0; i < now.problems && i < (int) now.fixes.size(); ++i)
+            stillFlagged = stillFlagged || (now.fixes[(size_t) i] == a.fix && (i < (int) now.fixData.size() ? now.fixData[(size_t) i] : 0u) == a.data);
+        if (stillFlagged && now.problems >= problemsBeforeLastPass && a.seq != 0)
+        {
+            undoFix (a.seq);
+            revertedFixes.push_back ({ a.fix, a.data });
+            verdict.add ("undid '" + coach::describe (a.fix).fromFirstOccurrenceOf (": ", false, false) + "': it didn't help");
+        }
+        else ++kept;
+    }
+    if (kept > 0) verdict.insert (0, "kept " + juce::String (kept) + (kept == 1 ? " fix that helped" : " fixes that helped"));
+    lastApplied.clear();
+    const juce::ScopedLock sl (historyLock);
+    lastVerdict = verdict.joinIntoString ("; ");
+    return verdict;
 }
 
 juce::StringArray MentalismProcessor::liveChecks() const

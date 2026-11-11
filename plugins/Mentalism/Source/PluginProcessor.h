@@ -10,6 +10,7 @@
 #include "MySound.h"
 #include "Masking.h"
 #include "HostInfo.h"
+#include "FixBus.h"
 #include <thread>
 #include <map>
 
@@ -59,7 +60,9 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     /** Clears integrated loudness, true peak and long-term balance (applied on the next block). */
-    void resetMeasurements() { keepPassForCompare(); resetRequested.store (true); autoPasses.store (0); }
+    void resetMeasurements() { keepPassForCompare(); resetRequested.store (true); autoPasses.store (0); lastApplied.clear(); revertedFixes.clear(); }
+    /** The learning pass (Ouroboros): start measuring afresh, and Finish the song at its end. */
+    std::unique_ptr<suite::FixReceiver> learnReceiver;
 
     /** Pass compare: Reset keeps the pass you just measured (if it ran 20 s or more), and the
         next pass is compared with it: loudness (so you can hear both at equal loudness) and the
@@ -218,6 +221,15 @@ public:
         per pass, at most `maxAutoPasses` passes), until the coach is happy. */
     static constexpr int maxAutoPasses = 3;
     int autoCoachPasses() const { return autoPasses.load(); }
+    /** Fixes that check themselves: after each auto-coach pass, the next complete play-through
+        shows whether its fixes helped. One whose problem is still flagged, while the arrangement
+        has no fewer problems than before, is undone and not tried again. */
+    struct AppliedFix { suite::Fix fix; uint32_t data, seq; };
+    std::vector<AppliedFix> lastApplied;
+    int problemsBeforeLastPass = 0;
+    std::vector<std::pair<suite::Fix, uint32_t>> revertedFixes;
+    juce::StringArray verifyLastPass (const coach::Result& now);
+    juce::String lastVerdict;   // the last check, for the UI and tests
     juce::String autoCoachStatus() const { const juce::ScopedLock sl (historyLock); return autoStatus; }
 
     /** Finish the song: gain staging, DJ intro/outro, reference tone, then (once the drops have
