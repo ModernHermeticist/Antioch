@@ -118,7 +118,6 @@ namespace suite
         const juce::String& getLabel (int i) const { return labels[(size_t) i]; }
         const juce::String& getParamId (int i) const { return ids[(size_t) i]; }
         int getCount() const noexcept { return count; }
-        const juce::String& getParamId (int i) const { return ids[(size_t) i]; }
         /** Normalised value in use: the knob's current value plus the current (gliding) offset. */
         float getEffective (int i) const noexcept
         {

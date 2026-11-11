@@ -97,7 +97,6 @@ namespace suite
         }
         /** A few times a second on the message thread (plugins with section scenes watch your tweaks here). */
         virtual void pollTick() {}
-        bool isMorphing() const noexcept { return morphing; }
 
         /** Applies the role setup if it's due (the poller calls it; tests call it directly). */
         bool tryRoleSetup()
