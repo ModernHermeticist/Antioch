@@ -391,7 +391,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         {
             const auto mid = 0.5f * (left[n] + right[n]);
             auto side = 0.5f * (left[n] - right[n]);
-            side -= monoSide.lowpass (side);   // the side's lows go: that part of the stereo image is mono
+            side = monoSide.highpass (side);   // the side's lows go: that part of the stereo image is mono
             left[n] = mid + side;
             right[n] = mid - side;
         }
