@@ -685,6 +685,16 @@ int main (int argc, char** argv)
         check (! lead->glueRoomTick() && lead->apvts.getRawParameterValue (Params::echoLevel)->load() > 0.4f, "a lead's Antioch stays as it is");
     }
 
+    section ("Throws wait for the lead's phrase");
+    {
+        auto p = make();
+        render (*p, 0.2, [] (juce::AudioBuffer<float>&, int64_t) {}, nullptr, nullptr, [] (int64_t) { suite::ActivityBus::write (suite::ActivityBus::lead, 1.0f); });
+        check (p->throwsHeld.load(), "while the lead plays, automatic throws on other tracks wait");
+        suite::ActivityBus::clear();
+        render (*p, 0.2, [] (juce::AudioBuffer<float>&, int64_t) {});
+        check (! p->throwsHeld.load(), "and go again once it stops");
+    }
+
     section ("State save/restore");
     {
         auto a = make();

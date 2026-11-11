@@ -271,7 +271,16 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         firstBlock = false;
     }
 
-    const auto spaceGain = juce::Decibels::decibelsToGain (value (spaceTrim));
+    // The space: its own trim (unless the suite's automation is bypassed), and the energy curve:
+    // where the energy is drawn up the space tightens (up to 3 dB), where it's drawn down it opens
+    float energyDb = 0.0f;
+    if (sections.refresh() && host.hasPpq)
+        if (const auto at = sections.locate (host.ppq, host.barQuarters()); at.valid)
+            energyDb = juce::jlimit (-3.0f, 3.0f, -3.0f * (at.energyRatio - 1.0f));
+    const auto spaceGain = juce::Decibels::decibelsToGain ((suite::AutomationBus::bypassed() ? 0.0f : value (spaceTrim)) + energyDb);
+    // The lead's phrases: while it plays (Vibration says so), automatic throws on other tracks wait
+    const auto holdForLead = ! onLeadTrack.load() && suite::ActivityBus::read (suite::ActivityBus::lead) > 0.5f;
+    throwsHeld.store (holdForLead);
     if (spaceReset.exchange (false)) { spaceDry = spaceWet = 0.0; spaceSamples = 0; spaceHeard.store (0.0f); spaceTailDb.store (-100.0f); }
     bool spaceHere = true;   // outside breakdowns
     if (haveSections && host.hasPpq)
@@ -302,13 +311,13 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
 
         // Throw (manual button/automation or automatic phrase-end window)
         bool gateOpen = manualThrow;
-        if (autoOn && ! gateOpen)
+        if (autoOn && ! gateOpen && ! holdForLead)
         {
             auto pos = std::fmod (host.ppq + qPerSample * n, phraseQ);
             if (pos < 0.0) pos += phraseQ;
             gateOpen = pos >= phraseQ - windowQ;
         }
-        if (sectionThrows && ! gateOpen)
+        if (sectionThrows && ! gateOpen && ! holdForLead)
         {
             // Throw the last part of every section (into the next one), as marked in Ouroboros.
             const auto posQ = host.ppq + qPerSample * n;

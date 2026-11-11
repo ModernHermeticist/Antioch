@@ -89,6 +89,42 @@ the suite, with the track, the bar, the reason, and whether it was kept or undon
   heard again before it's judged again. Structural changes (extending a section) are
   offered, not made. Lapis keeps the drop at its loudness target, so the arc sits on that.
 
+### Plugins that listen to each other, one decision everywhere, the whole mix watched
+
+- **The vocal leads the arrangement.** While Solve et Coagula hears the vocal, the busy parts
+  (a track named *arp* or *pluck*) step back further than the pads (about 3.75 dB against
+  1.5 dB) and come back when the phrase ends.
+- **The lead's phrases are left alone.** While Vibration says the lead is playing, the automatic
+  throws on other tracks' Antiochs wait (manual throws still fire).
+- **One kick drives the bus too.** On the music bus, Quintessence's glue adds up to 1.5 dB of
+  reduction just after each hit of the suite kick (Kybalion's shared pattern), with no
+  routing. Antioch's reverb pump and Azoth's impacts already follow the same kick.
+- **Room at the chord's root.** On pads and leads, Quintessence leaves a 2 dB notch at the root
+  of the chord playing (from Correspondence), down where the bass plays it.
+- **Room for the riser.** While Azoth's riser or swell plays, pads and leads give way 3 dB around
+  4 kHz, so it cuts through without being turned up.
+- **One energy dial.** Draw a section's energy in Ouroboros and the plugins follow it.
+  Kybalion's gate cuts deeper or softer, Vibration's Euphoria rises or falls, Quintessence's
+  glue tightens or loosens, Antioch's space closes or opens, and Prima Materia's level moves.
+- **Hear without the automation.** *Start from a template... > Hear without the automation*
+  takes every automatic move out of the sound at once: Quintessence, Antioch's space trim,
+  Vibration's drive trim, Lapis' tilt and Prima Materia's phrase ride. Choose it again to put
+  them back. Nothing is forgotten, and it lapses after 10 minutes.
+- **Moods.** *Mood: darker/brighter* moves the master's tilt (Lapis) by a dB, *wider* widens
+  the pads, leads and FX 15% (Quintessence), and *more pump* deepens Kybalion's ducking 10%.
+  Each can be undone like any fix.
+- **Releases follow the tempo.** Quintessence's multiband releases scale with the tempo, as its
+  glue does.
+- **Section by section.** Mentalism keeps each kind of section's low end against the target. If
+  an intro, groove, breakdown or outro runs more than 4 dB heavier below 125 Hz than the
+  drops, the watcher brings the bass down 2 dB there, by itself.
+- **Masking where it happens.** Carves made for clashes heard in the drops are set *not in
+  breakdowns*, where the music thins out and there's nothing to clash with.
+- **Headroom.** If Lapis is holding back more than 6 dB, or the master hits Lapis over full
+  scale, the watcher gain-stages every track down together, so the limiter needn't clamp.
+- **Stereo field.** *Start from a template... > Stereo field* shows how wide each track sits
+  (from its Quintessence), widest first.
+
 ## Correspondence: key and chord engine
 
 ![Correspondence](docs/correspondence.png)

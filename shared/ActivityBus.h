@@ -12,7 +12,7 @@
 
 namespace suite::ActivityBus
 {
-    enum Source { vocal = 0, lead = 1, vocalOverMusic = 2, numSources = 4 };   // vocalOverMusic: dB, written raw
+    enum Source { vocal = 0, lead = 1, vocalOverMusic = 2, riser = 3, numSources = 4 };   // vocalOverMusic: dB, written raw; riser: Azoth's riser and swell
 
     namespace detail
     {

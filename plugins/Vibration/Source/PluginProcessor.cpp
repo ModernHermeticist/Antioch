@@ -37,6 +37,11 @@ namespace
 
 void VibrationProcessor::updateTension (const suite::HostInfo& host)
 {
+    // The energy curve (Ouroboros): drawn up, a little more Euphoria; drawn down, a little less
+    float energy = 1.0f;
+    if (host.hasPpq && chordSections.refresh())
+        if (const auto at = chordSections.locate (host.ppq, host.barQuarters()); at.valid) energy = at.energyRatio;
+    energyNow.store (energy);
     suite::Progression prog;
     float target = 0.0f;
     if (host.playing && host.hasPpq && suite::ChordBus::read (prog))
@@ -93,12 +98,12 @@ VibrationProcessor::Effective VibrationProcessor::effective() const
 {
     using namespace Params;
     // Scene-able values come through the scene engine (base knob + section offset).
-    const auto m = scenes.plain (sEuphoria);
+    const auto m = juce::jlimit (0.0f, 1.0f, scenes.plain (sEuphoria) + juce::jlimit (-0.25f, 0.25f, 0.5f * (energyNow.load() - 1.0f)));
     const auto bright = value (pitchBright) * pitchOffset.load();   // -1..+1: below / above the lead's usual pitch
     return { juce::jlimit (-6.0f, 12.0f, scenes.plain (sAir) + m * Macro::air + 4.0f * bright),
              juce::jlimit (-6.0f, 9.0f, value (presence) + m * Macro::presence + 2.0f * bright),
              juce::jlimit (-12.0f, 3.0f, value (mud) + m * Macro::mud),
-             juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive + value (driveTrim)),
+             juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive + (suite::AutomationBus::bypassed() ? 0.0f : value (driveTrim))),
              juce::jlimit (0.0f, 1.0f, scenes.plain (sMultiband) + m * Macro::mbDepth),
              juce::jlimit (0.0f, 2.5f, (scenes.plain (sWidth) + m * Macro::width) * (1.0f + 0.5f * value (tensionWidth) * tensionNow.load())) };
 }

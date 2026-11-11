@@ -9,6 +9,8 @@
 #include "Scenes.h"
 #include "Parameters.h"
 #include "MoveLog.h"
+#include "AutomationBus.h"
+#include "ActivityBus.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
 {
@@ -72,7 +74,8 @@ public:
     bool spacePass();
     static float spaceTargetFor (int role);   // tail minus dry, dB (0: leave it alone)
     static constexpr float spacePassSeconds = 4.0f;
-    std::atomic<float> spaceHeard { 0.0f }, spaceTailDb { -100.0f };   // this pass: seconds heard, tail minus dry (dB)
+    std::atomic<float> spaceHeard { 0.0f }, spaceTailDb { -100.0f };
+    std::atomic<bool> throwsHeld { false };   // automatic throws waiting for the lead's phrase to end   // this pass: seconds heard, tail minus dry (dB)
     std::atomic<int> spaceKept { 0 }, spaceUndone { 0 };
     std::atomic<bool> onLeadTrack { false };   // on the lead itself, lead-aware space stays out of the way
     std::atomic<float> leadRoomNow { 1.0f };

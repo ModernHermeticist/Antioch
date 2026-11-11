@@ -18,7 +18,7 @@ namespace pm
     inline juce::String lowCutId (int t)  { return "lc_" + juce::String (t); }
     inline juce::String highCutId (int t) { return "hc_" + juce::String (t); }
     inline const juce::String roleId { "role" }, trimId { "trim" }, lowManagerId { "lowmgr" },
-                              carveBandId { "carve_band" }, carveDepthId { "carve_depth" }, carveWhenId { "carve_when" },   // masking fix: a dip in one octave band
+                              carveBandId { "carve_band" }, carveDepthId { "carve_depth" }, carveWhenId { "carve_when" }, carveWhereId { "carve_where" },   // masking fix: a dip in one octave band
                               breathId { "breath" }, answerId { "answer" }, pumpId { "pump" }, sweepId { "bd_sweep" }, vocalRoomId { "vocal_room" }, monoLowsId { "mono_lows" }, rideVocalId { "ride_vocal" }, phraseRideId { "phrase_ride" }, inputGainId { "input_gain" },
                               autoStageId { "auto_stage" };   // keep the input at -18 dBFS RMS as you work
     enum Answer { answerOff = 0, answerCall, answerResponse };   // role: 0 = not set, k + 1 = roles()[k]
@@ -127,6 +127,7 @@ namespace pm
             l.add (std::make_unique<AudioParameterFloat> (id (carveDepthId), "Carve Depth", NormalisableRange<float> (-9.0f, 0.0f), -3.0f,
                                                           Attr().withStringFromValueFunction ([] (float v, int) { return String (v, 1) + " dB"; })));
             l.add (std::make_unique<AudioParameterChoice> (id (carveWhenId), "Carve When", StringArray { "Always", "While the vocal sings", "While the lead plays" }, 0));
+            l.add (std::make_unique<AudioParameterChoice> (id (carveWhereId), "Carve Where", StringArray { "Everywhere", "Not in breakdowns" }, 0));
         }
         l.add (std::make_unique<AudioParameterFloat> (id (trimId), "Trim", NormalisableRange<float> (-24.0f, 12.0f), 0.0f,
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return (v > 0.05f ? "+" : "") + String (v, 1) + " dB"; })));

@@ -40,6 +40,10 @@ namespace watcher
             haveKybalion = haveKybalion || e.plugin == "Kybalion";
         }
         auto where = [] (const suite::SuiteEntry& e) { return e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track"); };
+        for (const auto& e : entries)
+            if (e.plugin == "Lapis" && e.metrics[0] > 6.0f)   // the limiter holding more than 6 dB
+                out.push_back ({ "limiter", "Lapis is holding back " + juce::String (e.metrics[0], 1) + " dB",
+                                 "gain staging brings every track down together, so the limiter needn't clamp", suite::Fix::GainStage, 0, true });
 
         for (const auto& e : entries)
         {
@@ -54,6 +58,9 @@ namespace watcher
         }
         if (master.measured)
         {
+            if (master.truePeakDb > 0.0f && haveLapis)   // over full scale going into the limiter (Mentalism sits before Lapis)
+                out.push_back ({ "headroom", "The master runs into Lapis at " + juce::String (master.truePeakDb, 1) + " dBTP",
+                                 "gain staging brings every track down together, so the limiter needn't clamp", suite::Fix::GainStage, 0, true });
             if (master.truePeakDb > master.ceilingDb + 0.1f && ! haveLapis)
                 out.push_back ({ "peak", "The master peaks at " + juce::String (master.truePeakDb, 1) + " dBTP with no limiter",
                                  "put Lapis last on the master (nothing to click: it needs placing)", suite::Fix::None, 0, false });

@@ -100,6 +100,7 @@ public:
     std::atomic<bool> suiteKickAvailable { false };   // a shared pattern is being received
     SuiteStatus suiteStatus() override;
     std::atomic<float> suiteSwing { 0.0f };
+    std::atomic<float> gateDepthNow { 0.0f };   // the gate's depth in use (after the energy curve)
     std::atomic<float> suiteChordQ { 0.0f };   // Correspondence's chord length in quarters (0 = not running)
     std::atomic<int> chordAccents { 0 };       // chord changes accented (for tests and the UI)
     bool inChordAccent = false;

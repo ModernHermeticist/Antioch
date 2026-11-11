@@ -72,6 +72,16 @@ private:
     juce::Label note;
 };
 
+/** The stereo field: how wide each track sits (from its Quintessence), widest first. */
+class StereoPanel : public juce::Component, private juce::Timer
+{
+public:
+    StereoPanel() { setSize (520, 360); startTimerHz (2); }
+    void paint (juce::Graphics&) override;
+private:
+    void timerCallback() override { repaint(); }
+};
+
 /** What changed: every automatic move in the suite, newest first, with a search. */
 class ChangesPanel : public juce::Component, private juce::Timer
 {

@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "AutomationBus.h"
 #include "ChordBus.h"
 #include "MorphBus.h"
 #include "SceneUI.h"
@@ -409,6 +410,22 @@ int main (int argc, char** argv)
         auto off = makeNeutral();
         render (*off, 4.2, lead);
         check (! off->drivePass(), "off, it leaves the drive alone");
+    }
+
+    section ("The energy curve; hear without the automation");
+    {
+        auto p = makeNeutral();
+        set (*p, Params::driveTrim, 6.0f);
+        const auto withTrim = p->effective().drive;
+        suite::AutomationBus::setBypassed (true);
+        const auto without = p->effective().drive;
+        suite::AutomationBus::setBypassed (false);
+        check (std::abs (withTrim - without - 6.0f) < 0.01f, "hear without the automation: the drive trim is out of the sound");
+        p->energyNow.store (1.4f);
+        const auto up = p->effective().air;
+        p->energyNow.store (1.0f);
+        const auto usual = p->effective().air;
+        check (up > usual, "a section drawn up in energy gets more Euphoria");
     }
 
     section ("Stress: everything maxed on full-scale noise");

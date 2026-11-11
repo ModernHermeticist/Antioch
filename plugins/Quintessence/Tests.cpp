@@ -10,6 +10,9 @@
 #include "TestUtils.h"
 #include "ConductorBus.h"
 #include "ReferenceBus.h"
+#include "AutomationBus.h"
+#include "ChordBus.h"
+#include "FixBus.h"
 
 using namespace suite::test;
 
@@ -428,6 +431,66 @@ int main (int argc, char** argv)
                                                      + juce::String (back, 1) + " dB)");
         suite::SectionBus::withdraw();
         p->setPlayHead (nullptr);
+    }
+
+    section ("Listening to the suite: bypass, riser room, chord room, moods");
+    {
+        // B2: hear without the automation: the track exactly as it comes in
+        auto p = make (4);
+        Player player { bands (heavyPad) };
+        passes (*p, player, 6);
+        suite::AutomationBus::setBypassed (true);
+        juce::AudioBuffer<float> out;
+        player.play (*p, 0.5, &out);
+        juce::AudioBuffer<float> in (2, out.getNumSamples());
+        bands (heavyPad) (in, player.at - (int64_t) (0.5 * sampleRate));
+        bool same = true;
+        for (int i = 0; i < out.getNumSamples() && same; ++i) same = std::abs (out.getSample (0, i) - in.getSample (0, i)) < 1.0e-6f;
+        check (same && p->bypassedNow.load(), "hear without the automation: the pad passes untouched (its moves are kept for later)");
+        suite::AutomationBus::setBypassed (false);
+
+        // A5: while Azoth's riser plays, pads make room for it around 4 kHz
+        auto q = make (4);
+        set (*q, qn::autoEqId, 0.0f);
+        set (*q, qn::autoMbId, 0.0f);
+        q->autoPass();   // (sets the role it shows)
+        passes (*q, player, 1);
+        auto level = [&] (bool riser)
+        {
+            juce::AudioBuffer<float> a;
+            Player tone { sine (4000.0f, 0.2f) };
+            tone.play (*q, 1.0, &a, [riser] (int64_t) { if (riser) suite::ActivityBus::write (suite::ActivityBus::riser, 1.0f); });
+            return rmsBetween (a, 0.5, 1.0);
+        };
+        const auto plain = level (false), withRiser = level (true);
+        const auto room = juce::Decibels::gainToDecibels (withRiser / plain);
+        check (room < -2.5f && room > -3.5f, "while the riser plays, the pad gives way at 4 kHz (" + juce::String (room, 1) + " dB)");
+        suite::ActivityBus::clear();
+
+        // A4: chord-aware: room at the chord's root, down where the bass plays it
+        suite::Progression prog;
+        prog.valid = true; prog.root = 9; prog.scale = 0; prog.count = 1; prog.quartersPerChord = 4.0; prog.chordRoots[0] = 0;
+        suite::ChordBus::publish (prog);
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        FakePlayHead head;
+        head.bpm = 128.0;
+        q->setPlayHead (&head);
+        Player pad { bands (heavyPad) };
+        pad.head = &head;
+        pad.play (*q, 0.3);
+        q->setPlayHead (nullptr);
+        check (std::abs (q->chordHzNow.load() - 110.0f) < 0.5f, "on an A chord, the pad leaves a little room at 110 Hz, where the bass plays A (" + juce::String (q->chordHzNow.load(), 1) + " Hz)");
+        suite::SectionBus::withdraw();
+        suite::ChordBus::withdraw();
+
+        // B3: mood: wider
+        const auto widthBefore = v (*q, qn::widthId);
+        suite::FixBus::send (suite::Fix::Wider);
+        q->fixes->poll();
+        check (std::abs (v (*q, qn::widthId) - widthBefore * 1.15f) < 0.01f, "the mood 'wider' widens the pad 15%");
     }
 
     section ("Spire tips");

@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "FixBus.h"
 
 using namespace suite::test;
 
@@ -270,6 +271,19 @@ int main (int argc, char** argv)
                "a dark master is tilted brighter, a checked half dB at a time (" + juce::String (tiltBefore, 2) + " -> " + juce::String (tiltAfter, 2)
                    + " dB per octave; tilt +" + juce::String (p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load(), 1) + " dB)");
         check (std::abs (LapisProcessor::tiltOf (guide, guide)) < 1.0e-4f, "the guide against itself: no tilt");
+    }
+
+    section ("Moods and the headroom report");
+    {
+        auto p = make();
+        suite::FixBus::send (suite::Fix::Darker);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load() + 1.0f) < 0.01f, "the mood 'darker' tilts the master a dB darker");
+        suite::FixBus::send (suite::Fix::Brighter);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load()) < 0.01f, "'brighter' tilts it back");
+        p->maxReductionDb.store (7.5f);
+        check (std::abs (p->suiteStatus().metrics[0] - 7.5f) < 0.01f, "it tells the suite how hard the limiter is working");
     }
 
     section ("Follows Mentalism's target");

@@ -19,7 +19,9 @@ namespace suite
     enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch, DjPhrasing, ExtendSection, SessionHealth, ArrangeFromLoop, DraftSong,
                                     LearnStart, KickFit, PhaseFlip, FinishSong,     // the learning pass (Ouroboros)
                                     BalanceStep,                                    // Mentalism's balance loop: each track a step towards its balance
-                                    VocalRide, MonoLows };                          // the problem watcher: ride a buried vocal; mono lows where they're off
+                                    VocalRide, MonoLows,                            // the problem watcher: ride a buried vocal; mono lows where they're off
+                                    Darker, Brighter, Wider, MorePump,              // moods (Ouroboros): each plugin does its share
+                                    SectionLowsDown };                              // the bass down 2 dB in one kind of section (data: the type)
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)
@@ -28,7 +30,7 @@ namespace suite
                                        "Rough mix", "DJ intro and outro", "Reference tone", "Masking carve", "Gain staging", "Arc match",
                                        "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
                                        "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
-                                       "Ride the vocal", "Mono lows" };
+                                       "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -37,6 +39,9 @@ namespace suite
     inline uint32_t packCarve (uint32_t instanceId, int band) noexcept { return ((uint32_t) (band & 0xf) << 12) | (instanceId & 0xfffu); }
     /** Carve that only opens while the vocal (when = 1) or the lead (when = 2) plays: masking resolved automatically. */
     inline uint32_t packCarve (uint32_t instanceId, int band, int when) noexcept { return packCarve (instanceId, band) | ((uint32_t) (when & 0x3) << 16); }
+    /** ...and only outside breakdowns (a clash heard in the drops isn't carved where the music thins out). */
+    inline uint32_t packCarve (uint32_t instanceId, int band, int when, bool notInBreakdowns) noexcept { return packCarve (instanceId, band, when) | (notInBreakdowns ? (1u << 18) : 0u); }
+    inline bool carveNotInBreakdowns (uint32_t data) noexcept { return (data & (1u << 18)) != 0; }
 
     /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */
     inline uint32_t packTone (float lowDb, float highDb) noexcept

@@ -311,6 +311,11 @@ private:
     int balanceRest = 0;
     float lastWatchAt = 0.0f;
     uint32_t watchingTurn = 0;
+public:
+    std::atomic<int> sectionTypeNow { -1 };   // the section playing (from the map), for the section-by-section check
+    std::array<float, (size_t) suite::SectionType::count> lowsSum {};
+    std::array<int, (size_t) suite::SectionType::count> lowsCount {};
+private:
     float turnBefore = -1.0f;
     bool turnJudged = true;
     std::vector<watcher::Problem> offered;

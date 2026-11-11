@@ -45,6 +45,8 @@ LapisProcessor::LapisProcessor()
     // Mentalism's "Match reference": nudge the tone shelves by the amounts it sends.
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
     {
+        if (fix == suite::Fix::Darker || fix == suite::Fix::Brighter)   // moods: the master's tilt a dB that way
+            return { { tiltId, juce::jlimit (-3.0f, 3.0f, value (tiltId) + (fix == suite::Fix::Brighter ? 1.0f : -1.0f)) } };
         if (fix != suite::Fix::ReferenceTone) return {};
         float lowDb = 0.0f, highDb = 0.0f;
         suite::unpackTone (data, lowDb, highDb);
@@ -292,7 +294,7 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         shownLow = toneLow; shownHigh = toneHigh;
     }
     const auto toneOn = std::abs (toneLow) > 0.01f || std::abs (toneHigh) > 0.01f;
-    const auto tilt = value (tiltId);
+    const auto tilt = suite::AutomationBus::bypassed() ? 0.0f : value (tiltId);
     if (std::abs (tilt - tiltShown) > 1.0e-3f)
     {
         for (auto& f : tiltLow) f.setLowShelf (300.0f, -0.5f * tilt, (float) sampleRate);

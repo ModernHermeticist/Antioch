@@ -30,6 +30,8 @@ KybalionProcessor::KybalionProcessor()
         if (fix == suite::Fix::KickFit && overlapDb() > -90.0f)
             fit.push_back ({ Params::Duck::depth, depthForOverlap (overlapDb()) });   // as deep as the collision needs
         if (fix == suite::Fix::KickFit) return fit;
+        if (fix == suite::Fix::MorePump && value (Params::duckOn) > 0.5f)   // mood: more pump
+            return { { Params::Duck::depth, juce::jmin (1.0f, value (Params::Duck::depth) + 0.1f) } };
         if (fix == suite::Fix::PhaseFlip && phaseMeasured.load() && lowCorrelation.load() < -0.3f)
             return { { Params::Duck::flip, value (Params::Duck::flip) > 0.5f ? 0.0f : 1.0f } };
         return {};
@@ -179,6 +181,11 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
         s.attackMs = value (Gate::attack);
         s.releaseMs = value (Gate::release);
         s.depth = scenes.plain (sGateDepth);
+        // The energy curve (Ouroboros): where it's drawn up the gate cuts deeper, where it's drawn down, softer
+        if (sections.refresh() && host.hasPpq)
+            if (const auto at = sections.locate (host.ppq, host.barQuarters()); at.valid)
+                s.depth = juce::jlimit (0.0f, 1.0f, s.depth * juce::jlimit (0.6f, 1.3f, at.energyRatio));
+        gateDepthNow.store (s.depth);
         // Dynamic gate: through each drop the gate starts at 60% of its depth and reaches full
         // depth by the end, so the drop keeps intensifying; elsewhere it follows the energy curve.
         if (value (Gate::dynamic) > 0.5f && value (Params::follow) > 0.5f && host.playing && host.hasPpq && sections.refresh())

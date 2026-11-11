@@ -695,6 +695,28 @@ int main (int argc, char** argv)
                "Auto focuses when most of the low end is elsewhere (and doesn't flip back and forth)");
     }
 
+    section ("The energy curve and the 'more pump' mood");
+    {
+        auto p = make (true, true);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[0].energy = (int) std::lround (100.0f * suite::defaultEnergy (suite::SectionType::Drop) * 0.7f);   // the drop drawn down to 70%
+        suite::SectionBus::publish (map);
+        render (*p, 0.2, [] (juce::AudioBuffer<float>&, int64_t) {}, nullptr, &head);
+        const auto base = p->apvts.getRawParameterValue (Params::Gate::depth)->load();
+        check (std::abs (p->gateDepthNow.load() - base * 0.7f) < 0.03f, "a drop drawn down to 70% energy gates 70% as deep (" + juce::String (p->gateDepthNow.load(), 2) + " of " + juce::String (base, 2) + ")");
+        suite::SectionBus::withdraw();
+        p->setPlayHead (nullptr);
+        const auto depthBefore = p->apvts.getRawParameterValue (Params::Duck::depth)->load();
+        suite::FixBus::send (suite::Fix::MorePump);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::Duck::depth)->load() - juce::jmin (1.0f, depthBefore + 0.1f)) < 0.01f, "the mood 'more pump' ducks 10% deeper");
+    }
+
     section ("Presets and state");
     {
         auto p = make (true, true);

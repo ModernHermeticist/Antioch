@@ -373,7 +373,7 @@ void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashe
                 for (const auto& e : suite::Registry::list())
                     if (e.plugin == "Prima Materia" && e.track == c.keepTrack) keepRole = (int) e.metrics[0];
                 const auto when = keepRole == 6 ? 1 : keepRole == 5 ? 2 : 0;
-                sendFix (suite::Fix::Carve, suite::packCarve (c.carveId, c.band, when));
+                sendFix (suite::Fix::Carve, suite::packCarve (c.carveId, c.band, when, true));   // heard in the drops: not carved in the breakdowns
                 ++autoCarves[key];
                 lasting.add ("Masking: " + c.text + ": resolved, " + c.carveTrack + " gives way"
                              + (when == 1 ? " while the vocal sings" : when == 2 ? " while the lead plays" : juce::String()) + " (undo in History)");
@@ -398,6 +398,12 @@ void MentalismProcessor::runAutomation()
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
     conductTick (rep);
+    // Each kind of section's low end against the target (for the watcher's section-by-section check)
+    if (const auto type = sectionTypeNow.load(); type >= 0 && type < (int) lowsSum.size() && rep.tonalAvailable && rep.measurement.integratedLufs > -70.0f)
+    {
+        lowsSum[(size_t) type] += 0.5f * (rep.shortDiff[1] + rep.shortDiff[2]);
+        ++lowsCount[(size_t) type];
+    }
     if (rep.measuredSeconds >= lastWatchAt + 4.0f) { lastWatchAt = rep.measuredSeconds; watchPass (rep); }
     else if (rep.measuredSeconds < lastWatchAt) lastWatchAt = rep.measuredSeconds;
     if (rep.measuredSeconds >= lastBalanceAt + balanceEverySeconds)
@@ -593,6 +599,38 @@ bool MentalismProcessor::watchPass (const Report& rep)
             if (watchAnnounced.insert (key).second)
                 suite::MoveLog::add (getName(), getTrackName(), "Problem: " + note + ". Suggested (Mentalism's Problems): " + suite::fixName (fix));
         }
+
+    // Section by section: a kind of section (intro, groove, breakdown, outro) whose low end runs
+    // more than 4 dB heavier than the drops' (against the target) gets the bass 2 dB down there
+    {
+        using T = suite::SectionType;
+        const auto drop = (size_t) T::Drop;
+        if (lowsCount[drop] >= 40)
+            for (auto type : { T::Intro, T::Groove, T::Breakdown, T::Outro })
+            {
+                const auto t = (size_t) type;
+                if (lowsCount[t] < 40) continue;
+                const auto heavier = lowsSum[t] / (float) lowsCount[t] - lowsSum[drop] / (float) lowsCount[drop];
+                if (heavier <= 4.0f) continue;
+                const auto key = "lows:" + juce::String ((int) t);
+                const juce::String text = juce::String ("The ") + suite::sectionName (type) + "'s low end is " + juce::String (heavier, 1) + " dB heavier than the drops'";
+                present.insert (key);
+                auto& [when, tries] = watchActed.try_emplace (key, std::make_pair (-1000.0f, 0)).first->second;
+                if (tries < 2 && now - when >= 30.0f)
+                {
+                    sendFix (suite::Fix::SectionLowsDown, (uint32_t) t);
+                    when = now;
+                    ++tries;
+                    acted = true;
+                    lowsSum[t] = 0.0f; lowsCount[t] = 0;   // hear it afresh
+                    suite::MoveLog::add (getName(), getTrackName(), "Problem watcher: " + text + ". Fixed: the bass 2 dB down there", suite::MoveLog::fix);
+                }
+                else if (tries >= 2)
+                {
+                    offer.push_back ({ key, text + " (still there after two fixes)", "the bass another 2 dB down there", suite::Fix::SectionLowsDown, (uint32_t) t, false });
+                }
+            }
+    }
 
     // Problems that went away can come back as new ones
     for (auto it = watchAnnounced.begin(); it != watchAnnounced.end();)
@@ -875,6 +913,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (followSections)
     {
         const auto sec = sections.locate (host.ppq, host.barQuarters());
+        sectionTypeNow.store (sec.valid ? (int) sec.type : -1);
         if (sec.valid && sec.type == suite::SectionType::Drop && loudness.shortTerm.load() > -40.0f)
             monoDropSeconds.store (stereo.correlation.load() > monoCorrelation ? monoDropSeconds.load() + (float) (buffer.getNumSamples() / sampleRate) : 0.0f);
         else if (sec.valid && sec.type != suite::SectionType::Drop)

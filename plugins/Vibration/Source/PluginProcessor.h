@@ -10,6 +10,7 @@
 #include "Scenes.h"
 #include "Fingerprint.h"
 #include "MoveLog.h"
+#include "AutomationBus.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
 {
@@ -87,6 +88,7 @@ public:
     double richHigh = 0.0, richLow = 0.0;
     std::atomic<float> richDb { -100.0f };
     std::atomic<bool> driveReset { false };
+    std::atomic<float> energyNow { 1.0f };   // the energy curve here, against the section's usual (1 = as usual)
     std::atomic<int> driveKept { 0 }, driveUndone { 0 };
     float richnessNow (int role) const;
     struct { bool pending = false; float trimBefore = 0.0f, errBefore = 0.0f; int rest = 0; } drivePending;

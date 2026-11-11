@@ -9,6 +9,7 @@
 #include "HostInfo.h"
 #include "Analysis.h"
 #include "Registry.h"
+#include "AutomationBus.h"
 #include "KickBus.h"
 #include <optional>
 
@@ -76,6 +77,7 @@ public:
     std::atomic<bool> roleGuessed { false };
     std::atomic<bool> clippedRecently { false };
     std::atomic<bool> learnReset { false };
+    std::atomic<bool> busyPart { false };   // an arp or pluck (by its name): thins out more while the vocal sings
     std::atomic<float> riderDbNow { 0.0f };   // the vocal rider's gain now (tests, UI)
     float rideDb = 0.0f;   // the learning pass started: measure afresh   // over 0 dBFS since the last status (live mix check)
     void guessRoleFromSound();

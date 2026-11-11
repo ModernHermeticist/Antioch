@@ -393,6 +393,42 @@ int main (int argc, char** argv)
         check (dip < -7.0f, "a carve made for the vocal opens only while it sings (" + juce::String (dip, 1) + " dB at 1 kHz then, none without it)");
     }
 
+    section ("The vocal leads; section lows; carves the breakdowns don't need");
+    {
+        auto stepBack = [] (const char* name)
+        {
+            auto p = make (roleIndex ("Pads"));
+            juce::AudioProcessor::TrackProperties props;
+            props.name = name;
+            p->updateTrackProperties (props);
+            p->announce();   // (it reads its name)
+            auto level = [&] (bool singing)
+            {
+                juce::AudioBuffer<float> a;
+                render (*p, 1.0, tone (440.0f), &a, nullptr, [singing] (int64_t) { if (singing) suite::ActivityBus::write (suite::ActivityBus::vocal, 1.0f); });
+                return rmsBetween (a, 0.6, 1.0);
+            };
+            const auto quiet = level (false), sung = level (true);
+            suite::ActivityBus::clear();
+            return juce::Decibels::gainToDecibels (sung / quiet);
+        };
+        const auto pads = stepBack ("Pads"), arp = stepBack ("Arp");
+        check (std::abs (pads + 1.5f) < 0.2f && std::abs (arp + 3.75f) < 0.3f,
+               "while the vocal sings, the pads step back " + juce::String (-pads, 1) + " dB and the busy arp " + juce::String (-arp, 1) + " dB: the vocal leads");
+
+        auto bass = make (roleIndex ("Bass"));
+        const auto introBefore = bass->apvts.getRawParameterValue (pm::levelId ((int) T::Intro))->load();
+        suite::FixBus::send (suite::Fix::SectionLowsDown, (uint32_t) T::Intro);
+        bass->fixes->poll();
+        check (std::abs (bass->apvts.getRawParameterValue (pm::levelId ((int) T::Intro))->load() - (introBefore - 2.0f)) < 0.05f || introBefore <= pm::offDb + 0.5f,
+               "the intro's lows too heavy: the bass 2 dB down in the intro");
+
+        auto pad = make (roleIndex ("Pads"));
+        suite::FixBus::send (suite::Fix::Carve, suite::packCarve (pad->getInstanceId(), 5, 0, true));
+        pad->fixes->poll();
+        check (pad->apvts.getRawParameterValue (pm::carveWhereId)->load() > 0.5f, "a carve for a clash heard in the drops is set 'not in breakdowns'");
+    }
+
     section ("Phrase ride");
     {
         auto p = make (roleIndex ("Pads"));

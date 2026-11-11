@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ActivityBus.h"
 #include "PluginEditor.h"
 #include "KeyBus.h"
 #include "KickBus.h"
@@ -292,6 +293,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     auto* left = buffer.getWritePointer (0);
     auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
 
+    float riserActivity = 0.0f;   // how far into a riser or swell (Quintessence on the pads and leads makes room for it)
     for (int n = 0; n < buffer.getNumSamples(); ++n)
     {
         float fx = 0.0f;
@@ -408,6 +410,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                         const auto x = (float) s;
                         swellFilter.set (400.0f * std::pow (30.0f, x), 0.7f, sr);
                         fx += swellFilter.lowpass (swellNoise.process()) * x * x * swellLevel * 0.6f;
+                        riserActivity = juce::jmax (riserActivity, swellLevel > 0.0f ? x : 0.0f);
                     }
                 }
             }
@@ -420,6 +423,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         fx += (impact.process() + crash.process() + downlifter.process()) * energyGain;
         for (auto& sp : samplePlayers) fx += sp.process() * energyGain;
         fx += riser.process (rise, riserRootHz * riseKey * chordRatio, riserRange, riserLevel) * riseGain;
+        if (rise >= 0.0f && riserLevel > 0.0f) riserActivity = juce::jmax (riserActivity, rise);
         for (auto& s : snares) fx += s.process() * riseGain;
 
         fx *= level;
@@ -569,6 +573,8 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         if (right != nullptr) right[n] += fx;
         lastRise.store (rise);
     }
+    if (riserActivity > 0.0f) suite::ActivityBus::write (suite::ActivityBus::riser, riserActivity);
+
 
     if (reverseOn)
         swell.renderStep (buffer.getNumSamples());   // render the next part of any pending swell

@@ -6,6 +6,7 @@
 #include "KickBus.h"
 #include "KeyBus.h"
 #include "TestUtils.h"
+#include "ActivityBus.h"
 #include "ChordBus.h"
 
 using namespace suite::test;
@@ -756,6 +757,25 @@ int main (int argc, char** argv)
         check (std::abs (AzothProcessor::unswing (0.325, 0.3) - 0.25) < 1.0e-9 && std::abs (AzothProcessor::unswing (0.5, 0.3) - 0.5) < 1.0e-9
                    && std::abs (AzothProcessor::unswing (0.3, 0.3) - 0.3 * 0.25 / 0.325) < 1.0e-9 && std::abs (AzothProcessor::unswing (0.3, 0.0) - 0.3) < 1.0e-9,
                "the snare roll's 16ths follow the suite's swing (straight when there's none)");
+    }
+
+    section ("It tells the suite when a riser plays");
+    {
+        suite::ActivityBus::clear();
+        auto p = make();
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Build };
+        map.sections[1] = { 5, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        float heard = 0.0f;
+        render (*p, 6.0, [] (juce::AudioBuffer<float>&, int64_t) {}, nullptr, &head, [&] (int64_t) { heard = std::max (heard, suite::ActivityBus::read (suite::ActivityBus::riser)); });
+        p->setPlayHead (nullptr);
+        suite::SectionBus::withdraw();
+        check (heard > 0.5f, "through a build, the riser's progress is shared (so the pads can make room for it): " + juce::String (heard, 2));
     }
 
     section ("No surprises");

@@ -124,6 +124,10 @@ between versions.
 - [ ] **6b.18** Correspondence *Export all*: *SONG VOCAL ANSWER* plays in the vocal's gaps; *Spire macros.mid*
   has four CC lanes. *Vary... > Clash check* lists parts sharing a register. Load a reference in Mentalism:
   Quintessence says "+ your reference".
+- [ ] **6b.19** Ouroboros: *Hear without the automation*, then switch back: the difference is everything the suite did.
+  Try *Mood: darker* and *wider*. Draw a drop's energy down: the gate softens and Euphoria drops there.
+- [ ] **6b.20** While the vocal sings, an arp track steps back more than the pads; while the lead plays, other
+  tracks' throws wait. *Stereo field* lists each track's width.
 
 ## 7. A song end to end
 

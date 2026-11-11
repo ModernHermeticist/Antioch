@@ -17,6 +17,7 @@ namespace qn
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoEqId, 1 }, "Auto EQ", true));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoMbId, 1 }, "Auto dynamics", true));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { transitionsId, 1 }, "Transitions", true));
+        l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { chordAwareId, 1 }, "Chord-aware", true));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { roleId, 1 }, "Role",
                    juce::StringArray { "From the track", "Kick", "Bass", "Hats", "Pads", "Lead", "Vocal", "FX", "Music bus" }, 0, notAutomatable));
 

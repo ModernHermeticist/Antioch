@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "AutomationBus.h"
 #include "Alias.h"
 #include "SceneUI.h"
 #include "Music.h"
@@ -351,6 +352,45 @@ void SectionSnapPanel::resized()
 }
 
 //==============================================================================
+void StereoPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (14);
+    g.setColour (Colours::text);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("Stereo field", r.removeFromTop (22), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    g.drawText ("How far each track's side sits under its middle (from its Quintessence): wider to the right.", r.removeFromTop (18), juce::Justification::centredLeft);
+    r.removeFromTop (8);
+    std::vector<std::pair<float, juce::String>> rows;
+    static const char* roles[] = { "", "kick", "bass", "hats", "pads", "lead", "vocal", "FX", "bus" };
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Quintessence" && e.metrics[3] > -90.0f)
+            rows.push_back ({ e.metrics[3], (e.track.isNotEmpty() ? e.track : juce::String ("a track")) + "  (" + roles[juce::jlimit (0, 8, (int) e.metrics[0])] + ")" });
+    std::sort (rows.begin(), rows.end(), [] (const auto& a, const auto& b) { return a.first > b.first; });
+    if (rows.empty())
+    {
+        g.drawFittedText ("No widths yet: Quintessence on each track measures it while the song plays.", r.removeFromTop (40), juce::Justification::topLeft, 2);
+        return;
+    }
+    for (const auto& [db, name] : rows)
+    {
+        if (r.getHeight() < 22) break;
+        auto row = r.removeFromTop (22);
+        g.setColour (Colours::text);
+        g.drawText (name, row.removeFromLeft (170), juce::Justification::centredLeft, true);
+        const auto w = juce::jlimit (0.0f, 1.0f, (db + 30.0f) / 30.0f);   // -30 dB (mono) .. 0 dB (as wide as it is deep)
+        auto bar = row.reduced (4, 5);
+        g.setColour (Colours::outline);
+        g.fillRoundedRectangle (bar.toFloat(), 3.0f);
+        g.setColour (db > -6.0f ? Colours::ember : db > -14.0f ? Colours::verdigris : Colours::dimText);
+        g.fillRoundedRectangle (bar.toFloat().withWidth ((float) bar.getWidth() * w), 3.0f);
+        g.setColour (Colours::text);
+        g.drawText (juce::String (db, 1) + " dB", bar, juce::Justification::centredRight);
+    }
+}
+
 ChangesPanel::ChangesPanel()
 {
     search.setTextToShowWhenEmpty ("Search: a bar (\"bar 64\") or words (\"pads\", \"undid\", \"Quintessence\")", Colours::dimText);
@@ -793,6 +833,28 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
             processor.undoLearningPass();
+            return;
+        }
+        if (id == 986)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<StereoPanel>(), templateBox.getScreenBounds(), nullptr);
+            return;
+        }
+        if (id == 985)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            suite::AutomationBus::setBypassed (! suite::AutomationBus::bypassed());
+            suite::MoveLog::add ("Ouroboros", {}, suite::AutomationBus::bypassed() ? "Hearing the mix without the suite's automatic moves (A/B)"
+                                                                                   : "The suite's automatic moves are back in the sound");
+            fillTemplates();
+            return;
+        }
+        if (id >= 980 && id <= 983)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            const suite::Fix moods[] = { suite::Fix::Darker, suite::Fix::Brighter, suite::Fix::Wider, suite::Fix::MorePump };
+            suite::FixBus::send (moods[id - 980]);
             return;
         }
         if (id == 987)
@@ -1351,6 +1413,12 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Project tidy...", 992);
     templateBox.addItem ("Arrange from my loop (Prima Materia roles decide who plays where)", 991);
     templateBox.addItem ("What changed? Every automatic move, and why...", 987);
+    templateBox.addItem (suite::AutomationBus::bypassed() ? "Hear WITH the automation again (A/B)" : "Hear without the automation (A/B)", 985);
+    templateBox.addItem ("Stereo field: how wide each track sits...", 986);
+    templateBox.addItem ("Mood: darker (the master's tilt)", 980);
+    templateBox.addItem ("Mood: brighter (the master's tilt)", 981);
+    templateBox.addItem ("Mood: wider (pads, leads, FX)", 982);
+    templateBox.addItem ("Mood: more pump (Kybalion's ducking)", 983);
     templateBox.addItem ("Moments (an impact, a stop or a throw on any bar)...", 990);
     templateBox.addItem ("Learning pass: play the song once and the suite sets itself up", 989);
     templateBox.addItem ("Undo the learning pass", 988);

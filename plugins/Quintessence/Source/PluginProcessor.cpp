@@ -53,6 +53,15 @@ QuintessenceProcessor::QuintessenceProcessor()
     {
         if (fix == suite::Fix::Carve) return carve (data);
         if (fix == suite::Fix::LearnStart) { relearn(); return [] {}; }
+        if (fix == suite::Fix::Wider && value (qn::widthLockId) < 0.5f)
+        {
+            const auto r = effectiveRole();
+            if (r == 1 || r == 2 || r == 6) return {};   // kick, bass and vocal stay where they are
+            const auto before = value (qn::widthId), after = juce::jmin (2.0f, before * 1.15f);
+            write (qn::widthId, after);
+            addLog ("Width " + juce::String (juce::roundToInt (before * 100.0f)) + "% -> " + juce::String (juce::roundToInt (after * 100.0f)) + "% (mood: wider)");
+            return [this, before, after] { if (std::abs (value (qn::widthId) - after) < 0.01f) write (qn::widthId, before); };
+        }
         return {};
     });
     for (auto& a : passBandDb) a.store (-100.0f);
@@ -131,16 +140,21 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 {
     juce::ScopedNoDenormals noDenormals;
     if (resetRequested.exchange (false)) resetMeasurement();
+    if (suite::AutomationBus::bypassed()) { bypassedNow.store (true); return; }   // "hear without the automation": the track as it comes in
+    bypassedNow.store (false);
 
     // Breakdowns get their own correction: a pass measures one kind of section only
     int group = 0;
-    float buildProgress = 0.0f;
+    float buildProgress = 0.0f, energyRatio = 1.0f;
+    double sectionStartQ = 0.0;
+    int sectionType = -1;
     const auto info = suite::HostInfo::read (getPlayHead());
     if (follower.refresh() && info.hasPpq)
     {
         const auto pos = follower.locate (info.ppq, info.barQuarters());
         if (pos.valid && pos.type == suite::SectionType::Breakdown) group = 1;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
+        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; }
     }
     if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
     if (group != passGroup) { resetMeasurement(); passGroup = group; measureGroup.store (group); }
@@ -192,7 +206,55 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         deessFreqNow = deessFreq;
     }
     const auto punch = value (qn::punchId);
-    const auto glueThr = value (qn::glueThrId) - (transitions ? 3.0f * buildProgress : 0.0f);
+    // The energy curve (Ouroboros) sets how hard the glue holds: up to 2 dB tighter where the energy's drawn up
+    const auto glueThr = value (qn::glueThrId) - (transitions ? 3.0f * buildProgress : 0.0f) - juce::jlimit (-2.0f, 2.0f, 2.0f * (energyRatio - 1.0f));
+    // Kick-keyed glue: on the music bus, the shared kick (Kybalion) adds up to 1.5 dB just after each hit
+    float kickMs = 1.0e9f, msPerSample = 0.0f;
+    if (roleShown.load() == qn::targets::musicBus && info.hasPpq && info.playing)
+    {
+        const auto kick = suite::KickBus::read();
+        if (kick.valid)
+        {
+            const auto msPerQ = 60000.0 / juce::jmax (1.0, info.bpm);
+            auto phase = std::fmod (info.ppq, info.barQuarters());
+            if (phase < 0.0) phase += info.barQuarters();
+            kickMs = kick.msSinceHit (sectionType, phase, info.barQuarters(), msPerQ);
+            msPerSample = (float) (1000.0 / sr);
+        }
+    }
+    kickKeyed.store (kickMs < 1.0e8f);
+    // The multiband's releases follow the tempo (as set at 128 BPM)
+    if (info.bpm > 1.0 && std::abs (info.bpm - tempoNow) > 0.5)
+    {
+        tempoNow = info.bpm;
+        const auto scale = (float) juce::jlimit (0.7, 1.4, 128.0 / info.bpm);
+        const std::array<std::pair<float, float>, qn::numMbBands> t { { { 30.0f, 250.0f }, { 10.0f, 150.0f }, { 3.0f, 80.0f } } };
+        for (int b = 0; b < qn::numMbBands; ++b) env[(size_t) b].set (t[(size_t) b].first, t[(size_t) b].second * scale, fs);
+    }
+    // Chord-aware: pads and leads leave a little room at the current chord's root, down where the bass plays it
+    const auto chordAware = (roleNow == 4 || roleNow == 5) && value (qn::chordAwareId) > 0.5f;
+    float chordHz = 0.0f;
+    if (chordAware && sectionType >= 0 && info.hasPpq)
+        if (suite::Progression prog; suite::ChordBus::read (prog) && prog.valid && prog.count > 0)
+        {
+            const auto idx = prog.chordAt (info.ppq - sectionStartQ);
+            chordHz = suite::music::midiToHz ((float) (36 + (prog.root + prog.chordRoots[(size_t) (idx & 7)]) % 12));
+        }
+    if (std::abs (chordHz - chordDipHz) > 0.5f)
+    {
+        for (auto& f : chordDip) { f.setPeak (juce::jmax (20.0f, chordHz), 3.0f, chordHz > 0.0f ? -2.0f : 0.0f, fs); }
+        chordDipHz = chordHz;
+    }
+    chordHzNow.store (chordHz);
+    // Riser-aware: while Azoth's riser or swell plays, pads and leads make room for it around 4 kHz
+    const auto riserLevel = (roleNow == 4 || roleNow == 5) ? suite::ActivityBus::read (suite::ActivityBus::riser) : 0.0f;
+    const auto riserDb = std::round (-3.0f * riserLevel * 2.0f) * 0.5f;
+    if (std::abs (riserDb - riserDipDb) > 0.01f)
+    {
+        for (auto& f : riserDip) f.setPeak (4000.0f, 1.0f, riserDb, fs);
+        riserDipDb = riserDb;
+    }
+    riserDipNow.store (riserDb);
     const auto glueOn = glueThr < -0.05f;
     const auto glueRelease = juce::jlimit (50.0f, 300.0f, 30000.0f / (float) (info.bpm > 1.0 ? info.bpm : 128.0));   // an 8th note
     if (std::abs (glueRelease - glueReleaseNow) > 0.5f) { glueEnv.set (30.0f, glueRelease, fs); glueReleaseNow = glueRelease; }
@@ -219,6 +281,8 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             for (int s = 0; s < qn::numSlots; ++s)
                 if (on[(size_t) s]) v = peaks[(size_t) s][(size_t) c].process (v);
             if (highOn) v = highCuts[(size_t) c * 2 + 1].lowpass (highCuts[(size_t) c * 2].lowpass (v));
+            if (chordDipHz > 0.0f) v = chordDip[(size_t) c].process (v);
+            if (riserDipDb < -0.01f) v = riserDip[(size_t) c].process (v);
             x[c] = v;
         }
 
@@ -290,6 +354,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             {
                 const auto over = levelDb - glueThr;
                 gr = over > 3.0f ? over * 0.5f : over > -3.0f ? 0.5f * (over + 3.0f) * (over + 3.0f) / 12.0f : 0.0f;
+                if (kickMs < 1.0e8f) gr += 1.5f * juce::jmax (0.0f, 1.0f - (kickMs + (float) i * msPerSample) / 150.0f);
             }
             if (ge > 1.0e-4f)
             {
@@ -575,13 +640,14 @@ bool QuintessenceProcessor::autoPass()
 {
     drainSpectrum();
     const auto m = measurement();
-    if (m.seconds < (float) passSecondsNow()) return false;
+    if (m.seconds < (float) passSecondsNow() || suite::AutomationBus::bypassed()) return false;
     requestReset();
     if (m.group == 2) return false;   // builds: the transition moves things on purpose, nothing to judge
     struct ClearAfterPass { qn::ResonanceFinder& f; ~ClearAfterPass() { f.reset(); } } clearAfterPass { resonances };   // each pass hears its own spectrum
     const auto role = effectiveRole();
     roleShown.store (role);
     groupShown.store (m.group);
+    if (m.sideMinusMid() > -90.0f) sideNow.store (m.sideMinusMid());
     if (++passes % 40 == 0) loadLearned();
     learnedShown.store (learnedSongs (role) >= 3 ? learnedSongs (role) : 0);
 
@@ -1130,14 +1196,16 @@ std::function<void()> QuintessenceProcessor::carve (uint32_t data)
     const auto centre = analysis::bandCentres()[(size_t) band];
 
     std::vector<std::pair<juce::String, float>> before;
-    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot) }) before.push_back ({ id, value (id) });
+    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot) }) before.push_back ({ id, value (id) });
     if (pending.kind == Pending::eqSlot && pending.index == slot) pending.kind = Pending::none;
     write (qn::freqId (slot), centre);
     write (qn::qId (slot), 1.4f);
     write (qn::reasonId (slot), (float) reason);
     write (qn::whenId (slot), (float) when);
     write (qn::gainId (slot), gain);
-    addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (gain) + " for "
+    const auto notInBreakdowns = suite::carveNotInBreakdowns (data);
+    write (qn::bdId (slot), notInBreakdowns ? -gain : 0.0f);   // heard in the drops: not carved where the music thins out
+    addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (gain) + (notInBreakdowns ? " (not in breakdowns)" : "") + " for "
             + qn::reasonNames()[reason].toLowerCase() + (when == 1 ? ", only while the vocal sings" : when == 2 ? ", only while the lead plays" : "") + " (from Mentalism)");
 
     return [this, before, slot, gain]
@@ -1156,7 +1224,7 @@ QuintessenceProcessor::SuiteStatus QuintessenceProcessor::suiteStatus()
     for (int sl = 0; sl < qn::numSlots; ++sl) if (std::abs (value (qn::gainId (sl))) > 0.05f) ++active;
     float gr = 0.0f;
     for (auto& g : grNow) gr = juce::jmax (gr, g.load());
-    s.metrics = { (float) effectiveRole(), (float) active, gr, 0.0f };
+    s.metrics = { (float) effectiveRole(), (float) active, gr, sideNow.load() };   // [3]: the side under the middle (dB): the stereo field map
     if (haveBands) { s.flags |= suite::Status::hasBands; s.bands = longBands; }
     return s;
 }

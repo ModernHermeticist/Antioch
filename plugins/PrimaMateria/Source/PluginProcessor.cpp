@@ -90,7 +90,8 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 const auto depth = apvts.getRawParameterValue (pm::carveDepthId)->load();
                 return { { pm::carveBandId, (float) (band + 1) },
                          { pm::carveDepthId, current == band ? juce::jmax (-9.0f, depth - 1.5f) : -3.0f },   // again: deeper
-                         { pm::carveWhenId, (float) ((data >> 16) & 0x3u) } };                              // always, or only while the vocal / lead plays
+                         { pm::carveWhenId, (float) ((data >> 16) & 0x3u) },                                // always, or only while the vocal / lead plays
+                         { pm::carveWhereId, suite::carveNotInBreakdowns (data) ? 1.0f : 0.0f } };           // heard in the drops: not where the music thins out
             }
             case suite::Fix::RoughMix:
             {
@@ -101,6 +102,13 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 // The problem watcher: the vocal is buried, so the vocal track rides itself over the music
                 if (getRole() == 6 && apvts.getRawParameterValue (pm::rideVocalId)->load() < 3.0f) return { { pm::rideVocalId, 6.0f } };
                 return {};
+            case suite::Fix::SectionLowsDown:
+            {
+                // The watcher: one kind of section is heavier in the lows than the drops: the bass 2 dB down there
+                const auto type = (int) data;
+                if (getRole() != 2 || type < 0 || type >= pm::numTypes || muted (level (type))) return {};
+                return { { pm::levelId (type), juce::jmax (pm::offDb + 1.0f, level (type) - 2.0f) } };
+            }
             case suite::Fix::MonoLows:
                 if ((int) apvts.getRawParameterValue (pm::monoLowsId)->load() == 0) return { { pm::monoLowsId, 2.0f } };   // below 120 Hz
                 return {};
@@ -188,7 +196,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     mapAvailable.store (haveMap);
     const auto follow = apvts.getRawParameterValue (pm::followId)->load() > 0.5f && haveMap && host.playing && host.hasPpq;
     const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f;
-    const auto phraseRide = apvts.getRawParameterValue (pm::phraseRideId)->load();
+    const auto phraseRide = suite::AutomationBus::bypassed() ? 0.0f : apvts.getRawParameterValue (pm::phraseRideId)->load();
     const auto gapQ = pm::gapQuarters ((int) apvts.getRawParameterValue (pm::gapId)->load());
     const auto morphQ = pm::morphQuarters ((int) apvts.getRawParameterValue (pm::morphId)->load());
     const auto qPerSample = host.quartersPerSample (sampleRate);
@@ -206,6 +214,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     // Moving dips: a carve made for the vocal or the lead opens only while it plays (in 1 dB steps, so it isn't recalculated every block).
     if (const auto when = (int) apvts.getRawParameterValue (pm::carveWhenId)->load(); when > 0)
         carveDepth = std::round (carveDepth * suite::ActivityBus::read (when == 1 ? suite::ActivityBus::vocal : suite::ActivityBus::lead));
+    if (apvts.getRawParameterValue (pm::carveWhereId)->load() > 0.5f && currentType.load() == (int) suite::SectionType::Breakdown)
+        carveDepth = 0.0f;
     if (carveBand != carveBandNow || std::abs (carveDepth - carveDepthNow) > 1.0e-3f)
     {
         if (carveBand >= 0)
@@ -236,7 +246,8 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     if (monoHz > 0.0f && std::abs (monoHz - monoHzNow) > 0.5f) { monoSide.set (monoHz, 0.707f, sr); monoHzNow = monoHz; }
     // Vocal-aware levels: pads, leads and FX step back while the vocal sings (Solve et Coagula hears it).
     const auto roleNow = getRole();
-    const auto vocalRoom = (roleNow == 4 || roleNow == 5 || roleNow == 7) ? apvts.getRawParameterValue (pm::vocalRoomId)->load() : 0.0f;
+    // ...and the busiest parts (arps, plucks) thin out more while the vocal sings, so it leads the arrangement
+    const auto vocalRoom = (roleNow == 4 || roleNow == 5 || roleNow == 7) ? apvts.getRawParameterValue (pm::vocalRoomId)->load() * (busyPart.load() ? 2.5f : 1.0f) : 0.0f;
     const auto vocalTarget = vocalRoom > 0.0f ? juce::Decibels::decibelsToGain (-vocalRoom * suite::ActivityBus::read (suite::ActivityBus::vocal)) : 1.0f;
     // Vocal rider: on the vocal track, the level is ridden (within 6 dB, ~1 dB a second) so the vocal sits this far above the music.
     const auto rideTarget = roleNow == 6 ? apvts.getRawParameterValue (pm::rideVocalId)->load() : 0.0f;
@@ -472,6 +483,10 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
 PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
 {
+    {
+        const auto name = getTrackName();
+        busyPart.store (suite::isArpName (name) || suite::isPluckName (name));
+    }
     SuiteStatus s;
     const auto role = getRole();
     if (role >= 0) s.flags |= suite::Status::roleSet;

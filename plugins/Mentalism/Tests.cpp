@@ -1038,6 +1038,30 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+    section ("Headroom and section lows");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        suite::Registry::announce (8001, "Lapis", "Master", 0, { 8.0f, 0.0f, 0.0f, 0.0f });
+        watcher::Master master;
+        master.measured = true; master.truePeakDb = 0.6f;
+        const auto found = watcher::scan (suite::Registry::list(), master);
+        auto has = [&] (const juce::String& key) { return std::any_of (found.begin(), found.end(), [&] (const watcher::Problem& q) { return q.key == key && q.automatic && q.fix == suite::Fix::GainStage; }); };
+        check (has ("limiter") && has ("headroom"), "Lapis holding 8 dB, and the master over full scale into it: gain staging every track, by itself");
+
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 10.0f;
+        p->lowsCount[(size_t) suite::SectionType::Drop] = 40; p->lowsSum[(size_t) suite::SectionType::Drop] = 0.0f;
+        p->lowsCount[(size_t) suite::SectionType::Intro] = 40; p->lowsSum[(size_t) suite::SectionType::Intro] = 40.0f * 5.0f;   // 5 dB heavier
+        suite::Registry::reset();
+        p->watchPass (r);
+        suite::FixBus::Message m;
+        check (suite::FixBus::latest() >= 1 && suite::FixBus::read (suite::FixBus::latest(), m) && m.fix == suite::Fix::SectionLowsDown && m.target == (uint32_t) suite::SectionType::Intro,
+               "the intro's lows run 5 dB heavier than the drops': the bass comes down there, by itself");
+        suite::FixBus::reset();
+    }
+
     section ("The balance loop");
     {
         suite::FixBus::reset();

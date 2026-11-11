@@ -23,6 +23,11 @@
 #include "SpireTips.h"
 #include "ConductorBus.h"
 #include "ReferenceBus.h"
+#include "AutomationBus.h"
+#include "KickBus.h"
+#include "ChordBus.h"
+#include "ActivityBus.h"
+#include "Music.h"
 #include "Registry.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
@@ -140,6 +145,9 @@ private:
     //==============================================================================
     // Audio thread
     double sr = 48000.0;
+    double tempoNow = -1.0;
+    std::array<suite::Biquad, 2> chordDip, riserDip;
+    float chordDipHz = 0.0f, riserDipDb = 0.0f;
     suite::SectionFollower follower;
     int passGroup = -1;
     std::atomic<int> measureGroup { 0 };
@@ -183,6 +191,8 @@ private:
 public:
     std::atomic<float> deessNow { 0.0f };   // the de-esser's reduction now (dB, UI)
     std::atomic<float> buildNow { 0.0f };   // how far through a build (0 outside one)
+    std::atomic<bool> bypassedNow { false }, kickKeyed { false };   // (tests, UI)
+    std::atomic<float> chordHzNow { 0.0f }, riserDipNow { 0.0f }, sideNow { -100.0f };
 private:
     std::vector<float> fifoData, blockMono;
     juce::AbstractFifo fifo { 1 << 18 };
