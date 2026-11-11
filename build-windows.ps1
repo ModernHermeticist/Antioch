@@ -10,7 +10,7 @@
 
 param(
     [string[]] $Plugins = @("Antioch", "CauseAndEffect", "Correspondence", "Kybalion", "Vibration", "Mentalism",
-                            "Ouroboros", "Lapis", "EmeraldTablet", "Azoth", "PrimaMateria", "SolveEtCoagula"),
+                            "Ouroboros", "Lapis", "EmeraldTablet", "Azoth", "PrimaMateria", "SolveEtCoagula", "Quintessence"),
     [string] $BuildDir = "build-win",
     [switch] $NoInstall
 )

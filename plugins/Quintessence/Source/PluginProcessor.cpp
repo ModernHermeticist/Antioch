@@ -1,0 +1,690 @@
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+#include "ActivityBus.h"
+#include "Analysis.h"
+#include "Registry.h"
+#include <map>
+
+namespace
+{
+    const std::map<juce::String, int>& lockBits()
+    {
+        // Which lock a manual edit sets: bits 0-5 the bands, 6 low cut, 7 high cut, 8-10 the compressor bands.
+        static const std::map<juce::String, int> m = []
+        {
+            std::map<juce::String, int> out;
+            for (int s = 0; s < qn::numSlots; ++s)
+                for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s) }) out[id] = s;
+            out[qn::lowCutId] = 6;
+            out[qn::highCutId] = 7;
+            for (int b = 0; b < qn::numMbBands; ++b) { out[qn::thrId (b)] = 8 + b; out[qn::ratioId (b)] = 8 + b; }
+            return out;
+        }();
+        return m;
+    }
+
+    int nearestBand (float hz)
+    {
+        int best = 0;
+        for (int b = 1; b < analysis::numBands; ++b)
+            if (std::abs (std::log2 (hz / analysis::bandCentres()[(size_t) b])) < std::abs (std::log2 (hz / analysis::bandCentres()[(size_t) best]))) best = b;
+        return best;
+    }
+
+    juce::String hzText (float hz) { return hz >= 1000.0f ? juce::String (hz / 1000.0f, hz >= 10000.0f ? 0 : 1) + " kHz" : juce::String (juce::roundToInt (hz)) + " Hz"; }
+    juce::String dbText (float db) { return (db > 0.0f ? "+" : "") + juce::String (db, 1) + " dB"; }
+}
+
+QuintessenceProcessor::QuintessenceProcessor()
+    : SuiteProcessor (BusesProperties()
+                          .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this, nullptr, "QuintessenceState", qn::layout())
+{
+    for (const auto& [id, bit] : lockBits()) apvts.addParameterListener (id, this);
+
+    // Mentalism's masking, mud and harshness fixes for this track land here (Prima Materia leaves
+    // them to us when we share a track); Ouroboros' learning pass starts us afresh.
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix, uint32_t) { return std::vector<suite::FixReceiver::Change> {}; });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
+    {
+        if (fix == suite::Fix::Carve) return carve (data);
+        if (fix == suite::Fix::LearnStart) { relearn(); return [] {}; }
+        return {};
+    });
+    for (auto& a : passBandDb) a.store (-100.0f);
+}
+
+QuintessenceProcessor::~QuintessenceProcessor()
+{
+    for (const auto& [id, bit] : lockBits()) apvts.removeParameterListener (id, this);
+}
+
+bool QuintessenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+{
+    const auto out = layouts.getMainOutputChannelSet();
+    return (out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono())
+        && layouts.getMainInputChannelSet() == out;
+}
+
+void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
+{
+    sr = sampleRate;
+    const auto fs = (float) sr;
+    for (auto& f : lowCuts) f.reset();
+    for (auto& f : highCuts) f.reset();
+    lowCutNow = highCutNow = -1.0f;
+    for (auto& s : peaks) for (auto& f : s) f.reset();
+    for (auto& p : peakNow) p = { -1.0f, 0.0f, 0.0f };
+    for (int c = 0; c < 2; ++c)
+    {
+        xLow[(size_t) c].set (qn::crossLow, fs);   xLow[(size_t) c].reset();
+        xHigh[(size_t) c].set (qn::crossHigh, fs); xHigh[(size_t) c].reset();
+        apLow[(size_t) c].set (qn::crossHigh, fs); apLow[(size_t) c].reset();
+    }
+    const std::array<std::pair<float, float>, qn::numMbBands> times { { { 30.0f, 250.0f }, { 10.0f, 150.0f }, { 3.0f, 80.0f } } };
+    for (int b = 0; b < qn::numMbBands; ++b) { env[(size_t) b].set (times[(size_t) b].first, times[(size_t) b].second, fs); env[(size_t) b].reset(); }
+    makeupDb.fill (0.0f);
+    makeupCoeff = 1.0f / (3.0f * fs);   // level-neutral: the make-up follows the average reduction over ~3 s
+    for (int b = 0; b < analysis::numBands; ++b) { analysers[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs); analysers[(size_t) b].reset(); }
+    winLength = juce::jmax (1, (int) std::round (sr * 0.1));
+    mbWinLength = juce::jmax (1, (int) std::round (sr * 0.05));
+    resetMeasurement();
+}
+
+void QuintessenceProcessor::resetMeasurement() noexcept
+{
+    winBand.fill (0.0); passBand.fill (0.0); winTotal = 0.0; winCount = 0; passWindows = 0;
+    mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
+    for (auto& h : histPre) for (auto& c : h) c.store (0, std::memory_order_relaxed);
+    for (auto& h : histPost) for (auto& c : h) c.store (0, std::memory_order_relaxed);
+    for (auto& a : passBandDb) a.store (-100.0f);
+    passWindowsShared.store (0);
+    settle = (int) (sr * 0.15);   // let the filters settle after a change before measuring
+}
+
+void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+{
+    juce::ScopedNoDenormals noDenormals;
+    if (resetRequested.exchange (false)) resetMeasurement();
+
+    const auto n = buffer.getNumSamples();
+    const auto chs = juce::jmin (2, buffer.getNumChannels());
+    if (chs == 0) return;
+    float* ch[2] = { buffer.getWritePointer (0), chs > 1 ? buffer.getWritePointer (1) : nullptr };
+    const auto fs = (float) sr;
+
+    // Cuts (4th-order Butterworth)
+    const auto lc = value (qn::lowCutId), hc = value (qn::highCutId);
+    if (std::abs (lc - lowCutNow) > 1.0e-4f)  { for (int c = 0; c < 2; ++c) { lowCuts[(size_t) c * 2].set (lc, 0.5412f, fs);  lowCuts[(size_t) c * 2 + 1].set (lc, 1.3066f, fs); }  lowCutNow = lc; }
+    if (std::abs (hc - highCutNow) > 1.0e-4f) { for (int c = 0; c < 2; ++c) { highCuts[(size_t) c * 2].set (hc, 0.5412f, fs); highCuts[(size_t) c * 2 + 1].set (hc, 1.3066f, fs); } highCutNow = hc; }
+    const auto lowOn = lc > qn::lowCutOff, highOn = hc < qn::highCutOff;
+
+    // Bands; a dip made for the vocal or the lead opens only while it plays (in half-dB steps)
+    std::array<bool, qn::numSlots> on {};
+    for (int s = 0; s < qn::numSlots; ++s)
+    {
+        const auto f = value (qn::freqId (s)), q = value (qn::qId (s));
+        auto g = value (qn::gainId (s));
+        if (const auto when = (int) value (qn::whenId (s)); when > 0)
+            g = std::round (2.0f * g * suite::ActivityBus::read (when == 1 ? suite::ActivityBus::vocal : suite::ActivityBus::lead)) * 0.5f;
+        auto& now = peakNow[(size_t) s];
+        if (std::abs (f - now[0]) > 1.0e-4f || std::abs (g - now[1]) > 1.0e-4f || std::abs (q - now[2]) > 1.0e-4f)
+        {
+            for (auto& p : peaks[(size_t) s]) p.setPeak (f, q, g, fs);
+            now = { f, g, q };
+        }
+        on[(size_t) s] = std::abs (g) > 0.05f;
+    }
+
+    // Compressor bands
+    std::array<float, qn::numMbBands> thr {}, slope {}, grMax {};
+    std::array<bool, qn::numMbBands> comp {};
+    for (int b = 0; b < qn::numMbBands; ++b)
+    {
+        thr[(size_t) b] = value (qn::thrId (b));
+        const auto ratio = value (qn::ratioId (b));
+        comp[(size_t) b] = ratio > 1.01f;
+        slope[(size_t) b] = 1.0f - 1.0f / juce::jmax (1.0f, ratio);
+    }
+
+    for (int i = 0; i < n; ++i)
+    {
+        float x[2] = { ch[0][i], ch[1] != nullptr ? ch[1][i] : ch[0][i] };
+        for (int c = 0; c < 2; ++c)
+        {
+            auto v = x[c];
+            if (lowOn) v = lowCuts[(size_t) c * 2 + 1].highpass (lowCuts[(size_t) c * 2].highpass (v));
+            for (int s = 0; s < qn::numSlots; ++s)
+                if (on[(size_t) s]) v = peaks[(size_t) s][(size_t) c].process (v);
+            if (highOn) v = highCuts[(size_t) c * 2 + 1].lowpass (highCuts[(size_t) c * 2].lowpass (v));
+            x[c] = v;
+        }
+
+        // Three bands (Linkwitz-Riley: they add back up flat)
+        float band[qn::numMbBands][2];
+        for (int c = 0; c < 2; ++c)
+        {
+            float lo, rest, mid, hi;
+            xLow[(size_t) c].process (x[c], lo, rest);
+            xHigh[(size_t) c].process (rest, mid, hi);
+            band[0][c] = apLow[(size_t) c].allpass (lo);
+            band[1][c] = mid;
+            band[2][c] = hi;
+        }
+
+        float out[2] = { 0.0f, 0.0f };
+        for (int b = 0; b < qn::numMbBands; ++b)
+        {
+            auto& l = band[b][0]; auto& r = band[b][1];
+            mbWinPre[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
+            const auto e = env[(size_t) b].process (juce::jmax (std::abs (l), std::abs (r)));
+            float gr = 0.0f;
+            if (comp[(size_t) b])
+            {
+                const auto over = 20.0f * std::log10 (e + 1.0e-9f) - thr[(size_t) b];   // 6 dB soft knee
+                gr = over > 3.0f ? over * slope[(size_t) b] : over > -3.0f ? slope[(size_t) b] * (over + 3.0f) * (over + 3.0f) / 12.0f : 0.0f;
+            }
+            if (e > 1.0e-4f) makeupDb[(size_t) b] += makeupCoeff * (gr - makeupDb[(size_t) b]);
+            const auto g = juce::Decibels::decibelsToGain (makeupDb[(size_t) b] - gr);
+            l *= g; r *= g;
+            grMax[(size_t) b] = juce::jmax (grMax[(size_t) b], gr - makeupDb[(size_t) b]);
+            mbWinPost[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
+            out[0] += l; out[1] += r;
+        }
+        ch[0][i] = out[0];
+        if (ch[1] != nullptr) ch[1][i] = out[1];
+
+        // Measure (after a change, once the filters have settled)
+        if (settle > 0) { --settle; continue; }
+        const auto mono = 0.5f * (out[0] + out[1]);
+        for (int b = 0; b < analysis::numBands; ++b)
+        {
+            const auto y = analysers[(size_t) b].bandpass (mono);
+            winBand[(size_t) b] += (double) y * y;
+        }
+        winTotal += (double) mono * mono;
+        if (++winCount >= winLength)
+        {
+            if (winTotal / winCount > 1.0e-6)   // music, not silence
+            {
+                ++passWindows;
+                for (int b = 0; b < analysis::numBands; ++b)
+                {
+                    passBand[(size_t) b] += winBand[(size_t) b] / winCount;
+                    passBandDb[(size_t) b].store ((float) (10.0 * std::log10 (passBand[(size_t) b] / passWindows + 1.0e-12)));
+                }
+                passWindowsShared.store (passWindows);
+            }
+            winBand.fill (0.0); winTotal = 0.0; winCount = 0;
+        }
+        if (++mbWinCount >= mbWinLength)
+        {
+            auto bin = [] (double p) { return juce::jlimit (0, histBins - 1, (int) (-20.0 * std::log10 (p + 1.0e-12))); };   // half-dB bins
+            for (int b = 0; b < qn::numMbBands; ++b)
+            {
+                const auto pre = mbWinPre[(size_t) b] / mbWinCount, post = mbWinPost[(size_t) b] / mbWinCount;
+                if (pre > 1.0e-7)
+                {
+                    histPre[(size_t) b][(size_t) bin (pre)].fetch_add (1, std::memory_order_relaxed);
+                    histPost[(size_t) b][(size_t) bin (post)].fetch_add (1, std::memory_order_relaxed);
+                }
+            }
+            mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
+        }
+    }
+    for (int b = 0; b < qn::numMbBands; ++b) grNow[(size_t) b].store (juce::jmax (0.0f, grMax[(size_t) b]));
+}
+
+//==============================================================================
+QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
+{
+    Measurement m;
+    for (int b = 0; b < analysis::numBands; ++b) m.bandsDb[(size_t) b] = passBandDb[(size_t) b].load();
+    m.seconds = (float) passWindowsShared.load() * 0.1f;
+    auto percentiles = [] (const std::array<std::atomic<int>, histBins>& h, float& p50, float& p95) -> int
+    {
+        int total = 0;
+        for (auto& c : h) total += c.load (std::memory_order_relaxed);
+        p50 = p95 = -100.0f;
+        if (total == 0) return 0;
+        int cum = 0;
+        bool have50 = false;
+        for (int bin = histBins - 1; bin >= 0; --bin)   // from quiet to loud
+        {
+            cum += h[(size_t) bin].load (std::memory_order_relaxed);
+            if (! have50 && cum >= total / 2) { p50 = -0.5f * (float) bin; have50 = true; }
+            if (cum >= (total * 95 + 99) / 100) { p95 = -0.5f * (float) bin; break; }
+        }
+        return total;
+    };
+    for (int b = 0; b < qn::numMbBands; ++b)
+    {
+        percentiles (histPre[(size_t) b], m.p50Pre[(size_t) b], m.p95Pre[(size_t) b]);
+        m.windowsPost[(size_t) b] = percentiles (histPost[(size_t) b], m.p50Post[(size_t) b], m.p95Post[(size_t) b]);
+    }
+    return m;
+}
+
+std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int role) const
+{
+    std::array<float, 10> diff {};
+    const auto& t = qn::targets::roles()[(size_t) juce::jlimit (0, 7, role)];
+    if (t.from > t.to) return diff;
+
+    // Bands that matter: the role's, minus bands a carve is dipping on purpose, minus bands with
+    // nothing in them (40 dB under the loudest: there's nothing to shape).
+    std::array<bool, 10> use {};
+    float loudest = -200.0f;
+    for (int b = t.from; b <= t.to; ++b) loudest = juce::jmax (loudest, m.bandsDb[(size_t) b]);
+    for (int b = t.from; b <= t.to; ++b) use[(size_t) b] = m.bandsDb[(size_t) b] > loudest - 40.0f;
+    for (int s = 0; s < qn::numSlots; ++s)
+    {
+        const auto reason = (int) value (qn::reasonId (s));
+        if ((reason == qn::masking || reason == qn::mud || reason == qn::harshness) && value (qn::gainId (s)) < -0.05f)
+            use[(size_t) nearestBand (value (qn::freqId (s)))] = false;
+    }
+    double sumM = 0.0, sumT = 0.0;
+    int count = 0;
+    for (int b = 0; b < 10; ++b)
+        if (use[(size_t) b]) { sumM += m.bandsDb[(size_t) b]; sumT += t.shape[(size_t) b]; ++count; }
+    if (count < 2) return diff;
+    const auto meanM = (float) (sumM / count), meanT = (float) (sumT / count);
+    for (int b = 0; b < 10; ++b)
+        if (use[(size_t) b]) diff[(size_t) b] = (m.bandsDb[(size_t) b] - meanM) - (t.shape[(size_t) b] - meanT);
+    return diff;
+}
+
+float QuintessenceProcessor::toneError (const Measurement& m, int role) const
+{
+    const auto d = toneDiff (m, role);
+    float sum = 0.0f;
+    int count = 0;
+    for (auto v : d) if (std::abs (v) > 1.0e-6f) { sum += std::abs (v); ++count; }
+    return count > 0 ? sum / (float) count : -1.0f;
+}
+
+int QuintessenceProcessor::effectiveRole() const
+{
+    const auto chosen = (int) value (qn::roleId);
+    if (chosen > 0) return chosen;
+    return juce::jlimit (0, 7, roleForTrack());
+}
+
+//==============================================================================
+void QuintessenceProcessor::write (const juce::String& id, float plain)
+{
+    if (auto* p = apvts.getParameter (id))
+    {
+        autoWriting.store (true);   // not a manual edit
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (p->convertTo0to1 (p->getNormalisableRange().snapToLegalValue (plain)));
+        p->endChangeGesture();
+        autoWriting.store (false);
+    }
+}
+
+void QuintessenceProcessor::parameterChanged (const juce::String& id, float)
+{
+    if (autoWriting.load() || isMorphing()) return;
+    const auto it = lockBits().find (id);
+    if (it != lockBits().end()) pendingLocks.fetch_or (1u << it->second);
+}
+
+void QuintessenceProcessor::applyLocks()
+{
+    const auto bits = pendingLocks.exchange (0);
+    if (bits == 0) return;
+    for (int s = 0; s < qn::numSlots; ++s)
+        if (bits & (1u << s))
+        {
+            if (value (qn::lockId (s)) < 0.5f) addLog ("Band " + juce::String (s + 1) + " is yours now: locked, the automation leaves it alone");
+            write (qn::lockId (s), 1.0f);
+            write (qn::reasonId (s), (float) qn::yours);
+            if (pending.kind == Pending::eqSlot && pending.index == s) pending.kind = Pending::none;
+        }
+    if (bits & (1u << 6)) { write (qn::lowCutLockId, 1.0f);  if (pending.kind == Pending::lowCut) pending.kind = Pending::none; }
+    if (bits & (1u << 7)) write (qn::highCutLockId, 1.0f);
+    for (int b = 0; b < qn::numMbBands; ++b)
+        if (bits & (1u << (8 + b)))
+        {
+            write (qn::mbLockId (b), 1.0f);
+            if (pending.kind == Pending::mb && pending.index == b) pending.kind = Pending::none;
+        }
+}
+
+void QuintessenceProcessor::addLog (const juce::String& line)
+{
+    const juce::ScopedLock sl (logLock);
+    log.insert (0, line);
+    while (log.size() > 40) log.remove (log.size() - 1);
+}
+
+//==============================================================================
+bool QuintessenceProcessor::autoPass()
+{
+    const auto m = measurement();
+    if (m.seconds < (float) passSeconds) return false;
+    requestReset();
+    const auto role = effectiveRole();
+    roleShown.store (role);
+    ++passes;
+
+    if (! haveBands) { longBands = m.bandsDb; haveBands = true; }
+    else for (int b = 0; b < 10; ++b) longBands[(size_t) b] += 0.3f * (m.bandsDb[(size_t) b] - longBands[(size_t) b]);
+    const auto diff = toneDiff (m, role);
+    for (int b = 0; b < 10; ++b) shownDiff[(size_t) b].store (diff[(size_t) b]);
+
+    for (auto& c : toneCooldown) c = juce::jmax (0, c - 1);
+    for (auto& c : mbCooldown) c = juce::jmax (0, c - 1);
+
+    // Check the last move: keep it if the sound got closer to the target, otherwise undo it.
+    if (pending.kind != Pending::none)
+    {
+        bool helped = false;
+        juce::String measure;
+        if (pending.kind == Pending::eqSlot)
+        {
+            const auto after = toneError (m, role);
+            helped = after >= 0.0f && after < pending.errBefore - 0.15f;
+            measure = "distance from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s usual tone " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB";
+            if (! helped && pending.band >= 0) toneCooldown[(size_t) pending.band] = 8;
+        }
+        else if (pending.kind == Pending::lowCut)
+        {
+            // The lows went down and the part's own body didn't (the octave bands overlap, so a
+            // band's reading never drops all the way)
+            const auto lows = juce::jmax (m.bandsDb[0], m.bandsDb[1]);
+            float body = -200.0f;
+            for (int b = 2; b < 10; ++b) body = juce::jmax (body, m.bandsDb[(size_t) b]);
+            helped = lows < pending.errBefore - 1.0f && body > pending.extra - 1.0f;
+            measure = "lows " + juce::String (pending.errBefore - lows, 1) + " dB down, the body " + juce::String (body - pending.extra, 1) + " dB";
+        }
+        else
+        {
+            const auto& t = qn::targets::roles()[(size_t) role];
+            const auto after = std::abs (m.swingPost (pending.index) - t.swing[(size_t) pending.index]);
+            helped = after < pending.errBefore - 0.5f;
+            measure = "loud moments " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from the target";
+            if (! helped) mbCooldown[(size_t) pending.index] = 8;
+        }
+        const auto what = pending.what;
+        if (helped) { ++kept; addLog ("Kept: " + what + " (" + measure + ")"); }
+        else
+        {
+            for (const auto& [id, v] : pending.before) write (id, v);
+            ++undone;
+            addLog ("Undid: " + what + ": it didn't bring the sound closer (" + measure + ")");
+        }
+        pending.kind = Pending::none;
+        if (! helped) return true;   // this pass measured the undone move: decide again next pass
+    }
+
+    // At most one new move a pass, so the next pass can tell whether it helped. EQ and
+    // dynamics take turns going first.
+    const auto moved = lastWasEq ? (mbMove (m, role) || eqMove (m, role)) : (eqMove (m, role) || mbMove (m, role));
+    return moved;
+}
+
+int QuintessenceProcessor::slotFor (int band, bool forCarve) const
+{
+    const auto centre = analysis::bandCentres()[(size_t) band];
+    auto reason = [this] (int s) { return (int) value (qn::reasonId (s)); };
+    auto locked = [this] (int s) { return value (qn::lockId (s)) > 0.5f; };
+    auto near = [&] (int s) { return std::abs (std::log2 (value (qn::freqId (s)) / centre)) < 0.35f; };
+
+    // A band already working at this frequency for the same kind of reason
+    for (int s = 0; s < qn::numSlots; ++s)
+    {
+        if (locked (s) || ! near (s)) continue;
+        const auto r = reason (s);
+        if (forCarve ? (r == qn::masking || r == qn::mud || r == qn::harshness) : (r == qn::roleTone || (r == qn::yours && std::abs (value (qn::gainId (s))) < 0.05f)))
+            return s;
+    }
+    // A free band (the nearest by its resting place), or one handed back by unlocking it
+    int best = -1;
+    for (int s = 0; s < qn::numSlots; ++s)
+    {
+        if (locked (s)) continue;
+        const auto r = reason (s);
+        if (r != qn::free && ! (r == qn::yours && std::abs (value (qn::gainId (s))) < 0.05f)) continue;
+        if (best < 0 || std::abs (std::log2 (qn::defaultFreqs()[(size_t) s] / centre)) < std::abs (std::log2 (qn::defaultFreqs()[(size_t) best] / centre))) best = s;
+    }
+    if (best >= 0 || ! forCarve) return best;
+    // A fix outranks tone shaping: take over a role-tone band
+    for (int s = 0; s < qn::numSlots; ++s)
+        if (! locked (s) && reason (s) == qn::roleTone) return s;
+    return -1;
+}
+
+bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
+{
+    if (value (qn::autoEqId) < 0.5f) return false;
+    const auto& t = qn::targets::roles()[(size_t) role];
+
+    // Low cut where the part has no job (once; it's checked like any move)
+    if (t.lowCutHz > 0.0f && ! lowCutTried && value (qn::lowCutLockId) < 0.5f && value (qn::lowCutId) <= qn::lowCutOff)
+    {
+        float below = -200.0f, loudest = -200.0f;
+        for (int b = 0; b < 10; ++b)
+        {
+            loudest = juce::jmax (loudest, m.bandsDb[(size_t) b]);
+            if (analysis::bandCentres()[(size_t) b] < t.lowCutHz * 0.75f) below = juce::jmax (below, m.bandsDb[(size_t) b]);
+        }
+        lowCutTried = true;
+        if (below > loudest - 20.0f)
+        {
+            float body = -200.0f;
+            for (int b = 2; b < 10; ++b) body = juce::jmax (body, m.bandsDb[(size_t) b]);
+            pending = { Pending::lowCut, -1, -1, { { qn::lowCutId, value (qn::lowCutId) } }, juce::jmax (m.bandsDb[0], m.bandsDb[1]),
+                        "low cut at " + hzText (t.lowCutHz), body };
+            write (qn::lowCutId, t.lowCutHz);
+            addLog ("Low cut at " + hzText (t.lowCutHz) + ": a " + juce::String (t.name) + " has no job down there, and this one had lows "
+                    + juce::String (juce::roundToInt (loudest - below)) + " dB under its loudest");
+            lastWasEq = true;
+            return true;
+        }
+    }
+
+    // Tone: the band furthest from the role's usual shape, a step at a time
+    const auto diff = toneDiff (m, role);
+    const auto before = toneError (m, role);
+    if (before < 0.0f) return false;
+    std::vector<int> order;
+    for (int b = 0; b < 10; ++b) if (std::abs (diff[(size_t) b]) > 2.0f && toneCooldown[(size_t) b] == 0) order.push_back (b);
+    std::sort (order.begin(), order.end(), [&] (int a, int b) { return std::abs (diff[(size_t) a]) > std::abs (diff[(size_t) b]); });
+    for (const auto band : order)
+    {
+        const auto slot = slotFor (band, false);
+        if (slot < 0) continue;
+        const auto err = diff[(size_t) band];
+        const auto step = std::round (juce::jlimit (0.5f, 1.5f, std::abs (err) * 0.5f) * 2.0f) * 0.5f * (err > 0.0f ? -1.0f : 1.0f);
+        const auto fresh = (int) value (qn::reasonId (slot)) != qn::roleTone;
+        const auto current = fresh ? 0.0f : value (qn::gainId (slot));
+        const auto next = juce::jlimit (-qn::maxToneDb, qn::maxToneDb, current + step);
+        if (std::abs (next - current) < 0.05f) { toneCooldown[(size_t) band] = 8; continue; }   // as far as it goes
+
+        const auto centre = analysis::bandCentres()[(size_t) band];
+        pending = { Pending::eqSlot, slot, band,
+                    { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
+                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) } },
+                    before,
+                    "band " + juce::String (slot + 1) + " " + hzText (centre) + " " + dbText (next) };
+        write (qn::freqId (slot), centre);
+        write (qn::qId (slot), 1.0f);
+        write (qn::reasonId (slot), (float) qn::roleTone);
+        write (qn::gainId (slot), next);
+        addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (next) + " (" + juce::String (std::abs (err), 1) + " dB "
+                + (err > 0.0f ? "more" : "less") + " there than a " + juce::String (t.name) + " usually has)");
+        lastWasEq = true;
+        return true;
+    }
+    return false;
+}
+
+bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
+{
+    if (value (qn::autoMbId) < 0.5f) return false;
+    const auto& t = qn::targets::roles()[(size_t) role];
+    // Bands with something in them (not just the edges of another band's sound), furthest from their target first
+    float loudest = -200.0f;
+    for (int b = 0; b < qn::numMbBands; ++b) loudest = juce::jmax (loudest, m.p95Pre[(size_t) b]);
+    std::vector<int> order;
+    for (int b = 0; b < qn::numMbBands; ++b)
+        if (t.swing[(size_t) b] > 0.0f && m.p95Pre[(size_t) b] > loudest - 30.0f) order.push_back (b);
+    std::sort (order.begin(), order.end(), [&] (int a, int b)
+               { return std::abs (m.swingPost (a) - t.swing[(size_t) a]) > std::abs (m.swingPost (b) - t.swing[(size_t) b]); });
+    for (const auto b : order)
+    {
+        const auto target = t.swing[(size_t) b];
+        if (value (qn::mbLockId (b)) > 0.5f || mbCooldown[(size_t) b] > 0 || m.windowsPost[(size_t) b] < 20) continue;
+        const auto swing = m.swingPost (b);
+        const auto thr = value (qn::thrId (b)), ratio = value (qn::ratioId (b));
+        float newThr = thr, newRatio = ratio;
+        juce::String why;
+        if (swing > target + 1.0f)
+        {
+            if (ratio <= 1.01f) { newRatio = t.ratio; newThr = std::round ((m.p50Pre[(size_t) b] + target) * 2.0f) * 0.5f; }
+            else if (thr > m.p50Pre[(size_t) b] - 6.0f) newThr = thr - 2.0f;
+            else continue;   // holding as hard as it should
+            why = "its loud moments stand " + juce::String (swing, 1) + " dB out; a " + juce::String (t.name) + " wants about " + juce::String (juce::roundToInt (target));
+        }
+        else if (swing < target - 2.0f && ratio > 1.01f)
+        {
+            newThr = thr + 2.0f;
+            if (newThr >= m.p95Pre[(size_t) b]) { newThr = 0.0f; newRatio = 1.0f; }
+            why = "it's held more than it needs (" + juce::String (swing, 1) + " dB, wants " + juce::String (juce::roundToInt (target)) + ")";
+        }
+        else continue;
+
+        newThr = juce::jlimit (-60.0f, 0.0f, newThr);
+        pending = { Pending::mb, b, -1, { { qn::thrId (b), thr }, { qn::ratioId (b), ratio } }, std::abs (swing - target),
+                    qn::mbBandNames()[b].toLowerCase() + " band " + (newRatio <= 1.01f ? juce::String ("released") : "at " + juce::String (newThr, 1) + " dB, " + juce::String (newRatio, 1) + ":1") };
+        write (qn::thrId (b), newThr);
+        write (qn::ratioId (b), newRatio);
+        addLog ("Dynamics, " + qn::mbBandNames()[b].toLowerCase() + " band: " + (newRatio <= 1.01f ? juce::String ("released") : juce::String (newThr, 1) + " dB, " + juce::String (newRatio, 1) + ":1")
+                + " (" + why + ")");
+        lastWasEq = false;
+        return true;
+    }
+    return false;
+}
+
+void QuintessenceProcessor::relearn()
+{
+    for (int s = 0; s < qn::numSlots; ++s)
+        if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == qn::roleTone)
+        {
+            write (qn::gainId (s), 0.0f);
+            write (qn::freqId (s), qn::defaultFreqs()[(size_t) s]);
+            write (qn::qId (s), 1.0f);
+            write (qn::reasonId (s), (float) qn::free);
+        }
+    if (value (qn::lowCutLockId) < 0.5f) write (qn::lowCutId, 20.0f);
+    for (int b = 0; b < qn::numMbBands; ++b)
+        if (value (qn::mbLockId (b)) < 0.5f) { write (qn::thrId (b), 0.0f); write (qn::ratioId (b), 1.0f); }
+    pending.kind = Pending::none;
+    toneCooldown.fill (0); mbCooldown.fill (0);
+    lowCutTried = false;
+    haveBands = false;
+    requestReset();
+    addLog ("Re-learning: automatic moves cleared (masking fixes and your own bands stay)");
+}
+
+//==============================================================================
+uint32_t QuintessenceProcessor::primaMateriaIdHere() const
+{
+    const auto track = getTrackName();
+    if (track.isEmpty()) return 0xffffffffu;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Prima Materia" && e.track == track) return e.id & 0xfffu;
+    return 0xffffffffu;
+}
+
+std::function<void()> QuintessenceProcessor::carve (uint32_t data)
+{
+    const auto target = data & 0xfffu;
+    if (target != (getInstanceId() & 0xfffu) && target != primaMateriaIdHere()) return {};   // another track's
+    const auto band = (int) ((data >> 12) & 0xf);
+    const auto when = (int) ((data >> 16) & 0x3u);
+    if (band >= analysis::numBands) return {};
+    const auto slot = slotFor (band, true);
+    if (slot < 0) { addLog ("A masking fix arrived, but every band is locked or busy"); return {}; }
+
+    const auto reason = when > 0 ? qn::masking : band == 3 ? qn::mud : (band == 6 || band == 7) ? qn::harshness : qn::masking;
+    const auto r = (int) value (qn::reasonId (slot));
+    const auto again = r == qn::masking || r == qn::mud || r == qn::harshness;
+    const auto gain = again ? juce::jmax (-9.0f, value (qn::gainId (slot)) - 1.5f) : -3.0f;   // again: deeper
+    const auto centre = analysis::bandCentres()[(size_t) band];
+
+    std::vector<std::pair<juce::String, float>> before;
+    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot) }) before.push_back ({ id, value (id) });
+    if (pending.kind == Pending::eqSlot && pending.index == slot) pending.kind = Pending::none;
+    write (qn::freqId (slot), centre);
+    write (qn::qId (slot), 1.4f);
+    write (qn::reasonId (slot), (float) reason);
+    write (qn::whenId (slot), (float) when);
+    write (qn::gainId (slot), gain);
+    addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (gain) + " for "
+            + qn::reasonNames()[reason].toLowerCase() + (when == 1 ? ", only while the vocal sings" : when == 2 ? ", only while the lead plays" : "") + " (from Mentalism)");
+
+    return [this, before, slot, gain]
+    {
+        if (std::abs (value (qn::gainId (slot)) - gain) > 0.05f) return;   // moved since: that wins
+        for (const auto& [id, v] : before) write (id, v);
+        addLog ("Band " + juce::String (slot + 1) + ": fix undone");
+    };
+}
+
+//==============================================================================
+QuintessenceProcessor::SuiteStatus QuintessenceProcessor::suiteStatus()
+{
+    SuiteStatus s;
+    int active = 0;
+    for (int sl = 0; sl < qn::numSlots; ++sl) if (std::abs (value (qn::gainId (sl))) > 0.05f) ++active;
+    float gr = 0.0f;
+    for (auto& g : grNow) gr = juce::jmax (gr, g.load());
+    s.metrics = { (float) effectiveRole(), (float) active, gr, 0.0f };
+    if (haveBands) { s.flags |= suite::Status::hasBands; s.bands = longBands; }
+    return s;
+}
+
+juce::AudioProcessorEditor* QuintessenceProcessor::createEditor()
+{
+    return new QuintessenceEditor (*this);
+}
+
+void QuintessenceProcessor::getPluginState (juce::MemoryBlock& destData)
+{
+    auto state = apvts.copyState();
+    if (auto xml = state.createXml())
+    {
+        auto* l = xml->createNewChildElement ("Log");
+        l->addTextElement (moveLog().joinIntoString ("\n"));
+        copyXmlToBinary (*xml, destData);
+    }
+}
+
+void QuintessenceProcessor::setPluginState (const void* data, int sizeInBytes)
+{
+    if (auto xml = getXmlFromBinary (data, sizeInBytes))
+        if (xml->hasTagName (apvts.state.getType()))
+        {
+            if (auto* l = xml->getChildByName ("Log"))
+            {
+                const juce::ScopedLock sl (logLock);
+                log = juce::StringArray::fromLines (l->getAllSubText());
+                log.removeEmptyStrings();
+                xml->removeChildElement (l, true);
+            }
+            autoWriting.store (true);   // a project loading isn't a manual edit
+            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            autoWriting.store (false);
+            pendingLocks.store (0);
+        }
+}
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new QuintessenceProcessor();
+}

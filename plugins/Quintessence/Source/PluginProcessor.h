@@ -1,0 +1,152 @@
+#pragma once
+
+// Quintessence: an EQ and a three-band compressor that manage themselves.
+//
+// Every few seconds of music it measures the track (ten octave bands after the EQ, and the
+// dynamics of three bands before and after the compressor) and makes at most one move towards
+// what the track's role usually sounds like: a band 1-1.5 dB at a time (never past +-4 dB), a
+// low cut where the part has no job, a compressor band in or out. On the next pass it checks
+// the move: if the sound didn't get closer to the target, the move is undone and that spot is
+// left alone for a while. Mentalism's masking, mud and harshness fixes for this track come
+// here instead of to Prima Materia, with dips that open only while the vocal or lead plays.
+// Touch a band and it's yours: it locks, and the automation leaves it alone.
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include "SuiteProcessor.h"
+#include "SuiteDSP.h"
+#include "FixBus.h"
+#include "Parameters.h"
+#include "Targets.h"
+
+class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
+{
+public:
+    QuintessenceProcessor();
+    ~QuintessenceProcessor() override;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override  { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+
+    void getPluginState (juce::MemoryBlock& destData) override;
+    void setPluginState (const void* data, int sizeInBytes) override;
+    SuiteStatus suiteStatus() override;
+    bool morphsWithSnapshots() const override { return false; }   // it manages its own settings
+    void pollTick() override { applyLocks(); autoPass(); }
+
+    //==============================================================================
+    static constexpr double passSeconds = 3.0;   // music heard per pass
+
+    /** Message thread: one pass if enough music has been heard since the last (the poller calls
+        it; tests call it directly). Returns true if it made or undid a move. */
+    bool autoPass();
+    /** Message thread: turns manual edits into locks (the poller calls it; tests too). */
+    void applyLocks();
+    /** Forgets the automatic tone and dynamics moves (carves and your own bands stay). */
+    void relearn();
+    /** The role in use: the Role setting, or the track's (from Prima Materia or the name). */
+    int effectiveRole() const;
+
+    juce::StringArray moveLog() const { const juce::ScopedLock sl (logLock); return log; }
+
+    struct Measurement
+    {
+        std::array<float, 10> bandsDb {};
+        std::array<float, qn::numMbBands> p50Pre {}, p95Pre {}, p50Post {}, p95Post {};
+        std::array<int, qn::numMbBands> windowsPost {};
+        float seconds = 0.0f;
+        float swingPost (int b) const { return p95Post[(size_t) b] - p50Post[(size_t) b]; }
+    };
+    /** The measurement so far this pass (any thread). */
+    Measurement measurement() const;
+    /** Mean absolute distance from the role's tone, over the bands that matter (dB); -1 if none. */
+    float toneError (const Measurement&, int role) const;
+    /** The measured shape minus the target, per band (0 where it doesn't matter). */
+    std::array<float, 10> toneDiff (const Measurement&, int role) const;
+
+    juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;
+
+    std::array<std::atomic<float>, qn::numMbBands> grNow {};          // gain reduction, dB (UI)
+    std::array<std::atomic<float>, 10> shownDiff {};                  // measured minus target (UI)
+    std::atomic<int> roleShown { 0 };
+    std::atomic<int> passes { 0 }, kept { 0 }, undone { 0 };
+
+private:
+    void parameterChanged (const juce::String& id, float) override;
+    void write (const juce::String& id, float plain);
+    float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
+    void addLog (const juce::String& line);
+    bool eqMove (const Measurement&, int role);
+    bool mbMove (const Measurement&, int role);
+    int slotFor (int band, bool forCarve) const;
+    std::function<void()> carve (uint32_t data);
+    uint32_t primaMateriaIdHere() const;
+    void requestReset() { resetRequested.store (true); }
+
+    //==============================================================================
+    // Audio thread
+    double sr = 48000.0;
+    std::array<suite::Svf, 4> lowCuts, highCuts;   // two per channel: 24 dB/oct
+    float lowCutNow = -1.0f, highCutNow = -1.0f;
+    std::array<std::array<suite::Biquad, 2>, qn::numSlots> peaks;
+    std::array<std::array<float, 3>, qn::numSlots> peakNow {};   // freq, gain, q in use
+    std::array<suite::Crossover, 2> xLow, xHigh, apLow;
+    std::array<suite::EnvelopeFollower, qn::numMbBands> env;
+    std::array<float, qn::numMbBands> makeupDb {};
+    float makeupCoeff = 0.0f;
+
+    // Measurement (audio thread writes; message thread reads and asks for resets)
+    std::array<suite::Svf, 10> analysers;
+    std::array<double, 10> winBand {}, passBand {};
+    double winTotal = 0.0;
+    int winCount = 0, winLength = 4800, passWindows = 0, settle = 0;
+    std::array<double, qn::numMbBands> mbWinPre {}, mbWinPost {};
+    int mbWinCount = 0, mbWinLength = 2400;
+    static constexpr int histBins = 200;   // half-dB bins from 0 down to -100 dBFS
+    std::array<std::array<std::atomic<int>, histBins>, qn::numMbBands> histPre {}, histPost {};
+    std::array<std::atomic<float>, 10> passBandDb {};
+    std::atomic<int> passWindowsShared { 0 };
+    std::atomic<bool> resetRequested { true };
+    void resetMeasurement() noexcept;
+
+    //==============================================================================
+    // Message thread
+    struct Pending
+    {
+        enum Kind { none, eqSlot, lowCut, mb } kind = none;
+        int index = -1, band = -1;
+        std::vector<std::pair<juce::String, float>> before;
+        float errBefore = 0.0f;
+        juce::String what;
+        float extra = 0.0f;
+    } pending;
+    std::array<int, 10> toneCooldown {};
+    std::array<int, qn::numMbBands> mbCooldown {};
+    bool lowCutTried = false, lastWasEq = false;
+    std::array<float, 10> longBands {};
+    bool haveBands = false;
+    std::atomic<bool> autoWriting { false };
+    std::atomic<uint32_t> pendingLocks { 0 };
+    juce::CriticalSection logLock;
+    juce::StringArray log;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (QuintessenceProcessor)
+};

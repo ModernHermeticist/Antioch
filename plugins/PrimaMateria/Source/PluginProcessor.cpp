@@ -82,6 +82,9 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
             case suite::Fix::Carve:
             {
                 if ((data & 0xfffu) != (getInstanceId() & 0xfffu)) return {};   // meant for another track
+                if (const auto track = getTrackName(); track.isNotEmpty())
+                    for (const auto& e : suite::Registry::list())
+                        if (e.plugin == "Quintessence" && e.track == track) return {};   // its EQ takes the carve (with a reason, checked)
                 const auto band = (int) ((data >> 12) & 0xf);
                 const auto current = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
                 const auto depth = apvts.getRawParameterValue (pm::carveDepthId)->load();

@@ -9,10 +9,10 @@ Allow about an hour. Use a fresh project at 138 BPM.
 
 ## 0. Install
 
-- [ ] **0.1** Copy all twelve `.vst3` files into `C:\Program Files\Common Files\VST3`.
-- [ ] **0.2** FL: *Options > Manage plugins > Find plugins*. All twelve appear (Antioch, Azoth,
+- [ ] **0.1** Copy all thirteen `.vst3` files into `C:\Program Files\Common Files\VST3`.
+- [ ] **0.2** FL: *Options > Manage plugins > Find plugins*. All thirteen appear (Antioch, Azoth,
   Cause & Effect, Correspondence, Emerald Tablet, Kybalion, Lapis, Mentalism, Ouroboros,
-  Prima Materia, Solve et Coagula, Vibration) under the *ModernHermeticist* vendor.
+  Prima Materia, Quintessence, Solve et Coagula, Vibration) under the *ModernHermeticist* vendor.
 - [ ] **0.3** Each one opens its window without errors.
 
 ## 1. The plugins find each other
@@ -81,6 +81,18 @@ between versions.
 - [ ] **6.3** Load *Song Lead Octave*, *Song Lead Pluck* and *Song Sub* on three more Spire
   channels: the octave plays only in the drops, the pluck from the build, the sub everywhere
   but the breakdowns.
+
+## 6b. Quintessence (new)
+
+- [ ] **6b.1** Put Quintessence on a pad track named "Pads" and play a loop for 30 s. *What it
+  did* fills in: a low cut, then band moves marked *Role tone*, each followed by *Kept* or *Undid*.
+- [ ] **6b.2** Turn a band's Gain knob by hand. It shows *Locked* and *Your setting*, and the
+  automation doesn't move it again. Unlock it and it's free for the automation again.
+- [ ] **6b.3** On a vocal track, the Mid compressor band comes in within a few passes and the
+  vocal's level holds steadier, with no jump in loudness.
+- [ ] **6b.4** With Prima Materia on the same track, Mentalism's *Mix it* puts its masking and mud
+  dips in Quintessence (purple/brass bands), not in Prima Materia. Undo Mix it removes them.
+- [ ] **6b.5** Save the project, reopen it: same bands, same locks, the log is still there.
 
 ## 7. A song end to end
 

@@ -29,10 +29,17 @@ namespace mixfix
     /** The tracks putting most into `band` (up to two, within 6 dB of the loudest), skipping the given roles. */
     inline std::vector<Culprit> culprits (const std::vector<suite::SuiteEntry>& entries, int band, std::initializer_list<int> skipRoles)
     {
+        // Prima Materia's report, or Quintessence's on a track without one (fixes go to that EQ)
+        auto pmOn = [&] (const juce::String& track)
+        {
+            return std::any_of (entries.begin(), entries.end(), [&] (const suite::SuiteEntry& o)
+                                { return o.plugin == "Prima Materia" && o.track == track && o.has (suite::Status::hasBands); });
+        };
         std::vector<Culprit> all;
         for (const auto& e : entries)
         {
-            if (e.plugin != "Prima Materia" || ! e.has (suite::Status::hasBands)) continue;
+            if (! e.has (suite::Status::hasBands)) continue;
+            if (e.plugin != "Prima Materia" && ! (e.plugin == "Quintessence" && (e.track.isEmpty() || ! pmOn (e.track)))) continue;
             const auto role = (int) e.metrics[0];
             if (std::find (skipRoles.begin(), skipRoles.end(), role) != skipRoles.end()) continue;
             all.push_back ({ e.id, e.track, role, e.bands[(size_t) band] });

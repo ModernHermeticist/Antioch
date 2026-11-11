@@ -1,6 +1,6 @@
 # Antioch Suite
 
-Twelve VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Thirteen VST3 plugins for uplifting trance production in FL Studio. They're built to replace
 the setup work you'd otherwise redo in every project. They share one key: set it once
 in **Correspondence**, and the others follow it.
 
@@ -18,6 +18,7 @@ in **Correspondence**, and the others follow it.
 | **Azoth**: automatic transition FX | Placing impacts, crashes, swells, downlifters and snare rolls at every transition |
 | **Prima Materia**: section mixer | Muting, filtering and riding individual tracks section by section with automation |
 | **Solve et Coagula**: vocal unmasking | Carving EQ space for the vocal by hand, or a static cut that's there even when nobody sings |
+| **Quintessence**: self-managing EQ and multiband dynamics | The channel EQ and multiband compressor you set by ear on every track, then forget to revisit |
 
 ## How much runs on its own
 
@@ -47,7 +48,9 @@ With the full suite loaded, here is everything that happens without automation c
 11. **Set-up:** Prima Materia and Kybalion set themselves up from the track names, every
     Kybalion can duck to the real kick with no routing (**Suite kick**), **Rough mix**
     balances the tracks, and Ouroboros' **Suite** overview says what's still missing.
-12. **Snapshots** save and compare whole versions of the song across every plugin, and
+12. **Quintessence** on any track EQs and compresses it towards what that part usually
+    sounds like, checking every move and undoing the ones that don't help.
+13. **Snapshots** save and compare whole versions of the song across every plugin, and
     **Export all** writes the song's MIDI in one go.
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
@@ -1062,6 +1065,38 @@ In FL Studio, select the vocal's mixer track, right-click the arrow below the mu
 track and choose **Sidechain to this track**. Then select that input in the plugin
 wrapper's settings, as for Kybalion's sidechain.
 
+## Quintessence: self-managing EQ and multiband dynamics
+
+![Quintessence](docs/quintessence.png)
+
+An EQ (low cut, high cut, six bands) and a three-band compressor (split at 200 Hz and 3 kHz)
+that set themselves. Put it on a track and play. Every three seconds of music it measures the
+track, makes **one** move, and on the next pass checks whether that move brought the sound
+closer to its target. If it didn't, the move is undone and that spot is left alone for a while.
+
+- **Target:** the usual shape of the track's role (kick, bass, hi-hat, pad, lead, vocal),
+  taken from Prima Materia on the same track or from the track name, or set with **Role**.
+  Only the shape counts: the level is the fader's job. Bands with nothing in them are
+  ignored, so it never boosts where there's nothing to boost.
+- **EQ moves:** 1-1.5 dB at a time, never past ±4 dB for tone. Where the part has no job
+  (below 100 Hz on a pad, 300 Hz on hats) it puts in a low cut, once, and keeps it only if
+  the part's own body is intact.
+- **Dynamics:** each band's loud moments are held towards how far they usually stand out
+  for that role (a vocal's mids within about 5 dB, a bass's lows about 5 dB, kicks never
+  touched). Make-up follows the average reduction, so it's level-neutral: it evens out the
+  part without making it louder.
+- **Every band has a reason**, shown on the band and in the graph: *Role tone*, *Masking*,
+  *Mud*, *Harshness* or *Your setting*. **What it did** lists each move and whether it
+  was kept or undone, and why.
+- **Mentalism's fixes come here.** Masking carves (including the ones that open only while
+  the vocal or lead plays), mud cleanup and the harshness finder go to Quintessence when
+  it shares a track with Prima Materia, and Prima Materia leaves them alone. Undo works
+  as usual.
+- **Touch a band and it's yours:** it locks and the automation leaves it alone. Unlock it
+  to hand it back. **Re-learn** clears the automatic moves (carves and your own bands
+  stay); Ouroboros' learning pass does the same. **Auto EQ** and **Auto dynamics**
+  switch each half off.
+
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
@@ -1077,7 +1112,7 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
 1. Open the repository's **Actions** tab on GitHub, pick the latest successful **Build**
    run, and download **AntiochSuite-Windows-VST3**. Version tags (`v0.2.0`, …) also attach
    the zip to a GitHub Release.
-2. Unzip it and copy the twelve `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
+2. Unzip it and copy the thirteen `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
 4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
    and Mentalism last on the master,
@@ -1433,7 +1468,8 @@ plugins/EmeraldTablet/   KeyDetector.h (salience chromagram + key profiles), tes
 plugins/Azoth/           Voices.h (impact, crash, downlifter, snare), ReverseSwell.h, section-driven triggering, tests
 plugins/PrimaMateria/    Params.h (per-section settings, role presets), section mixer, tests
 plugins/SolveEtCoagula/  Unmasker.h (sidechain-keyed dynamic EQ), band display, tests
-.github/workflows/       Windows/macOS/Linux CI builds of all twelve
+plugins/Quintessence/    Targets.h (role tone and dynamics targets), checked auto EQ + 3-band compressor, tests
+.github/workflows/       Windows/macOS/Linux CI builds of all thirteen
 ```
 
 ## Licence note
