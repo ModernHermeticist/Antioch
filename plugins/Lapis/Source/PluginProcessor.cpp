@@ -25,6 +25,8 @@ namespace
                                                       Attr().withStringFromValueFunction ([] (float v, int) { return String (roundToInt (v)) + " ms"; })));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::toneLowId, 1 }, "Low Tone", NormalisableRange<float> (-6.0f, 6.0f), 0.0f, db));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::toneHighId, 1 }, "High Tone", NormalisableRange<float> (-6.0f, 6.0f), 0.0f, db));
+        l.add (std::make_unique<AudioParameterBool> (ParameterID { LapisProcessor::autoToneId, 1 }, "Auto Tone", false));
+        l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::tiltId, 1 }, "Tilt", NormalisableRange<float> (-3.0f, 3.0f, 0.1f), 0.0f, db));
         l.add (std::make_unique<AudioParameterFloat> (ParameterID { LapisProcessor::manualGainId, 1 }, "Manual Gain",
                                                       NormalisableRange<float> (-6.0f, 24.0f), 0.0f, db));
         l.add (std::make_unique<AudioParameterChoice> (ParameterID { LapisProcessor::bitDepthId, 1 }, "Export Bit Depth",
@@ -49,6 +51,85 @@ LapisProcessor::LapisProcessor()
         const auto low = value (toneLowId), high = value (toneHighId);
         return { { toneLowId, juce::jlimit (-6.0f, 6.0f, low + lowDb) }, { toneHighId, juce::jlimit (-6.0f, 6.0f, high + highDb) } };
     });
+}
+
+float LapisProcessor::tiltOf (const std::array<float, 10>& measured, const std::array<float, 10>& target)
+{
+    // The straight line through measured minus target over 63 Hz..8 kHz: dB per octave (positive = brighter than the target)
+    double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
+    for (int b = 1; b <= 8; ++b)
+    {
+        const auto y = (double) (measured[(size_t) b] - target[(size_t) b]);
+        sx += b; sy += y; sxx += (double) b * b; sxy += b * y;
+    }
+    const auto n = 8.0;
+    return (float) ((n * sxy - sx * sy) / (n * sxx - sx * sx));
+}
+
+std::array<float, 10> LapisProcessor::toneTarget (bool& yours) const
+{
+    // Your finished masters (the median of each band), or the uplifting trance guide
+    std::vector<std::array<float, 10>> shapes;
+    for (const auto& e : suite::StyleLog::read())
+    {
+        if (e.kind != "master") continue;
+        const auto v = juce::StringArray::fromTokens (e.get ("bands"), ",", "");
+        if (v.size() != 10) continue;
+        std::array<float, 10> b {};
+        for (int i = 0; i < 10; ++i) b[(size_t) i] = v[i].getFloatValue();
+        shapes.push_back (b);
+    }
+    yours = shapes.size() >= 2;
+    if (! yours) return { -4.0f, 1.5f, 1.5f, -1.5f, -3.5f, -5.0f, -6.5f, -8.5f, -11.0f, -17.0f };
+    std::array<float, 10> out {};
+    for (size_t i = 0; i < 10; ++i)
+    {
+        std::vector<float> col;
+        for (const auto& s : shapes) col.push_back (s[i]);
+        out[i] = suite::StyleLog::median (col);
+    }
+    return out;
+}
+
+bool LapisProcessor::tonePass()
+{
+    if (toneReset.load() || value (autoToneId) < 0.5f || toneBands.longSeconds.load() < 8.0f) return false;
+    std::array<float, 10> measured {};
+    for (size_t b = 0; b < 10; ++b) measured[b] = toneBands.longDb[b].load();
+    bool yours = false;
+    const auto tilt = tiltOf (measured, toneTarget (yours));
+    tiltNow.store (tilt);
+    toneReset.store (true);
+    const auto err = std::abs (tilt);
+    const juce::String against = yours ? "your finished masters" : "the uplifting trance guide";
+    if (tone.pending)
+    {
+        tone.pending = false;
+        if (err < tone.errBefore - 0.05f)
+        {
+            ++toneKept;
+            suite::MoveLog::add (getName(), getTrackName(), "Kept: master tone (tilt " + juce::String (tone.errBefore, 2) + " -> " + juce::String (err, 2)
+                                 + " dB per octave from " + against + ")", suite::MoveLog::kept);
+        }
+        else
+        {
+            setParameterPlain (apvts, tiltId, tone.tiltBefore);
+            ++toneUndone;
+            tone.rest = 6;
+            suite::MoveLog::add (getName(), getTrackName(), "Undid: master tone back: the tilt didn't get closer to " + against, suite::MoveLog::undone);
+            return true;
+        }
+    }
+    if (tone.rest > 0) { --tone.rest; return false; }
+    if (err < 0.15f) return false;
+    const auto now = value (tiltId);
+    const auto next = juce::jlimit (-3.0f, 3.0f, now + (tilt > 0.0f ? -0.5f : 0.5f));   // too bright: darker
+    if (std::abs (next - now) < 0.01f) return false;
+    tone = { true, now, err, 0 };
+    setParameterPlain (apvts, tiltId, next);
+    suite::MoveLog::add (getName(), getTrackName(), "Master tilt " + juce::String (now, 1) + " -> " + juce::String (next, 1) + " dB (the master tilts "
+                         + juce::String (std::abs (tilt), 2) + " dB per octave " + (tilt > 0.0f ? "brighter" : "darker") + " than " + against + ")");
+    return true;
 }
 
 bool LapisProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -140,6 +221,8 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
     shownLow = shownHigh = 1000.0f;   // recalculate the shelves for this sample rate
     setLatencySamples (limiter.getLatency());
     loudness.prepare (sampleRate);
+    toneBands.prepare (sampleRate);
+    tiltShown = 1000.0f;
     outBands.prepare (sampleRate);
     outputPeak.reset();
     passLoudness.prepare (sampleRate);
@@ -155,6 +238,7 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 {
     juce::ScopedNoDenormals noDenormals;
 
+    if (toneReset.exchange (false)) toneBands.reset();
     if (resetRequested.exchange (false))
     {
         learnedGainDb.store (0.0f);
@@ -205,6 +289,14 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         shownLow = toneLow; shownHigh = toneHigh;
     }
     const auto toneOn = std::abs (toneLow) > 0.01f || std::abs (toneHigh) > 0.01f;
+    const auto tilt = value (tiltId);
+    if (std::abs (tilt - tiltShown) > 1.0e-3f)
+    {
+        for (auto& f : tiltLow) f.setLowShelf (300.0f, -0.5f * tilt, (float) sampleRate);
+        for (auto& f : tiltHigh) f.setHighShelf (3000.0f, 0.5f * tilt, (float) sampleRate);
+        tiltShown = tilt;
+    }
+    const auto tiltOn = std::abs (tilt) > 0.01f;
 
     auto* L = buffer.getWritePointer (0);
     auto* R = buffer.getWritePointer (1);
@@ -235,6 +327,11 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             l = highShelf[0].process (lowShelf[0].process (l));
             r = highShelf[1].process (lowShelf[1].process (r));
         }
+        if (tiltOn)
+        {
+            l = tiltHigh[0].process (tiltLow[0].process (l));
+            r = tiltHigh[1].process (tiltLow[1].process (r));
+        }
 
         // Soft clipper: shaves the sharpest peaks so the limiter works less hard.
         if (clip > 0.0f)
@@ -254,6 +351,7 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         // Final safety: never exceed the ceiling by more than rounding.
         L[n] = juce::jlimit (-ceiling, ceiling, l);
         R[n] = juce::jlimit (-ceiling, ceiling, r);
+        toneBands.process (L[n], R[n]);
         if (playing)
         {
             passLoudness.process (L[n], R[n]);

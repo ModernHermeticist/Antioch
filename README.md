@@ -268,6 +268,10 @@ Pad, Vocal chop, Arp, Clean), then fine-tune:
 - **Pitch bright** (off by default): Vibration tracks the lead's pitch; notes above its
   usual pitch get more air and presence (up to +4 and +2 dB) and notes below get less, so
   the top of a melody sparkles and low notes stay warm.
+- **Auto drive** (saturation by ear; switched on by itself on a lead or pad track): every
+  4 s it measures how much of the part sits above 2 kHz against its body below 1 kHz. A
+  lead's harmonics usually sit about 12 dB under the body. Too clean (it disappears on a
+  phone): 3 dB more drive. Harsh: 3 dB less. Each step is kept only if it got closer.
 
 ## Mentalism: mix assistant
 
@@ -746,6 +750,11 @@ integrated target, because breakdowns pull the song average down by about that m
 - **Clip** shaves the sharpest peaks with a soft clipper before the limiter.
 - The **limiter** is a lookahead true-peak design that detects inter-sample peaks, adds
   77 samples of latency (FL compensates for it automatically), and holds the ceiling.
+- **Auto tone** (master tone loop): every 8 s of music, Lapis measures the master's tilt
+  (dB per octave, 63 Hz-8 kHz). The reference is the median of your finished masters (from
+  the style log, once there are two) or the uplifting trance guide. It moves its broad
+  **Tilt** (shelves at 300 Hz and 3 kHz) half a dB at a time, within ±3 dB, and keeps a step
+  only if the tilt got closer.
 
 ## Emerald Tablet: key detector
 
@@ -1163,6 +1172,15 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
 - **Ringing peaks:** a narrow peak 10-35 dB above the sound around it that's there pass
   after pass for 12 s of music (a filter's resonance, not a note) gets a narrow dip
   (*Resonance*), deeper each time it's still there, and is checked like every move.
+- **Punch** (kick and hats): a transient shaper steered towards how far a role's hits
+  usually stand over its body, in checked steps of 25%.
+- **Glue** (role *Music bus*, or a track named "bus", "group" or "music"): a 2:1 bus
+  compressor with a 30 ms attack and an 8th-note release from the tempo. Its threshold is
+  steered to about 1.5 dB of average reduction, level-neutral.
+- **De-esser** (vocal): it finds where the vocal's 's' sounds spike, from 4.5, 6, 7.5 or
+  9 kHz. It only switches on when that band spikes more than the vocal itself, so not on
+  the vocal's own phrasing. It acts only on the spikes, 6 dB at most (8-10 if they still
+  stand out), and every step is checked.
 - **Spire tips:** what to change in Spire so the EQ has less to do. There's a starting patch
   for the role, plus tips from what it measures. For example, "Dull: open Filter 1's cutoff
   or add OSC 3 an octave up", "Narrow for a lead: unison 7-9 voices, detune 25-35", or "A

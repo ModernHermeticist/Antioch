@@ -17,7 +17,7 @@ namespace qn
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoEqId, 1 }, "Auto EQ", true));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoMbId, 1 }, "Auto dynamics", true));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { roleId, 1 }, "Role",
-                   juce::StringArray { "From the track", "Kick", "Bass", "Hats", "Pads", "Lead", "Vocal", "FX" }, 0, notAutomatable));
+                   juce::StringArray { "From the track", "Kick", "Bass", "Hats", "Pads", "Lead", "Vocal", "FX", "Music bus" }, 0, notAutomatable));
 
         l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { lowCutId, 1 }, "Low cut", hz (20.0f, 1000.0f), 20.0f,
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v <= lowCutOff ? juce::String ("Off") : juce::String (juce::roundToInt (v)) + " Hz"; })));
@@ -25,6 +25,13 @@ namespace qn
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v >= highCutOff ? juce::String ("Off") : juce::String (v / 1000.0f, 1) + " kHz"; })));
         l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { widthId, 1 }, "Width", juce::NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f,
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v * 100.0f)) + "%"; })));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { punchId, 1 }, "Punch", juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f,
+                   juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return std::abs (v) < 0.005f ? juce::String ("Off") : (v > 0.0f ? "+" : "") + juce::String (juce::roundToInt (v * 100.0f)) + "%"; })));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { glueThrId, 1 }, "Glue threshold", juce::NormalisableRange<float> (-40.0f, 0.0f, 0.1f), 0.0f,
+                   juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v > -0.05f ? juce::String ("Off") : juce::String (v, 1) + " dB"; })));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { deessFreqId, 1 }, "De-ess frequency", hz (3000.0f, 12000.0f), 7000.0f, hzAttr));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { deessDepthId, 1 }, "De-ess depth", juce::NormalisableRange<float> (0.0f, 12.0f, 0.1f), 0.0f,
+                   juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v < 0.05f ? juce::String ("Off") : juce::String (v, 1) + " dB"; })));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { widthLockId, 1 }, "Width locked", false, boolNotAutomatable));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { lowCutLockId, 1 }, "Low cut locked", false, boolNotAutomatable));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { highCutLockId, 1 }, "High cut locked", false, boolNotAutomatable));

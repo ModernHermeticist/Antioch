@@ -8,6 +8,7 @@
 #include "Spectrum.h"
 #include "Scenes.h"
 #include "Fingerprint.h"
+#include "MoveLog.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
 {
@@ -52,6 +53,7 @@ public:
         else if (role == suite::roleVocal) preset = 3;
         if (preset < 0) return false;
         applyPreset (preset);
+        if (role == suite::roleLead || role == suite::rolePads) setParameterPlain (apvts, Params::autoDrive, 1.0f);   // its drive sets itself
         return true;
     }
 
@@ -73,8 +75,24 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    /** Saturation by ear: every 4 s of the part, how rich it sounds (2-8 kHz against 250 Hz-1 kHz,
+        after the drive) against what a lead (or pad) usually has. Too clean (it disappears on a
+        phone): 3 dB more drive; harsh: 3 dB less. The next pass keeps it if it got closer, undoes
+        it otherwise. Message thread (tests call it). */
+    bool drivePass();
+    static float richnessTarget (int role) { return role == suite::rolePads ? -16.0f : role == suite::roleVocal ? 0.0f : -12.0f; }   // above 2 kHz against below 1 kHz
+    analysis::BandAnalyzer driveBands;   // after the processing, reset each pass (its seconds count the music heard)
+    std::array<suite::Svf, 4> richFilters;   // 4th-order: high-pass at 2 kHz (the harmonics), low-pass at 1 kHz (the body)
+    double richHigh = 0.0, richLow = 0.0;
+    std::atomic<float> richDb { -100.0f };
+    std::atomic<bool> driveReset { false };
+    std::atomic<int> driveKept { 0 }, driveUndone { 0 };
+    float richnessNow (int role) const;
+    struct { bool pending = false; float trimBefore = 0.0f, errBefore = 0.0f; int rest = 0; } drivePending;
+
     void pollTick() override
     {
+        drivePass();
         scenes.watchTweaks (isMorphing());
         const auto role = roleForTrack();
         isLeadTrack.store (role == suite::roleLead || role < 0);   // lead-aware space: this is the lead (or most likely is)

@@ -375,6 +375,42 @@ int main (int argc, char** argv)
                "a new Vibration on a lead track loads the supersaw lead, on a pluck the pluck; FX tracks are left alone");
     }
 
+    section ("Saturation by ear");
+    {
+        auto p = makeNeutral();
+        set (*p, Params::autoDrive, 1.0f);
+        set (*p, Params::satMix, 1.0f);
+        set (*p, Params::drive, 6.0f);
+        // A pure, quiet lead: far too clean to cut through on a phone
+        auto lead = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = 0.4f * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * (double) (pos + i) / sampleRate);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        int64_t at = 0;
+        auto play = [&] { render (*p, 4.2, [&] (juce::AudioBuffer<float>& b, int64_t pos) { lead (b, at + pos); }); at += (int64_t) (4.2 * sampleRate); };
+        play();
+        const auto before = p->richnessNow (-1);
+        for (int i = 0; i < 8; ++i)
+        {
+            const auto moved = p->drivePass();
+            if (std::getenv ("VDEBUG")) std::cout << "pass " << i << " moved " << moved << " secs " << p->driveBands.longSeconds.load() << " rich " << p->richnessNow (-1)
+                                                  << " trim " << p->apvts.getRawParameterValue (Params::driveTrim)->load() << " reset " << p->driveReset.load() << std::endl;
+            play();
+        }
+        p->driveReset.store (false);
+        const auto after = p->richnessNow (-1);
+        check (p->apvts.getRawParameterValue (Params::driveTrim)->load() >= 6.0f && after > before + 4.0f && p->driveKept.load() >= 2,
+               "a too-clean lead gets drive, a checked 3 dB at a time (harmonics " + juce::String (before, 1) + " -> " + juce::String (after, 1)
+                   + " dB against the body; trim +" + juce::String (p->apvts.getRawParameterValue (Params::driveTrim)->load(), 0) + " dB)");
+        auto off = makeNeutral();
+        render (*off, 4.2, lead);
+        check (! off->drivePass(), "off, it leaves the drive alone");
+    }
+
     section ("Stress: everything maxed on full-scale noise");
     {
         auto p = std::make_unique<VibrationProcessor>();

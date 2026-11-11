@@ -8,6 +8,8 @@ namespace qn
 
     inline const juce::String autoEqId { "autoeq" }, autoMbId { "automb" }, roleId { "role" };
     inline const juce::String widthId { "width" }, widthLockId { "width_lock" };
+    inline const juce::String punchId { "punch" }, glueThrId { "glue_thr" }, deessFreqId { "deess_freq" }, deessDepthId { "deess_depth" };
+    constexpr std::array<float, 4> sibilanceCentres { 4500.0f, 6000.0f, 7500.0f, 9000.0f };
     inline const juce::String lowCutId { "lowcut" }, highCutId { "highcut" }, lowCutLockId { "lowcut_lock" }, highCutLockId { "highcut_lock" };
 
     inline juce::String slotId (int slot, const char* what) { return "b" + juce::String (slot + 1) + "_" + what; }

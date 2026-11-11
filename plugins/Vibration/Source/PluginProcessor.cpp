@@ -98,9 +98,57 @@ VibrationProcessor::Effective VibrationProcessor::effective() const
     return { juce::jlimit (-6.0f, 12.0f, scenes.plain (sAir) + m * Macro::air + 4.0f * bright),
              juce::jlimit (-6.0f, 9.0f, value (presence) + m * Macro::presence + 2.0f * bright),
              juce::jlimit (-12.0f, 3.0f, value (mud) + m * Macro::mud),
-             juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive),
+             juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive + value (driveTrim)),
              juce::jlimit (0.0f, 1.0f, scenes.plain (sMultiband) + m * Macro::mbDepth),
              juce::jlimit (0.0f, 2.5f, (scenes.plain (sWidth) + m * Macro::width) * (1.0f + 0.5f * value (tensionWidth) * tensionNow.load())) };
+}
+
+float VibrationProcessor::richnessNow (int) const
+{
+    return richDb.load();
+}
+
+bool VibrationProcessor::drivePass()
+{
+    if (driveReset.load()) return false;   // the audio thread hasn't started the new pass yet
+    if (apvts.getRawParameterValue (Params::autoDrive)->load() < 0.5f || driveBands.longSeconds.load() < 4.0f) return false;
+    const auto role = roleForTrack();
+    const auto target = richnessTarget (role);
+    const auto rich = richnessNow (role);
+    driveReset.store (true);
+    if (target == 0.0f || rich < -99.0f) return false;
+    const auto err = std::abs (rich - target);
+    if (drivePending.pending)
+    {
+        drivePending.pending = false;
+        if (err < drivePending.errBefore - 0.3f)
+        {
+            ++driveKept;
+            suite::MoveLog::add (getName(), getTrackName(), "Kept: drive " + juce::String (value (Params::driveTrim), 1) + " dB (richness "
+                                 + juce::String (drivePending.errBefore, 1) + " -> " + juce::String (err, 1) + " dB from the target)", suite::MoveLog::kept);
+        }
+        else
+        {
+            setParameterPlain (apvts, Params::driveTrim, drivePending.trimBefore);
+            ++driveUndone;
+            drivePending.rest = 6;
+            suite::MoveLog::add (getName(), getTrackName(), "Undid: drive back to " + juce::String (drivePending.trimBefore, 1) + " dB: it didn't get closer ("
+                                 + juce::String (drivePending.errBefore, 1) + " -> " + juce::String (err, 1) + " dB)", suite::MoveLog::undone);
+            return true;
+        }
+    }
+    if (drivePending.rest > 0) { --drivePending.rest; return false; }
+    const auto trim = value (Params::driveTrim);
+    float next = trim;
+    if (rich < target - 2.0f) next = juce::jmin (12.0f, trim + 3.0f);        // too clean: it vanishes on small speakers
+    else if (rich > target + 3.0f) next = juce::jmax (-12.0f, trim - 3.0f);  // harsh
+    if (std::abs (next - trim) < 0.05f) return false;
+    drivePending = { true, trim, err, 0 };
+    setParameterPlain (apvts, Params::driveTrim, next);
+    suite::MoveLog::add (getName(), getTrackName(), "Drive " + juce::String (trim, 1) + " -> " + juce::String (next, 1) + " dB (the upper harmonics sit "
+                         + juce::String (-rich, 1) + " dB under the body; a " + (role == suite::rolePads ? "pad" : "lead") + " usually about "
+                         + juce::String (juce::roundToInt (-target)) + (rich < target ? ": too clean to cut through on a phone)" : ": harsh)"));
+    return true;
 }
 
 void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
@@ -109,6 +157,11 @@ void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBloc
     const auto sr = (float) sampleRate;
     scenes.prepare();
     outBands.prepare (sampleRate);
+    driveBands.prepare (sampleRate);
+    richFilters[0].set (2000.0f, 0.5412f, sr); richFilters[1].set (2000.0f, 1.3066f, sr);
+    richFilters[2].set (1000.0f, 0.5412f, sr); richFilters[3].set (1000.0f, 1.3066f, sr);
+    for (auto& f : richFilters) f.reset();
+    richHigh = richLow = 0.0;
 
     oversampler = std::make_unique<juce::dsp::Oversampling<float>> (
         2, 1, juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, true);
@@ -178,6 +231,8 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
     // Lead-aware space (Antioch on other tracks): how much the lead is playing now.
     if (host.playing && isLeadTrack.load())
         suite::ActivityBus::write (suite::ActivityBus::lead, buffer.getRMSLevel (0, 0, n) / 0.05f);
+
+    if (driveReset.exchange (false)) { driveBands.reset(); richHigh = richLow = 0.0; richDb.store (-100.0f); }
 
     // ---- Input analysis ----
     for (int i = 0; i < n; ++i)
@@ -295,7 +350,14 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
         L[i] *= g;
         R[i] *= g;
         monoScratch[(size_t) i] = 0.5f * (L[i] + R[i]);
+        driveBands.process (L[i], R[i]);
+        const auto mono = monoScratch[(size_t) i];
+        const auto hi = richFilters[1].highpass (richFilters[0].highpass (mono));
+        const auto lo = richFilters[3].lowpass (richFilters[2].lowpass (mono));
+        richHigh += (double) hi * hi;
+        richLow += (double) lo * lo;
     }
+    if (richLow > 1.0e-9) richDb.store ((float) (10.0 * std::log10 ((richHigh + 1.0e-15) / richLow)));
     autoGainDb.store (autoOn ? juce::Decibels::gainToDecibels (autoGain) : 0.0f);
     outputTap.push (monoScratch.data(), n);
 }

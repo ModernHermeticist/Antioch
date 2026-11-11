@@ -272,6 +272,67 @@ int main (int argc, char** argv)
         check (tips.joinIntoString (" ").contains ("ringing"), "Spire tips point at the filter's resonance");
     }
 
+    section ("Punch, glue and the de-esser");
+    {
+        // A soft kick: a 55 Hz thump whose attack swells in over 25 ms
+        auto p = make (1);
+        set (*p, qn::autoEqId, 0.0f);
+        Player kick { [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = std::fmod ((double) (pos + i) / sampleRate, 0.5);
+                const auto env = juce::jmin (1.0, t / 0.025) * std::exp (-t * 6.0);
+                const auto x = (float) (0.5 * env * std::sin (juce::MathConstants<double>::twoPi * 55.0 * t));
+                b.setSample (0, i, x); b.setSample (1, i, x);
+            }
+        } };
+        kick.play (*p, QuintessenceProcessor::passSeconds + 0.3);
+        const auto punchBefore = p->measurement().punchDb;
+        p->autoPass();
+        passes (*p, kick, 10);
+        if (std::getenv ("QDEBUG")) std::cout << p->moveLog().joinIntoString ("\n") << std::endl;
+        kick.play (*p, QuintessenceProcessor::passSeconds + 0.3);
+        const auto punchAfter = p->measurement().punchDb;
+        check (v (*p, qn::punchId) > 0.3f && punchAfter > punchBefore + 1.0f,
+               "a soft kick gets punch, checked step by step (" + juce::String (punchBefore, 1) + " -> " + juce::String (punchAfter, 1)
+                   + " dB; punch " + juce::String (juce::roundToInt (v (*p, qn::punchId) * 100.0f)) + "%)");
+
+        // The music bus: glue to about 1.5 dB of reduction
+        auto bus = make (qn::targets::musicBus);
+        set (*bus, qn::autoEqId, 0.0f);
+        Player music { bands (heavyPad) };
+        passes (*bus, music, 10);
+        music.play (*bus, QuintessenceProcessor::passSeconds + 0.3);
+        const auto gr = bus->measurement().glueGrDb;
+        check (v (*bus, qn::glueThrId) < -0.05f && std::abs (gr - qn::targets::glueTargetDb) < 0.6f,
+               "on the music bus the glue settles near 1.5 dB of reduction (" + juce::String (gr, 2) + " dB at " + juce::String (v (*bus, qn::glueThrId), 1) + " dB)");
+        check (v (*bus, qn::ratioId (1)) < 1.01f && std::abs (v (*bus, qn::gainId (1))) < 0.05f, "and leaves the EQ and multiband alone");
+
+        // A vocal with spiky 's' sounds around 7.5 kHz
+        auto vox = make (6);
+        set (*vox, qn::autoEqId, 0.0f);
+        auto essFilter = std::make_shared<suite::Svf>();
+        essFilter->set (7500.0f, 2.0f, (float) sampleRate);
+        Player voice { [essFilter] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            juce::Random rng (pos + 7);
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto vowel = 0.15 * (std::sin (juce::MathConstants<double>::twoPi * 220.0 * t) + 0.5 * std::sin (juce::MathConstants<double>::twoPi * 440.0 * t));
+                const auto noise = essFilter->bandpass (rng.nextFloat() * 2.0f - 1.0f);   // band-limited around 7.5 kHz
+                const auto ess = std::fmod (t, 0.5) < 0.08 ? 0.5 * noise : 0.0;
+                const auto x = (float) (vowel + ess + 0.002 * (rng.nextFloat() * 2.0 - 1.0));
+                b.setSample (0, i, x); b.setSample (1, i, x);
+            }
+        } };
+        passes (*vox, voice, 10);
+        check (v (*vox, qn::deessDepthId) >= 6.0f && std::abs (v (*vox, qn::deessFreqId) - 7500.0f) < 1.0f
+                   && vox->moveLog().joinIntoString ("\n").contains ("Kept: de-esser"),
+               "it finds the vocal's sibilance at 7.5 kHz and de-esses only the spikes, checked (depth " + juce::String (v (*vox, qn::deessDepthId), 0) + " dB)");
+    }
+
     section ("Spire tips");
     {
         qn::spire::Reading dull;

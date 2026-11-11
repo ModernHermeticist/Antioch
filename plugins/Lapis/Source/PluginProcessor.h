@@ -9,6 +9,8 @@
 #include "FixBus.h"
 #include "SuiteDSP.h"
 #include "HostInfo.h"
+#include "MoveLog.h"
+#include "StyleLog.h"
 #include <map>
 
 class LapisProcessor : public suite::SuiteProcessor
@@ -111,6 +113,22 @@ public:
     static juce::File notesFolder() { return notesFolderOverride() != juce::File() ? notesFolderOverride() : suite::Alias::file ("Export notes"); }
     juce::File writeExportNotes();   // message thread; the newest finished pass, if any
     SuiteStatus suiteStatus() override { writeExportNotes(); return {}; }
+
+    /** Master tone loop: every 8 s of music, the master's tilt (dB per octave, 63 Hz-8 kHz)
+        against your finished masters (the style log, 2 or more) or the uplifting trance guide.
+        Too bright: the tilt 0.5 dB darker; too dark: brighter, within +-3 dB. The next pass keeps it if the tilt got closer, undoes it otherwise. */
+    static inline const juce::String autoToneId { "auto_tone" }, tiltId { "tilt" };   // tilt: dB, the highs up and lows down by half of it each (300 Hz / 3 kHz shelves)
+    bool tonePass();
+    static float tiltOf (const std::array<float, 10>& measured, const std::array<float, 10>& target);
+    std::array<float, 10> toneTarget (bool& yours) const;
+    analysis::BandAnalyzer toneBands;
+    std::atomic<bool> toneReset { false };
+    std::atomic<int> toneKept { 0 }, toneUndone { 0 };
+    std::atomic<float> tiltNow { 0.0f };
+    struct { bool pending = false; float tiltBefore = 0.0f, errBefore = 0.0f; int rest = 0; } tone;
+    std::array<suite::Biquad, 2> tiltLow, tiltHigh;
+    float tiltShown = 1000.0f;
+    void pollTick() override { tonePass(); }
     std::atomic<bool> passReady { false };
     juce::File lastNotes;
 

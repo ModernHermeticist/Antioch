@@ -240,6 +240,38 @@ int main (int argc, char** argv)
         dir.deleteRecursively();
     }
 
+    section ("Master tone loop");
+    {
+        suite::StyleLog::setFileForTests (juce::File::createTempFile ("lapis-style.txt"));
+        auto p = make();
+        set (*p, LapisProcessor::autoToneId, 1.0f);
+        // A dark master: the guide's shape, falling 1.5 dB per octave more
+        const std::array<float, 10> guide { -4.0f, 1.5f, 1.5f, -1.5f, -3.5f, -5.0f, -6.5f, -8.5f, -11.0f, -17.0f };
+        auto dark = [guide] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                double v = 0.0;
+                for (int k = 1; k <= 8; ++k)
+                    v += 0.06 * std::pow (10.0, (guide[(size_t) k] - 1.5 * k) / 20.0) * std::sin (juce::MathConstants<double>::twoPi * analysis::bandCentres()[(size_t) k] * t + k);
+                b.setSample (0, i, (float) v); b.setSample (1, i, (float) v);
+            }
+        };
+        int64_t at = 0;
+        auto play = [&] { render (*p, 8.3, [&] (juce::AudioBuffer<float>& b, int64_t pos) { dark (b, at + pos); }); at += (int64_t) (8.3 * sampleRate); };
+        play();
+        p->tonePass();
+        const auto tiltBefore = p->tiltNow.load();
+        for (int i = 0; i < 8; ++i) { play(); p->tonePass(); }
+        const auto tiltAfter = p->tiltNow.load();
+        check (tiltBefore < -0.3f && p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load() > 0.9f && std::abs (tiltAfter) < std::abs (tiltBefore) - 0.2f
+                   && p->toneKept.load() >= 2,
+               "a dark master is tilted brighter, a checked half dB at a time (" + juce::String (tiltBefore, 2) + " -> " + juce::String (tiltAfter, 2)
+                   + " dB per octave; tilt +" + juce::String (p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load(), 1) + " dB)");
+        check (std::abs (LapisProcessor::tiltOf (guide, guide)) < 1.0e-4f, "the guide against itself: no tilt");
+    }
+
     section ("Follows Mentalism's target");
     {
         auto p = make (LapisProcessor::followMentalism);

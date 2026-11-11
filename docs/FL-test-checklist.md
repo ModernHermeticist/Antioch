@@ -107,6 +107,11 @@ between versions.
   body sits against the key; with *Duck focus* on Auto it reports which kind of ducking it chose.
 - [ ] **6b.12** Correspondence: *Vary... > Breakdown > Breakdown writer*, then Export all. The breakdown has
   held chords and a slow hint of the hook; drops 2, 3 and 4 each play the hook differently.
+- [ ] **6b.13** Quintessence on the kick: *Punch* rises on a soft kick. On the music bus (role *Music bus*)
+  the glue settles around 1.5 dB of reduction. On the vocal the de-esser switches on at the 's'
+  sounds only.
+- [ ] **6b.14** Vibration on a clean lead: *Drive trim* rises until it cuts through. Lapis with *Auto
+  tone*: the *Tilt* moves towards your masters' balance.
 
 ## 7. A song end to end
 

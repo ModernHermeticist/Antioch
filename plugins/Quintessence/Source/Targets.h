@@ -16,6 +16,14 @@
 
 namespace qn::targets
 {
+    /** Punch: how far a 50 ms window's peak stands over its level (dB), for kick and hats. */
+    inline float punchTarget (int role) { return role == 1 ? 12.0f : role == 3 ? 11.0f : 0.0f; }
+    constexpr float glueTargetDb = 1.5f;   // the music bus's average gain reduction
+    constexpr float sibilanceSwingDb = 10.0f;   // above this, a vocal's 4.5-9 kHz band is spiky: de-ess
+}
+
+namespace qn::targets
+{
     struct Role
     {
         const char* name;
@@ -27,9 +35,11 @@ namespace qn::targets
         float sideDb;                  // side minus mid, dB (0: leave alone)
     };
 
-    inline const std::array<Role, 8>& roles()
+    constexpr int musicBus = 8;   // Quintessence's own extra role: the music bus (glue only)
+
+    inline const std::array<Role, 9>& roles()
     {
-        static const std::array<Role, 8> r {{
+        static const std::array<Role, 9> r {{
             { "track", {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f },
             { "kick",  { 0, 0, -2, -9, -13, -15, -14, -15, -20, -26 }, 1, 7, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, -30.0f },   // transients are the point; mono
             { "bass",  { -2, 0, -2, -8, -13, -17, -20, -24, -28, -32 }, 0, 5, 0.0f,  { 5.0f, 7.0f, 0.0f }, 4.0f, -20.0f },
@@ -38,6 +48,7 @@ namespace qn::targets
             { "lead",  { -30, -24, -12, -5, -1, 0, -1, -3, -6, -11 }, 3, 9, 150.0f,  { 7.0f, 6.0f, 7.0f }, 3.0f, -9.0f },
             { "vocal", { -40, -30, -12, -5, -1, 0, 0, -2, -6, -12 }, 3, 9, 100.0f,   { 8.0f, 5.0f, 6.0f }, 3.0f, -16.0f },
             { "FX",    {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f },
+            { "music bus", {}, 1, 0, 0.0f, { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f },
         }};
         return r;
     }

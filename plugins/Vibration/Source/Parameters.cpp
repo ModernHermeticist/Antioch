@@ -60,6 +60,8 @@ namespace Params
         layout.add (param (air,       "Air (10 kHz)",   { -6.0f, 9.0f }, d.air, db()));
         layout.add (param (drive,     "Drive",          { 0.0f, 24.0f }, d.drive, db()));
         layout.add (param (satMix,    "Saturation Mix", { 0.0f, 1.0f }, d.satMix, percent()));
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoDrive, 1 }, "Auto Drive", false));
+        layout.add (param (driveTrim, "Drive Trim", { -12.0f, 12.0f }, 0.0f, db()));
         layout.add (param (mbDepth,   "Multiband Depth",{ 0.0f, 1.0f }, d.mbDepth, percent()));
         layout.add (param (mbTime,    "Multiband Time", skewed (0.25f, 3.0f, 1.0f), d.mbTime,
                            Attr().withStringFromValueFunction ([] (float v, int) { return String (v, 2) + "x"; })));

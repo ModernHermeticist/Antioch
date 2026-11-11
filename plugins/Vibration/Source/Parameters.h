@@ -19,6 +19,8 @@ namespace Params
     inline const juce::String output    { "output" };
     inline const juce::String tensionWidth { "tensionwidth" };   // wider on tension chords (from Correspondence)
     inline const juce::String pitchBright  { "pitchbright" };    // air and presence follow the lead's pitch
+    inline const juce::String autoDrive    { "auto_drive" };     // saturation by ear: the drive sets itself from how rich the part sounds
+    inline const juce::String driveTrim    { "drive_trim" };     // ... by this much (dB, on top of Drive)
 
     constexpr float lowCutOffBelow = 25.0f;   // low cut values under this mean "off"
     constexpr float mudHz = 320.0f, presenceHz = 3200.0f, airHz = 10000.0f;

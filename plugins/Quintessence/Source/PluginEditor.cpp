@@ -153,18 +153,31 @@ void QuintessenceEditor::paint (juce::Graphics& g)
     drawPanel (g, logArea, "What it did");
     drawCurve (g, curveArea.reduced (14, 10).withTrimmedTop (18));
 
-    static const char* roleNames[] = { "no role yet", "kick", "bass", "hats", "pads", "lead", "vocal", "FX" };
+    static const char* roleNames[] = { "no role yet", "kick", "bass", "hats", "pads", "lead", "vocal", "FX", "the music bus (glue)" };
     auto c = controlArea.reduced (14, 10).withTrimmedTop (18);
     c.removeFromTop (140);
     g.setFont (juce::FontOptions (13.0f));
     g.setColour (Colours::text);
     const auto learnedSongs = processor.learnedShown.load();
-    g.drawText ("Steering towards: " + juce::String (roleNames[juce::jlimit (0, 7, processor.roleShown.load())])
+    g.drawText ("Steering towards: " + juce::String (roleNames[juce::jlimit (0, 8, processor.roleShown.load())])
                 + (learnedSongs > 0 ? " (your sound, " + juce::String (learnedSongs) + " songs)" : juce::String())
                 + (processor.groupShown.load() == 1 ? ", breakdown" : ""), c.removeFromTop (20), juce::Justification::centredLeft);
     g.setColour (Colours::dimText);
     g.drawText (juce::String (processor.passes.load()) + " passes, " + juce::String (processor.kept.load()) + " moves kept, "
                 + juce::String (processor.undone.load()) + " undone", c.removeFromTop (20), juce::Justification::centredLeft);
+    {
+        auto v = [this] (const juce::String& id) { return processor.apvts.getRawParameterValue (id)->load(); };
+        juce::StringArray extra;
+        if (std::abs (v (qn::punchId)) > 0.005f) extra.add ("Punch " + juce::String (v (qn::punchId) > 0.0f ? "+" : "") + juce::String (juce::roundToInt (v (qn::punchId) * 100.0f)) + "%");
+        if (v (qn::glueThrId) < -0.05f) extra.add ("Glue " + juce::String (v (qn::glueThrId), 1) + " dB");
+        if (v (qn::deessDepthId) > 0.05f) extra.add ("De-ess " + juce::String (v (qn::deessFreqId) / 1000.0f, 1) + " kHz, " + juce::String (processor.deessNow.load(), 1) + " dB now");
+        if (! extra.isEmpty())
+        {
+            g.setColour (Colours::verdigris);
+            g.drawText (extra.joinIntoString ("   "), controlArea.reduced (14, 10).withTrimmedTop (18).withTrimmedTop (112).withHeight (18), juce::Justification::centredLeft);
+        }
+    }
+    g.setColour (Colours::dimText);
     g.setFont (juce::FontOptions (12.0f));
     g.drawFittedText ("Touch a band and it's yours: it locks. Unlock it to hand it back.", c.removeFromTop (18), juce::Justification::topLeft, 1);
 

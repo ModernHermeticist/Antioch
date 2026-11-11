@@ -84,6 +84,10 @@ public:
         std::array<int, qn::numMbBands> windowsPost {};
         float seconds = 0.0f;
         float midDb = -100.0f, sideDb = -100.0f;
+        std::array<float, 4> sibSwing {}, sibPeak {};   // a vocal's 4.5 / 6 / 7.5 / 9 kHz bands: how far their loud moments stand out (before de-essing)
+        float sibPostSwing = 0.0f;          // ... the de-esser's band after it
+        float punchDb = 0.0f;               // how far the attacks stand over the body (fast over slow follower, dB, average of each 50 ms window's most; 0 = nothing heard)
+        float glueGrDb = 0.0f, glueLevelDb = -100.0f;   // the glue's average gain reduction, and the level it sees
         float sideMinusMid() const { return midDb > -90.0f ? sideDb - midDb : -100.0f; }
         int group = 0;   // 0: anywhere but a breakdown, 1: a breakdown (it keeps a separate correction there)
         float swingPost (int b) const { return p95Post[(size_t) b] - p50Post[(size_t) b]; }
@@ -118,6 +122,9 @@ private:
     bool eqMove (const Measurement&, int role);
     bool widthMove (const Measurement&, int role);
     bool resonanceMove (const Measurement&, int role);
+    bool punchMove (const Measurement&, int role);
+    bool glueMove (const Measurement&, int role);
+    bool deessMove (const Measurement&, int role);
     void drainSpectrum();
     bool mbMove (const Measurement&, int role);
     int slotFor (int band, bool forCarve) const;
@@ -153,6 +160,24 @@ private:
     std::atomic<int> passWindowsShared { 0 };
     double winMid = 0.0, winSide = 0.0, passMid = 0.0, passSide = 0.0;
     std::atomic<float> passMidDb { -100.0f }, passSideDb { -100.0f };
+    // De-esser, transient shaper and glue (audio thread)
+    std::array<suite::Svf, 2> deessBand;
+    std::array<suite::Svf, 4> sibAnalysers;
+    suite::Svf sibPostAnalyser;
+    suite::EnvelopeFollower deessEnv, fastEnv, slowEnv, glueEnv, outFast, outSlow;
+    float attackMax = 0.0f;
+    float deessFreqNow = -1.0f, deessSlow = 0.0f, deessSlowCoeff = 0.0f, glueMakeup = 0.0f, glueReleaseNow = -1.0f;
+    std::array<double, 4> sibWin {};
+    double sibPostWin = 0.0, crestPow = 0.0, punchSum = 0.0, glueGrSum = 0.0, glueLevelSum = 0.0;
+    float crestPeak = 0.0f;
+    int punchCount = 0;
+    int64_t glueCount = 0;
+    std::array<std::array<std::atomic<int>, histBins>, 4> histSib {};
+    std::array<std::atomic<int>, histBins> histSibPost {};
+    std::atomic<float> passPunchDb { 0.0f }, passGlueGr { 0.0f }, passGlueLevel { -100.0f };
+public:
+    std::atomic<float> deessNow { 0.0f };   // the de-esser's reduction now (dB, UI)
+private:
     std::vector<float> fifoData, blockMono;
     juce::AbstractFifo fifo { 1 << 18 };
     std::atomic<bool> resetRequested { true };
@@ -162,7 +187,7 @@ private:
     // Message thread
     struct Pending
     {
-        enum Kind { none, eqSlot, lowCut, mb, width, resonance } kind = none;
+        enum Kind { none, eqSlot, lowCut, mb, width, resonance, punch, glue, deess } kind = none;
         int index = -1, band = -1;
         std::vector<std::pair<juce::String, float>> before;
         float errBefore = 0.0f;
@@ -173,7 +198,7 @@ private:
     std::array<int, qn::numMbBands> mbCooldown {};
     bool lowCutTried = false;
     int nextFirst = 0;   // which kind of move gets the first chance this pass (they take turns)
-    int widthCooldown = 0;
+    int widthCooldown = 0, punchCooldown = 0, deessCooldown = 0;
     qn::ResonanceFinder resonances;
     struct Candidate { float hz; int passes; float prominence; float seconds; };
     std::vector<Candidate> candidates;

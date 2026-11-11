@@ -92,6 +92,16 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     makeupCoeff = 1.0f / (3.0f * fs);   // level-neutral: the make-up follows the average reduction over ~3 s
     for (int b = 0; b < analysis::numBands; ++b) { analysers[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs); analysers[(size_t) b].reset(); }
     winLength = juce::jmax (1, (int) std::round (sr * 0.1));
+    for (int k = 0; k < 4; ++k) { sibAnalysers[(size_t) k].set (qn::sibilanceCentres[(size_t) k], 1.5f, fs); sibAnalysers[(size_t) k].reset(); }
+    deessFreqNow = -1.0f;
+    deessEnv.set (1.0f, 60.0f, fs);  deessEnv.reset();
+    fastEnv.set (0.5f, 40.0f, fs);   fastEnv.reset();
+    attackMax = 0.0f;
+    slowEnv.set (40.0f, 60.0f, fs);  slowEnv.reset();
+    outFast.set (0.5f, 40.0f, fs);   outFast.reset();
+    outSlow.set (40.0f, 60.0f, fs);  outSlow.reset();
+    glueReleaseNow = -1.0f; glueMakeup = 0.0f; deessSlow = 0.0f;
+    deessSlowCoeff = 1.0f / (0.4f * fs);
     fifoData.assign ((size_t) fifo.getTotalSize(), 0.0f);
     blockMono.clear();
     blockMono.reserve (8192);
@@ -103,6 +113,10 @@ void QuintessenceProcessor::resetMeasurement() noexcept
 {
     winBand.fill (0.0); passBand.fill (0.0); winTotal = 0.0; winCount = 0; passWindows = 0;
     winMid = winSide = passMid = passSide = 0.0;
+    sibWin.fill (0.0); sibPostWin = crestPow = punchSum = glueGrSum = glueLevelSum = 0.0; crestPeak = 0.0f; punchCount = 0; glueCount = 0;
+    for (auto& h : histSib) for (auto& c : h) c.store (0, std::memory_order_relaxed);
+    for (auto& c : histSibPost) c.store (0, std::memory_order_relaxed);
+    passPunchDb.store (0.0f); passGlueGr.store (0.0f); passGlueLevel.store (-100.0f);
     passMidDb.store (-100.0f); passSideDb.store (-100.0f);
     mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
     for (auto& h : histPre) for (auto& c : h) c.store (0, std::memory_order_relaxed);
@@ -160,6 +174,21 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto width = value (qn::widthId);
     blockMono.clear();
 
+    // De-esser, transient shaper, glue
+    const auto deessDepth = value (qn::deessDepthId), deessFreq = value (qn::deessFreqId);
+    if (std::abs (deessFreq - deessFreqNow) > 0.5f)
+    {
+        for (auto& f : deessBand) { f.set (deessFreq, 1.5f, fs); f.reset(); }
+        sibPostAnalyser.set (deessFreq, 1.5f, fs); sibPostAnalyser.reset();
+        deessFreqNow = deessFreq;
+    }
+    const auto punch = value (qn::punchId);
+    const auto glueThr = value (qn::glueThrId);
+    const auto glueOn = glueThr < -0.05f;
+    const auto glueRelease = juce::jlimit (50.0f, 300.0f, 30000.0f / (float) (info.bpm > 1.0 ? info.bpm : 128.0));   // an 8th note
+    if (std::abs (glueRelease - glueReleaseNow) > 0.5f) { glueEnv.set (30.0f, glueRelease, fs); glueReleaseNow = glueRelease; }
+    float deessMax = 0.0f;
+
     // Compressor bands
     std::array<float, qn::numMbBands> thr {}, slope {}, grMax {};
     std::array<bool, qn::numMbBands> comp {};
@@ -182,6 +211,34 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 if (on[(size_t) s]) v = peaks[(size_t) s][(size_t) c].process (v);
             if (highOn) v = highCuts[(size_t) c * 2 + 1].lowpass (highCuts[(size_t) c * 2].lowpass (v));
             x[c] = v;
+        }
+
+        // De-esser: the sibilance band comes down only when it spikes 6 dB over its own recent level
+        const auto monoPre = 0.5f * (x[0] + x[1]);
+        for (int k = 0; k < 4; ++k) { const auto y = sibAnalysers[(size_t) k].bandpass (monoPre); sibWin[(size_t) k] += (double) y * y; }
+        if (deessDepth > 0.05f)
+        {
+            const auto b0 = deessBand[0].bandpass (x[0]) / 1.5f, b1 = deessBand[1].bandpass (x[1]) / 1.5f;
+            const auto e = deessEnv.process (0.5f * (std::abs (b0) + std::abs (b1)));
+            deessSlow += deessSlowCoeff * (e * e - deessSlow);
+            const auto thr = 2.0f * std::sqrt (deessSlow) + 1.0e-6f;
+            const auto red = e > thr ? juce::jmin (deessDepth, 20.0f * std::log10 (e / thr)) : 0.0f;
+            const auto g = juce::Decibels::decibelsToGain (-red);
+            x[0] -= b0 * (1.0f - g);
+            x[1] -= b1 * (1.0f - g);
+            deessMax = juce::jmax (deessMax, red);
+        }
+
+        // Transient shaper: the attack (fast follower over slow) raised or softened
+        {
+            const auto a = 0.5f * (std::abs (x[0]) + std::abs (x[1]));
+            const auto f = fastEnv.process (a), sl = slowEnv.process (a);
+            if (std::abs (punch) > 0.005f)
+            {
+                const auto attack = juce::jlimit (0.0f, 12.0f, 20.0f * std::log10 ((f + 1.0e-6f) / (sl + 1.0e-6f)));
+                const auto g = juce::Decibels::decibelsToGain (juce::jlimit (-9.0f, 9.0f, punch * attack));
+                x[0] *= g; x[1] *= g;
+            }
         }
 
         // Three bands (Linkwitz-Riley: they add back up flat)
@@ -215,6 +272,24 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             mbWinPost[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
             out[0] += l; out[1] += r;
         }
+        // Glue (the music bus): 2:1, 30 ms attack, release an 8th note, level-neutral make-up
+        {
+            const auto ge = glueEnv.process (juce::jmax (std::abs (out[0]), std::abs (out[1])));
+            const auto levelDb = 20.0f * std::log10 (ge + 1.0e-9f);
+            float gr = 0.0f;
+            if (glueOn)
+            {
+                const auto over = levelDb - glueThr;
+                gr = over > 3.0f ? over * 0.5f : over > -3.0f ? 0.5f * (over + 3.0f) * (over + 3.0f) / 12.0f : 0.0f;
+            }
+            if (ge > 1.0e-4f)
+            {
+                glueMakeup += makeupCoeff * (gr - glueMakeup);
+                if (settle == 0) { glueGrSum += gr; glueLevelSum += levelDb; ++glueCount; }
+            }
+            const auto g = juce::Decibels::decibelsToGain (glueMakeup - gr);
+            out[0] *= g; out[1] *= g;
+        }
         // Width: the side scaled (mid unchanged)
         const auto mid = 0.5f * (out[0] + out[1]);
         const auto side = 0.5f * (out[0] - out[1]) * width;
@@ -226,6 +301,13 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (settle > 0) { --settle; continue; }
         const auto mono = 0.5f * (out[0] + out[1]);
         if (blockMono.size() < blockMono.capacity()) blockMono.push_back (mono);
+        { const auto y = sibPostAnalyser.bandpass (mono); sibPostWin += (double) y * y; }
+        crestPeak = juce::jmax (crestPeak, std::abs (mono));
+        crestPow += (double) mono * mono;
+        {
+            const auto f = outFast.process (std::abs (mono)), sl = outSlow.process (std::abs (mono));
+            if (f > 1.0e-3f) attackMax = juce::jmax (attackMax, 20.0f * std::log10 ((f + 1.0e-6f) / (sl + 1.0e-6f)));
+        }
         winMid += (double) mid * mid;
         winSide += (double) side * side;
         for (int b = 0; b < analysis::numBands; ++b)
@@ -264,10 +346,22 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                     histPost[(size_t) b][(size_t) bin (post)].fetch_add (1, std::memory_order_relaxed);
                 }
             }
+            for (int k = 0; k < 4; ++k)
+                if (sibWin[(size_t) k] / mbWinCount > 1.0e-9) histSib[(size_t) k][(size_t) bin (sibWin[(size_t) k] / mbWinCount)].fetch_add (1, std::memory_order_relaxed);
+            if (sibPostWin / mbWinCount > 1.0e-9) histSibPost[(size_t) bin (sibPostWin / mbWinCount)].fetch_add (1, std::memory_order_relaxed);
+            if (crestPow / mbWinCount > 1.0e-7 && attackMax > 0.5f)   // windows with an attack in them
+            {
+                punchSum += attackMax;
+                passPunchDb.store ((float) (punchSum / ++punchCount));
+            }
+            attackMax = 0.0f;
+            if (glueCount > 0) { passGlueGr.store ((float) (glueGrSum / (double) glueCount)); passGlueLevel.store ((float) (glueLevelSum / (double) glueCount)); }
+            sibWin.fill (0.0); sibPostWin = crestPow = 0.0; crestPeak = 0.0f;
             mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
         }
     }
     for (int b = 0; b < qn::numMbBands; ++b) grNow[(size_t) b].store (juce::jmax (0.0f, grMax[(size_t) b]));
+    deessNow.store (deessMax);
     // For the resonance finder (the message thread reads it)
     if (! blockMono.empty())
     {
@@ -304,6 +398,20 @@ QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
         }
         return total;
     };
+    for (int k = 0; k < 4; ++k)
+    {
+        float p50, p95;
+        const auto heard = percentiles (histSib[(size_t) k], p50, p95) >= 20;
+        m.sibSwing[(size_t) k] = heard ? p95 - p50 : 0.0f;
+        m.sibPeak[(size_t) k] = heard ? p95 : -100.0f;
+    }
+    {
+        float p50, p95;
+        m.sibPostSwing = percentiles (histSibPost, p50, p95) >= 20 ? p95 - p50 : 0.0f;
+    }
+    m.punchDb = passPunchDb.load();
+    m.glueGrDb = passGlueGr.load();
+    m.glueLevelDb = passGlueLevel.load();
     for (int b = 0; b < qn::numMbBands; ++b)
     {
         percentiles (histPre[(size_t) b], m.p50Pre[(size_t) b], m.p95Pre[(size_t) b]);
@@ -315,7 +423,7 @@ QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
 std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int role) const
 {
     std::array<float, 10> diff {};
-    const auto& t = qn::targets::roles()[(size_t) juce::jlimit (0, 7, role)];
+    const auto& t = qn::targets::roles()[(size_t) juce::jlimit (0, qn::targets::musicBus, role)];
     if (t.from > t.to) return diff;
     const auto& shape = shapeFor (role);
 
@@ -355,6 +463,8 @@ int QuintessenceProcessor::effectiveRole() const
 {
     const auto chosen = (int) value (qn::roleId);
     if (chosen > 0) return chosen;
+    const auto track = getTrackName().toLowerCase();
+    if (track.contains ("bus") || track.contains ("group") || track.contains ("music")) return qn::targets::musicBus;   // the music bus: glue
     return juce::jlimit (0, 7, roleForTrack());
 }
 
@@ -467,6 +577,8 @@ bool QuintessenceProcessor::autoPass()
     for (auto& c : toneCooldown) c = juce::jmax (0, c - 1);
     for (auto& c : mbCooldown) c = juce::jmax (0, c - 1);
     widthCooldown = juce::jmax (0, widthCooldown - 1);
+    punchCooldown = juce::jmax (0, punchCooldown - 1);
+    deessCooldown = juce::jmax (0, deessCooldown - 1);
     for (auto& c : resonanceCooldown) --c.second;
     resonanceCooldown.erase (std::remove_if (resonanceCooldown.begin(), resonanceCooldown.end(), [] (const std::pair<float, int>& c) { return c.second <= 0; }),
                              resonanceCooldown.end());
@@ -532,6 +644,25 @@ bool QuintessenceProcessor::autoPass()
             measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s";
             if (! helped) widthCooldown = 8;
         }
+        else if (pending.kind == Pending::punch)
+        {
+            const auto after = std::abs (m.punchDb - qn::targets::punchTarget (role));
+            helped = m.punchDb > 0.0f && after < pending.errBefore - 0.3f;
+            measure = "punch " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from the target";
+            if (! helped) punchCooldown = 8;
+        }
+        else if (pending.kind == Pending::glue)
+        {
+            const auto after = std::abs (m.glueGrDb - qn::targets::glueTargetDb);
+            helped = after < pending.errBefore - 0.2f;
+            measure = "glue " + juce::String (m.glueGrDb, 1) + " dB average reduction (aiming for " + juce::String (qn::targets::glueTargetDb, 1) + ")";
+        }
+        else if (pending.kind == Pending::deess)
+        {
+            helped = m.sibPostSwing > 0.0f && m.sibPostSwing < pending.errBefore - 1.5f;
+            measure = "the sibilance spikes " + juce::String (pending.errBefore, 1) + " -> " + juce::String (m.sibPostSwing, 1) + " dB over its usual level";
+            if (! helped) deessCooldown = 12;
+        }
         else if (pending.kind == Pending::resonance)
         {
             // The peak stands out less, and the tone around it didn't suffer
@@ -564,11 +695,79 @@ bool QuintessenceProcessor::autoPass()
 
     // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
     // move (EQ, dynamics, width, resonances) take turns going first.
-    for (int k = 0; k < 4; ++k)
+    constexpr int kinds = 7;
+    for (int k = 0; k < kinds; ++k)
     {
-        const auto kind = (nextFirst + k) % 4;
-        const auto moved = kind == 0 ? eqMove (m, role) : kind == 1 ? mbMove (m, role) : kind == 2 ? widthMove (m, role) : resonanceMove (m, role);
-        if (moved) { nextFirst = (kind + 1) % 4; return true; }
+        const auto kind = (nextFirst + k) % kinds;
+        const auto moved = kind == 0 ? eqMove (m, role) : kind == 1 ? mbMove (m, role) : kind == 2 ? widthMove (m, role) : kind == 3 ? resonanceMove (m, role)
+                         : kind == 4 ? punchMove (m, role) : kind == 5 ? glueMove (m, role) : deessMove (m, role);
+        if (moved) { nextFirst = (kind + 1) % kinds; return true; }
+    }
+    return false;
+}
+
+bool QuintessenceProcessor::punchMove (const Measurement& m, int role)
+{
+    const auto target = qn::targets::punchTarget (role);
+    if (target <= 0.0f || value (qn::autoMbId) < 0.5f || m.group == 1 || m.punchDb <= 0.0f || punchCooldown > 0) return false;
+    const auto err = m.punchDb - target;
+    if (std::abs (err) < 1.5f) return false;
+    const auto punch = value (qn::punchId);
+    const auto next = juce::jlimit (-1.0f, 1.0f, punch + (err < 0.0f ? 0.25f : -0.25f));
+    if (std::abs (next - punch) < 0.01f) return false;
+    pending = { Pending::punch, -1, -1, { { qn::punchId, punch } }, std::abs (err), "punch " + juce::String (juce::roundToInt (next * 100.0f)) + "%" };
+    write (qn::punchId, next);
+    addLog ("Punch " + juce::String (juce::roundToInt (punch * 100.0f)) + "% -> " + juce::String (juce::roundToInt (next * 100.0f)) + "% (its hits stand "
+            + juce::String (m.punchDb, 1) + " dB over its body; a " + juce::String (qn::targets::roles()[(size_t) role].name) + " usually has about " + juce::String (juce::roundToInt (target)) + ")");
+    return true;
+}
+
+bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
+{
+    if (role != qn::targets::musicBus || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
+    const auto thr = value (qn::glueThrId);
+    const auto on = thr < -0.05f;
+    const auto err = (on ? m.glueGrDb : 0.0f) - qn::targets::glueTargetDb;
+    if (on && std::abs (err) < 0.5f) return false;
+    // First: 3 dB under the bus's average level (about 1.5 dB of reduction at 2:1); then 1.5 dB steps towards the target
+    const auto next = juce::jlimit (-40.0f, -0.1f, on ? thr + (err < 0.0f ? -1.5f : 1.5f) : std::round (m.glueLevelDb - 3.0f));
+    if (std::abs (next - thr) < 0.05f) return false;
+    pending = { Pending::glue, -1, -1, { { qn::glueThrId, thr } }, std::abs (err), "glue at " + juce::String (next, 1) + " dB" };
+    write (qn::glueThrId, next);
+    addLog ("Glue " + (on ? "threshold " + juce::String (thr, 1) + " -> " : juce::String ("on at ")) + juce::String (next, 1) + " dB (2:1, release an 8th note; "
+            + (on ? "it was holding " + juce::String (m.glueGrDb, 1) + " dB on average" : juce::String ("the bus averages ") + juce::String (m.glueLevelDb, 1) + " dB")
+            + ", aiming for " + juce::String (qn::targets::glueTargetDb, 1) + ")");
+    return true;
+}
+
+bool QuintessenceProcessor::deessMove (const Measurement& m, int role)
+{
+    if (role != 6 || value (qn::autoMbId) < 0.5f || m.group == 1 || deessCooldown > 0) return false;
+    const auto depth = value (qn::deessDepthId);
+    if (depth < 0.05f)
+    {
+        // Where the sibilance is: of the bands that spike, the one whose spikes are loudest
+        int best = -1;
+        for (int k = 0; k < 4; ++k)
+            if (m.sibSwing[(size_t) k] >= qn::targets::sibilanceSwingDb && m.sibPeak[(size_t) k] > m.p95Pre[1] - 30.0f
+                && m.sibSwing[(size_t) k] > (m.p95Pre[1] - m.p50Pre[1]) + 4.0f   // spikier than the vocal itself: 's' sounds, not its phrasing
+                && (best < 0 || m.sibPeak[(size_t) k] > m.sibPeak[(size_t) best])) best = k;
+        if (best < 0) return false;
+        const auto hz = qn::sibilanceCentres[(size_t) best];
+        pending = { Pending::deess, -1, -1, { { qn::deessFreqId, value (qn::deessFreqId) }, { qn::deessDepthId, depth } }, m.sibSwing[(size_t) best],
+                    "de-esser at " + juce::String (hz / 1000.0f, 1) + " kHz" };
+        write (qn::deessFreqId, hz);
+        write (qn::deessDepthId, 6.0f);
+        addLog ("De-esser on at " + juce::String (hz / 1000.0f, 1) + " kHz, up to 6 dB (the 's' sounds spike " + juce::String (m.sibSwing[(size_t) best], 1)
+                + " dB over the vocal's usual level there; it acts only on the spikes)");
+        return true;
+    }
+    if (m.sibPostSwing > qn::targets::sibilanceSwingDb + 2.0f && depth < 10.0f)
+    {
+        pending = { Pending::deess, -1, -1, { { qn::deessDepthId, depth } }, m.sibPostSwing, "de-esser up to " + juce::String (depth + 2.0f, 0) + " dB" };
+        write (qn::deessDepthId, depth + 2.0f);
+        addLog ("De-esser deeper: up to " + juce::String (depth + 2.0f, 0) + " dB (the spikes still stand " + juce::String (m.sibPostSwing, 1) + " dB out)");
+        return true;
     }
     return false;
 }
@@ -810,6 +1009,9 @@ void QuintessenceProcessor::relearn()
         }
     if (value (qn::lowCutLockId) < 0.5f) write (qn::lowCutId, 20.0f);
     if (value (qn::widthLockId) < 0.5f) write (qn::widthId, 1.0f);
+    write (qn::punchId, 0.0f);
+    write (qn::glueThrId, 0.0f);
+    write (qn::deessDepthId, 0.0f);
     candidates.clear();
     resonanceCooldown.clear();
     widthCooldown = 0;
