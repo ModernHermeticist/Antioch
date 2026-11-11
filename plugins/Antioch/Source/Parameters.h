@@ -17,6 +17,8 @@ namespace Params
     inline const juce::String verbLevel { "verb" };
     inline const juce::String throwLevel{ "throwlvl" };
     inline const juce::String output    { "output" };
+    inline const juce::String autoSpace { "auto_space" };   // the echo and reverb level set itself: the tail sits where the role wants it
+    inline const juce::String spaceTrim { "space_trim" };   // ... by this much (dB, on the echo, reverb and freeze)
 
     // ---- Echo section ----
     inline const juce::String resonance { "resonance" };

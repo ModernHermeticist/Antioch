@@ -23,6 +23,9 @@ namespace qn
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v <= lowCutOff ? juce::String ("Off") : juce::String (juce::roundToInt (v)) + " Hz"; })));
         l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { highCutId, 1 }, "High cut", hz (1000.0f, 20000.0f), 20000.0f,
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v >= highCutOff ? juce::String ("Off") : juce::String (v / 1000.0f, 1) + " kHz"; })));
+        l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { widthId, 1 }, "Width", juce::NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f,
+                   juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v * 100.0f)) + "%"; })));
+        l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { widthLockId, 1 }, "Width locked", false, boolNotAutomatable));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { lowCutLockId, 1 }, "Low cut locked", false, boolNotAutomatable));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { highCutLockId, 1 }, "High cut locked", false, boolNotAutomatable));
 

@@ -625,7 +625,46 @@ int main (int argc, char** argv)
         AntiochProcessor pad;
         pad.captureFreshValues();
         named (pad, "Pads");
-        check (! pad.tryRoleSetup() && (int) pad.apvts.getRawParameterValue (Params::Throw::autoMode)->load() == 0, "on pads it stays as it is");
+        check (pad.tryRoleSetup() && (int) pad.apvts.getRawParameterValue (Params::Throw::autoMode)->load() == 0
+                   && pad.apvts.getRawParameterValue (Params::autoSpace)->load() > 0.5f, "on pads: no throws, but its space sets itself");
+    }
+
+    section ("Auto space level");
+    {
+        auto p = make();
+        juce::AudioProcessor::TrackProperties props;
+        props.name = "Lead";
+        p->updateTrackProperties (props);
+        set (*p, Params::autoSpace, 1.0f);
+        set (*p, Params::echoLevel, 1.0f);   // far too much space for a lead
+        set (*p, Params::verbLevel, 1.0f);
+        set (*p, Params::throwLevel, 0.0f);
+        auto plucks = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto inNote = std::fmod (t, 0.5);
+                const auto v = 0.3f * (float) (std::sin (juce::MathConstants<double>::twoPi * 440.0 * t) * std::exp (-inNote * 6.0));
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        int64_t at = 0;
+        const auto before = [&] { render (*p, 4.3, [&] (juce::AudioBuffer<float>& b, int64_t pos) { plucks (b, at + pos); }); at += (int64_t) (4.3 * sampleRate); }; 
+        before();
+        const auto tailBefore = p->spaceTailDb.load();
+        for (int i = 0; i < 16; ++i) { before(); p->spacePass(); }
+        before();
+        const auto tailAfter = p->spaceTailDb.load();
+        const auto trim = p->apvts.getRawParameterValue (Params::spaceTrim)->load();
+        check (trim < -3.0f && std::abs (tailAfter + 12.0f) < std::abs (tailBefore + 12.0f) - 3.0f && p->spaceKept.load() >= 2,
+               "on a lead with too much space it brings the echo and reverb down, a checked step at a time (tail "
+                   + juce::String (tailBefore, 1) + " -> " + juce::String (tailAfter, 1) + " dB under the dry, target -12; trim " + juce::String (trim, 1) + " dB)");
+        auto off = make();
+        off->updateTrackProperties (props);
+        set (*off, Params::echoLevel, 1.0f);
+        render (*off, 4.3, plucks);
+        check (! off->spacePass() && std::abs (off->apvts.getRawParameterValue (Params::spaceTrim)->load()) < 0.01f, "off, it leaves the space alone");
     }
 
     section ("State save/restore");

@@ -7,6 +7,7 @@ namespace qn
     constexpr int numSlots = 6, numMbBands = 3;
 
     inline const juce::String autoEqId { "autoeq" }, autoMbId { "automb" }, roleId { "role" };
+    inline const juce::String widthId { "width" }, widthLockId { "width_lock" };
     inline const juce::String lowCutId { "lowcut" }, highCutId { "highcut" }, lowCutLockId { "lowcut_lock" }, highCutLockId { "highcut_lock" };
 
     inline juce::String slotId (int slot, const char* what) { return "b" + juce::String (slot + 1) + "_" + what; }
@@ -24,10 +25,10 @@ namespace qn
     inline juce::String mbLockId (int b) { return mbId (b, "lock"); }
 
     /** Why a band is where it is. */
-    enum Reason { free = 0, roleTone, masking, mud, harshness, yours, numReasons };
+    enum Reason { free = 0, roleTone, masking, mud, harshness, yours, resonance, numReasons };
     inline const juce::StringArray& reasonNames()
     {
-        static const juce::StringArray n { "Free", "Role tone", "Masking", "Mud", "Harshness", "Your setting" };
+        static const juce::StringArray n { "Free", "Role tone", "Masking", "Mud", "Harshness", "Your setting", "Resonance" };
         return n;
     }
 

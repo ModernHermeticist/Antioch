@@ -10,6 +10,7 @@
 //  - Dynamics: how far the loud moments of each band (low / mid / high) may stand above its
 //    typical level (95th minus 50th percentile of 50 ms levels, dB; 0 = leave it alone),
 //    and the ratio to use when it needs holding.
+//  - Width: how loud the side sits under the middle (dB; 0 = leave the width alone).
 
 #include <array>
 
@@ -23,19 +24,20 @@ namespace qn::targets
         float lowCutHz;
         std::array<float, 3> swing;    // dB per multiband band
         float ratio;
+        float sideDb;                  // side minus mid, dB (0: leave alone)
     };
 
     inline const std::array<Role, 8>& roles()
     {
         static const std::array<Role, 8> r {{
-            { "track", {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f },
-            { "kick",  { 0, 0, -2, -9, -13, -15, -14, -15, -20, -26 }, 1, 7, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f },   // transients are the point
-            { "bass",  { -2, 0, -2, -8, -13, -17, -20, -24, -28, -32 }, 0, 5, 0.0f,  { 5.0f, 7.0f, 0.0f }, 4.0f },
-            { "hi-hat",  { -40, -40, -40, -35, -25, -15, -6, -1, 0, -3 }, 6, 9, 300.0f, { 0.0f, 0.0f, 8.0f }, 2.0f },
-            { "pad",  { -30, -20, -8, -4, -1, 0, -2, -5, -9, -14 }, 2, 9, 100.0f,   { 6.0f, 6.0f, 7.0f }, 2.5f },
-            { "lead",  { -30, -24, -12, -5, -1, 0, -1, -3, -6, -11 }, 3, 9, 150.0f,  { 7.0f, 6.0f, 7.0f }, 3.0f },
-            { "vocal", { -40, -30, -12, -5, -1, 0, 0, -2, -6, -12 }, 3, 9, 100.0f,   { 8.0f, 5.0f, 6.0f }, 3.0f },
-            { "FX",    {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f },
+            { "track", {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f },
+            { "kick",  { 0, 0, -2, -9, -13, -15, -14, -15, -20, -26 }, 1, 7, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, -30.0f },   // transients are the point; mono
+            { "bass",  { -2, 0, -2, -8, -13, -17, -20, -24, -28, -32 }, 0, 5, 0.0f,  { 5.0f, 7.0f, 0.0f }, 4.0f, -20.0f },
+            { "hi-hat",  { -40, -40, -40, -35, -25, -15, -6, -1, 0, -3 }, 6, 9, 300.0f, { 0.0f, 0.0f, 8.0f }, 2.0f, -8.0f },
+            { "pad",  { -30, -20, -8, -4, -1, 0, -2, -5, -9, -14 }, 2, 9, 100.0f,   { 6.0f, 6.0f, 7.0f }, 2.5f, -6.0f },
+            { "lead",  { -30, -24, -12, -5, -1, 0, -1, -3, -6, -11 }, 3, 9, 150.0f,  { 7.0f, 6.0f, 7.0f }, 3.0f, -9.0f },
+            { "vocal", { -40, -30, -12, -5, -1, 0, 0, -2, -6, -12 }, 3, 9, 100.0f,   { 8.0f, 5.0f, 6.0f }, 3.0f, -16.0f },
+            { "FX",    {}, 1, 0, 0.0f,   { 0.0f, 0.0f, 0.0f }, 1.0f, 0.0f },
         }};
         return r;
     }

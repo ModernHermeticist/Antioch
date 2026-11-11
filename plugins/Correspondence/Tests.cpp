@@ -1211,13 +1211,70 @@ int main (int argc, char** argv)
         check (p->undoHarmonyIdea() && p->currentSettings().slots[(size_t) before.count - 1].quality == before.slots[(size_t) before.count - 1].quality, "and Undo puts it back");
 
         const auto vars = p->sectionVariations (suite::SectionType::Drop);
-        check (vars.size() == 3 && vars[0].name == "Re-rhythmed" && vars[1].name == "Thinned out", "three variations for the drop");
+        check (vars.size() == 4 && vars[0].name == "Re-rhythmed" && vars[1].name == "Thinned out" && vars[3].name == "New groove", "four variations for the drop");
         check (p->sectionVariations (suite::SectionType::Breakdown).back().name == "Re-harmonised", "and the breakdown can be re-harmonised");
         const auto dropChords = p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop];
         check (p->applyVariation (suite::SectionType::Drop, 1) && p->currentSongPatterns().arp[(size_t) suite::SectionType::Drop] == 0
                    && p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop] == 1,
                "thinned out: the drop's arp goes and its chords sustain");
         check (p->undoVariation() && p->currentSongPatterns().chords[(size_t) suite::SectionType::Drop] == dropChords, "and Undo brings the drop back");
+    }
+
+    section ("Writing tools: arps, basslines, breakdowns, hook variations");
+    {
+        auto s = aMinor();
+        s.arpOctaves = 2;
+        auto arpWith = [&] (chords::ArpPattern a) { auto t = s; t.arpPattern = a; return chords::arpClip (t); };
+        const auto gated = arpWith (chords::ArpPattern::Gated), threeThree = arpWith (chords::ArpPattern::ThreeThreeTwo);
+        const auto broken = arpWith (chords::ArpPattern::Broken), jumps = arpWith (chords::ArpPattern::OctaveJumps);
+        check (gated.size() == 48 && threeThree.size() == 24, "gated arp: x x - x (48 notes); 3-3-2 arp: 3 hits per 2 beats (24)");
+        check (broken[1].pitch > broken[2].pitch && broken[2].pitch > broken[0].pitch, "broken arp: 1-3-2-4");
+        check (jumps[1].pitch == jumps[0].pitch + 12, "octave-jump arp: each note, then an octave up");
+        auto bassWith = [&] (chords::BassPattern b) { auto t = s; t.bassPattern = b; return chords::bassClip (t); };
+        const auto oct = bassWith (chords::BassPattern::OctaveOffbeat), pump = bassWith (chords::BassPattern::Pumping);
+        check (oct.size() == 16 && oct[1].pitch == oct[0].pitch + 12 && std::abs (oct[0].start - 0.5) < 1.0e-9, "octave offbeat bass: offbeats, every second one an octave up");
+        check (pump.size() == 16 && std::abs (pump[0].start - 0.25) < 1.0e-9 && pump[0].length > 0.6, "pumping bass: a 16th after each beat, held to the next");
+
+        chords::MelodySettings ms;
+        const auto mel = chords::melody (s, ms);
+        const auto cycleQ = s.quartersPerChord * s.count;
+        const auto hint = chords::hookHint (mel, cycleQ);
+        bool slow = ! hint.empty();
+        for (const auto& n : hint) slow = slow && n.start < cycleQ && std::any_of (mel.begin(), mel.end(), [&] (const chords::Note& m) { return std::abs (m.start * 2.0 - n.start) < 1.0e-9 && m.pitch == n.pitch; });
+        check (slow, "hook hint: the melody's opening at half speed (" + juce::String ((int) hint.size()) + " notes)");
+
+        const auto answer = chords::callResponse (mel, s);
+        const auto half = cycleQ / 2.0;
+        std::vector<double> callTimes, answerTimes;
+        for (const auto& n : answer) (n.start < half ? callTimes : answerTimes).push_back (n.start < half ? n.start : n.start - half);
+        const auto last = std::max_element (answer.begin(), answer.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+        const auto lastSlot = (int) std::floor (last->start / s.quartersPerChord);
+        check (callTimes == answerTimes && ((last->pitch % 12) + 12) % 12 == chords::chordRootPitchClass (s, lastSlot),
+               "call and response: the answer repeats the call's rhythm and ends on its chord's root");
+
+        // Four drops: each later one varies the hook its own way
+        suite::SectionMap map;
+        map.totalBars = 28; map.count = 7;
+        const int starts[] = { 1, 5, 9, 13, 17, 21, 25 };
+        for (int i = 0; i < 7; ++i) map.sections[(size_t) i] = { starts[i], i % 2 == 0 ? suite::SectionType::Drop : suite::SectionType::Breakdown };
+        chords::SongPatterns patterns;
+        patterns.liftLaterDrops = false; patterns.doubleFinalDrop = false; patterns.phraseVariation = false;
+        patterns.lead = { 0, 0, 0, 0, 1, 0 };
+        const auto lead = chords::songClip (s, map, patterns, chords::SongPart::Lead);
+        std::array<std::vector<std::pair<int, int>>, 4> drops;
+        for (const auto& n : lead)
+        {
+            const auto section = (int) std::floor (n.start / 16.0 + 1.0e-9);
+            if (section % 2 == 0) drops[(size_t) section / 2].push_back ({ (int) std::lround ((n.start - section * 16.0) * 4.0), n.pitch });
+        }
+        for (auto& d : drops) std::sort (d.begin(), d.end());
+        if (std::getenv ("CDEBUG")) for (auto& d : drops) { for (auto& [t, pch] : d) std::cout << t << ":" << pch << " "; std::cout << std::endl; }
+        check (drops[1] != drops[0] && drops[2] != drops[1] && drops[3] != drops[2] && drops[3] != drops[1],
+               "four drops, four versions of the hook: as written, embellished, answered, pushed");
+
+        const auto vars = harmony::variations (patterns, suite::SectionType::Breakdown);
+        const auto writer = std::find_if (vars.begin(), vars.end(), [] (const harmony::Variation& v) { return v.name == "Breakdown writer"; });
+        check (writer != vars.end() && writer->lead == 3 && writer->bass == 0 && writer->breakdownStart == 1, "the breakdown writer: held chords from VI, no bass, the hook hinted");
     }
 
     section ("Song pack for a vocalist");

@@ -112,6 +112,13 @@ three tabs:
   the length you choose) of every sung phrase: put Antioch on the vocal and play the song once
   with Solve et Coagula hearing the vocal, and its last words echo out wherever a phrase ends.
 
+**Auto space level** (switched on by itself on a lead, vocal or pad track): every 4 s of
+the part playing outside breakdowns, Antioch measures how far its echo and reverb sit under
+the dry part and steers the *Space trim* towards what the role usually has: a lead's tail
+about 12 dB under it, a vocal's 14, a pad's 10. One step of up to 1.5 dB at a time, kept if
+the tail got closer, undone if not, and logged in *What changed?*. Breakdowns are left to the
+section scenes, which open the space on purpose.
+
 ![Antioch reverb tab](docs/antioch_reverb.png)
 ![Antioch throw tab](docs/antioch_throw.png)
 
@@ -219,6 +226,14 @@ the last few bars.
 
 Put it on any insert. A typical setup: Rhythm on a pad or pluck bus, and Polarity
 (Tempo, *Bass (tight)*) on the bass.
+
+**Kick and bass.** With the suite kick shared, Kybalion reads the kick's body pitch and
+compares it with the key. In *What changed?* you get a line like "Kick body 52 Hz (G#1): tune
+the kick +1 semitone to the root (A)". **Duck focus** can duck only *around the kick's note*:
+the kick's note comes down and the rest of the bass keeps sustaining through the kick. On
+*Auto* (set by itself on a bass track) it measures how much of the bass's low end sits on
+the kick's note. If less than half does, it ducks around the note; otherwise it ducks the
+whole sound. Each change is logged.
 
 ## Vibration: lead polish strip
 
@@ -671,7 +686,10 @@ The second, third and later drops build on the first, so the last drop isn't a r
   in Song patterns). It's also **varied** there (passing notes across leaps, an octave
   climax in the last phrase) with a **harmony line** a diatonic third below, written as
   the SONG HARMONY clip and track in Export all (*Vary the lead + harmony* in Song
-  patterns).
+  patterns). Each later drop varies the hook its own way: the second is embellished,
+  the third **answers itself** (call and response: the second half repeats the first
+  half's rhythm, moved with the chords, ending on the chord's root), and the fourth and
+  later are **pushed** (notes on the 8th-note grid come a 16th early) and embellished.
 
 ### Final-drop key change
 
@@ -962,6 +980,14 @@ first note of each phrase up into its pitch from 2 semitones below, over a 1/16,
 bend. Choose the bend range your synth uses (2 or 12 semitones) so the scoop is the right
 size, or *Plain lead* for neither. The lead track in the all-parts file gets the glides.
 
+**More patterns:** bass *Octave offbeat* (every second offbeat an octave up) and *Pumping*
+(a 16th after each beat, held to the next, so it never sits on the kick); arp *Broken*
+(1-3-2-4), *Octave jumps*, *Gated* (x x - x) and *3-3-2*, with accents. In the song
+patterns a section's lead can be a **Hook hint**: the hook's opening at half speed and
+softer, for breakdowns. The **Vary...** menu has a **Breakdown writer** (held chords from
+VI, no bass or arp, the hook hinted) and a **New groove** for drops (octave-offbeat bass,
+3-3-2 arp).
+
 **Climbing chords in drop 2+** (on by default): each chord in later drops gains its top
 note an octave higher, so the second drop is bigger and brighter with the same harmony.
 
@@ -1131,6 +1157,16 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
   set in the main sections.
 - **A new track settles fast:** the first six passes are 1.5 s, and steps go up to 2.5 dB
   while a band is more than 4 dB off. A heavy 250 Hz on a new pad is dipped in about 9 s.
+- **Width:** the side is steered towards how wide the role usually is (a lead's side about
+  9 dB under its middle, a pad's 6, a vocal's 16, a bass's 20, so the low end stays mono),
+  2 dB a step and checked. A mono part is never widened.
+- **Ringing peaks:** a narrow peak 10-35 dB above the sound around it that's there pass
+  after pass for 12 s of music (a filter's resonance, not a note) gets a narrow dip
+  (*Resonance*), deeper each time it's still there, and is checked like every move.
+- **Spire tips:** what to change in Spire so the EQ has less to do. There's a starting patch
+  for the role, plus tips from what it measures. For example, "Dull: open Filter 1's cutoff
+  or add OSC 3 an octave up", "Narrow for a lead: unison 7-9 voices, detune 25-35", or "A
+  ringing peak at 1234 Hz: usually Filter 1's resonance".
 - **Touch a band and it's yours:** it locks and the automation leaves it alone. Unlock it
   to hand it back. **Re-learn** clears the automatic moves (carves and your own bands
   stay); Ouroboros' learning pass does the same. **Auto EQ** and **Auto dynamics**

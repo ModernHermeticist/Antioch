@@ -7,6 +7,7 @@
 #include "SectionBus.h"
 #include "Scenes.h"
 #include "Parameters.h"
+#include "MoveLog.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
 {
@@ -46,7 +47,19 @@ public:
     {
         scenes.watchTweaks (isMorphing());
         onLeadTrack.store (roleForTrack() == suite::roleLead);
+        spacePass();
     }
+
+    /** Auto space level: every 4 s of the dry part playing (outside breakdowns, where the scenes
+        open the space on purpose), how far the echo and reverb sit under the dry part, against
+        what the track's role usually has (a lead's tail about 12 dB under it). One trim step
+        (up to 1.5 dB) a pass; the next pass keeps it if the tail got closer to the target, and
+        undoes it otherwise. Returns true if it moved or undid. Message thread (tests call it). */
+    bool spacePass();
+    static float spaceTargetFor (int role);   // tail minus dry, dB (0: leave it alone)
+    static constexpr float spacePassSeconds = 4.0f;
+    std::atomic<float> spaceHeard { 0.0f }, spaceTailDb { -100.0f };   // this pass: seconds heard, tail minus dry (dB)
+    std::atomic<int> spaceKept { 0 }, spaceUndone { 0 };
     std::atomic<bool> onLeadTrack { false };   // on the lead itself, lead-aware space stays out of the way
     std::atomic<float> leadRoomNow { 1.0f };
     std::atomic<int> chordShift { 0 };   // semitones the resonators follow the chord (tests, UI)    // the wet gain lead-aware space is applying (tests, UI)
@@ -75,7 +88,9 @@ public:
         end of every section (into the next). */
     bool applyRoleSetup (int role, const juce::String&) override
     {
-        if (role != suite::roleVocal && role != suite::roleLead) return false;
+        if (role == suite::roleVocal || role == suite::roleLead || role == suite::rolePads)
+            setParameterPlain (apvts, Params::autoSpace, 1.0f);   // its space sets itself
+        if (role != suite::roleVocal && role != suite::roleLead) return role == suite::rolePads;
         setParameterPlain (apvts, Params::Throw::autoMode, (float) (role == suite::roleVocal ? Params::Throw::autoAtVocalEnds : Params::Throw::autoAtSectionEnds));
         setParameterPlain (apvts, Params::Throw::autoLen, role == suite::roleVocal ? 1.0f : 2.0f);   // last 1/8, or the last beat
         return true;
@@ -92,6 +107,10 @@ public:
     std::atomic<float> pumpNow { 1.0f };          // the reverb pump's lowest gain in the last block
     std::atomic<bool> vocalMarksFound { false };  // Solve et Coagula has marked vocal bars
     float reverbPump = 1.0f;
+    std::atomic<bool> spaceReset { true };
+    double spaceDry = 0.0, spaceWet = 0.0;
+    int64_t spaceSamples = 0;
+    struct { bool pending = false; float trimBefore = 0.0f, errBefore = 0.0f; int rest = 0; } space;
 
 private:
     juce::AudioParameterBool* boolParam (const juce::String& id);

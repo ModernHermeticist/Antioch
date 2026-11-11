@@ -15,6 +15,7 @@ namespace
             case qn::mud:       return Colours::brass;
             case qn::harshness: return Colours::ember;
             case qn::yours:     return Colours::moss;
+            case qn::resonance: return juce::Colour (0xffe89a5a);
             default:            return Colours::dimText;
         }
     }
@@ -26,11 +27,30 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
       autoMb (p.apvts, qn::autoMbId, "Auto dynamics", quint),
       role (p.apvts, qn::roleId, "Role"),
       lowCut (p.apvts, qn::lowCutId, "Low cut", quint), highCut (p.apvts, qn::highCutId, "High cut", quint),
-      lowLock (p.apvts, qn::lowCutLockId, "Locked", quint), highLock (p.apvts, qn::highCutLockId, "Locked", quint)
+      width (p.apvts, qn::widthId, "Width", quint),
+      lowLock (p.apvts, qn::lowCutLockId, "Locked", quint), highLock (p.apvts, qn::highCutLockId, "Locked", quint),
+      widthLock (p.apvts, qn::widthLockId, "Locked", quint)
 {
     setLookAndFeel (&lnf);
     relearnButton.onClick = [this] { processor.relearn(); };
-    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &role, &relearnButton, &lowCut, &highCut, &lowLock, &highLock })
+    tipsButton.onClick = [this]
+    {
+        auto tips = processor.spireTips();
+        const auto start = processor.spireStart();
+        juce::String text;
+        if (start.isNotEmpty()) text << "Starting point\n" << start << "\n\n";
+        text << (tips.isEmpty() ? juce::String ("Nothing to change in Spire right now (play the track for a few seconds first).")
+                                : "From what it hears\n- " + tips.joinIntoString ("\n- "));
+        auto label = std::make_unique<juce::Label>();
+        label->setText (text, juce::dontSendNotification);
+        label->setFont (juce::FontOptions (13.0f));
+        label->setJustificationType (juce::Justification::topLeft);
+        label->setColour (juce::Label::textColourId, Colours::text);
+        label->setSize (460, 80 + 36 * (tips.size() + (start.isNotEmpty() ? 2 : 0)));
+        juce::CallOutBox::launchAsynchronously (std::move (label), tipsButton.getScreenBounds(), nullptr);
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &role, &relearnButton, &tipsButton, &lowCut, &highCut, &width,
+                                                              &lowLock, &highLock, &widthLock })
         addAndMakeVisible (c);
     for (int s = 0; s < qn::numSlots; ++s)
     {
@@ -54,8 +74,8 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         mbLocks.push_back (std::make_unique<Toggle> (p.apvts, qn::mbLockId (b), "Locked", Colours::verdigris));
         addAndMakeVisible (*mbLocks.back());
     }
-    lowCut.maxHeight = highCut.maxHeight = 74;
-    setSize (1000, 700);
+    lowCut.maxHeight = highCut.maxHeight = width.maxHeight = 74;
+    setSize (1100, 700);
     startTimerHz (10);
 }
 
@@ -125,10 +145,10 @@ void QuintessenceEditor::drawCurve (juce::Graphics& g, juce::Rectangle<int> area
 void QuintessenceEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 900, 32 }, "QUINTESSENCE", "self-managing EQ and multiband dynamics", quint);
+    drawHeader (g, { 20, 12, 1000, 32 }, "QUINTESSENCE", "self-managing EQ and multiband dynamics", quint);
     drawPanel (g, curveArea, "Where it is, and what it's steering out", quint);
     drawPanel (g, controlArea, "Automation");
-    drawPanel (g, cutArea, "Cuts");
+    drawPanel (g, cutArea, "Cuts and width");
     drawPanel (g, mbArea, "Dynamics (level-neutral)", Colours::verdigris);
     drawPanel (g, logArea, "What it did");
     drawCurve (g, curveArea.reduced (14, 10).withTrimmedTop (18));
@@ -221,7 +241,7 @@ void QuintessenceEditor::resized()
     bounds.removeFromTop (12);
 
     auto bottom = bounds;
-    cutArea = bottom.removeFromLeft (190);
+    cutArea = bottom.removeFromLeft (280);
     bottom.removeFromLeft (12);
     mbArea = bottom.removeFromLeft (390);
     bottom.removeFromLeft (12);
@@ -233,14 +253,20 @@ void QuintessenceEditor::resized()
     autoMb.setBounds (toggles.reduced (2, 0));
     role.setBounds (c.removeFromTop (54));
     c.removeFromTop (4);
-    relearnButton.setBounds (c.removeFromTop (28).removeFromLeft (120));
+    auto buttons = c.removeFromTop (28);
+    relearnButton.setBounds (buttons.removeFromLeft (120));
+    buttons.removeFromLeft (8);
+    tipsButton.setBounds (buttons.removeFromLeft (120));
 
     auto cu = cutArea.reduced (10, 8).withTrimmedTop (18);
-    auto left = cu.removeFromLeft (cu.getWidth() / 2), right = cu;
-    lowLock.setBounds (left.removeFromBottom (24));
+    const auto third = cu.getWidth() / 3;
+    auto left = cu.removeFromLeft (third), middle = cu.removeFromLeft (third), right = cu;
+    lowLock.setBounds (left.removeFromBottom (24).reduced (2, 0));
     lowCut.setBounds (left);
-    highLock.setBounds (right.removeFromBottom (24));
-    highCut.setBounds (right);
+    highLock.setBounds (middle.removeFromBottom (24).reduced (2, 0));
+    highCut.setBounds (middle);
+    widthLock.setBounds (right.removeFromBottom (24).reduced (2, 0));
+    width.setBounds (right);
 
     auto mb = mbArea.reduced (10, 8).withTrimmedTop (18);
     const auto bw = mb.getWidth() / qn::numMbBands;

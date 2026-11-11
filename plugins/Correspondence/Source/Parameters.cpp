@@ -12,8 +12,8 @@ namespace Params
         const StringArray degreeNames { "I", "II", "III", "IV", "V", "VI", "VII" };
         const StringArray voicingNames { "Close", "Open", "Wide" };
         const StringArray chordPatternNames { "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
-        const StringArray bassPatternNames { "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)" };
-        const StringArray arpPatternNames { "Up", "Down", "Up-down", "Bounce" };
+        const StringArray bassPatternNames { "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)", "Octave offbeat", "Pumping" };
+        const StringArray arpPatternNames { "Up", "Down", "Up-down", "Bounce", "Broken", "Octave jumps", "Gated", "3-3-2" };
 
         int choiceIndex (const AudioProcessorValueTreeState& s, const String& pid)
         {

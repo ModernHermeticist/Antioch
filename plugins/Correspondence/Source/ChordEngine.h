@@ -18,7 +18,7 @@ namespace chords
     enum class Quality { Auto, Major, Minor, Sus2, Sus4, Seventh, Add9, Power };
     enum class Voicing { Close, Open, Wide };
     enum class ChordPattern { Sustain, OffbeatStabs, Pluck332, Gate16 };
-    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain, Walking, Mine };
+    enum class BassPattern { Offbeat, Rolling, Galloping, Sustain, Walking, Mine, OctaveOffbeat, Pumping };
 
     /** Bassline DNA: where in the bar you put bass notes (16 steps) and where you jump up an
         octave, learned from your own bass clips. */
@@ -28,7 +28,7 @@ namespace chords
         std::array<float, 16> onset {}, octave {};
         int clips = 0, notes = 0;
     };
-    enum class ArpPattern { Up, Down, UpDown, Bounce };
+    enum class ArpPattern { Up, Down, UpDown, Bounce, Broken, OctaveJumps, Gated, ThreeThreeTwo };
 
     inline const juce::StringArray& qualityNames()
     {
@@ -349,6 +349,18 @@ namespace chords
                 case BassPattern::Galloping: forEachHit (L, emit, { 2, 3, 6, 7, 10, 11, 14, 15 }, 0.2); break;
                 case BassPattern::Sustain:   emit (0.0, L - 0.02, true); break;
                 case BassPattern::Walking:   break;   // handled above
+                case BassPattern::OctaveOffbeat:
+                    // Offbeats, every second one an octave up: the bounce of a lot of uplifting basslines
+                    forEachHit (L, [&] (double t, double len, bool)
+                    {
+                        const auto up = ((int) std::lround (t * 4.0) % 8) == 6;
+                        notes.push_back ({ pitch + (up ? 12 : 0), base + t, len, up ? 100 : 110 });
+                    }, { 2, 6, 10, 14 }, 0.4);
+                    break;
+                case BassPattern::Pumping:
+                    // Starts a 16th after each beat and holds to the next: leaves the kick alone without any ducking
+                    forEachHit (L, emit, { 1, 5, 9, 13 }, 0.7);
+                    break;
             }
         }
         return notes;
@@ -372,22 +384,45 @@ namespace chords
 
             std::vector<int> order;
             const auto n = (int) tones.size();
+            const auto chordSize = (int) voiced[i].size();
             switch (s.arpPattern)
             {
-                case ArpPattern::Up:     for (int k = 0; k < n; ++k) order.push_back (k); break;
+                case ArpPattern::Up:
+                case ArpPattern::Gated:
+                case ArpPattern::ThreeThreeTwo: for (int k = 0; k < n; ++k) order.push_back (k); break;
                 case ArpPattern::Down:   for (int k = n - 1; k >= 0; --k) order.push_back (k); break;
                 case ArpPattern::UpDown:
                     for (int k = 0; k < n; ++k) order.push_back (k);
                     for (int k = n - 2; k > 0; --k) order.push_back (k);
                     break;
                 case ArpPattern::Bounce: for (int k = 1; k < n; ++k) { order.push_back (0); order.push_back (k); } break;
+                case ArpPattern::Broken:   // 1-3-2-4: skip up a note, step back
+                    for (int k = 0; k + 2 < n; ++k) { order.push_back (k); order.push_back (k + 2); }
+                    if (order.empty()) for (int k = 0; k < n; ++k) order.push_back (k);
+                    break;
+                case ArpPattern::OctaveJumps:   // each chord tone, then the same an octave up
+                    for (int k = 0; k < chordSize; ++k) { order.push_back (k); order.push_back (k + chordSize < n ? k + chordSize : k); }
+                    break;
             }
             if (order.empty()) order.push_back (0);
 
+            // Rhythm: 16ths, a gated "x x - x" 16th pattern, or dotted 8ths in 3-3-2
             const auto steps = (int) std::round (L * 4.0);
+            int played = 0;
             for (int k = 0; k < steps; ++k)
-                notes.push_back ({ tones[(size_t) order[(size_t) k % order.size()]], (double) i * L + k * 0.25, 0.2,
-                                   k % 4 == 0 ? 110 : 88 });
+            {
+                auto len = 0.2;
+                auto vel = k % 4 == 0 ? 110 : 88;
+                if (s.arpPattern == ArpPattern::Gated && k % 4 == 2) continue;
+                if (s.arpPattern == ArpPattern::ThreeThreeTwo)
+                {
+                    const auto inEight = k % 8;
+                    if (inEight != 0 && inEight != 3 && inEight != 6) continue;
+                    len = inEight == 6 ? 0.45 : 0.7;
+                    vel = inEight == 0 ? 115 : 100;
+                }
+                notes.push_back ({ tones[(size_t) order[(size_t) played++ % order.size()]], (double) i * L + k * 0.25, len, vel });
+            }
         }
         return notes;
     }
@@ -633,6 +668,75 @@ namespace chords
         for (const auto& n : melodyNotes)
             if (std::fmod (n.start, 8.0) < 4.0) out.push_back (n);
         return out;
+    }
+
+    /** Breakdown hook hint: the hook's opening, twice as slow and softer, so the breakdown
+        sings what the drop will play without giving it away. */
+    inline std::vector<Note> hookHint (const std::vector<Note>& melodyNotes, double cycleQ)
+    {
+        std::vector<Note> out;
+        for (const auto& n : melodyNotes)
+            if (n.start * 2.0 < cycleQ - 1.0e-9)
+                out.push_back ({ n.pitch, n.start * 2.0, std::min (n.length * 2.0, cycleQ - n.start * 2.0), juce::jmax (1, n.velocity - 14) });
+        return out;
+    }
+
+    /** Call and response: the melody's first half is the call; the second half answers with the
+        same rhythm, moved with the chords (a sequence), ending on the chord's root. */
+    inline std::vector<Note> callResponse (const std::vector<Note>& mel, const Settings& s)
+    {
+        const auto count = juce::jlimit (1, maxSlots, s.count);
+        const auto L = s.quartersPerChord;
+        const auto half = L * count / 2.0;
+        if (count < 2 || mel.empty()) return mel;
+        const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, s.scale)].steps;
+        auto inKey = [&] (int p) { return std::find (steps.begin(), steps.end(), ((p - s.root) % 12 + 12) % 12) != steps.end(); };
+        std::vector<Note> out;
+        std::vector<Note> call;
+        for (const auto& n : mel) if (n.start < half - 1.0e-9) { out.push_back (n); call.push_back (n); }
+        for (size_t k = 0; k < call.size(); ++k)
+        {
+            auto n = call[k];
+            const auto slot = (int) std::floor (n.start / L + 1.0e-9);
+            const auto answerSlot = juce::jlimit (0, count - 1, slot + count / 2);
+            auto shift = chordRootPitchClass (s, answerSlot) - chordRootPitchClass (s, slot);
+            if (shift > 6) shift -= 12;
+            if (shift < -6) shift += 12;
+            n.pitch += shift;
+            while (! inKey (n.pitch)) --n.pitch;
+            n.start += half;
+            if (k + 1 == call.size())
+            {
+                // The answer ends home: the nearest root of its chord
+                const auto root = chordRootPitchClass (s, answerSlot);
+                auto best = n.pitch;
+                for (int d = 0; d <= 6; ++d)
+                {
+                    if (((n.pitch - d) % 12 + 12) % 12 == root) { best = n.pitch - d; break; }
+                    if (((n.pitch + d) % 12 + 12) % 12 == root) { best = n.pitch + d; break; }
+                }
+                n.pitch = best;
+            }
+            out.push_back (n);
+        }
+        return out;
+    }
+
+    /** Pushed: notes on the 8th-note grid (except each bar's downbeat) come a 16th early
+        (anticipations), for a later drop that drives harder with the same tune. */
+    inline std::vector<Note> pushed (std::vector<Note> mel)
+    {
+        for (auto& n : mel)
+        {
+            const auto inBar = std::fmod (n.start, 4.0);
+            const auto eighths = inBar * 2.0;
+            if (inBar > 1.0e-6 && std::abs (eighths - std::round (eighths)) < 1.0e-6 && n.start >= 0.25)
+            {
+                n.start -= 0.25;
+                n.length += 0.25;
+            }
+        }
+        return mel;
     }
 
     //==============================================================================
@@ -1124,9 +1228,9 @@ namespace chords
     inline const juce::StringArray& songChoiceNames (SongPart part)
     {
         static const juce::StringArray chords { "None", "Sustain", "Offbeat stabs", "Pluck 3-3-2", "16th gate" };
-        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)" };
-        static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce" };
-        static const juce::StringArray lead   { "None", "Melody", "Teaser" };
+        static const juce::StringArray bass   { "None", "Offbeat", "Rolling", "Galloping", "Sustain", "Walking", "Mine (learned)", "Octave offbeat", "Pumping" };
+        static const juce::StringArray arp    { "None", "Up", "Down", "Up-down", "Bounce", "Broken", "Octave jumps", "Gated", "3-3-2" };
+        static const juce::StringArray lead   { "None", "Melody", "Teaser", "Hook hint" };
         return part == SongPart::Chords ? chords : part == SongPart::Bass ? bass : part == SongPart::Arp ? arp : lead;
     }
 
@@ -1207,7 +1311,15 @@ namespace chords
                 {
                     c = melody (cs, patterns.melody);
                     if (choice == 2) c = teaser (c);
-                    if (varied) c = embellish (c, cs);
+                    if (choice == 3) c = hookHint (c, progressionQ);
+                    // Each later drop varies the hook its own way: embellished, then answered (call and
+                    // response), then pushed ahead of the beat (and embellished again)
+                    if (varied)
+                    {
+                        if (earlierSame == 2) c = callResponse (c, cs);
+                        else if (earlierSame >= 3) c = pushed (embellish (c, cs));
+                        else c = embellish (c, cs);
+                    }
                     if (part == SongPart::Harmony) c = harmony (c, cs);
                     if (part == SongPart::Counter) c = counterMelody (c, cs);
                 }

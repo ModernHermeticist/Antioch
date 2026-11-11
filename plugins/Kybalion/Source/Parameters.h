@@ -73,6 +73,8 @@ namespace Params
         inline const juce::String breakdown { "d_breakdown" };
         inline const juce::String shareKick { "d_sharekick" };   // on the kick track: share its pattern with the suite
         inline const juce::String flip      { "d_flip" };        // flip this track's polarity (kick and bass phase check)
+        inline const juce::String focus     { "d_focus" };       // duck the whole sound, only around the kick's note, or decide (Auto)
+        enum Focus { FocusWhole = 0, FocusKickNote = 1, FocusAuto = 2 };
 
         enum Source { Tempo = 0, Sidechain = 1, SuiteKick = 2 };
         double rateQuarters (int index);

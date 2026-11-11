@@ -174,6 +174,9 @@ namespace Params
         layout.add (floatParam (Verb::tension, "Reverb Tension Width", { 0.0f, 1.0f }, 0.3f, percent()));
         layout.add (floatParam (Verb::pump, "Reverb Pump", { 0.0f, 1.0f }, 0.0f, percent()));
         layout.add (floatParam (Verb::leadRoom, "Room for the Lead", { 0.0f, 1.0f }, 0.5f, percent()));
+        layout.add (std::make_unique<AudioParameterBool> (id (autoSpace), "Auto Space Level", false));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (id (spaceTrim), "Space Trim", juce::NormalisableRange<float> (-12.0f, 6.0f, 0.1f), 0.0f,
+                                                                 juce::AudioParameterFloatAttributes().withLabel ("dB")));
 
         // ---- Throw ----
         layout.add (std::make_unique<AudioParameterBool> (id (Throw::on), "Throw", false));

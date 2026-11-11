@@ -163,7 +163,17 @@ public:
         const auto target = 1.0f - amountAt (msSinceTrigger);
         gain += smooth * (target - gain);
 
-        if (s.splitHz >= Params::Duck::fullBandBelow)
+        if (focusHz > 0.0f)
+        {
+            // Duck only around the kick's note: the band there (unity at its centre) comes down.
+            float* ch[2] = { &left, &right };
+            for (size_t c = 0; c < 2; ++c)
+            {
+                const auto band = focusBand[c].bandpass (*ch[c]) / focusQ;
+                *ch[c] -= band * (1.0f - gain);
+            }
+        }
+        else if (s.splitHz >= Params::Duck::fullBandBelow)
         {
             // Duck only the lows. A 4th-order Linkwitz-Riley crossover keeps the bands
             // cleanly apart (a simple "x minus low-pass" split leaks most of the bass into
@@ -186,7 +196,20 @@ public:
 
     float getGain() const noexcept { return gain; }
 
+    /** Duck only around the kick's note (`hz`; 0 = the whole sound, or the split): the rest of
+        the bass keeps sustaining through the kick. */
+    void setFocus (float hz) noexcept
+    {
+        if (std::abs (hz - focusHz) < 0.5f) return;
+        focusHz = hz;
+        if (hz > 0.0f) for (auto& f : focusBand) { f.set (hz, focusQ, sr); f.reset(); }
+    }
+    float getFocus() const noexcept { return focusHz; }
+
 private:
+    static constexpr float focusQ = 1.2f;
+    std::array<suite::Svf, 2> focusBand;
+    float focusHz = 0.0f;
     Settings s;
     std::array<suite::Svf, 8> crossover; // per channel: 2 low-pass + 2 high-pass stages
     float sr = 44100.0f, gain = 1.0f, smooth = 0.5f;

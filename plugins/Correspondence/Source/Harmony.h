@@ -106,7 +106,8 @@ namespace harmony
         const auto c = p.chords[t], b = p.bass[t], a = p.arp[t], l = p.lead[t];
         std::vector<Variation> out;
         // Chords: 0 none, 1 sustain, 2 offbeat stabs, 3 pluck 3-3-2, 4 16th gate. Bass: 0 none, 1 offbeat,
-        // 2 rolling, 3 galloping, 4 sustain, 5 walking, 6 mine. Arp: 0 none, 1 up, 2 down, 3 up-down, 4 bounce. Lead: 0 none, 1 melody, 2 teaser.
+        // 2 rolling, 3 galloping, 4 sustain, 5 walking, 6 mine, 7 octave offbeat, 8 pumping. Arp: 0 none, 1 up, 2 down, 3 up-down,
+        // 4 bounce, 5 broken, 6 octave jumps, 7 gated, 8 3-3-2. Lead: 0 none, 1 melody, 2 teaser, 3 hook hint.
         {
             Variation v { "Re-rhythmed", "the same notes in a new rhythm: different chord stabs, bass and arp movement" };
             v.chords = c == 3 ? 2 : c == 2 ? 4 : c == 4 ? 3 : c == 1 ? 3 : 0;
@@ -128,6 +129,19 @@ namespace harmony
             v.arp = a == 0 ? 1 : a;
             v.lead = l == 0 ? 2 : 1;
             v.bass = (b == 0 && type != suite::SectionType::Breakdown) ? 1 : b;
+            out.push_back (v);
+        }
+        if (type == suite::SectionType::Breakdown)
+        {
+            Variation v { "Breakdown writer", "a written breakdown: held chords starting on VI, no bass or arp, and the lead hinting at the drop's hook, twice as slow" };
+            v.chords = 1; v.bass = 0; v.arp = 0; v.lead = 3; v.breakdownStart = 1;
+            out.push_back (v);
+        }
+        if (type == suite::SectionType::Drop || type == suite::SectionType::Groove)
+        {
+            Variation v { "New groove", "the bass bounces octaves on the offbeats, the arp plays 3-3-2" };
+            v.bass = b == 7 ? 8 : 7;
+            v.arp = a == 8 ? 6 : 8;
             out.push_back (v);
         }
         if (type == suite::SectionType::Breakdown)

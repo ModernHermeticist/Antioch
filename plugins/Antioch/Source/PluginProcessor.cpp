@@ -271,6 +271,12 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         firstBlock = false;
     }
 
+    const auto spaceGain = juce::Decibels::decibelsToGain (value (spaceTrim));
+    if (spaceReset.exchange (false)) { spaceDry = spaceWet = 0.0; spaceSamples = 0; spaceHeard.store (0.0f); spaceTailDb.store (-100.0f); }
+    bool spaceHere = true;   // outside breakdowns
+    if (haveSections && host.hasPpq)
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid && sec.type == suite::SectionType::Breakdown) spaceHere = false;
+
     auto* left  = buffer.getWritePointer (0);
     auto* right = numOut > 1 ? buffer.getWritePointer (1) : nullptr;
     const auto* inRight = numIn > 1 ? buffer.getReadPointer (1) : nullptr;
@@ -378,8 +384,15 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
 
         const auto d = dryGain.getNextValue();
         const auto o = outGain.getNextValue();
-        const auto oL = (inL * d + eL + tL + rL * vg + fL) * o;
-        const auto oR = (inR * d + eR + tR + rR * vg + fR) * o;
+        const auto spaceL = (eL + rL * vg + fL) * spaceGain, spaceR = (eR + rR * vg + fR) * spaceGain;
+        const auto oL = (inL * d + spaceL + tL) * o;
+        const auto oR = (inR * d + spaceR + tR) * o;
+        if (spaceHere)
+        {
+            spaceDry += 0.5 * ((double) inL * inL + (double) inR * inR) * d * d;
+            spaceWet += 0.5 * ((double) spaceL * spaceL + (double) spaceR * spaceR);
+            if (std::abs (inL) + std::abs (inR) > 2.0e-3f) ++spaceSamples;   // the part is playing
+        }
 
         if (right != nullptr)
         {
@@ -392,10 +405,69 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         }
     }
 
+    spaceHeard.store ((float) ((double) spaceSamples / sampleRate));
+    if (spaceDry > 1.0e-9 && spaceWet > 1.0e-12) spaceTailDb.store ((float) (10.0 * std::log10 (spaceWet / spaceDry)));
     throwGate.store (throwDelay.gateLevel());
     pumpNow.store (minPump);
     leadRoomNow.store (leadRoomGain);
     duckAmount.store (maxDuck);
+}
+
+float AntiochProcessor::spaceTargetFor (int role)
+{
+    switch (role)
+    {
+        case suite::roleLead:  return -12.0f;
+        case suite::roleVocal: return -14.0f;
+        case suite::rolePads:  return -10.0f;
+        case suite::roleHats:  return -16.0f;
+        case suite::roleFx:    return -8.0f;
+        default:               return 0.0f;   // kick and bass stay dry
+    }
+}
+
+bool AntiochProcessor::spacePass()
+{
+    if (value (Params::autoSpace) < 0.5f || spaceHeard.load() < spacePassSeconds) return false;
+    const auto role = roleForTrack();
+    const auto target = spaceTargetFor (role);
+    const auto tail = spaceTailDb.load();
+    spaceReset.store (true);
+    if (target == 0.0f || tail < -90.0f) return false;
+    const auto err = std::abs (tail - target);
+    static const char* names[] = { "track", "kick", "bass", "hats", "pad", "lead", "vocal", "FX" };
+    const juce::String name = names[juce::jlimit (0, 7, role)];
+
+    if (space.pending)
+    {
+        space.pending = false;
+        if (err < space.errBefore - 0.5f)
+        {
+            ++spaceKept;
+            suite::MoveLog::add (getName(), getTrackName(), "Kept: space " + juce::String (value (Params::spaceTrim), 1) + " dB (the tail "
+                                 + juce::String (space.errBefore, 1) + " -> " + juce::String (err, 1) + " dB from a " + name + "'s)", suite::MoveLog::kept);
+        }
+        else
+        {
+            setParameterPlain (apvts, Params::spaceTrim, space.trimBefore);
+            ++spaceUndone;
+            space.rest = 6;
+            suite::MoveLog::add (getName(), getTrackName(), "Undid: space back to " + juce::String (space.trimBefore, 1) + " dB: the tail didn't get closer to a "
+                                 + name + "'s (" + juce::String (space.errBefore, 1) + " -> " + juce::String (err, 1) + " dB)", suite::MoveLog::undone);
+            return true;
+        }
+    }
+    if (space.rest > 0) { --space.rest; return false; }
+    if (err <= 1.5f) return false;
+    const auto trim = value (Params::spaceTrim);
+    const auto step = std::round (juce::jlimit (-1.5f, 1.5f, target - tail) * 2.0f) * 0.5f;
+    const auto next = juce::jlimit (-12.0f, 6.0f, trim + step);
+    if (std::abs (next - trim) < 0.05f) return false;
+    space = { true, trim, err, 0 };
+    setParameterPlain (apvts, Params::spaceTrim, next);
+    suite::MoveLog::add (getName(), getTrackName(), "Space " + juce::String (trim, 1) + " -> " + juce::String (next, 1) + " dB (the echo and reverb sit "
+                         + juce::String (-tail, 1) + " dB under the " + name + "; it usually wants about " + juce::String (juce::roundToInt (-target)) + ")");
+    return true;
 }
 
 juce::AudioProcessorEditor* AntiochProcessor::createEditor()

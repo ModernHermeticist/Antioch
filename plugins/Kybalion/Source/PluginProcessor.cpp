@@ -219,6 +219,12 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
     const auto sharing = value (Duck::shareKick) > 0.5f && host.playing && host.hasPpq;
     const auto suiteKick = useSuiteKick ? suite::KickBus::read() : suite::KickPatternSet {};
     suiteKickAvailable.store (suiteKick.valid);
+    // Kick and bass: duck around the kick's note, if chosen (or Auto decided so)
+    const auto body = suiteKick.valid ? suiteKick.bodyHz : 0.0f;
+    kickBodyHz.store (body);
+    const auto focusMode = (int) value (Duck::focus);
+    ducker.setFocus (body > 25.0f && (focusMode == Duck::FocusKickNote || (focusMode == Duck::FocusAuto && focusAuto.load())) ? body : 0.0f);
+    if (body > 25.0f && std::abs (body - kickNoteBandHz) > 0.5f) { kickNoteBand.set (body, 1.2f, (float) getSampleRate()); kickNoteBand.reset(); kickNoteBandHz = body; kickNotePower = lowPower = 0.0; }
     if (! sharing) kickLearner.interrupt();
     const auto scBuffer = scActive ? getBusBuffer (buffer, true, 1) : juce::AudioBuffer<float>();
     const auto threshold = juce::Decibels::decibelsToGain (value (Duck::threshold));
@@ -279,6 +285,12 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
         auto l = flip ? -left[n] : left[n];
         auto r = flip ? -(right != nullptr ? right[n] : left[n]) : (right != nullptr ? right[n] : left[n]);
         const auto lowIn = overlapLow.lowpass (0.5f * (l + r));   // this track's low end, before anything (ducking depth fit)
+        if (kickNoteBandHz > 0.0f)
+        {
+            const auto onNote = kickNoteBand.bandpass (0.5f * (l + r)) / 1.2f;
+            kickNotePower += (double) onNote * onNote;
+            lowPower += (double) lowIn * lowIn;
+        }
 
         // On the kick track: learn where the kick hits (from this track's own audio, before any processing).
         int typeHere = -1;
@@ -393,6 +405,7 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
         position += qPerSample;
     }
 
+    if (lowPower > 1.0e-6) shareOnKickNote.store ((float) juce::jmin (1.0, kickNotePower / lowPower));
     gateStep.store (gate.getCurrentStep());
     currentFill.store (fillNow);
     duckGain.store (duckEnabled ? ducker.getGain() : 1.0f);
@@ -432,6 +445,50 @@ KybalionProcessor::SuiteStatus KybalionProcessor::suiteStatus()
     return s;
 }
 
+juce::String KybalionProcessor::kickTuning (float bodyHz, int keyRoot, bool haveKey)
+{
+    if (bodyHz < 25.0f) return {};
+    const auto midi = 69.0f + 12.0f * std::log2 (bodyHz / 440.0f);
+    const auto note = juce::roundToInt (midi);
+    const auto cents = juce::roundToInt ((midi - (float) note) * 100.0f);
+    const auto& names = suite::music::noteNames();
+    juce::String text = "Kick body " + juce::String (juce::roundToInt (bodyHz)) + " Hz (" + names[((note % 12) + 12) % 12] + juce::String (note / 12 - 1)
+                        + (cents != 0 ? juce::String (cents > 0 ? " +" : " ") + juce::String (cents) + " cents" : juce::String()) + ")";
+    if (! haveKey) return text + ".";
+    const auto pc = ((note - keyRoot) % 12 + 12) % 12;
+    auto shortest = [] (int semis) { semis = ((semis % 12) + 12) % 12; return semis > 6 ? semis - 12 : semis; };
+    const auto toRoot = shortest (-pc), toFifth = shortest (7 - pc);
+    const auto signed_ = [] (int s) { return (s > 0 ? "+" : "") + juce::String (s) + (std::abs (s) == 1 ? " semitone" : " semitones"); };
+    if (toRoot == 0) return text + ": on the key's root (" + names[keyRoot] + "), in tune with the bass.";
+    if (toFifth == 0) return text + ": on the key's fifth (" + names[(keyRoot + 7) % 12] + "), in tune with the bass.";
+    return text + ": between the key's notes. Tune the kick " + signed_ (toRoot) + " to the root (" + names[keyRoot] + ")"
+           + (std::abs (toFifth) < std::abs (toRoot) + 2 ? ", or " + signed_ (toFifth) + " to the fifth (" + names[(keyRoot + 7) % 12] + ")" : juce::String())
+           + ", so its body rings with the bass, not against it.";
+}
+
+void KybalionProcessor::kickBassTick()
+{
+    const auto body = kickBodyHz.load();
+    const auto key = suite::KeyBus::read();
+    const auto tuning = kickTuning (body, key.root, key.valid);
+    if (tuning.isNotEmpty() && tuning != tuningText)
+    {
+        tuningText = tuning;
+        suite::MoveLog::add (getName(), getTrackName(), tuning);
+    }
+    if ((int) value (Params::Duck::focus) != Params::Duck::FocusAuto || body < 25.0f) return;
+    const auto share = shareOnKickNote.load();
+    if (share < 0.0f) return;
+    const auto was = focusAuto.load();
+    const auto now = focusFor (share, was);
+    if (now == was) return;
+    focusAuto.store (now);
+    const auto pct = juce::String (juce::roundToInt (share * 100.0f)) + "%";
+    suite::MoveLog::add (getName(), getTrackName(), now ? "Ducking only around the kick's note (" + juce::String (juce::roundToInt (body)) + " Hz): " + pct
+                                                          + " of this track's low end is there, so the rest keeps sustaining through the kick"
+                                                        : "Ducking the whole sound again: " + pct + " of this track's low end sits on the kick's note");
+}
+
 bool KybalionProcessor::applyRoleSetup (int role, const juce::String&)
 {
     int preset = -1;
@@ -446,6 +503,7 @@ bool KybalionProcessor::applyRoleSetup (int role, const juce::String&)
     }
     applyDuckPreset (preset);
     setParam (Params::duckOn, 1.0f);
+    if (role == suite::roleBass) setParam (Params::Duck::focus, (float) Params::Duck::FocusAuto);   // it decides from what it hears
     setParam (Params::Duck::source, (float) Params::Duck::SuiteKick);
     setParam (Params::gateOn, gate ? 1.0f : 0.0f);
     if (gate && ! startedOnFavourite) applyGatePattern (1);   // Trance classic, unless your favourite is already there

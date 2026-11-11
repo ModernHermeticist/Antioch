@@ -19,6 +19,7 @@ namespace
                 for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s), qn::bdId (s) }) out[id] = s;
             out[qn::lowCutId] = 6;
             out[qn::highCutId] = 7;
+            out[qn::widthId] = 11;
             for (int b = 0; b < qn::numMbBands; ++b) { out[qn::thrId (b)] = 8 + b; out[qn::ratioId (b)] = 8 + b; }
             return out;
         }();
@@ -91,6 +92,9 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     makeupCoeff = 1.0f / (3.0f * fs);   // level-neutral: the make-up follows the average reduction over ~3 s
     for (int b = 0; b < analysis::numBands; ++b) { analysers[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs); analysers[(size_t) b].reset(); }
     winLength = juce::jmax (1, (int) std::round (sr * 0.1));
+    fifoData.assign ((size_t) fifo.getTotalSize(), 0.0f);
+    blockMono.clear();
+    blockMono.reserve (8192);
     mbWinLength = juce::jmax (1, (int) std::round (sr * 0.05));
     resetMeasurement();
 }
@@ -98,6 +102,8 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
 void QuintessenceProcessor::resetMeasurement() noexcept
 {
     winBand.fill (0.0); passBand.fill (0.0); winTotal = 0.0; winCount = 0; passWindows = 0;
+    winMid = winSide = passMid = passSide = 0.0;
+    passMidDb.store (-100.0f); passSideDb.store (-100.0f);
     mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
     for (auto& h : histPre) for (auto& c : h) c.store (0, std::memory_order_relaxed);
     for (auto& h : histPost) for (auto& c : h) c.store (0, std::memory_order_relaxed);
@@ -150,6 +156,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
         on[(size_t) s] = std::abs (g) > 0.05f;
     }
+
+    const auto width = value (qn::widthId);
+    blockMono.clear();
 
     // Compressor bands
     std::array<float, qn::numMbBands> thr {}, slope {}, grMax {};
@@ -206,12 +215,19 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             mbWinPost[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
             out[0] += l; out[1] += r;
         }
+        // Width: the side scaled (mid unchanged)
+        const auto mid = 0.5f * (out[0] + out[1]);
+        const auto side = 0.5f * (out[0] - out[1]) * width;
+        if (ch[1] != nullptr) { out[0] = mid + side; out[1] = mid - side; }
         ch[0][i] = out[0];
         if (ch[1] != nullptr) ch[1][i] = out[1];
 
         // Measure (after a change, once the filters have settled)
         if (settle > 0) { --settle; continue; }
         const auto mono = 0.5f * (out[0] + out[1]);
+        if (blockMono.size() < blockMono.capacity()) blockMono.push_back (mono);
+        winMid += (double) mid * mid;
+        winSide += (double) side * side;
         for (int b = 0; b < analysis::numBands; ++b)
         {
             const auto y = analysers[(size_t) b].bandpass (mono);
@@ -229,8 +245,12 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                     passBandDb[(size_t) b].store ((float) (10.0 * std::log10 (passBand[(size_t) b] / passWindows + 1.0e-12)));
                 }
                 passWindowsShared.store (passWindows);
+                passMid += winMid / winCount;
+                passSide += winSide / winCount;
+                passMidDb.store ((float) (10.0 * std::log10 (passMid / passWindows + 1.0e-12)));
+                passSideDb.store ((float) (10.0 * std::log10 (passSide / passWindows + 1.0e-12)));
             }
-            winBand.fill (0.0); winTotal = 0.0; winCount = 0;
+            winBand.fill (0.0); winTotal = 0.0; winCount = 0; winMid = winSide = 0.0;
         }
         if (++mbWinCount >= mbWinLength)
         {
@@ -248,6 +268,15 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
     }
     for (int b = 0; b < qn::numMbBands; ++b) grNow[(size_t) b].store (juce::jmax (0.0f, grMax[(size_t) b]));
+    // For the resonance finder (the message thread reads it)
+    if (! blockMono.empty())
+    {
+        int s1, n1, s2, n2;
+        fifo.prepareToWrite ((int) blockMono.size(), s1, n1, s2, n2);
+        if (n1 > 0) std::copy (blockMono.begin(), blockMono.begin() + n1, fifoData.begin() + s1);
+        if (n2 > 0) std::copy (blockMono.begin() + n1, blockMono.begin() + n1 + n2, fifoData.begin() + s2);
+        fifo.finishedWrite (n1 + n2);
+    }
 }
 
 //==============================================================================
@@ -257,6 +286,8 @@ QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
     for (int b = 0; b < analysis::numBands; ++b) m.bandsDb[(size_t) b] = passBandDb[(size_t) b].load();
     m.seconds = (float) passWindowsShared.load() * 0.1f;
     m.group = measureGroup.load();
+    m.midDb = passMidDb.load();
+    m.sideDb = passSideDb.load();
     auto percentiles = [] (const std::array<std::atomic<int>, histBins>& h, float& p50, float& p95) -> int
     {
         int total = 0;
@@ -361,6 +392,7 @@ void QuintessenceProcessor::applyLocks()
         }
     if (bits & (1u << 6)) { write (qn::lowCutLockId, 1.0f);  if (pending.kind == Pending::lowCut) pending.kind = Pending::none; }
     if (bits & (1u << 7)) write (qn::highCutLockId, 1.0f);
+    if (bits & (1u << 11)) { write (qn::widthLockId, 1.0f); if (pending.kind == Pending::width) pending.kind = Pending::none; }
     for (int b = 0; b < qn::numMbBands; ++b)
         if (bits & (1u << (8 + b)))
         {
@@ -416,9 +448,11 @@ void QuintessenceProcessor::loadLearned()
 //==============================================================================
 bool QuintessenceProcessor::autoPass()
 {
+    drainSpectrum();
     const auto m = measurement();
     if (m.seconds < (float) passSecondsNow()) return false;
     requestReset();
+    struct ClearAfterPass { qn::ResonanceFinder& f; ~ClearAfterPass() { f.reset(); } } clearAfterPass { resonances };   // each pass hears its own spectrum
     const auto role = effectiveRole();
     roleShown.store (role);
     groupShown.store (m.group);
@@ -432,6 +466,42 @@ bool QuintessenceProcessor::autoPass()
 
     for (auto& c : toneCooldown) c = juce::jmax (0, c - 1);
     for (auto& c : mbCooldown) c = juce::jmax (0, c - 1);
+    widthCooldown = juce::jmax (0, widthCooldown - 1);
+    for (auto& c : resonanceCooldown) --c.second;
+    resonanceCooldown.erase (std::remove_if (resonanceCooldown.begin(), resonanceCooldown.end(), [] (const std::pair<float, int>& c) { return c.second <= 0; }),
+                             resonanceCooldown.end());
+
+    // Ringing peaks: one that's there pass after pass is a resonance, not a note
+    std::vector<float> found;
+    if (resonances.framesHeard() >= 8)
+        for (const auto& peak : resonances.peaks (sr))
+        {
+            found.push_back (peak.hz);
+            auto it = std::find_if (candidates.begin(), candidates.end(), [&] (const Candidate& c) { return std::abs (std::log2 (c.hz / peak.hz)) < 0.04f; });
+            if (it != candidates.end()) { it->hz = 0.5f * (it->hz + peak.hz); ++it->passes; it->prominence = peak.prominenceDb; it->seconds += m.seconds; }
+            else candidates.push_back ({ peak.hz, 1, peak.prominenceDb, m.seconds });
+        }
+    candidates.erase (std::remove_if (candidates.begin(), candidates.end(), [&] (const Candidate& c)
+                      { return std::none_of (found.begin(), found.end(), [&] (float hz) { return std::abs (std::log2 (c.hz / hz)) < 0.04f; }); }),
+                      candidates.end());
+
+    // Spire tips from this pass
+    {
+        const auto& t = qn::targets::roles()[(size_t) role];
+        qn::spire::Reading reading;
+        reading.role = role;
+        reading.toneDiff = diff;
+        reading.sideMinusMidDb = m.sideMinusMid();
+        reading.sideTargetDb = t.sideDb;
+        reading.midSwingDb = m.windowsPost[1] >= 20 ? m.swingPost (1) : 0.0f;
+        reading.midSwingTargetDb = t.swing[1];
+        reading.breakdown = m.group == 1;
+        for (const auto& c : candidates) if (c.passes >= 2) reading.resonancesHz.push_back (c.hz);
+        const juce::ScopedLock sl (logLock);
+        tipsNow = qn::spire::tips (reading);
+        resonancesNow = reading.resonancesHz;
+    }
+
 
     // Check the last move: keep it if the sound got closer to the target, otherwise undo it.
     if (pending.kind != Pending::none)
@@ -455,6 +525,23 @@ bool QuintessenceProcessor::autoPass()
             helped = lows < pending.errBefore - 1.0f && body > pending.extra - 1.0f;
             measure = "lows " + juce::String (pending.errBefore - lows, 1) + " dB down, the body " + juce::String (body - pending.extra, 1) + " dB";
         }
+        else if (pending.kind == Pending::width)
+        {
+            const auto after = std::abs (m.sideMinusMid() - qn::targets::roles()[(size_t) role].sideDb);
+            helped = m.sideMinusMid() > -90.0f && after < pending.errBefore - 0.5f;
+            measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s";
+            if (! helped) widthCooldown = 8;
+        }
+        else if (pending.kind == Pending::resonance)
+        {
+            // The peak stands out less, and the tone around it didn't suffer
+            const auto hz = value (qn::freqId (pending.index));
+            const auto after = resonances.prominenceAt (hz, sr);
+            const auto tone = toneError (m, role);
+            helped = after < pending.errBefore - 1.0f && (tone < 0.0f || pending.extra < 0.0f || tone < pending.extra + 1.0f);
+            measure = "the peak " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB above its surroundings";
+            if (! helped) resonanceCooldown.push_back ({ hz, 12 });
+        }
         else
         {
             const auto& t = qn::targets::roles()[(size_t) role];
@@ -475,10 +562,86 @@ bool QuintessenceProcessor::autoPass()
         if (! helped) return true;   // this pass measured the undone move: decide again next pass
     }
 
-    // At most one new move a pass, so the next pass can tell whether it helped. EQ and
-    // dynamics take turns going first.
-    const auto moved = lastWasEq ? (mbMove (m, role) || eqMove (m, role)) : (eqMove (m, role) || mbMove (m, role));
-    return moved;
+    // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
+    // move (EQ, dynamics, width, resonances) take turns going first.
+    for (int k = 0; k < 4; ++k)
+    {
+        const auto kind = (nextFirst + k) % 4;
+        const auto moved = kind == 0 ? eqMove (m, role) : kind == 1 ? mbMove (m, role) : kind == 2 ? widthMove (m, role) : resonanceMove (m, role);
+        if (moved) { nextFirst = (kind + 1) % 4; return true; }
+    }
+    return false;
+}
+
+void QuintessenceProcessor::drainSpectrum()
+{
+    const auto ready = fifo.getNumReady();
+    if (ready <= 0) return;
+    int s1, n1, s2, n2;
+    fifo.prepareToRead (ready, s1, n1, s2, n2);
+    if (n1 > 0) resonances.add (fifoData.data() + s1, n1);
+    if (n2 > 0) resonances.add (fifoData.data() + s2, n2);
+    fifo.finishedRead (n1 + n2);
+}
+
+bool QuintessenceProcessor::widthMove (const Measurement& m, int role)
+{
+    const auto& t = qn::targets::roles()[(size_t) role];
+    if (value (qn::autoEqId) < 0.5f || t.sideDb == 0.0f || m.group == 1 || widthCooldown > 0 || value (qn::widthLockId) > 0.5f) return false;
+    const auto now = m.sideMinusMid();
+    if (now < -90.0f) return false;
+    const auto diff = now - t.sideDb;
+    if (std::abs (diff) <= 2.0f) return false;
+    if (diff < 0.0f && now < -40.0f) return false;   // (nearly) mono: there's no side to widen
+    const auto width = value (qn::widthId);
+    const auto next = juce::jlimit (0.0f, 2.0f, width * juce::Decibels::decibelsToGain (juce::jlimit (-2.0f, 2.0f, -diff)));
+    if (std::abs (next - width) < 0.01f) { widthCooldown = 8; return false; }
+    pending = { Pending::width, -1, -1, { { qn::widthId, width } }, std::abs (diff), "width " + juce::String (juce::roundToInt (next * 100.0f)) + "%" };
+    write (qn::widthId, next);
+    addLog ("Width " + juce::String (juce::roundToInt (width * 100.0f)) + "% -> " + juce::String (juce::roundToInt (next * 100.0f)) + "% (the side sits "
+            + juce::String (-now, 1) + " dB under the middle; a " + juce::String (t.name) + " is usually about " + juce::String (juce::roundToInt (-t.sideDb)) + ")");
+    return true;
+}
+
+bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
+{
+    if (value (qn::autoEqId) < 0.5f || m.group == 1) return false;
+    for (const auto& c : candidates)
+    {
+        if (c.passes < 3 || c.seconds < 12.0f) continue;   // there pass after pass, for 12 s of music: not a passing note
+        if (std::any_of (resonanceCooldown.begin(), resonanceCooldown.end(), [&] (const std::pair<float, int>& cd) { return std::abs (std::log2 (cd.first / c.hz)) < 0.05f; }))
+            continue;
+        // A resonance band already there: deeper; otherwise a free band
+        int slot = -1;
+        for (int s = 0; s < qn::numSlots; ++s)
+            if ((int) value (qn::reasonId (s)) == qn::resonance && value (qn::lockId (s)) < 0.5f && std::abs (std::log2 (value (qn::freqId (s)) / c.hz)) < 0.05f) slot = s;
+        if (slot < 0)
+            for (int s = 0; s < qn::numSlots; ++s)
+                if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == qn::free) { slot = s; break; }
+        if (slot < 0) return false;
+        const auto again = (int) value (qn::reasonId (slot)) == qn::resonance;
+        const auto gain = again ? juce::jmax (-6.0f, value (qn::gainId (slot)) - 1.5f) : -3.0f;
+        if (again && std::abs (gain - value (qn::gainId (slot))) < 0.05f) continue;   // as deep as it goes
+        pending = { Pending::resonance, slot, -1,
+                    { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
+                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) } },
+                    c.prominence, "band " + juce::String (slot + 1) + " " + juce::String (juce::roundToInt (c.hz)) + " Hz " + dbText (gain) + " (resonance)",
+                    toneError (m, role) };
+        write (qn::freqId (slot), c.hz);
+        write (qn::qId (slot), 6.0f);
+        write (qn::reasonId (slot), (float) qn::resonance);
+        write (qn::bdId (slot), 0.0f);
+        write (qn::gainId (slot), gain);
+        addLog ("Band " + juce::String (slot + 1) + ": " + juce::String (juce::roundToInt (c.hz)) + " Hz " + dbText (gain) + ", narrow (a ringing peak "
+                + juce::String (c.prominence, 1) + " dB above the sound around it, there for " + juce::String (juce::roundToInt (c.seconds)) + " s)");
+        return true;
+    }
+    return false;
+}
+
+juce::String QuintessenceProcessor::spireStart() const
+{
+    return qn::spire::startingPoint (roleShown.load(), groupShown.load() == 1);
 }
 
 int QuintessenceProcessor::slotFor (int band, bool forCarve) const
@@ -537,7 +700,6 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
             write (qn::lowCutId, t.lowCutHz);
             addLog ("Low cut at " + hzText (t.lowCutHz) + ": a " + juce::String (t.name) + " has no job down there, and this one had lows "
                     + juce::String (juce::roundToInt (loudest - below)) + " dB under its loudest");
-            lastWasEq = true;
             return true;
         }
     }
@@ -583,7 +745,6 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
         const auto yours = learnedSongs (role) >= 3;
         addLog ("Band " + juce::String (slot + 1) + where + ": " + hzText (centre) + " " + dbText (next) + " (" + juce::String (std::abs (err), 1) + " dB "
                 + (err > 0.0f ? "more" : "less") + " there than " + (yours ? "your " + juce::String (t.name) + "s usually have" : "a " + juce::String (t.name) + " usually has") + ")");
-        lastWasEq = true;
         return true;
     }
     return false;
@@ -631,7 +792,6 @@ bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
         write (qn::ratioId (b), newRatio);
         addLog ("Dynamics, " + qn::mbBandNames()[b].toLowerCase() + " band: " + (newRatio <= 1.01f ? juce::String ("released") : juce::String (newThr, 1) + " dB, " + juce::String (newRatio, 1) + ":1")
                 + " (" + why + ")");
-        lastWasEq = false;
         return true;
     }
     return false;
@@ -640,7 +800,7 @@ bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
 void QuintessenceProcessor::relearn()
 {
     for (int s = 0; s < qn::numSlots; ++s)
-        if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == qn::roleTone)
+        if (value (qn::lockId (s)) < 0.5f && ((int) value (qn::reasonId (s)) == qn::roleTone || (int) value (qn::reasonId (s)) == qn::resonance))
         {
             write (qn::gainId (s), 0.0f);
             write (qn::freqId (s), qn::defaultFreqs()[(size_t) s]);
@@ -649,6 +809,10 @@ void QuintessenceProcessor::relearn()
             write (qn::reasonId (s), (float) qn::free);
         }
     if (value (qn::lowCutLockId) < 0.5f) write (qn::lowCutId, 20.0f);
+    if (value (qn::widthLockId) < 0.5f) write (qn::widthId, 1.0f);
+    candidates.clear();
+    resonanceCooldown.clear();
+    widthCooldown = 0;
     for (int b = 0; b < qn::numMbBands; ++b)
         if (value (qn::mbLockId (b)) < 0.5f) { write (qn::thrId (b), 0.0f); write (qn::ratioId (b), 1.0f); }
     pending.kind = Pending::none;

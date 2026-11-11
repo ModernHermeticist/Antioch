@@ -19,6 +19,8 @@
 #include "HostInfo.h"
 #include "Parameters.h"
 #include "Targets.h"
+#include "Resonance.h"
+#include "SpireTips.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
 {
@@ -69,6 +71,11 @@ public:
     int effectiveRole() const;
 
     juce::StringArray moveLog() const { const juce::ScopedLock sl (logLock); return log; }
+    /** What to change in Spire for this track (from the last pass). */
+    juce::StringArray spireTips() const { const juce::ScopedLock sl (logLock); return tipsNow; }
+    juce::String spireStart() const;
+    /** Ringing peaks found in the last pass (Hz). */
+    std::vector<float> lastResonances() const { const juce::ScopedLock sl (logLock); return resonancesNow; }
 
     struct Measurement
     {
@@ -76,6 +83,8 @@ public:
         std::array<float, qn::numMbBands> p50Pre {}, p95Pre {}, p50Post {}, p95Post {};
         std::array<int, qn::numMbBands> windowsPost {};
         float seconds = 0.0f;
+        float midDb = -100.0f, sideDb = -100.0f;
+        float sideMinusMid() const { return midDb > -90.0f ? sideDb - midDb : -100.0f; }
         int group = 0;   // 0: anywhere but a breakdown, 1: a breakdown (it keeps a separate correction there)
         float swingPost (int b) const { return p95Post[(size_t) b] - p50Post[(size_t) b]; }
     };
@@ -107,6 +116,9 @@ private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     void addLog (const juce::String& line);
     bool eqMove (const Measurement&, int role);
+    bool widthMove (const Measurement&, int role);
+    bool resonanceMove (const Measurement&, int role);
+    void drainSpectrum();
     bool mbMove (const Measurement&, int role);
     int slotFor (int band, bool forCarve) const;
     std::function<void()> carve (uint32_t data);
@@ -139,6 +151,10 @@ private:
     std::array<std::array<std::atomic<int>, histBins>, qn::numMbBands> histPre {}, histPost {};
     std::array<std::atomic<float>, 10> passBandDb {};
     std::atomic<int> passWindowsShared { 0 };
+    double winMid = 0.0, winSide = 0.0, passMid = 0.0, passSide = 0.0;
+    std::atomic<float> passMidDb { -100.0f }, passSideDb { -100.0f };
+    std::vector<float> fifoData, blockMono;
+    juce::AbstractFifo fifo { 1 << 18 };
     std::atomic<bool> resetRequested { true };
     void resetMeasurement() noexcept;
 
@@ -146,7 +162,7 @@ private:
     // Message thread
     struct Pending
     {
-        enum Kind { none, eqSlot, lowCut, mb } kind = none;
+        enum Kind { none, eqSlot, lowCut, mb, width, resonance } kind = none;
         int index = -1, band = -1;
         std::vector<std::pair<juce::String, float>> before;
         float errBefore = 0.0f;
@@ -155,7 +171,15 @@ private:
     } pending;
     std::array<int, 10> toneCooldown {};
     std::array<int, qn::numMbBands> mbCooldown {};
-    bool lowCutTried = false, lastWasEq = false;
+    bool lowCutTried = false;
+    int nextFirst = 0;   // which kind of move gets the first chance this pass (they take turns)
+    int widthCooldown = 0;
+    qn::ResonanceFinder resonances;
+    struct Candidate { float hz; int passes; float prominence; float seconds; };
+    std::vector<Candidate> candidates;
+    std::vector<std::pair<float, int>> resonanceCooldown;   // Hz, passes left
+    juce::StringArray tipsNow;
+    std::vector<float> resonancesNow;
     std::array<float, 10> longBands {};
     bool haveBands = false;
     std::array<std::array<float, 10>, 8> learned {};

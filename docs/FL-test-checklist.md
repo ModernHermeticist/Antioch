@@ -99,6 +99,14 @@ between versions.
   its track and bar; typing a bar number shows what changed just before it.
 - [ ] **6b.8** Mentalism: turn on *Balance* (or *Mix it*), play the drop. Over a minute the pad/lead
   trims in Prima Materia move 1 dB at a time, each one kept or undone in *What changed?*.
+- [ ] **6b.9** A wide supersaw lead: Quintessence narrows its *Width* a step at a time; a mono bass is
+  never widened. *Spire tips* lists what to change in Spire.
+- [ ] **6b.10** Antioch on the lead with lots of echo and reverb: *Space trim* comes down until the tail
+  sits about 12 dB under the dry lead; each step shows in *What changed?*.
+- [ ] **6b.11** Kybalion on the bass with the suite kick shared: *What changed?* says where the kick's
+  body sits against the key; with *Duck focus* on Auto it reports which kind of ducking it chose.
+- [ ] **6b.12** Correspondence: *Vary... > Breakdown > Breakdown writer*, then Export all. The breakdown has
+  held chords and a slow hint of the hook; drops 2, 3 and 4 each play the hook differently.
 
 ## 7. A song end to end
 

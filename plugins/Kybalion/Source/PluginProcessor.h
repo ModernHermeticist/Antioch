@@ -9,6 +9,8 @@
 #include "Scenes.h"
 #include "StyleLog.h"
 #include "FixBus.h"
+#include "KeyBus.h"
+#include "Music.h"
 #include <map>
 
 class KybalionProcessor : public suite::SuiteProcessor
@@ -50,7 +52,22 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
-    void pollTick() override { scenes.watchTweaks (isMorphing()); }
+    void pollTick() override { scenes.watchTweaks (isMorphing()); kickBassTick(); }
+
+    /** Kick and bass: where the kick's body sits against the key ("tune it up a semitone to the
+        root"), and with Duck focus on Auto, whether to duck only around the kick's note (when
+        most of this track's low end lives elsewhere, so it keeps sustaining) or the whole sound.
+        Message thread; logs to What changed when either changes. */
+    void kickBassTick();
+    static juce::String kickTuning (float bodyHz, int keyRoot, bool haveKey);
+    /** Auto focus: duck around the kick's note when less than half this track's low end is there. */
+    static bool focusFor (float shareOnKickNote, bool wasFocused) { return wasFocused ? shareOnKickNote < 0.6f : shareOnKickNote < 0.4f; }
+    std::atomic<bool> focusAuto { false };
+    std::atomic<float> kickBodyHz { 0.0f }, shareOnKickNote { -1.0f };
+    juce::String tuningText;   // message thread (UI)
+    suite::Svf kickNoteBand;
+    float kickNoteBandHz = 0.0f;
+    double kickNotePower = 0.0, lowPower = 0.0;
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

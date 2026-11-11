@@ -661,6 +661,40 @@ int main (int argc, char** argv)
         suite::Registry::reset();
     }
 
+    section ("Kick and bass");
+    {
+        check (KybalionProcessor::kickTuning (55.0f, 9, true).contains ("on the key's root (A)"), "a 55 Hz kick in A: on the root");
+        check (KybalionProcessor::kickTuning (82.4f, 9, true).contains ("fifth (E)"), "an 82 Hz kick in A: on the fifth");
+        const auto off = KybalionProcessor::kickTuning (52.0f, 9, true);
+        check (off.contains ("G#1") && off.contains ("+1 semitone to the root (A)"), "a 52 Hz kick in A: tune it up a semitone (" + off + ")");
+        check (KybalionProcessor::kickTuning (0.0f, 9, true).isEmpty(), "no kick heard yet: nothing to say");
+
+        // Ducking around the kick's note: the kick's note comes down, the rest of the bass stays
+        auto ducked = [] (float hz, float focus)
+        {
+            Ducker d;
+            d.prepare (sampleRate);
+            Ducker::Settings st;
+            st.depth = 0.9f; st.holdMs = 1.0e6f;   // fully ducked throughout
+            d.update (st);
+            d.setFocus (focus);
+            double in = 0.0, out = 0.0;
+            for (int i = 0; i < (int) sampleRate; ++i)
+            {
+                const auto x = 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * i / sampleRate);
+                auto l = x, r = x;
+                d.process (5.0f, l, r);
+                if (i > (int) sampleRate / 2) { in += (double) x * x; out += (double) l * l; }
+            }
+            return (float) (10.0 * std::log10 (out / in));
+        };
+        const auto onNote = ducked (55.0f, 55.0f), above = ducked (220.0f, 55.0f), whole = ducked (220.0f, 0.0f);
+        check (onNote < -15.0f && above > -3.0f && whole < -15.0f, "focused on 55 Hz: the kick's note ducks (" + juce::String (onNote, 1) + " dB), the bass two octaves up barely ("
+                                                                    + juce::String (above, 1) + " dB; whole-sound ducking takes it " + juce::String (whole, 1) + ")");
+        check (KybalionProcessor::focusFor (0.2f, false) && ! KybalionProcessor::focusFor (0.8f, false) && KybalionProcessor::focusFor (0.5f, true),
+               "Auto focuses when most of the low end is elsewhere (and doesn't flip back and forth)");
+    }
+
     section ("Presets and state");
     {
         auto p = make (true, true);

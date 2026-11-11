@@ -127,6 +127,8 @@ namespace Params
                                                             StringArray { "Off", "Accent", "Restart" }, 1));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::shareKick), "Share This Kick With the Suite", false));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::flip), "Flip Polarity", false));
+        layout.add (std::make_unique<juce::AudioParameterChoice> (id (Duck::focus), "Duck Focus",
+                                                                  juce::StringArray { "Whole sound", "Around the kick's note", "Auto" }, 0));
         suite::SceneEngine::addParameters (layout);
 
         return layout;

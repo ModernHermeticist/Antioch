@@ -218,6 +218,78 @@ int main (int argc, char** argv)
         check (at64 == 1 && lead == 1, "'bar 64' finds the change at bar 60; 'lead' finds the lead's");
     }
 
+    section ("Width towards the role's");
+    {
+        auto p = make (5);   // lead: the side usually sits about 9 dB under the middle
+        set (*p, qn::autoMbId, 0.0f);
+        // As much side as middle: far too wide for a lead
+        Player player { [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto mid = 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 500.0 * t);
+                const auto side = 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 750.0 * t);
+                b.setSample (0, i, mid + side); b.setSample (1, i, mid - side);
+            }
+        } };
+        passes (*p, player, 16);
+        check (v (*p, qn::widthId) < 0.6f && p->moveLog().joinIntoString ("\n").contains ("Kept: width"),
+               "it narrows the lead step by step, each step checked (width " + juce::String (juce::roundToInt (v (*p, qn::widthId) * 100.0f)) + "%)");
+        juce::AudioBuffer<float> mono;
+        Player monoPlayer { sine (500.0f, 0.3f) };
+        auto q = make (5);
+        set (*q, qn::autoMbId, 0.0f);
+        passes (*q, monoPlayer, 8);
+        check (std::abs (v (*q, qn::widthId) - 1.0f) < 0.01f, "a mono part isn't widened: there's no side to bring up");
+    }
+
+    section ("Ringing peaks");
+    {
+        auto p = make (4);
+        set (*p, qn::autoMbId, 0.0f);
+        // Noise with a fixed ring at 1234 Hz (a resonant filter's peak)
+        Player player { [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            juce::Random rng (pos);
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto x = 0.05f * (rng.nextFloat() * 2.0f - 1.0f) + 0.02f * (float) std::sin (juce::MathConstants<double>::twoPi * 1234.0 * t);
+                b.setSample (0, i, x); b.setSample (1, i, x);
+            }
+        } };
+        passes (*p, player, 10);
+        if (std::getenv ("QDEBUG")) { std::cout << p->moveLog().joinIntoString ("\n") << std::endl; for (auto hz : p->lastResonances()) std::cout << "res " << hz << std::endl; }
+        int slot = -1;
+        for (int sl = 0; sl < qn::numSlots; ++sl)
+            if ((int) v (*p, qn::reasonId (sl)) == qn::resonance && std::abs (v (*p, qn::freqId (sl)) - 1234.0f) < 15.0f) slot = sl;
+        check (slot >= 0 && v (*p, qn::gainId (slot)) <= -2.9f && v (*p, qn::qId (slot)) >= 5.9f,
+               "a ring that's there pass after pass gets a narrow dip, marked 'Resonance' ("
+                   + (slot >= 0 ? juce::String (v (*p, qn::freqId (slot)), 0) + " Hz, " + juce::String (v (*p, qn::gainId (slot)), 1) + " dB" : juce::String ("none")) + ")");
+        check (p->moveLog().joinIntoString ("\n").contains ("Kept: band " + juce::String (slot + 1)), "and the dip was checked and kept");
+        const auto tips = p->spireTips();
+        check (tips.joinIntoString (" ").contains ("ringing"), "Spire tips point at the filter's resonance");
+    }
+
+    section ("Spire tips");
+    {
+        qn::spire::Reading dull;
+        dull.role = 5;
+        dull.toneDiff[7] = -5.0f; dull.toneDiff[8] = -4.0f;
+        dull.sideMinusMidDb = -20.0f; dull.sideTargetDb = -9.0f;
+        const auto t = qn::spire::tips (dull);
+        check (t.size() == 2 && t[0].startsWith ("Dull") && t[1].contains ("unison"), "a dull, narrow lead: open the filter, more unison");
+        qn::spire::Reading bass;
+        bass.role = 2;
+        bass.sideMinusMidDb = -8.0f;
+        check (qn::spire::tips (bass).joinIntoString (" ").contains ("Mono"), "a wide bass: Mono");
+        qn::spire::Reading vocal;
+        vocal.role = 6;
+        vocal.toneDiff[7] = -6.0f;
+        check (qn::spire::tips (vocal).isEmpty() && qn::spire::startingPoint (5, false).contains ("Supersaw"), "no Spire tips for a vocal; a lead starts as a supersaw");
+    }
+
     section ("A move that doesn't help is undone");
     {
         auto p = make (5);   // lead
