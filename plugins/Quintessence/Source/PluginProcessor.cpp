@@ -221,8 +221,8 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             const auto b0 = deessBand[0].bandpass (x[0]) / 1.5f, b1 = deessBand[1].bandpass (x[1]) / 1.5f;
             const auto e = deessEnv.process (0.5f * (std::abs (b0) + std::abs (b1)));
             deessSlow += deessSlowCoeff * (e * e - deessSlow);
-            const auto thr = 2.0f * std::sqrt (deessSlow) + 1.0e-6f;
-            const auto red = e > thr ? juce::jmin (deessDepth, 20.0f * std::log10 (e / thr)) : 0.0f;
+            const auto deessThr = 2.0f * std::sqrt (deessSlow) + 1.0e-6f;
+            const auto red = e > deessThr ? juce::jmin (deessDepth, 20.0f * std::log10 (e / deessThr)) : 0.0f;
             const auto g = juce::Decibels::decibelsToGain (-red);
             x[0] -= b0 * (1.0f - g);
             x[1] -= b1 * (1.0f - g);
