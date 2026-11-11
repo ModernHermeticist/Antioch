@@ -3,6 +3,7 @@
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "ConductorBus.h"
 #include "Limiter.h"
 #include "Analysis.h"
 #include "TargetBus.h"
@@ -17,7 +18,7 @@ class LapisProcessor : public suite::SuiteProcessor
 {
 public:
     LapisProcessor();
-    ~LapisProcessor() override = default;
+    ~LapisProcessor() override { suite::Conductor::forget (getInstanceId()); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

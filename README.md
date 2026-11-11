@@ -60,6 +60,35 @@ has the track names, the plugin order on each track, the routing, and how to sav
 your FL template. **What it did:** Ouroboros' *What changed?* lists every automatic move in
 the suite, with the track, the bar, the reason, and whether it was kept or undone.
 
+## How the suite glues itself together
+
+- **One move at a time (the conductor).** Every plugin that moves by itself (Quintessence,
+  Antioch's space level, Vibration's drive, Lapis' tilt, Mentalism's balance loop) asks for
+  the turn first and gives it back once its move is checked. Whoever was turned away goes
+  next. While a move holds the turn, Mentalism measures the master's tone before it and
+  3 s into it. If the move took the master more than 0.5 dB further from its target, the
+  owner undoes it, even if it helped its own track. So two plugins never chase each other,
+  and nothing improves one track at the mix's expense.
+- **Tone budget.** The vocal owns 2 kHz (where its words are) and the lead owns 4 kHz over
+  the pads. A pad, lead or FX track that's strong there gets a gentle 1.5 dB dip from its
+  Quintessence that opens only while the owner plays: room made before there's a clash.
+- **Phrase riding.** In a drop, groove or breakdown of two or more 8-bar phrases, Prima
+  Materia lifts each phrase a little over the one before (1 dB from first to last, centred
+  on the section's level), the way a hand on the fader carries a section forward.
+- **Groove lock.** Correspondence's groove (its swing) sets the swing of Kybalion's gate,
+  the exported clips, and now Azoth's snare rolls, so the whole track swings the same way.
+- **Glue room.** A new Antioch on the music bus becomes one short shared room (0.9 s, no
+  echo or throws, about 18 dB under the music, level set by itself). The tracks' own
+  Antiochs give each part its depth; this puts them in one space.
+- **Transitions.** Through a build, Quintessence tightens the bus glue (up to 3 dB) and
+  widens the image (up to 25%, never the kick, bass or vocal); the drop's first beat lets
+  both go. Builds aren't measured for automatic moves, since the change there is on purpose.
+- **Section loudness.** When the auto-coach isn't running its own passes, the problem
+  watcher applies the coach's level fixes by itself (a breakdown too loud against the drop,
+  a build that doesn't rise, a later drop no bigger), one section at a time. Each section is
+  heard again before it's judged again. Structural changes (extending a section) are
+  offered, not made. Lapis keeps the drop at its loudness target, so the arc sits on that.
+
 ## Correspondence: key and chord engine
 
 ![Correspondence](docs/correspondence.png)

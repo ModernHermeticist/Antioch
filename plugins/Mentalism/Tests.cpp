@@ -7,6 +7,7 @@
 #include "Registry.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
+#include "ConductorBus.h"
 #include "StyleLog.h"
 #include "SectionBus.h"
 #include "SuiteUI.h"
@@ -502,6 +503,7 @@ int main (int argc, char** argv)
         };
         suite::FixBus::reset();
         auto p = make();
+        set (*p, Params::problemWatch, 0.0f);   // (the watcher keeps section loudness by itself when the coach is off)
         play (*p);
         const auto before = p->report();
         p->runAutomation();
@@ -995,6 +997,44 @@ int main (int argc, char** argv)
         set (*p, Params::problemWatch, 0.0f);
         check (! p->watchPass (r) && p->problems().empty(), "off, it does nothing");
         suite::Registry::reset();
+        suite::FixBus::reset();
+    }
+
+    section ("The conductor's judge, and section loudness");
+    {
+        suite::Conductor::reset();
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.tonalAvailable = true;
+        r.shortDiff.fill (1.0f);
+        check (suite::Conductor::request (4242u), "(another plugin takes the turn)");
+        p->conductTick (r);            // sees the new turn: the master before
+        r.shortDiff.fill (1.8f);       // the move took the master away from its target
+        juce::Thread::sleep (3100);
+        p->conductTick (r);
+        check (suite::Conductor::verdictFor (4242u) == suite::Conductor::worse, "the move made the master worse: the verdict says so");
+        suite::Conductor::release (4242u);
+        suite::Conductor::reset();
+
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        MentalismProcessor::Report s = p->report();
+        s.measuredSeconds = 10.0f;
+        s.arrangementAvailable = true;
+        s.map.totalBars = 16; s.map.count = 2;
+        s.map.sections[0] = { 1, suite::SectionType::Breakdown };
+        s.map.sections[1] = { 9, suite::SectionType::Drop };
+        s.arrangement.complete = true;
+        s.arrangement.problems = 2;
+        s.arrangement.notes = { "The breakdown is only 2 dB under the drop", "The drop is shorter than a DJ phrase" };
+        s.arrangement.fixes = { suite::Fix::ArcMatch, suite::Fix::ExtendSection };
+        s.arrangement.fixData = { suite::packArc (0, -2.0f), suite::packArc (1, 8.0f) };
+        p->watchPass (s);
+        suite::FixBus::Message m;
+        check (suite::FixBus::latest() == 1 && suite::FixBus::read (1, m) && m.fix == suite::Fix::ArcMatch, "a breakdown too loud against the drop: brought down by itself");
+        const auto offeredNow = p->problems();
+        check (std::any_of (offeredNow.begin(), offeredNow.end(), [] (const watcher::Problem& q) { return q.fix == suite::Fix::ExtendSection; }),
+               "a structural change (extending a section) is offered, not made");
         suite::FixBus::reset();
     }
 

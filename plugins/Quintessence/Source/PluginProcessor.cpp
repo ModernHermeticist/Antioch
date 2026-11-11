@@ -61,6 +61,7 @@ QuintessenceProcessor::QuintessenceProcessor()
 
 QuintessenceProcessor::~QuintessenceProcessor()
 {
+    suite::Conductor::forget (getInstanceId());
     for (const auto& [id, bit] : lockBits()) apvts.removeParameterListener (id, this);
 }
 
@@ -133,11 +134,13 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     // Breakdowns get their own correction: a pass measures one kind of section only
     int group = 0;
+    float buildProgress = 0.0f;
     const auto info = suite::HostInfo::read (getPlayHead());
     if (follower.refresh() && info.hasPpq)
     {
         const auto pos = follower.locate (info.ppq, info.barQuarters());
         if (pos.valid && pos.type == suite::SectionType::Breakdown) group = 1;
+        if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
     }
     if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
     if (group != passGroup) { resetMeasurement(); passGroup = group; measureGroup.store (group); }
@@ -171,7 +174,13 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         on[(size_t) s] = std::abs (g) > 0.05f;
     }
 
-    const auto width = value (qn::widthId);
+    // Transition-aware dynamics: through a build the glue tightens (up to 3 dB) and the image
+    // widens (up to 25%; not on kick, bass or vocal); the drop's first beat lets both go.
+    const auto transitions = value (qn::transitionsId) > 0.5f;
+    const auto roleNow = roleShown.load();
+    const auto widen = transitions && roleNow != 1 && roleNow != 2 && roleNow != 6 ? 1.0f + 0.25f * buildProgress : 1.0f;
+    const auto width = value (qn::widthId) * widen;
+    buildNow.store (buildProgress);
     blockMono.clear();
 
     // De-esser, transient shaper, glue
@@ -183,7 +192,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         deessFreqNow = deessFreq;
     }
     const auto punch = value (qn::punchId);
-    const auto glueThr = value (qn::glueThrId);
+    const auto glueThr = value (qn::glueThrId) - (transitions ? 3.0f * buildProgress : 0.0f);
     const auto glueOn = glueThr < -0.05f;
     const auto glueRelease = juce::jlimit (50.0f, 300.0f, 30000.0f / (float) (info.bpm > 1.0 ? info.bpm : 128.0));   // an 8th note
     if (std::abs (glueRelease - glueReleaseNow) > 0.5f) { glueEnv.set (30.0f, glueRelease, fs); glueReleaseNow = glueRelease; }
@@ -562,6 +571,7 @@ bool QuintessenceProcessor::autoPass()
     const auto m = measurement();
     if (m.seconds < (float) passSecondsNow()) return false;
     requestReset();
+    if (m.group == 2) return false;   // builds: the transition moves things on purpose, nothing to judge
     struct ClearAfterPass { qn::ResonanceFinder& f; ~ClearAfterPass() { f.reset(); } } clearAfterPass { resonances };   // each pass hears its own spectrum
     const auto role = effectiveRole();
     roleShown.store (role);
@@ -644,6 +654,13 @@ bool QuintessenceProcessor::autoPass()
             measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s";
             if (! helped) widthCooldown = 8;
         }
+        else if (pending.kind == Pending::budget)
+        {
+            // A deliberate dip: kept unless it pulls the track's own tone off
+            const auto after = toneError (m, role);
+            helped = pending.errBefore < 0.0f || after < pending.errBefore + 1.0f;
+            measure = "the track's tone " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from its target";
+        }
         else if (pending.kind == Pending::punch)
         {
             const auto after = std::abs (m.punchDb - qn::targets::punchTarget (role));
@@ -681,29 +698,81 @@ bool QuintessenceProcessor::autoPass()
             measure = "loud moments " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from the target";
             if (! helped) mbCooldown[(size_t) pending.index] = 8;
         }
+        // The conductor: Mentalism watched the master while this move held the turn
+        const auto masterWorse = suite::Conductor::verdictFor (getInstanceId()) == suite::Conductor::worse;
         const auto what = pending.what;
-        if (helped) { ++kept; addLog ("Kept: " + what + " (" + measure + ")"); }
+        if (helped && ! masterWorse) { ++kept; addLog ("Kept: " + what + " (" + measure + ")"); }
         else
         {
             for (const auto& [id, v] : pending.before) write (id, v);
             ++undone;
-            addLog ("Undid: " + what + ": it didn't bring the sound closer (" + measure + ")");
+            addLog ("Undid: " + what + (masterWorse ? juce::String (": it helped this track but moved the master away from its target")
+                                                    : ": it didn't bring the sound closer (" + measure + ")"));
+            helped = false;
         }
         pending.kind = Pending::none;
+        suite::Conductor::release (getInstanceId());
         if (! helped) return true;   // this pass measured the undone move: decide again next pass
     }
 
     // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
     // move (EQ, dynamics, width, resonances) take turns going first.
-    constexpr int kinds = 7;
+    // One move at a time across the whole mix: wait for the conductor's turn
+    if (! suite::Conductor::request (getInstanceId())) return false;
+    constexpr int kinds = 8;
     for (int k = 0; k < kinds; ++k)
     {
         const auto kind = (nextFirst + k) % kinds;
         const auto moved = kind == 0 ? eqMove (m, role) : kind == 1 ? mbMove (m, role) : kind == 2 ? widthMove (m, role) : kind == 3 ? resonanceMove (m, role)
-                         : kind == 4 ? punchMove (m, role) : kind == 5 ? glueMove (m, role) : deessMove (m, role);
+                         : kind == 4 ? punchMove (m, role) : kind == 5 ? glueMove (m, role) : kind == 6 ? deessMove (m, role) : budgetMove (m, role);
         if (moved) { nextFirst = (kind + 1) % kinds; return true; }
     }
+    suite::Conductor::release (getInstanceId());   // nothing to do: the turn goes on
     return false;
+}
+
+bool QuintessenceProcessor::budgetMove (const Measurement& m, int role)
+{
+    // Tone budget: the vocal owns 2 kHz (where its words are), the lead 4 kHz over the pads.
+    // Another part that's strong there gives it room: a gentle 1.5 dB dip that opens only while
+    // the owner plays.
+    if (value (qn::autoEqId) < 0.5f || m.group != 0) return false;
+    const auto track = getTrackName();
+    bool vocal = false, lead = false;
+    juce::String vocalTrack, leadTrack;
+    for (const auto& e : suite::Registry::list())
+    {
+        if ((e.plugin != "Prima Materia" && e.plugin != "Quintessence") || (track.isNotEmpty() && e.track == track) || e.id == getInstanceId()) continue;
+        const auto r = (int) e.metrics[0];
+        if (r == 6) { vocal = true; vocalTrack = e.track; }
+        if (r == 5) { lead = true; leadTrack = e.track; }
+    }
+    int band = -1, when = 0;
+    juce::String owner, ownerTrack;
+    if (vocal && (role == 4 || role == 5 || role == 7)) { band = 6; when = 1; owner = "vocal"; ownerTrack = vocalTrack; }
+    else if (lead && role == 4) { band = 7; when = 2; owner = "lead"; ownerTrack = leadTrack; }
+    if (band < 0 || budgetDone == band) return false;
+    float loudest = -200.0f;
+    for (auto b : m.bandsDb) loudest = juce::jmax (loudest, b);
+    budgetDone = band;
+    if (m.bandsDb[(size_t) band] < loudest - 18.0f) return false;   // hardly anything there: no need
+    const auto slot = slotFor (band, true);
+    if (slot < 0) return false;
+    if ((int) value (qn::reasonId (slot)) == qn::masking) return false;   // a carve is already there
+    const auto centre = analysis::bandCentres()[(size_t) band];
+    pending = { Pending::budget, slot, band,
+                { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) }, { qn::qId (slot), value (qn::qId (slot)) },
+                  { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::whenId (slot), value (qn::whenId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) } },
+                toneError (m, role), "room for the " + owner + " at " + hzText (centre) };
+    write (qn::freqId (slot), centre);
+    write (qn::qId (slot), 1.0f);
+    write (qn::reasonId (slot), (float) qn::masking);
+    write (qn::whenId (slot), (float) when);
+    write (qn::bdId (slot), 0.0f);
+    write (qn::gainId (slot), -1.5f);
+    addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " -1.5 dB while the " + owner + " plays: room for the " + owner
+            + (ownerTrack.isNotEmpty() ? " ('" + ownerTrack + "')" : juce::String()) + ", which owns that part of the spectrum");
+    return true;
 }
 
 bool QuintessenceProcessor::punchMove (const Measurement& m, int role)
@@ -998,6 +1067,8 @@ bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
 
 void QuintessenceProcessor::relearn()
 {
+    suite::Conductor::release (getInstanceId());
+    budgetDone = -1;
     for (int s = 0; s < qn::numSlots; ++s)
         if (value (qn::lockId (s)) < 0.5f && ((int) value (qn::reasonId (s)) == qn::roleTone || (int) value (qn::reasonId (s)) == qn::resonance))
         {

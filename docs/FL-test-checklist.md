@@ -115,6 +115,9 @@ between versions.
 - [ ] **6b.15** Push a track into clipping: within a few seconds Mentalism's watcher gain-stages it, and
   *What changed?* says so. Turn a Prima Materia's *Mono lows* off on a wide bass: *Problems (1)* offers
   to put it back.
+- [ ] **6b.16** With several Quintessences playing, *What changed?* shows their moves one after another,
+  never two at once. Put Antioch on the music bus: it becomes a short room. Through a build the pads
+  widen and the bus glue tightens; the drop resets both.
 
 ## 7. A song end to end
 

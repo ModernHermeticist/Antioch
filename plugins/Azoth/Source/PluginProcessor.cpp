@@ -377,9 +377,12 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                         const auto p = (double) shapeProgress (buildShape == bsStepped ? bsSmooth : buildShape,
                                                                (float) ((pos - startQ) / juce::jmax (1.0e-6, end - startQ)));
                         const auto rate = rollRate (rollFrom, rollTo, rollCurve, p);
-                        // A hit whenever playback crosses a grid line at the current rate.
+                        // A hit whenever playback crosses a grid line at the current rate (16ths and slower
+                        // follow the suite's groove: the off-16ths land late by its swing).
+                        const auto swing = rate >= 0.25 - 1.0e-9 ? (double) grooveSwing.load() : 0.0;
+                        const auto w = unswing (pos, swing), wPrev = unswing (rollPrevPos, swing);
                         const auto crossed = rollPrevPos < pos && pos - rollPrevPos < 0.5
-                                             && (int64_t) std::floor (pos / rate) != (int64_t) std::floor (rollPrevPos / rate);
+                                             && (int64_t) std::floor (w / rate) != (int64_t) std::floor (wPrev / rate);
                         if (crossed)
                         {
                             snares[(size_t) nextSnare].trigger (rollLevel * (rollVel + (1.0f - rollVel) * (float) p),

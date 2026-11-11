@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "ConductorBus.h"
 #include <juce_dsp/juce_dsp.h>
 #include "Parameters.h"
 #include "SuiteDSP.h"
@@ -14,7 +15,7 @@ class VibrationProcessor : public suite::SuiteProcessor
 {
 public:
     VibrationProcessor();
-    ~VibrationProcessor() override = default;
+    ~VibrationProcessor() override { suite::Conductor::forget (getInstanceId()); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}

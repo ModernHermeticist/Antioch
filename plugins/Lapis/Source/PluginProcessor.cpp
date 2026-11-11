@@ -105,7 +105,9 @@ bool LapisProcessor::tonePass()
     if (tone.pending)
     {
         tone.pending = false;
-        if (err < tone.errBefore - 0.05f)
+        const auto masterWorse = suite::Conductor::verdictFor (getInstanceId()) == suite::Conductor::worse;   // Mentalism's verdict on the master
+        suite::Conductor::release (getInstanceId());
+        if (err < tone.errBefore - 0.05f && ! masterWorse)
         {
             ++toneKept;
             suite::MoveLog::add (getName(), getTrackName(), "Kept: master tone (tilt " + juce::String (tone.errBefore, 2) + " -> " + juce::String (err, 2)
@@ -125,6 +127,7 @@ bool LapisProcessor::tonePass()
     const auto now = value (tiltId);
     const auto next = juce::jlimit (-3.0f, 3.0f, now + (tilt > 0.0f ? -0.5f : 0.5f));   // too bright: darker
     if (std::abs (next - now) < 0.01f) return false;
+    if (! suite::Conductor::request (getInstanceId())) return false;   // one move at a time across the mix
     tone = { true, now, err, 0 };
     setParameterPlain (apvts, tiltId, next);
     suite::MoveLog::add (getName(), getTrackName(), "Master tilt " + juce::String (now, 1) + " -> " + juce::String (next, 1) + " dB (the master tilts "

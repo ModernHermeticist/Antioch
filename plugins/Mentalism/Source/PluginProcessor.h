@@ -12,6 +12,7 @@
 #include "HostInfo.h"
 #include "FixBus.h"
 #include "Watcher.h"
+#include "ConductorBus.h"
 #include <map>
 #include <set>
 #include <thread>
@@ -238,6 +239,12 @@ public:
     bool watchPass (const Report& rep);
     std::vector<watcher::Problem> problems() const { const juce::ScopedLock sl (historyLock); return offered; }
     bool applyProblemFix (const juce::String& key);
+
+    /** The conductor's judge: while another plugin's move holds the turn, how far the master's
+        tone is from its target before it and 3 s into it. More than 0.5 dB further away: the
+        verdict is "worse" and the owner undoes it. Message thread (tests call it). */
+    void conductTick (const Report& rep);
+    static float tonalDistance (const Report& rep);
     static constexpr float balanceEverySeconds = 4.0f;
     std::atomic<int> balanceKept { 0 }, balanceUndone { 0 };
     uint32_t balanceSeq = 0;   // the step waiting to be checked
@@ -303,6 +310,9 @@ private:
     float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f, lastBalanceAt = 0.0f, balanceBefore = -1.0f;
     int balanceRest = 0;
     float lastWatchAt = 0.0f;
+    uint32_t watchingTurn = 0;
+    float turnBefore = -1.0f;
+    bool turnJudged = true;
     std::vector<watcher::Problem> offered;
     std::map<juce::String, std::pair<float, int>> watchActed;   // key -> (when last fixed, tries)
     std::set<juce::String> watchAnnounced;

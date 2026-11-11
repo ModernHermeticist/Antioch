@@ -121,7 +121,9 @@ bool VibrationProcessor::drivePass()
     if (drivePending.pending)
     {
         drivePending.pending = false;
-        if (err < drivePending.errBefore - 0.3f)
+        const auto masterWorse = suite::Conductor::verdictFor (getInstanceId()) == suite::Conductor::worse;   // Mentalism's verdict on the master
+        suite::Conductor::release (getInstanceId());
+        if (err < drivePending.errBefore - 0.3f && ! masterWorse)
         {
             ++driveKept;
             suite::MoveLog::add (getName(), getTrackName(), "Kept: drive " + juce::String (value (Params::driveTrim), 1) + " dB (richness "
@@ -143,6 +145,7 @@ bool VibrationProcessor::drivePass()
     if (rich < target - 2.0f) next = juce::jmin (12.0f, trim + 3.0f);        // too clean: it vanishes on small speakers
     else if (rich > target + 3.0f) next = juce::jmax (-12.0f, trim - 3.0f);  // harsh
     if (std::abs (next - trim) < 0.05f) return false;
+    if (! suite::Conductor::request (getInstanceId())) return false;   // one move at a time across the mix
     drivePending = { true, trim, err, 0 };
     setParameterPlain (apvts, Params::driveTrim, next);
     suite::MoveLog::add (getName(), getTrackName(), "Drive " + juce::String (trim, 1) + " -> " + juce::String (next, 1) + " dB (the upper harmonics sit "

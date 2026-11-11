@@ -39,9 +39,23 @@ public:
     void changeProgramName (int, const juce::String&) override {}
 
     void getPluginState (juce::MemoryBlock& destData) override;
+    /** Groove lock: Correspondence's groove (its swing) swings the snare roll's 16ths too. */
+    std::atomic<float> grooveSwing { 0.0f };
+    /** A position in quarters, as if the swung 16th grid were straight (off-16ths are `swing` of a 16th late). */
+    static double unswing (double q, double swing)
+    {
+        if (swing <= 0.0) return q;
+        const auto pair = std::floor (q / 0.5) * 0.5, bp = q - pair, off = 0.25 * (1.0 + swing);
+        return pair + (bp < off ? bp * 0.25 / off : 0.25 + (bp - off) * 0.25 / (0.5 - off));
+    }
+
     SuiteStatus suiteStatus() override
     {
         SuiteStatus s;
+        float swing = 0.0f;
+        for (const auto& e : suite::Registry::list())
+            if (e.plugin == "Correspondence") swing = std::max (swing, e.metrics[0]);
+        grooveSwing.store (swing);
         if (value (followId) > 0.5f) s.flags |= suite::Status::followsOuroboros;
         if (activeLatency.load() > 0) s.flags |= suite::Status::highLatency;   // reverse swells: 3 s lookahead
         if (missingSamples() > 0) s.flags |= suite::Status::missingFiles;

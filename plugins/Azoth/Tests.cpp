@@ -749,6 +749,15 @@ int main (int argc, char** argv)
         suite::Registry::reset();
     }
 
+    section ("Groove lock");
+    {
+        // With Correspondence swinging 30%, an off-16th sits at 0.325 of a beat instead of 0.25:
+        // the roll's grid lands there
+        check (std::abs (AzothProcessor::unswing (0.325, 0.3) - 0.25) < 1.0e-9 && std::abs (AzothProcessor::unswing (0.5, 0.3) - 0.5) < 1.0e-9
+                   && std::abs (AzothProcessor::unswing (0.3, 0.3) - 0.3 * 0.25 / 0.325) < 1.0e-9 && std::abs (AzothProcessor::unswing (0.3, 0.0) - 0.3) < 1.0e-9,
+               "the snare roll's 16ths follow the suite's swing (straight when there's none)");
+    }
+
     section ("No surprises");
     {
         suite::SectionBus::publish (testMap());

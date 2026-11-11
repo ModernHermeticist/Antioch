@@ -21,6 +21,8 @@
 #include "Targets.h"
 #include "Resonance.h"
 #include "SpireTips.h"
+#include "ConductorBus.h"
+#include "Registry.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
 {
@@ -125,6 +127,8 @@ private:
     bool punchMove (const Measurement&, int role);
     bool glueMove (const Measurement&, int role);
     bool deessMove (const Measurement&, int role);
+    bool budgetMove (const Measurement&, int role);
+    int budgetDone = -1;
     void drainSpectrum();
     bool mbMove (const Measurement&, int role);
     int slotFor (int band, bool forCarve) const;
@@ -177,6 +181,7 @@ private:
     std::atomic<float> passPunchDb { 0.0f }, passGlueGr { 0.0f }, passGlueLevel { -100.0f };
 public:
     std::atomic<float> deessNow { 0.0f };   // the de-esser's reduction now (dB, UI)
+    std::atomic<float> buildNow { 0.0f };   // how far through a build (0 outside one)
 private:
     std::vector<float> fifoData, blockMono;
     juce::AbstractFifo fifo { 1 << 18 };
@@ -187,7 +192,7 @@ private:
     // Message thread
     struct Pending
     {
-        enum Kind { none, eqSlot, lowCut, mb, width, resonance, punch, glue, deess } kind = none;
+        enum Kind { none, eqSlot, lowCut, mb, width, resonance, punch, glue, deess, budget } kind = none;
         int index = -1, band = -1;
         std::vector<std::pair<juce::String, float>> before;
         float errBefore = 0.0f;

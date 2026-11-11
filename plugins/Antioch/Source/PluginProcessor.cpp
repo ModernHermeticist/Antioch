@@ -413,6 +413,21 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     duckAmount.store (maxDuck);
 }
 
+bool AntiochProcessor::glueRoomTick()
+{
+    if (glueRoomChecked || getTrackName().isEmpty()) return false;
+    glueRoomChecked = true;   // one chance, while it's untouched
+    if (! onBusTrack() || ! untouched()) return false;
+    using namespace Params;
+    for (const auto& [id, v] : std::initializer_list<std::pair<juce::String, float>> {
+             { dry, 1.0f }, { echoLevel, 0.0f }, { throwLevel, 0.0f }, { verbLevel, 0.25f }, { Verb::decay, 0.9f }, { Verb::size, 0.35f },
+             { Verb::predelay, 12.0f }, { Verb::shimmer, 0.0f }, { Verb::lowCut, 400.0f }, { autoSpace, 1.0f } })
+        setParameterPlain (apvts, id, v);
+    captureFreshValues();
+    suite::MoveLog::add (getName(), getTrackName(), "Glue room: one short shared room (0.9 s) for everything on the bus, its level set by itself");
+    return true;
+}
+
 float AntiochProcessor::spaceTargetFor (int role)
 {
     switch (role)
@@ -430,7 +445,7 @@ bool AntiochProcessor::spacePass()
 {
     if (value (Params::autoSpace) < 0.5f || spaceHeard.load() < spacePassSeconds) return false;
     const auto role = roleForTrack();
-    const auto target = spaceTargetFor (role);
+    const auto target = onBusTrack() ? -18.0f : spaceTargetFor (role);   // the music bus: a glue room, well under the music
     const auto tail = spaceTailDb.load();
     spaceReset.store (true);
     if (target == 0.0f || tail < -90.0f) return false;
@@ -441,7 +456,9 @@ bool AntiochProcessor::spacePass()
     if (space.pending)
     {
         space.pending = false;
-        if (err < space.errBefore - 0.5f)
+        const auto masterWorse = suite::Conductor::verdictFor (getInstanceId()) == suite::Conductor::worse;   // Mentalism's verdict on the master
+        suite::Conductor::release (getInstanceId());
+        if (err < space.errBefore - 0.5f && ! masterWorse)
         {
             ++spaceKept;
             suite::MoveLog::add (getName(), getTrackName(), "Kept: space " + juce::String (value (Params::spaceTrim), 1) + " dB (the tail "
@@ -463,6 +480,7 @@ bool AntiochProcessor::spacePass()
     const auto step = std::round (juce::jlimit (-1.5f, 1.5f, target - tail) * 2.0f) * 0.5f;
     const auto next = juce::jlimit (-12.0f, 6.0f, trim + step);
     if (std::abs (next - trim) < 0.05f) return false;
+    if (! suite::Conductor::request (getInstanceId())) return false;   // one move at a time across the mix
     space = { true, trim, err, 0 };
     setParameterPlain (apvts, Params::spaceTrim, next);
     suite::MoveLog::add (getName(), getTrackName(), "Space " + juce::String (trim, 1) + " -> " + juce::String (next, 1) + " dB (the echo and reverb sit "

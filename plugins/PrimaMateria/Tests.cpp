@@ -393,6 +393,25 @@ int main (int argc, char** argv)
         check (dip < -7.0f, "a carve made for the vocal opens only while it sings (" + juce::String (dip, 1) + " dB at 1 kHz then, none without it)");
     }
 
+    section ("Phrase ride");
+    {
+        auto p = make (roleIndex ("Pads"));
+        suite::SectionMap longDrop;
+        longDrop.totalBars = 32; longDrop.count = 1;
+        longDrop.sections[0] = { 1, T::Drop };
+        suite::SectionBus::publish (longDrop);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        juce::AudioBuffer<float> audio;
+        render (*p, 64.0, tone (440.0f), &audio, &head);
+        p->setPlayHead (nullptr);
+        const auto first = rmsBetween (audio, 4.0, 14.0), last = rmsBetween (audio, 52.0, 62.0);
+        const auto rise = juce::Decibels::gainToDecibels (last / first);
+        check (std::abs (rise - 1.0f) < 0.15f, "across a 32-bar drop each phrase sits a little higher: the last 1 dB over the first (" + juce::String (rise, 2) + " dB)");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Mono lows and the vocal rider");
     {
         auto antiPhase = [] (float hz)

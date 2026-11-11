@@ -389,6 +389,7 @@ void MentalismProcessor::runAutomation()
     }
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
+    conductTick (rep);
     if (rep.measuredSeconds >= lastWatchAt + 4.0f) { lastWatchAt = rep.measuredSeconds; watchPass (rep); }
     else if (rep.measuredSeconds < lastWatchAt) lastWatchAt = rep.measuredSeconds;
     if (rep.measuredSeconds >= lastBalanceAt + balanceEverySeconds)
@@ -552,6 +553,39 @@ bool MentalismProcessor::watchPass (const Report& rep)
         if (watchAnnounced.insert (p.key).second)
             suite::MoveLog::add (getName(), getTrackName(), "Problem: " + p.text + ". Suggested (Mentalism's Problems): " + p.fixText);
     }
+    // Section loudness: the coach's level fixes (a breakdown too loud against the drop, a build
+    // that doesn't rise, a later drop no bigger) are applied by themselves when the auto-coach
+    // isn't running its own passes; each section is heard again before it's judged again.
+    bool fixedSection = false;
+    if (apvts.getRawParameterValue (Params::autoCoach)->load() < 0.5f && rep.arrangementAvailable && rep.arrangement.complete && rep.map.count > 0)
+        for (int i = 0; i < rep.arrangement.problems && i < (int) rep.arrangement.fixes.size(); ++i)
+        {
+            const auto fix = rep.arrangement.fixes[(size_t) i];
+            const auto data = i < (int) rep.arrangement.fixData.size() ? rep.arrangement.fixData[(size_t) i] : 0u;
+            const auto level = fix == suite::Fix::ArcMatch || fix == suite::Fix::BreakdownQuieter || fix == suite::Fix::BreakdownLouder
+                               || fix == suite::Fix::IntroQuieter || fix == suite::Fix::LaterDropBigger || fix == suite::Fix::BuildRise;
+            if (fix == suite::Fix::None) continue;
+            const auto key = "arc:" + juce::String ((int) fix) + ":" + juce::String (data);
+            const auto note = i < rep.arrangement.notes.size() ? rep.arrangement.notes[i] : suite::fixName (fix);
+            present.insert (key);
+            auto& [when, tries] = watchActed.try_emplace (key, std::make_pair (-1000.0f, 0)).first->second;
+            if (level && tries < 2)
+            {
+                if (fixedSection) continue;   // one section at a time: the next is judged after it's heard again
+                fixedSection = true;
+                applyCoachFix (fix, data, rep.map);
+                when = now;
+                ++tries;
+                acted = true;
+                suite::MoveLog::add (getName(), getTrackName(), "Section loudness: " + note + ". Fixed: " + suite::fixName (fix), suite::MoveLog::fix);
+                continue;
+            }
+            watcher::Problem p { key, note + (level ? juce::String (" (still there after two fixes)") : juce::String()), suite::fixName (fix), fix, data, false };
+            offer.push_back (p);
+            if (watchAnnounced.insert (key).second)
+                suite::MoveLog::add (getName(), getTrackName(), "Problem: " + note + ". Suggested (Mentalism's Problems): " + suite::fixName (fix));
+        }
+
     // Problems that went away can come back as new ones
     for (auto it = watchAnnounced.begin(); it != watchAnnounced.end();)
         it = present.count (*it) ? std::next (it) : watchAnnounced.erase (it);
@@ -560,6 +594,42 @@ bool MentalismProcessor::watchPass (const Report& rep)
     const juce::ScopedLock sl (historyLock);
     offered = std::move (offer);
     return acted;
+}
+
+float MentalismProcessor::tonalDistance (const Report& rep)
+{
+    if (! rep.tonalAvailable) return -1.0f;
+    float sum = 0.0f;
+    for (int b = 1; b <= 8; ++b) sum += std::abs (rep.shortDiff[(size_t) b]);
+    return sum / 8.0f;
+}
+
+void MentalismProcessor::conductTick (const Report& rep)
+{
+    const auto holder = suite::Conductor::holder();
+    if (holder == 0 || holder == getInstanceId()) return;
+    const auto turn = suite::Conductor::turn();
+    if (turn != watchingTurn)
+    {
+        watchingTurn = turn;
+        turnBefore = tonalDistance (rep);
+        turnJudged = false;
+        return;
+    }
+    if (turnJudged || turnBefore < 0.0f || suite::Conductor::heldForMs() < 3000) return;
+    const auto now = tonalDistance (rep);
+    if (now < 0.0f) return;
+    turnJudged = true;
+    const auto worse = now > turnBefore + 0.5f;
+    suite::Conductor::judge (worse ? suite::Conductor::worse : suite::Conductor::fine);
+    if (worse)
+    {
+        juce::String who = "a plugin";
+        for (const auto& e : suite::Registry::list())
+            if (e.id == holder) who = e.plugin + (e.track.isNotEmpty() ? " on '" + e.track + "'" : juce::String());
+        suite::MoveLog::add (getName(), getTrackName(), "Conductor: " + who + "'s move took the master " + juce::String (now - turnBefore, 1)
+                             + " dB further from its target; it's being undone", suite::MoveLog::undone);
+    }
 }
 
 bool MentalismProcessor::applyProblemFix (const juce::String& key)
@@ -592,6 +662,7 @@ bool MentalismProcessor::balancePass (const Report& rep)
     if (balanceSeq != 0)
     {
         const auto seq = std::exchange (balanceSeq, 0u);
+        suite::Conductor::release (getInstanceId());
         const auto tracks = suite::FixBus::acknowledgements (seq);
         if (tracks == 0) { balanceRest = 8; return false; }   // everyone's where they should be: rest a while
         const auto worse = now >= 0.0f && balanceBefore >= 0.0f && now > balanceBefore + 0.5f;
@@ -612,6 +683,7 @@ bool MentalismProcessor::balancePass (const Report& rep)
                              suite::MoveLog::kept);
     }
     if (balanceRest > 0) { --balanceRest; return false; }
+    if (! suite::Conductor::request (getInstanceId())) return false;   // one move at a time across the mix
     balanceBefore = now;
     balanceSeq = suite::FixBus::send (suite::Fix::BalanceStep);
     return true;

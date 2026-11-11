@@ -667,6 +667,24 @@ int main (int argc, char** argv)
         check (! off->spacePass() && std::abs (off->apvts.getRawParameterValue (Params::spaceTrim)->load()) < 0.01f, "off, it leaves the space alone");
     }
 
+    section ("Glue room on the music bus");
+    {
+        auto bus = make();
+        bus->captureFreshValues();
+        juce::AudioProcessor::TrackProperties props;
+        props.name = "Music Bus";
+        bus->updateTrackProperties (props);
+        auto v = [&] (const juce::String& id) { return bus->apvts.getRawParameterValue (id)->load(); };
+        check (bus->glueRoomTick() && v (Params::Verb::decay) < 1.0f && v (Params::echoLevel) < 0.01f && v (Params::throwLevel) < 0.01f
+                   && v (Params::autoSpace) > 0.5f, "a new Antioch on the music bus becomes a short shared room: no echo, no throws, its level set by itself");
+        check (! bus->glueRoomTick(), "once");
+        auto lead = make();
+        lead->captureFreshValues();
+        props.name = "Lead";
+        lead->updateTrackProperties (props);
+        check (! lead->glueRoomTick() && lead->apvts.getRawParameterValue (Params::echoLevel)->load() > 0.4f, "a lead's Antioch stays as it is");
+    }
+
     section ("State save/restore");
     {
         auto a = make();

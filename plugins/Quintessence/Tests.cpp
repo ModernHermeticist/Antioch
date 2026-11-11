@@ -8,6 +8,7 @@
 #include "MoveLog.h"
 #include "StyleLog.h"
 #include "TestUtils.h"
+#include "ConductorBus.h"
 
 using namespace suite::test;
 
@@ -331,6 +332,84 @@ int main (int argc, char** argv)
         check (v (*vox, qn::deessDepthId) >= 6.0f && std::abs (v (*vox, qn::deessFreqId) - 7500.0f) < 1.0f
                    && vox->moveLog().joinIntoString ("\n").contains ("Kept: de-esser"),
                "it finds the vocal's sibilance at 7.5 kHz and de-esses only the spikes, checked (depth " + juce::String (v (*vox, qn::deessDepthId), 0) + " dB)");
+    }
+
+    section ("The conductor: one move at a time across the mix");
+    {
+        suite::Conductor::reset();
+        auto a = make (4), b = make (4);
+        Player pa { bands (heavyPad) }, pb { bands (heavyPad) };
+        pa.play (*a, QuintessenceProcessor::passSeconds + 0.3);
+        pb.play (*b, QuintessenceProcessor::passSeconds + 0.3);
+        const auto aMoved = a->autoPass(), bMoved = b->autoPass();
+        check (aMoved && ! bMoved && suite::Conductor::holder() == a->getInstanceId(), "one Quintessence moves; the other waits its turn");
+        suite::Conductor::judge (suite::Conductor::worse);   // Mentalism: the master moved away from its target
+        pa.play (*a, QuintessenceProcessor::passSeconds + 0.3);
+        pb.play (*b, QuintessenceProcessor::passSeconds + 0.3);
+        a->autoPass();
+        check (a->undone.load() == 1 && a->moveLog()[0].contains ("moved the master away"), "a move that made the master worse is undone, even though it helped the track");
+        check (b->autoPass() && suite::Conductor::holder() == b->getInstanceId(), "then the one that waited gets the next turn");
+        suite::Conductor::reset();
+    }
+
+    section ("Tone budget: room for the vocal");
+    {
+        suite::Conductor::reset();
+        suite::Registry::announce (0x6a1u, "Prima Materia", "Vox", suite::Status::roleSet, { 6.0f, 0.0f, 0.0f, 0.0f });
+        auto p = make (4);
+        set (*p, qn::autoMbId, 0.0f);
+        juce::AudioProcessor::TrackProperties props;
+        props.name = "Pads";
+        p->updateTrackProperties (props);
+        Player player { bands (heavyPad) };
+        passes (*p, player, 12);
+        int slot = -1;
+        for (int sl = 0; sl < qn::numSlots; ++sl)
+            if ((int) v (*p, qn::reasonId (sl)) == qn::masking && std::abs (v (*p, qn::freqId (sl)) - 2000.0f) < 1.0f) slot = sl;
+        check (slot >= 0 && std::abs (v (*p, qn::gainId (slot)) + 1.5f) < 0.05f && (int) v (*p, qn::whenId (slot)) == 1,
+               "the pads give the vocal room at 2 kHz: 1.5 dB, only while it sings");
+        suite::Registry::remove (0x6a1u);
+        suite::Conductor::reset();
+    }
+
+    section ("Builds tighten and widen; the drop lets go");
+    {
+        auto p = make (4);
+        set (*p, qn::autoEqId, 0.0f);
+        set (*p, qn::autoMbId, 0.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Build };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        Player player { [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto mid = 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 500.0 * t);
+                const auto side = 0.1f * (float) std::sin (juce::MathConstants<double>::twoPi * 750.0 * t);
+                b.setSample (0, i, mid + side); b.setSample (1, i, mid - side);
+            }
+        } };
+        player.head = &head;
+        juce::AudioBuffer<float> a;
+        player.play (*p, 20.0, &a);
+        auto sideRms = [&] (double t0, double t1)
+        {
+            double sum = 0.0; int n = 0;
+            for (int i = (int) (t0 * sampleRate); i < (int) (t1 * sampleRate); ++i, ++n) { const auto sd = 0.5 * (a.getSample (0, i) - a.getSample (1, i)); sum += sd * sd; }
+            return std::sqrt (sum / n);
+        };
+        const auto early = sideRms (0.5, 1.5), late = sideRms (15.0, 15.9), drop = sideRms (17.0, 19.0);
+        const auto wider = juce::Decibels::gainToDecibels ((float) (late / early)), back = juce::Decibels::gainToDecibels ((float) (drop / early));
+        check (wider > 1.5f && std::abs (back) < 0.3f, "the image widens through the build (+" + juce::String (wider, 1) + " dB of side) and is back on the drop ("
+                                                     + juce::String (back, 1) + " dB)");
+        suite::SectionBus::withdraw();
+        p->setPlayHead (nullptr);
     }
 
     section ("Spire tips");

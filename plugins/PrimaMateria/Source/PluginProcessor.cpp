@@ -188,6 +188,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     mapAvailable.store (haveMap);
     const auto follow = apvts.getRawParameterValue (pm::followId)->load() > 0.5f && haveMap && host.playing && host.hasPpq;
     const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f;
+    const auto phraseRide = apvts.getRawParameterValue (pm::phraseRideId)->load();
     const auto gapQ = pm::gapQuarters ((int) apvts.getRawParameterValue (pm::gapId)->load());
     const auto morphQ = pm::morphQuarters ((int) apvts.getRawParameterValue (pm::morphId)->load());
     const auto qPerSample = host.quartersPerSample (sampleRate);
@@ -287,6 +288,19 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 typeNow = typeThis = (int) sec.type;
                 laterThis = sec.isLaterDrop();
                 energyDb = 12.0f * (sec.energy - suite::defaultEnergy (sec.type));   // drawn energy: up to +-12 dB, 0 when untouched
+                // Phrase ride: across a section of two or more 8-bar phrases, each phrase sits a little
+                // higher than the one before (centred on the section's level), the way a hand on the fader
+                // carries a drop or a breakdown forward
+                if (sec.type == T::Drop || sec.type == T::Groove || sec.type == T::Breakdown)
+                {
+                    const auto phraseQ = 8.0 * barQ;
+                    const auto phrases = (int) std::floor ((sec.endQ - sec.startQ) / phraseQ + 1.0e-9);
+                    if (phrases >= 2)
+                    {
+                        const auto k = juce::jlimit (0, phrases - 1, (int) std::floor ((pos - sec.startQ) / phraseQ + 1.0e-9));
+                        energyDb += phraseRide * ((float) k / (float) (phrases - 1) - 0.5f);
+                    }
+                }
                 if (sec.index < sections.getMap().count)
                     arcDb = arcTrimFor (sec.index, sections.getMap().sections[(size_t) sec.index].startBar);
                 const auto useLater = sec.isLaterDrop() && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f;

@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "ConductorBus.h"
 #include "Engines.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
@@ -13,7 +14,7 @@ class AntiochProcessor : public suite::SuiteProcessor
 {
 public:
     AntiochProcessor();
-    ~AntiochProcessor() override = default;
+    ~AntiochProcessor() override { suite::Conductor::forget (getInstanceId()); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -47,8 +48,21 @@ public:
     {
         scenes.watchTweaks (isMorphing());
         onLeadTrack.store (roleForTrack() == suite::roleLead);
+        glueRoomTick();
         spacePass();
     }
+
+    /** Glue room: a new Antioch on the music bus (a track named "bus", "group" or "music")
+        becomes one short, shared room for everything on it: a 0.9 s small room, no echo or
+        throws, and its level sets itself (the room about 18 dB under the music). The tracks'
+        own Antiochs give each part its depth; this puts them in one space. */
+    bool glueRoomTick();
+    bool onBusTrack() const
+    {
+        const auto n = getTrackName().toLowerCase();
+        return n.contains ("bus") || n.contains ("group") || n.contains ("music");
+    }
+    bool glueRoomChecked = false;
 
     /** Auto space level: every 4 s of the dry part playing (outside breakdowns, where the scenes
         open the space on purpose), how far the echo and reverb sit under the dry part, against
