@@ -585,6 +585,7 @@ int main (int argc, char** argv)
             m.sections[0] = { 1, suite::SectionType::Drop };
             m.sections[1] = { 3, suite::SectionType::Breakdown };
             auto q = make();
+            soloSection (*q, 0.0f, 0.4f, 0.0f);   // reverb only (at 40%, so the scene has room to raise it)
             suite::SectionBus::publish (m);
             int verb = -1;
             for (int i = 0; i < q->scenes.getCount(); ++i) if (q->scenes.getParamId (i) == Params::verbLevel) verb = i;

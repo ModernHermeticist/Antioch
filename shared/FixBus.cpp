@@ -5,11 +5,11 @@ namespace suite::FixBus
 {
     namespace
     {
-        // payload: [ undo : 8 | fix : 8 | target low bits : 16 ]
-        CommandRing& ring() noexcept { static CommandRing r ("antioch_suite_fixbus_v2"); return r; }
+        // payload: [ undo : 1 | fix : 7 | target low bits : 24 ]
+        CommandRing& ring() noexcept { static CommandRing r ("antioch_suite_fixbus_v3"); return r; }
         uint32_t pack (bool undo, Fix fix, uint32_t target) noexcept
         {
-            return ((uint32_t) (undo ? 1 : 0) << 24) | ((uint32_t) fix << 16) | (target & 0xffffu);
+            return ((uint32_t) (undo ? 1 : 0) << 31) | (((uint32_t) fix & 0x7fu) << 24) | (target & 0xffffffu);
         }
     }
 
@@ -27,9 +27,9 @@ namespace suite::FixBus
         if (! ring().read (seq, p))
             return false;
         out.seq = seq;
-        out.undo = ((p >> 24) & 0xff) != 0;
-        out.fix = (Fix) ((p >> 16) & 0xff);
-        out.target = p & 0xffff;
+        out.undo = (p >> 31) != 0;
+        out.fix = (Fix) ((p >> 24) & 0x7f);
+        out.target = p & 0xffffff;
         return true;
     }
 }

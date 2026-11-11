@@ -151,7 +151,7 @@ namespace suite
         void undo (const FixBus::Message& m)
         {
             for (auto it = history.begin(); it != history.end(); ++it)
-                if ((it->seq & 0xffffu) == (m.target & 0xffffu))
+                if ((it->seq & 0xffffffu) == (m.target & 0xffffffu))
                 {
                     if (it->customUndo != nullptr) it->customUndo();
                     for (auto c = it->changes.rbegin(); c != it->changes.rend(); ++c)
