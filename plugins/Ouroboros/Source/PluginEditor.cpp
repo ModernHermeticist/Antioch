@@ -309,12 +309,31 @@ void SuitePanel::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-RecipePanel::RecipePanel()
+RecipePanel::RecipePanel (OuroborosProcessor& p)
 {
     names.setEditableText (true);
     names.setTextWhenNothingSelected ("Recipe name (type a new one to save)");
     const auto existing = suite::Recipes::list();
-    for (int i = 0; i < existing.size(); ++i) names.addItem (existing[i], i + 1);
+    for (int i = 0; i < existing.size(); ++i)
+        if (! existing[i].startsWith (OuroborosProcessor::autosavePrefix)) names.addItem (existing[i], i + 1);
+
+    // Version history: the autosaves, newest first, to roll the whole suite back to.
+    autosave = std::make_unique<suite::ui::Choice> (p.apvts, OuroborosProcessor::autosaveId, "Autosave");
+    addAndMakeVisible (*autosave);
+    const auto saves = OuroborosProcessor::autosaves();
+    history.setTextWhenNothingSelected (saves.isEmpty() ? "No autosaves yet (they start once the song has played)" : "Version history...");
+    for (int i = 0; i < saves.size(); ++i) history.addItem (saves[i].fromFirstOccurrenceOf (OuroborosProcessor::autosavePrefix, false, false), i + 1);
+    rollBack.setTooltip ("Loads that autosave into every suite plugin (save a recipe first if you want to keep where you are)");
+    rollBack.onClick = [this, saves]
+    {
+        const auto i = history.getSelectedId() - 1;
+        if (! juce::isPositiveAndBelow (i, saves.size())) { result.setText ("Choose a version first", juce::dontSendNotification); return; }
+        sentSeq = suite::RecipeBus::send (suite::RecipeAction::Load, saves[i]);
+        sentWhat = "Rolled back to " + history.getText() + " in ";
+        timerCallback();
+    };
+    addAndMakeVisible (history);
+    addAndMakeVisible (rollBack);
     caption.setText ("Every suite plugin saves or loads its own settings, matched by track name. "
                      "Recipes live in " + suite::Recipes::folder().getFullPathName(), juce::dontSendNotification);
     caption.setFont (juce::FontOptions (12.0f));
@@ -328,7 +347,7 @@ RecipePanel::RecipePanel()
     saveSignature.onClick = [this] { names.setText (suite::Recipes::signature, juce::dontSendNotification); send (suite::RecipeAction::Save); };
     for (auto* c : std::initializer_list<juce::Component*> { &names, &save, &load, &saveSignature, &caption, &result })
         addAndMakeVisible (c);
-    setSize (460, 230);
+    setSize (460, 330);
     startTimerHz (4);
 }
 
@@ -359,6 +378,14 @@ void RecipePanel::resized()
     names.setBounds (row.withTrimmedRight (6));
     r.removeFromTop (8);
     saveSignature.setBounds (r.removeFromTop (30).removeFromLeft (200));
+    r.removeFromTop (8);
+    {
+        auto h = r.removeFromTop (54);
+        autosave->setBounds (h.removeFromLeft (170));
+        auto line = h.withTrimmedTop (20).withTrimmedLeft (8);
+        rollBack.setBounds (line.removeFromRight (90).reduced (2, 0));
+        history.setBounds (line.withTrimmedRight (6));
+    }
     r.removeFromTop (8);
     result.setBounds (r.removeFromBottom (22));
     caption.setBounds (r);
@@ -565,6 +592,13 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         if (id <= 0) return;
         const auto builtIn = (int) arrangement::templates().size();
         if (id == 998) { templateBox.setSelectedId (0, juce::dontSendNotification); exportMarkers(); return; }
+        if (id == 996)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Your style",
+                                                    OuroborosProcessor::styleReport() + "\n(Saved as " + OuroborosProcessor::styleReportFile().getFullPathName() + ")");
+            return;
+        }
         if (id == 997)   // your usual structure, learned from your templates
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -725,7 +759,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     recipesButton.setTooltip ("Save the whole suite's settings as a named recipe, or load one, in any project");
     recipesButton.onClick = [this]
     {
-        juce::CallOutBox::launchAsynchronously (std::make_unique<RecipePanel>(), recipesButton.getScreenBounds(), nullptr);
+        juce::CallOutBox::launchAsynchronously (std::make_unique<RecipePanel> (processor), recipesButton.getScreenBounds(), nullptr);
     };
     versionsButton.setTooltip ("Keeps this song in snapshot A and makes a radio edit in B, an extended mix in C and a club edit "
                                "in D (32-bar beat-only intro and outro); then click the slots to compare");
@@ -1062,6 +1096,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.setItemEnabled (997, dna.valid);
     templateBox.addItem ("Save the current map as a template...", 999);
     templateBox.addItem ("Export section markers for FL (MIDI + cue sheet)...", 998);
+    templateBox.addItem ("Style report: how you make trance...", 996);
 }
 
 void OuroborosEditor::exportMarkers()

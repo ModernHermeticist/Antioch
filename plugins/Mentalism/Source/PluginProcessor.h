@@ -7,8 +7,10 @@
 #include "Spectrum.h"
 #include "Coach.h"
 #include "MySound.h"
+#include "Masking.h"
 #include "HostInfo.h"
 #include <thread>
+#include <map>
 
 /** The analysed shape and loudness of a reference track. */
 struct ReferenceProfile
@@ -160,6 +162,12 @@ public:
     /** The timer's work (tests call it directly). */
     void runAutomation();
 
+    /** Masking watch: every 30 s of playback the clashes are checked again; one that has lasted
+        three checks in a row (a minute and a half) becomes a suggestion. Nothing is changed. */
+    static constexpr int maskingChecksToSuggest = 3;
+    void watchMasking (const std::vector<masking::Clash>& clashes);
+    juce::StringArray maskingSuggestions() const { const juce::ScopedLock sl (historyLock); return persistentMasking; }
+
     /** After a fix: forget what was measured for sections of `type`, so the coach re-checks them. */
     void forgetSections (suite::SectionType type, const suite::SectionMap& map)
     {
@@ -179,7 +187,9 @@ private:
     std::atomic<int> autoPasses { 0 };
     juce::String autoStatus, finishText;
     std::atomic<FinishStage> finishState { FinishStage::Idle };
-    float finishMeasuredAt = 0.0f;
+    float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f;
+    std::map<juce::String, int> maskingCounts;
+    juce::StringArray persistentMasking;
     std::vector<FixRecord> fixHistory;
 
     struct AtomicStat

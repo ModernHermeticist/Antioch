@@ -17,6 +17,8 @@ namespace
                                                             juce::NormalisableRange<float> (0.0f, 200.0f), 100.0f,
                                                             juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + "%"; })));
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { OuroborosProcessor::liveId, 1 }, "Live Mode", false));
+        l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::autosaveId, 1 }, "Autosave",
+                                                              juce::StringArray { "Off", "Every 5 minutes", "Every 10 minutes", "Every 20 minutes" }, 2));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::rideId, 1 }, "Intensity Ride",
                                                               juce::StringArray { "Off", "Mod wheel (CC 1)", "Breath (CC 2)", "Expression (CC 11)", "CC 16" }, 0));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { OuroborosProcessor::entranceId, 1 }, "Drop Entrance",
@@ -84,6 +86,7 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     bpm.store (host.bpm);
     barQuarters.store (host.barQuarters());
     playing.store (host.playing);
+    if (host.playing) playedSinceAutosave.store (true);
     if (host.hasPpq)
         ppq.store (host.ppq);
 
@@ -307,6 +310,61 @@ void OuroborosProcessor::logActivity()
             addNote ((a == suite::RecipeAction::Save ? "Saved recipe '" : "Loaded recipe '") + name + "'");
     }
     seenRecipe = suite::RecipeBus::latest();
+}
+
+juce::String OuroborosProcessor::autosaveNow()
+{
+    const auto name = autosavePrefix + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S");
+    suite::RecipeBus::send (suite::RecipeAction::Save, name);
+    pollRecipes();   // this plugin saves straight away; the others on their next poll
+    pruneAutosaves();
+    lastAutosave = juce::Time::getCurrentTime();
+    playedSinceAutosave.store (false);
+    return name;
+}
+
+void OuroborosProcessor::checkAutosave()
+{
+    const auto minutes = autosaveMinutes ((int) apvts.getRawParameterValue (autosaveId)->load());
+    if (minutes > 0 && playedSinceAutosave.load()
+        && juce::Time::getCurrentTime() - lastAutosave >= juce::RelativeTime::minutes (minutes))
+        autosaveNow();
+}
+
+juce::StringArray OuroborosProcessor::autosaves()
+{
+    juce::StringArray out;
+    for (const auto& n : suite::Recipes::list())
+        if (n.startsWith (autosavePrefix)) out.add (n);
+    out.sort (false);
+    juce::StringArray newestFirst;
+    for (int i = out.size() - 1; i >= 0; --i) newestFirst.add (out[i]);
+    return newestFirst;
+}
+
+void OuroborosProcessor::pruneAutosaves (int keep)
+{
+    const auto all = autosaves();
+    for (int i = keep; i < all.size(); ++i)
+        suite::Recipes::folder().getChildFile (juce::File::createLegalFileName (all[i])).deleteRecursively();
+}
+
+juce::String OuroborosProcessor::styleReport()
+{
+    juce::StringArray extra;
+    const auto dna = learnArrangementDna();
+    if (dna.valid)
+    {
+        juce::StringArray parts;
+        for (size_t i = 0; i < dna.structure.size(); ++i)
+            parts.add (juce::String (suite::sectionName (dna.structure[i])) + " " + juce::String (dna.bars[i]));
+        extra.add ("Your usual structure (" + juce::String (dna.songs) + " of the " + juce::String (dna.learnedFrom)
+                   + " maps you saved): " + parts.joinIntoString (", ") + " bars");
+    }
+    const auto text = suite::StyleLog::report (suite::StyleLog::read(), extra);
+    styleReportFile().getParentDirectory().createDirectory();
+    styleReportFile().replaceWithText (text);
+    return text;
 }
 
 void OuroborosProcessor::applyRide()

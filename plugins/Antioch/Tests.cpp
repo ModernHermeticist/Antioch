@@ -293,6 +293,48 @@ int main (int argc, char** argv)
                "scenes are saved with the project");
     }
 
+    section ("Reverb freeze into breakdowns");
+    {
+        suite::SectionMap map;   // 120 BPM: Drop bars 1-2 (0-4 s), Breakdown bars 3-6 (4-12 s)
+        map.totalBars = 6; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        map.sections[1] = { 3, suite::SectionType::Breakdown };
+        auto run = [&] (int freezeChoice)
+        {
+            auto p = make();
+            soloSection (*p, 0.0f, 1.0f, 0.0f);
+            set (*p, suite::SceneEngine::enabledId, 0.0f);
+            set (*p, Params::Verb::decay, 1.0f);
+            set (*p, Params::Verb::freeze, (float) freezeChoice);
+            suite::SectionBus::publish (map);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            juce::Random rng (5);
+            juce::AudioBuffer<float> audio;
+            render (*p, 12.5, [&] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = (double) (pos + i) / sampleRate < 3.9 ? 0.3f * (rng.nextFloat() * 2.0f - 1.0f) : 0.0f;
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, &audio, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            return std::make_pair (audio, p->freezesPlayed.load());
+        };
+        const auto [plain, none] = run (0);
+        const auto [frozen, played] = run (3);   // 4 bars
+        const auto tail = rmsBetween (plain, 6.0, 7.0), wash = rmsBetween (frozen, 6.0, 7.0);
+        check (none == 0 && played == 1, "the freeze fires once, entering the breakdown");
+        const auto inDrop = rmsBetween (plain, 3.0, 3.9);
+        check (wash > 0.25f * inDrop && wash > 10.0f * tail, "the drop's last moment hangs on as a wash well after the reverb would have died ("
+                   + juce::String (wash, 4) + " vs " + juce::String (tail, 5) + "; the reverb in the drop: " + juce::String (inDrop, 4) + ")");
+        check (rmsBetween (frozen, 6.0, 7.0) > rmsBetween (frozen, 10.0, 11.0) && rmsBetween (frozen, 12.1, 12.5) < 1.0e-4f,
+               "and fades out over the 4 bars");
+    }
+
     section ("Key follow via KeyBus");
     {
         auto p = make();

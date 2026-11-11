@@ -484,8 +484,68 @@ int main (int argc, char** argv)
         check (radio.totalBars < 140 && radio.totalBars >= 100 && radio.sections[0].type == suite::SectionType::Intro,
                "B is a radio edit of about 3:30 (" + juce::String (radio.totalBars) + " bars)");
         check (extended.totalBars == original.totalBars + 64, "C is an extended mix, 64 bars longer");
+        check (p->hasSnapshot (3), "D made too");
+        p->recallSnapshot (3);
+        const auto club = p->getMap();
+        const auto last = club.count - 1;
+        check (club.sections[0].type == T::Intro && club.endBar (0) - 1 == 32 && club.sections[(size_t) last].type == T::Outro
+                   && club.totalBars - club.sections[(size_t) last].startBar + 1 == 32
+                   && club.totalBars - 64 == original.totalBars - (original.endBar (0) - 1) - (original.totalBars - original.sections[(size_t) original.count - 1].startBar + 1),
+               "D is a club edit: 32-bar intro and outro around the same body (" + arrangement::toString (club) + ")");
         p->recallSnapshot (0);
         check (p->getMap() == original, "A is the song as it was");
+    }
+
+    section ("DJ phrasing fix, autosave and style report");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        suite::SectionMap m;
+        m.totalBars = 100; m.count = 4;
+        m.sections[0] = { 1, T::Intro };
+        m.sections[1] = { 21, T::Breakdown };   // a 20-bar intro, off the grid
+        m.sections[2] = { 45, T::Drop };
+        m.sections[3] = { 77, T::Outro };       // a 24-bar outro
+        p->setMap (m);
+        const auto issues = suite::dj::phrasingIssues (m);
+        check (issues.size() == 5 && issues[0].contains ("intro is 20") && issues[1].contains ("outro is 24"),
+               "finds the 20-bar intro, the 24-bar outro and the three sections it pushes off the 8-bar grid (" + issues.joinIntoString ("; ") + ")");
+        const auto seq = suite::FixBus::send (suite::Fix::DjPhrasing);
+        p->fixes->poll();
+        const auto fixed = p->getMap();
+        check (suite::dj::phrasingIssues (fixed).isEmpty() && fixed.endBar (0) - 1 == 16 && fixed.count == 4 && suite::FixBus::acknowledgements (seq) == 1,
+               "the fix: whole 16-bar phrases, every section on the grid (" + arrangement::toString (fixed) + ")");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (p->getMap() == m, "undo puts the map back");
+
+        const auto folder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosAutosave");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests (folder);
+        for (int i = 0; i < 14; ++i)
+            folder.getChildFile (OuroborosProcessor::autosavePrefix + "2026-01-" + juce::String (10 + i) + " 10-00-00").createDirectory();
+        const auto name = p->autosaveNow();
+        const auto saves = OuroborosProcessor::autosaves();
+        check (saves.size() == OuroborosProcessor::autosavesKept && saves[0] == name && folder.getChildFile (name).getNumberOfChildFiles (juce::File::findFiles) == 1,
+               "an autosave saves the suite as a recipe and keeps the 12 newest (" + saves[0] + " ... " + saves[saves.size() - 1] + ")");
+        check (! p->playedSinceAutosave.load(), "and waits for playback before the next one");
+        folder.deleteRecursively();
+        suite::Recipes::setFolderForTests ({});
+
+        const auto log = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("StyleLogTest.txt");
+        log.deleteFile();
+        suite::StyleLog::setFileForTests (log);
+        suite::StyleLog::add ("song", { { "key", "Am" }, { "bpm", "138" }, { "degrees", "i-VI-III-VII" }, { "bars", "240" }, { "structure", "Intro-Breakdown-Drop-Outro" } });
+        suite::StyleLog::add ("song", { { "key", "Am" }, { "bpm", "140" }, { "degrees", "i-VI-III-VII" }, { "bars", "224" }, { "structure", "Intro-Breakdown-Drop-Outro" } });
+        suite::StyleLog::add ("song", { { "key", "F#m" }, { "bpm", "136" }, { "degrees", "i-iv-VI-V" }, { "bars", "208" }, { "structure", "Intro-Drop-Outro" } });
+        suite::StyleLog::add ("master", { { "lufs", "-8.2" }, { "truepeak", "-0.4" } });
+        const auto report = suite::StyleLog::report (suite::StyleLog::read());
+        std::cout << "    " << report.replace ("\n", "\n    ") << std::endl;
+        check (report.contains ("Songs logged: 3") && report.contains ("Am (2)") && report.contains ("100% minor") && report.contains ("usually 138 BPM (136-140)")
+                   && report.contains ("i-VI-III-VII (2)") && report.contains ("usually 224 bars") && report.contains ("-8.2 LUFS"),
+               "the style report: keys, tempo, progressions, length and loudness from the log");
+        log.deleteFile();
+        suite::StyleLog::setFileForTests ({});
     }
 
     section ("Suite overview");

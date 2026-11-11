@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
+#include "StyleLog.h"
 #include "SectionBus.h"
 #include "SuiteUI.h"
 
@@ -35,6 +36,9 @@ namespace
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    // Never write the real style log from tests.
+    const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");
+    suite::StyleLog::setFileForTests (testStyleLog);
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -559,6 +563,38 @@ int main (int argc, char** argv)
                    && std::abs (r.ceiling - mine.ceiling()) < 0.01f,
                "'My sound' targets your loudness, ceiling and tonal balance (" + r.targetName + ")");
         dir.deleteRecursively();
+    }
+
+    section ("DJ phrasing and the masking watch");
+    {
+        MentalismProcessor::Report rep {};
+        rep.arrangementAvailable = true;
+        rep.map.totalBars = 100; rep.map.count = 3;
+        rep.map.sections[0] = { 1, suite::SectionType::Intro };
+        rep.map.sections[1] = { 21, suite::SectionType::Drop };
+        rep.map.sections[2] = { 85, suite::SectionType::Outro };
+        auto find = [] (const std::vector<checklist::Item>& items)
+        {
+            for (const auto& i : items) if (i.name == "DJ phrasing") return i;
+            return checklist::Item {};
+        };
+        const auto off = find (checklist::check (rep, 0));
+        check (off.state == checklist::State::Warn && off.fix == suite::Fix::DjPhrasing && off.detail.contains ("intro is 20 bars"),
+               "the checklist flags a 20-bar intro with a fix (" + off.detail + ")");
+        rep.map = suite::dj::fixPhrasing (rep.map);
+        check (find (checklist::check (rep, 0)).state == checklist::State::Pass, "and passes once it's on the phrase grid");
+
+        auto p = make();
+        masking::Clash c;
+        c.carveTrack = "Pad"; c.keepTrack = "Lead"; c.band = 6; c.text = "Pad and Lead clash at 2 kHz";
+        p->watchMasking ({ c });
+        p->watchMasking ({ c });
+        check (p->maskingSuggestions().isEmpty(), "a clash isn't suggested after two checks (a minute)");
+        p->watchMasking ({ c });
+        check (p->maskingSuggestions().size() == 1 && p->report().advice.joinIntoString ("|").contains ("Masking: Pad and Lead clash at 2 kHz"),
+               "after three checks in a row it joins the suggestions");
+        p->watchMasking ({});
+        check (p->maskingSuggestions().isEmpty(), "and leaves when the clash is gone (nothing is changed automatically)");
     }
 
     section ("Pass-through");

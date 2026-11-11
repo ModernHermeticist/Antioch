@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "StyleLog.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "KeyBus.h"
@@ -325,6 +326,15 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
             }
         }
         folder.getChildFile ("Song sheet.txt").replaceWithText (sheet.joinIntoString ("\n") + "\n");
+
+        // The style log: how you make trance, one exported song at a time.
+        juce::StringArray degrees, structure;
+        for (int i = 0; i < s.count; ++i) degrees.add (chords::romanNumeral (s, s.slots[(size_t) i]));
+        for (int i = 0; i < shared.count; ++i) structure.add (suite::sectionName (shared.sections[(size_t) i].type));
+        suite::StyleLog::add ("song", { { "title", title }, { "key", key }, { "bpm", juce::String (juce::roundToInt (bpm)) },
+                                        { "progression", progression.joinIntoString ("-") }, { "degrees", degrees.joinIntoString ("-") },
+                                        { "bars", shared.count > 0 ? juce::String (shared.totalBars) : juce::String() },
+                                        { "structure", structure.joinIntoString ("-") } });
     }
 
     suite::SectionMap map;

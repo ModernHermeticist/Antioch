@@ -56,7 +56,7 @@ private:
 class RecipePanel : public juce::Component, private juce::Timer
 {
 public:
-    RecipePanel();
+    explicit RecipePanel (OuroborosProcessor&);
     void paint (juce::Graphics&) override;
     void resized() override;
 
@@ -64,7 +64,9 @@ private:
     void timerCallback() override;
     void send (suite::RecipeAction);
     juce::ComboBox names;
-    juce::TextButton save { "Save" }, load { "Load" }, saveSignature { "Save as my signature" };
+    juce::TextButton save { "Save" }, load { "Load" }, saveSignature { "Save as my signature" }, rollBack { "Roll back" };
+    std::unique_ptr<suite::ui::Choice> autosave;
+    juce::ComboBox history;
     juce::Label caption, result;
     uint32_t sentSeq = 0;
     juce::String sentWhat;

@@ -4,6 +4,7 @@
 #include "TargetBus.h"
 #include "Checklist.h"
 #include "Registry.h"
+#include "StyleLog.h"
 
 //==============================================================================
 ReferenceProfile ReferenceProfile::analyse (const juce::File& file, const std::atomic<bool>* cancel)
@@ -119,9 +120,33 @@ juce::StringArray MentalismProcessor::finishSong()
     return done;
 }
 
+void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashes)
+{
+    std::map<juce::String, int> next;
+    juce::StringArray lasting;
+    for (const auto& c : clashes)
+    {
+        const auto key = c.carveTrack + "|" + c.keepTrack + "|" + juce::String (c.band);
+        const auto count = (maskingCounts.count (key) > 0 ? maskingCounts[key] : 0) + 1;
+        next[key] = count;
+        if (count >= maskingChecksToSuggest)
+            lasting.add ("Masking: " + c.text + " (for over a minute): try Carve on the Masking tab.");
+    }
+    maskingCounts = std::move (next);   // a clash that went away starts again from zero
+    const juce::ScopedLock sl (historyLock);
+    persistentMasking = lasting;
+}
+
 void MentalismProcessor::runAutomation()
 {
     const auto rep = report();
+    if (rep.measuredSeconds >= lastMaskingCheckAt + 30.0f)
+    {
+        lastMaskingCheckAt = rep.measuredSeconds;
+        watchMasking (masking::find (suite::Registry::list()));
+    }
+    else if (rep.measuredSeconds < lastMaskingCheckAt)
+        lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
     using T = suite::SectionType;
     auto setText = [this] (juce::String& which, const juce::String& text) { const juce::ScopedLock sl (historyLock); which = text; };
 
@@ -160,6 +185,10 @@ void MentalismProcessor::runAutomation()
         {
             const auto ready = checklist::readyToExport (checklist::check (rep, clippedSamples.load(), suite::Registry::list()));
             finishState.store (FinishStage::Done);
+            if (rep.measurement.integratedLufs > -70.0f)   // the style log: one finished master
+                suite::StyleLog::add ("master", { { "lufs", juce::String (rep.measurement.integratedLufs, 1) },
+                                                  { "truepeak", juce::String (rep.measurement.truePeakDb, 1) },
+                                                  { "target", rep.targetName } });
             setText (finishText, juce::String (happy ? "Finished: the arc is right. " : "Finished what can be automated. ")
                                      + (ready ? "Ready to export." : "See the checklist before you export."));
         }
@@ -453,6 +482,8 @@ MentalismProcessor::Report MentalismProcessor::report() const
             while (rep.advice.size() > 6) rep.advice.remove (rep.advice.size() - 1);
         }
     }
+    for (const auto& m : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), m);
+    while (rep.advice.size() > 6) rep.advice.remove (rep.advice.size() - 1);
     return rep;
 }
 

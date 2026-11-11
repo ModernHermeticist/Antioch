@@ -304,6 +304,40 @@ int main (int argc, char** argv)
         check (std::abs (v (AzothProcessor::laterDropsId) - later - 0.25f) < 0.01f, "a weaker later drop gets 'Bigger later drops' turned up");
     }
 
+    section ("Key-change pre-lift");
+    {
+        auto m = testMap();   // one drop, so it's the last: +2 semitones
+        m.finalLift = 2;
+        suite::SectionBus::publish (m);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        juce::AudioBuffer<float> audio;
+        auto p = quiet();
+        p->setPlayHead (&head);
+        render (*p, 12.6, sine (440.0f), &audio, &head);
+        p->setPlayHead (nullptr);
+        const auto before = peakFrequency (audio, 400.0f, 520.0f, 11.0, 11.4), lifted = peakFrequency (audio, 400.0f, 520.0f, 11.88, 11.99);
+        check (std::abs (before - 440.0f) < 3.0f && lifted > 470.0f, "the track glides up towards the new key over the last beat ("
+                   + juce::String (before, 0) + " -> " + juce::String (lifted, 0) + " Hz; B is 494)");
+        check (std::abs (bandLevel (audio, 440.0f, 12.2, 12.6) - 0.3f) < 0.02f, "and is itself again in the drop");
+
+        head.ppq = 0.0;
+        auto q = quiet();
+        set (*q, AzothProcessor::preLiftId, 0.0f);
+        q->setPlayHead (&head);
+        render (*q, 12.6, sine (440.0f), &audio, &head);
+        q->setPlayHead (nullptr);
+        check (std::abs (peakFrequency (audio, 400.0f, 520.0f, 11.88, 11.99) - 440.0f) < 3.0f, "off: untouched");
+
+        head.ppq = 0.0;
+        suite::SectionBus::publish (testMap());   // no key change: nothing to announce
+        auto r = quiet();
+        r->setPlayHead (&head);
+        render (*r, 12.6, sine (440.0f), &audio, &head);
+        r->setPlayHead (nullptr);
+        check (std::abs (peakFrequency (audio, 400.0f, 520.0f, 11.88, 11.99) - 440.0f) < 3.0f, "without a key change it does nothing");
+    }
+
     section ("Into the drop: tape stop and stutter");
     {
         suite::SectionBus::publish (testMap());

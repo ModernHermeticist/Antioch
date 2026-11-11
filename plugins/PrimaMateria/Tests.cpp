@@ -401,6 +401,19 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("Club edit");
+    {
+        auto lvl = [] (PrimaMateriaProcessor& p, T t) { return p.apvts.getRawParameterValue (pm::levelId ((int) t))->load(); };
+        auto pads = make (roleIndex ("Pads"));
+        auto kick = make (roleIndex ("Kick"));
+        set (*pads, pm::levelId ((int) T::Intro), -3.0f);
+        set (*kick, pm::levelId ((int) T::Intro), pm::offDb);
+        check (pads->applyVersion (suite::clubEdit) && kick->applyVersion (suite::clubEdit), "both tracks take part in the club edit");
+        check (lvl (*pads, T::Intro) <= pm::offDb + 0.5f && lvl (*pads, T::Outro) <= pm::offDb + 0.5f, "pads out of the intro and outro");
+        check (lvl (*kick, T::Intro) > pm::offDb + 0.5f, "the kick in the intro");
+        check (! pads->applyVersion (suite::radioEdit), "other versions leave the mixer alone");
+    }
+
     section ("Low-end manager");
     {
         // 120 BPM: Breakdown bars 1-2 (0-4 s, no bass), Drop bars 3-4 (4-8 s, the bass plays).

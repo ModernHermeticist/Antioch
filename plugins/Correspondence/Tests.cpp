@@ -4,6 +4,7 @@
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "StyleLog.h"
 
 using namespace suite::test;
 
@@ -54,6 +55,9 @@ namespace
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    // Never write the real style log from tests.
+    const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");
+    suite::StyleLog::setFileForTests (testStyleLog);
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -809,6 +813,31 @@ int main (int argc, char** argv)
         check (q->getSongTitle() == "Sunrise", "the title is saved with the project");
         suite::SectionBus::withdraw();
         parent.deleteRecursively();
+    }
+
+    section ("Style log");
+    {
+        const auto log = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceStyleLog.txt");
+        log.deleteFile();
+        suite::StyleLog::setFileForTests (log);
+        auto p = make();
+        p->applyPreset (0);
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Breakdown };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceLogExport");
+        parent.deleteRecursively();
+        p->exportEverything (parent);
+        const auto entries = suite::StyleLog::read();
+        check (entries.size() == 1 && entries[0].kind == "song" && entries[0].get ("key") == "Am" && entries[0].get ("degrees") == "i-VI-III-VII"
+                   && entries[0].get ("bars") == "16" && entries[0].get ("structure") == "Breakdown-Drop",
+               "Export all logs the song for your style report (" + (entries.empty() ? juce::String ("nothing") : entries[0].get ("degrees")) + ")");
+        parent.deleteRecursively();
+        log.deleteFile();
+        suite::StyleLog::setFileForTests (testStyleLog);
+        suite::SectionBus::withdraw();
     }
 
     section ("Adopting a key from Emerald Tablet");

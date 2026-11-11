@@ -87,7 +87,9 @@ three tabs:
 - **Reverb:** an 8-line reverb with decay up to 20 s, pre-delay, modulation, width and
   low/high cut. **Shimmer** feeds back a pitch-shifted copy of the tail (+5th, octave,
   octave+5th, 2 octaves or −octave). **Duck** pushes the reverb down while the dry signal
-  plays, so it blooms in the gaps without washing out the lead.
+  plays, so it blooms in the gaps without washing out the lead. **Freeze into breakdowns**
+  (with Ouroboros): as each breakdown starts, the last half second of the reverb is held as
+  an endless wash under it, fading out over 1, 2 or 4 bars (**Freeze level** sets how loud).
 - **Throw:** a dub-style delay that only takes in audio while the **THROW** pad is held
   (or latched, or automated). The tail keeps ringing after you let go. **Auto Throw**
   catches the last 1/16th to 1 bar of every 2, 4, 8 or 16 bars while FL is playing, so
@@ -240,6 +242,10 @@ band into the less important track (vocal keeps over lead, lead over kick and ba
 pads, hats, FX); press again to go deeper (up to 9 dB). Prima Materia's status line shows
 the carve, and History undoes it.
 
+Mentalism also keeps an eye on masking while you work: the clashes are checked every 30
+seconds of playback, and one that's still there after three checks in a row (over a minute)
+appears among the Suggestions. It never carves anything by itself: the Fix stays your call.
+
 **Match reference** (Tonal Balance tab, with a reference loaded and at least 10 s of the
 song measured) compares your mix's long-term balance with the reference and moves Lapis'
 new **Low tone** (100 Hz shelf) and **High tone** (8 kHz shelf) half-way towards it, at
@@ -253,7 +259,10 @@ been measured, loudness is within 1 LU of the target, true peak is under the cei
 samples clipped, the low end holds up in mono, the mix survives a mono sum, no section is
 silent by mistake, the coach is happy with the energy arc, and the intro and outro are
 DJ-friendly (a kick in the intro, no pads, leads or vocals in either; it checks the Prima
-Materia tracks, and its **Fix** button takes the melodic parts out, undoable in History). Each item shows pass,
+Materia tracks, and its **Fix** button takes the melodic parts out, undoable in History), and
+the **DJ phrasing** is right: the intro and outro are whole 16-bar phrases and every
+section starts on the 8-bar grid. Its Fix rounds the intro and outro to 16 or 32 bars and
+moves the sections onto the grid in Ouroboros (undoable). Each item shows pass,
 warning or fail, with *Ready to export* when everything passes. Press Reset and play the
 whole song through first.
 
@@ -414,8 +423,22 @@ top. Ouroboros keeps the new song's map.
 
 **Make versions** keeps the current song in snapshot A, then makes a **radio edit** in B
 (about 3:30, short intro and breakdown, at most two drops, streaming loudness target) and
-an **extended mix** in C (64 bars longer, DJ intro and outro, club target), and returns to
-A. Click the slots to switch between versions.
+an **extended mix** in C (64 bars longer, DJ intro and outro, club target) and a **club
+edit** in D (the same song with a 32-bar intro and outro; Prima Materia takes the pads,
+leads and vocals out of them and keeps the kick in, so DJs get beat-only ends; club
+target), and returns to A. Click the slots to switch between versions.
+
+**Autosave and version history.** Every 10 minutes (or 5 or 20, or off: *Autosave* in
+Recipes…), once the song has played since the last one, Ouroboros saves the whole suite as
+a recipe named *Autosave* with the date and time. The 12 newest are kept. *Version history*
+in Recipes… lists them, newest first; **Roll back** loads one into every plugin.
+
+**Style report** (template list) tells you how you make trance, from the style log the
+suite keeps as you work: Correspondence logs every song it exports with *Export all* (key,
+tempo, progression, length, structure) and Mentalism every master that *Finish the song*
+completes (loudness and peak). The report lists your usual keys (and how often minor),
+tempo, progressions, length, structures and master loudness, plus the structure arrangement
+DNA learned from your templates. It's also saved as *My style.txt*.
 
 **Final drop snapshot.** Pick a slot under *Final drop snapshot* and the whole suite morphs
 into it for the last drop: every plugin's knobs glide from your settings to the
@@ -575,6 +598,9 @@ FX are added on top. It reads the Ouroboros map and plays, timed to the sample:
   sweeping up one or two octaves while a filter opens. The **track riser** pitches this
   track's own audio up to an octave across the build and fades it in, the classic
   "everything lifts" effect.
+- **Key-change pre-lift** (on by default): over the beat before a drop that changes key,
+  this track's own audio glides up to the new key, announcing the lift. Nothing happens
+  without a key change.
 - **Into the drop** plays with this track's own audio just before each drop: **Tape stop**
   slows it to a halt over the last ½, 1 or 2 beats (pitch falling with it, and silence
   through any gap), or **Stutter** loops the moment before in 1/8s, then 1/16s, then 1/32s.
@@ -974,6 +1000,20 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   it, in key, with chord tones on the beat; in the song it plays with the full lead in the
   drop, not under the breakdown teaser, and can be switched off; Export all gains the
   Counter clip and track.
+- **Club edit:** version D has a 32-bar intro and outro around the same body; Prima
+  Materia takes pads out of them and puts the kick in; other versions leave the mixer alone.
+- **DJ phrasing:** a 20-bar intro, a 24-bar outro and the sections they push off the grid are
+  found; the fix gives whole 16-bar phrases and undo restores the map; the checklist warns,
+  then passes.
+- **Autosave:** saves the suite as a recipe, keeps the 12 newest and waits for playback.
+- **Style report:** keys, tempo, progressions, length and loudness from a style log; Export
+  all logs the song.
+- **Key-change pre-lift:** a 440 Hz track reaches 485 Hz by the end of the last beat (B is
+  494) and is 440 again in the drop; off, or without a key change, it's untouched.
+- **Reverb freeze:** fires once entering the breakdown, holds the drop's reverb long after
+  it would have died, and fades out over 4 bars.
+- **Masking watch:** a clash joins the suggestions after three checks in a row and leaves
+  when it's gone.
 - **Intensity ride:** off by default; on the mod wheel, 0 / 64 / 127 give 0 / 100 / 200%;
   other controllers are ignored.
 - **Arrangement DNA:** from three maps (two sharing intro-breakdown-build-drop-outro), it
