@@ -17,6 +17,8 @@ namespace Params
     inline const juce::String monoBelow { "monobelow" };
     inline const juce::String autoGain  { "autogain" };
     inline const juce::String output    { "output" };
+    inline const juce::String tensionWidth { "tensionwidth" };   // wider on tension chords (from Correspondence)
+    inline const juce::String pitchBright  { "pitchbright" };    // air and presence follow the lead's pitch
 
     constexpr float lowCutOffBelow = 25.0f;   // low cut values under this mean "off"
     constexpr float mudHz = 320.0f, presenceHz = 3200.0f, airHz = 10000.0f;

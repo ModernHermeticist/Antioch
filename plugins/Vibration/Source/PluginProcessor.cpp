@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ChordBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 
@@ -27,17 +28,78 @@ bool VibrationProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
         && (in == juce::AudioChannelSet::stereo() || in == juce::AudioChannelSet::mono());
 }
 
+namespace
+{
+    inline float L0 (const juce::AudioBuffer<float>& b, int i) { return b.getSample (0, i); }
+    inline float R0 (const juce::AudioBuffer<float>& b, int i) { return b.getSample (b.getNumChannels() > 1 ? 1 : 0, i); }
+}
+
+void VibrationProcessor::updateTension (const suite::HostInfo& host)
+{
+    suite::Progression prog;
+    float target = 0.0f;
+    if (host.playing && host.hasPpq && suite::ChordBus::read (prog))
+    {
+        auto origin = 0.0;
+        if (chordSections.refresh())
+            if (const auto sec = chordSections.locate (host.ppq, host.barQuarters()); sec.valid) origin = sec.startQ;
+        target = prog.isTension (prog.chordAt (host.ppq - origin)) ? 1.0f : 0.0f;
+    }
+    tensionNow.store (tensionNow.load() + 0.3f * (target - tensionNow.load()));
+}
+
+void VibrationProcessor::trackPitch (const float* mono, int n)
+{
+    // Autocorrelation pitch on the last 1024 samples, at half rate, 80 Hz to 1 kHz.
+    constexpr int ringSize = 2048;
+    if ((int) pitchRing.size() != ringSize) pitchRing.assign ((size_t) ringSize, 0.0f);
+    for (int i = 0; i < n; ++i) { pitchRing[(size_t) pitchWrite] = mono[i]; pitchWrite = (pitchWrite + 1) % ringSize; }
+    std::array<float, 512> w {};
+    float energy = 0.0f;
+    for (int k = 0; k < 512; ++k)
+    {
+        const auto idx = (pitchWrite - 1024 + 2 * k + 2 * ringSize) % ringSize;
+        w[(size_t) k] = 0.5f * (pitchRing[(size_t) idx] + pitchRing[(size_t) ((idx + 1) % ringSize)]);
+        energy += w[(size_t) k] * w[(size_t) k];
+    }
+    if (energy < 1.0e-3f) return;   // silence: keep the last reading
+    const auto rate = sampleRate / 2.0;
+    const auto minLag = juce::jmax (2, (int) (rate / 1000.0)), maxLag = juce::jmin (400, (int) (rate / 80.0));
+    std::array<float, 401> corr {};
+    float best = 0.0f;
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        float c = 0.0f;
+        for (int k = 0; k + lag < 512; ++k) c += w[(size_t) k] * w[(size_t) (k + lag)];
+        corr[(size_t) lag] = c / (float) (512 - lag);
+        best = std::max (best, corr[(size_t) lag]);
+    }
+    // The shortest period that's nearly as strong as the best (multiples of it score as well).
+    int bestLag = 0;
+    for (int lag = minLag + 1; lag < maxLag && bestLag == 0; ++lag)
+        if (corr[(size_t) lag] >= 0.9f * best && corr[(size_t) lag] >= corr[(size_t) lag - 1] && corr[(size_t) lag] >= corr[(size_t) lag + 1])
+            bestLag = lag;
+    if (bestLag == 0 || best < 0.3f * energy / 512.0f) return;   // not clearly pitched
+    const auto hz = (float) (rate / bestLag);
+    pitchHz.store (hz);
+    const auto semis = 12.0f * std::log2 (hz / 440.0f);
+    if (! pitchAverageSet) { pitchAverageSemis = semis; pitchAverageSet = true; }
+    pitchAverageSemis += 0.002f * (semis - pitchAverageSemis);   // the lead's usual pitch (slow)
+    pitchOffset.store (juce::jlimit (-1.0f, 1.0f, (semis - pitchAverageSemis) / 12.0f));
+}
+
 VibrationProcessor::Effective VibrationProcessor::effective() const
 {
     using namespace Params;
     // Scene-able values come through the scene engine (base knob + section offset).
     const auto m = scenes.plain (sEuphoria);
-    return { juce::jlimit (-6.0f, 12.0f, scenes.plain (sAir) + m * Macro::air),
-             juce::jlimit (-6.0f, 9.0f, value (presence) + m * Macro::presence),
+    const auto bright = value (pitchBright) * pitchOffset.load();   // -1..+1: below / above the lead's usual pitch
+    return { juce::jlimit (-6.0f, 12.0f, scenes.plain (sAir) + m * Macro::air + 4.0f * bright),
+             juce::jlimit (-6.0f, 9.0f, value (presence) + m * Macro::presence + 2.0f * bright),
              juce::jlimit (-12.0f, 3.0f, value (mud) + m * Macro::mud),
              juce::jlimit (0.0f, 30.0f, scenes.plain (sDrive) + m * Macro::drive),
              juce::jlimit (0.0f, 1.0f, scenes.plain (sMultiband) + m * Macro::mbDepth),
-             juce::jlimit (0.0f, 2.5f, scenes.plain (sWidth) + m * Macro::width) };
+             juce::jlimit (0.0f, 2.5f, (scenes.plain (sWidth) + m * Macro::width) * (1.0f + 0.5f * value (tensionWidth) * tensionNow.load())) };
 }
 
 void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
@@ -91,7 +153,14 @@ void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         monoScratch.resize ((size_t) n); // only if the host exceeds the announced block size
 
     const auto sr = (float) sampleRate;
-    scenes.beginBlock (suite::HostInfo::read (getPlayHead()), sampleRate, n);
+    const auto host = suite::HostInfo::read (getPlayHead());
+    scenes.beginBlock (host, sampleRate, n);
+    updateTension (host);
+    if (value (Params::pitchBright) > 0.0f)
+    {
+        for (int i = 0; i < n; ++i) monoScratch[(size_t) i] = 0.5f * (L0 (buffer, i) + R0 (buffer, i));
+        trackPitch (monoScratch.data(), n);
+    }
     const auto e = effective();
     auto* L = buffer.getWritePointer (0);
     auto* R = buffer.getWritePointer (1);

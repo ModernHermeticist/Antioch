@@ -25,6 +25,7 @@ namespace Params
         inline const juce::String stereo   { "g_stereo" };
         inline const juce::String filter   { "g_filter" };
         inline const juce::String res      { "g_res" };
+        inline const juce::String dynamic  { "g_dynamic" };   // the gate deepens through each drop (with Ouroboros)
 
         inline juce::String step (int i) { return "g_step" + juce::String (i + 1); }
         double rateQuarters (int index);

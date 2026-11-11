@@ -76,7 +76,8 @@ public:
     std::atomic<float> suiteSwing { 0.0f };
     std::atomic<float> suiteChordQ { 0.0f };   // Correspondence's chord length in quarters (0 = not running)
     std::atomic<int> chordAccents { 0 };       // chord changes accented (for tests and the UI)
-    bool inChordAccent = false;   // Correspondence's groove (the gate swings with it)
+    bool inChordAccent = false;
+    std::atomic<float> dynamicDepth { 1.0f };   // the dynamic gate's depth scale now (tests and UI)   // Correspondence's groove (the gate swings with it)
 
     /** Your own gate patterns: saved as files, offered in every project. */
     static juce::File userPatternFolder()

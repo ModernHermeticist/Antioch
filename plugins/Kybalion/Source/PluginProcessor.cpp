@@ -87,6 +87,16 @@ void KybalionProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         s.attackMs = value (Gate::attack);
         s.releaseMs = value (Gate::release);
         s.depth = scenes.plain (sGateDepth);
+        // Dynamic gate: through each drop the gate starts at 60% of its depth and reaches full
+        // depth by the end, so the drop keeps intensifying; elsewhere it follows the energy curve.
+        if (value (Gate::dynamic) > 0.5f && value (Params::follow) > 0.5f && host.playing && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid)
+            {
+                const auto scale = sec.type == suite::SectionType::Drop ? 0.6f + 0.4f * (float) juce::jlimit (0.0, 1.0, sec.progress (host.ppq))
+                                                                         : juce::jlimit (0.3f, 1.0f, sec.energyRatio);
+                s.depth *= scale;
+                dynamicDepth.store (scale);
+            }
         s.swing = juce::jmax (scenes.plain (sSwing), suiteSwing.load());   // Correspondence's groove, unless the gate swings more
         s.stereoOffset = (int) value (Gate::stereo);
         s.filter = scenes.plain (sGateFilter);

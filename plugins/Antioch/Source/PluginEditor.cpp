@@ -157,10 +157,11 @@ public:
           duck (p.apvts, Params::Verb::duck, "Duck", Colours::ember),
           duckRel (p.apvts, Params::Verb::duckRel, "Duck Release", Colours::ember),
           freeze (p.apvts, Params::Verb::freeze, "Freeze into breakdowns"),
-          freezeLevel (p.apvts, Params::Verb::freezeLevel, "Freeze level", verbColour)
+          freezeLevel (p.apvts, Params::Verb::freezeLevel, "Freeze level", verbColour),
+          tension (p.apvts, Params::Verb::tension, "Tension width", verbColour)
     {
         for (auto* c : std::initializer_list<juce::Component*> { &decay, &size, &predelay, &mod, &width, &damping, &lowCut,
-                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel, &freeze, &freezeLevel })
+                                                                 &highCut, &shimmer, &shimInt, &duck, &duckRel, &freeze, &freezeLevel, &tension })
             addAndMakeVisible (c);
     }
 
@@ -199,7 +200,7 @@ public:
         duckArea = bounds;
 
         auto inner = [] (juce::Rectangle<int> a) { return a.reduced (12, 6).withTrimmedTop (12); };
-        layoutRow (inner (spaceArea), { &decay, &size, &predelay, &mod, &width });
+        layoutRow (inner (spaceArea), { &decay, &size, &predelay, &mod, &width, &tension });
         layoutRow (inner (toneArea), { &damping, &lowCut, &highCut, &shimmer, &shimInt });
 
         auto d = inner (duckArea);
@@ -217,7 +218,7 @@ private:
     Choice shimInt;
     Knob duck, duckRel;
     Choice freeze;
-    Knob freezeLevel;
+    Knob freezeLevel, tension;
     juce::Rectangle<int> spaceArea, toneArea, duckArea, meterArea;
     float meter = 0.0f;
 };

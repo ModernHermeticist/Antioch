@@ -170,6 +170,7 @@ namespace Params
         layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { Verb::freeze, 1 }, "Reverb Freeze Into Breakdowns",
                                                                   juce::StringArray { "Off", "1 bar", "2 bars", "4 bars" }, 0));
         layout.add (floatParam (Verb::freezeLevel, "Reverb Freeze Level", { 0.0f, 1.0f }, 0.7f, percent()));
+        layout.add (floatParam (Verb::tension, "Reverb Tension Width", { 0.0f, 1.0f }, 0.3f, percent()));
 
         // ---- Throw ----
         layout.add (std::make_unique<AudioParameterBool> (id (Throw::on), "Throw", false));

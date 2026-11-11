@@ -67,6 +67,7 @@ private:
     void fillPatterns();
     juce::TextButton randomButton { "Randomise" };
     suite::ui::Choice gateRate, fills, fillStyle, chordFollow;
+    std::unique_ptr<suite::ui::Toggle> dynamicGate;
     suite::ui::Knob length, attack, release, depth, swing, stereo, filter, res;
 
     // Polarity

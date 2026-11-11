@@ -25,7 +25,9 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
       mbDepth (p.apvts, Params::mbDepth, "Depth", Colours::amethyst),
       mbTime (p.apvts, Params::mbTime, "Time", Colours::amethyst),
       width (p.apvts, Params::width, "Width", Colours::moss),
-      monoBelow (p.apvts, Params::monoBelow, "Mono below", Colours::moss)
+      monoBelow (p.apvts, Params::monoBelow, "Mono below", Colours::moss),
+      pitchBright (p.apvts, Params::pitchBright, "Pitch bright", Colours::verdigris),
+      tension (p.apvts, Params::tensionWidth, "Tension width", Colours::moss)
 {
     setLookAndFeel (&lnf);
 
@@ -46,7 +48,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
 
     for (auto* c : std::initializer_list<juce::Component*> { &euphoria, &presetBox, &macroInfo, &autoGainInfo, &autoGain, &output,
                                                              &spectrum, &lowCut, &mud, &presence, &air, &drive, &satMix,
-                                                             &mbDepth, &mbTime, &width, &monoBelow })
+                                                             &mbDepth, &mbTime, &width, &monoBelow, &pitchBright, &tension })
         addAndMakeVisible (c);
 
     scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
@@ -63,7 +65,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
     fingerprintStatus.setColour (juce::Label::textColourId, Colours::dimText);
     addAndMakeVisible (fingerprintButton);
     addAndMakeVisible (fingerprintStatus);
-    setSize (1000, 660);
+    setSize (1200, 660);
     timerCallback();
     startTimerHz (30);
 }
@@ -177,8 +179,8 @@ void VibrationEditor::resized()
     widthArea = bottom;
 
     auto inner = [] (juce::Rectangle<int> a) { return a.reduced (8, 6).withTrimmedTop (14); };
-    layoutRow (inner (eqArea), { &lowCut, &mud, &presence, &air });
+    layoutRow (inner (eqArea), { &lowCut, &mud, &presence, &air, &pitchBright });
     layoutRow (inner (satArea), { &drive, &satMix });
     layoutRow (inner (mbArea), { &mbDepth, &mbTime });
-    layoutRow (inner (widthArea), { &width, &monoBelow });
+    layoutRow (inner (widthArea), { &width, &monoBelow, &tension });
 }

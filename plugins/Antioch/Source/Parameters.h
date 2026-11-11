@@ -59,6 +59,7 @@ namespace Params
         inline const juce::String mod      { "rv_mod" };
         inline const juce::String freeze   { "rv_freeze" };        // hold the drop's last moment as a wash into breakdowns
         inline const juce::String freezeLevel { "rv_freezelvl" };
+        inline const juce::String tension  { "rv_tension" };     // wider on tension chords (Correspondence's progression)
         inline int freezeBars (int index) { static const int b[] = { 0, 1, 2, 4 }; return b[juce::jlimit (0, 3, index)]; }
 
         const juce::StringArray& shimmerIntervalNames();

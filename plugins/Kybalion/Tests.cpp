@@ -455,6 +455,30 @@ int main (int argc, char** argv)
         suite::Registry::reset();
     }
 
+    section ("Dynamic gate");
+    {
+        suite::SectionMap map;   // 120 BPM: Drop bars 1-8 (0-16 s)
+        map.totalBars = 8; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        auto run = [&] (bool dynamic, double seconds)
+        {
+            auto p = make (true, false);
+            suite::SectionBus::publish (map);
+            set (*p, Params::Gate::dynamic, dynamic ? 1.0f : 0.0f);
+            set (*p, suite::SceneEngine::enabledId, 0.0f);
+            FakePlayHead head;
+            head.bpm = 120.0;
+            p->setPlayHead (&head);
+            render (*p, seconds, tone (440.0f), nullptr, &head);
+            p->setPlayHead (nullptr);
+            return p->dynamicDepth.load();
+        };
+        const auto early = run (true, 1.0), late = run (true, 15.0);
+        check (early < 0.7f && late > 0.95f, "through the drop the gate deepens from about 60% to full depth ("
+                   + juce::String (early, 2) + " -> " + juce::String (late, 2) + ")");
+        suite::SectionBus::withdraw();
+    }
+
     section ("Presets and state");
     {
         auto p = make (true, true);

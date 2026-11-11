@@ -59,6 +59,7 @@ public:
     std::atomic<float> throwGate { 0.0f };     // 0..1, lights the THROW button
     std::atomic<float> duckAmount { 0.0f };    // current reverb gain reduction 0..1
     std::atomic<bool> ouroborosFound { false };
+    std::atomic<float> tensionNow { 0.0f }, reverbWidthNow { 1.0f };   // tension width (tests and UI)
 
 private:
     juce::AudioParameterBool* boolParam (const juce::String& id);

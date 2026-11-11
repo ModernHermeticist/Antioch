@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "TestUtils.h"
+#include "ChordBus.h"
 #include "MorphBus.h"
 #include "SceneUI.h"
 
@@ -279,6 +280,38 @@ int main (int argc, char** argv)
                "cancel puts the knobs back and keeps scenes on");
         p->setPlayHead (nullptr);
         suite::SectionBus::withdraw();
+    }
+
+    section ("Tension width and pitch-tracking brightness");
+    {
+        suite::Progression prog;   // i for a bar, then VI for a bar (120 BPM: 2 s each)
+        prog.root = 9; prog.scale = 0; prog.count = 2; prog.quartersPerChord = 4.0;
+        prog.chordRoots[0] = 0; prog.chordRoots[1] = 8;
+        auto p = makeNeutral();
+        set (*p, Params::width, 1.0f);
+        set (*p, Params::tensionWidth, 1.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::ChordBus::publish (prog);
+        render (*p, 1.8, signal (440.0f, 0.2f), nullptr, &head);
+        const auto home = p->effective().width;
+        render (*p, 1.8, signal (440.0f, 0.2f), nullptr, &head);   // into the VI
+        const auto away = p->effective().width;
+        suite::ChordBus::withdraw();
+        p->setPlayHead (nullptr);
+        check (away > home * 1.4f, "wider on the tension chord (" + juce::String (home, 2) + " -> " + juce::String (away, 2) + ")");
+
+        auto q = makeNeutral();
+        set (*q, Params::pitchBright, 1.0f);
+        render (*q, 4.0, signal (220.0f, 0.3f));
+        const auto low = q->effective().air;
+        const auto lowHz = q->pitchHz.load();
+        render (*q, 1.0, signal (440.0f, 0.3f));   // the lead jumps an octave
+        const auto high = q->effective().air;
+        check (std::abs (lowHz - 220.0f) < 8.0f && std::abs (q->pitchHz.load() - 440.0f) < 15.0f && high > low + 2.0f,
+               "tracks the lead's pitch (" + juce::String (lowHz, 0) + " -> " + juce::String (q->pitchHz.load(), 0) + " Hz) and adds air above its usual pitch ("
+                   + juce::String (low, 1) + " -> " + juce::String (high, 1) + " dB)");
     }
 
     section ("Final-drop snapshot morph");

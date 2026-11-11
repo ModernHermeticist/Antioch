@@ -236,6 +236,10 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &grid, &patternBox, &randomButton, &gateRate, &length, &attack,
                                                              &release, &depth, &swing, &stereo, &filter, &res, &fills, &fillStyle, &chordFollow })
         gatePanel.addAndMakeVisible (c);
+    dynamicGate = std::make_unique<suite::ui::Toggle> (p.apvts, Params::Gate::dynamic, "Dynamic gate", Colours::amethyst);
+    dynamicGate->setTooltip ("With Ouroboros: each drop starts the gate at 60% of its depth and deepens to the full depth by its end; "
+                             "other sections follow the energy curve");
+    gatePanel.addAndMakeVisible (*dynamicGate);
     for (auto* c : std::initializer_list<juce::Component*> { &duckView, &presetBox, &source, &duckRate, &nudge, &duckDepth,
                                                              &duckAttack, &hold, &duckRelease, &curve, &split, &threshold,
                                                              &breakdown, &sourceStatus })
@@ -388,6 +392,7 @@ void KybalionEditor::resized()
         auto bar = top.removeFromTop (30);
         randomButton.setBounds (bar.removeFromRight (110).reduced (2));
         patternBox.setBounds (bar.removeFromRight (200).reduced (2));
+        dynamicGate->setBounds (bar.removeFromRight (150).reduced (2));
         top.removeFromTop (8);
         grid.setBounds (top);
 

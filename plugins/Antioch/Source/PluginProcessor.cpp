@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "ChordBus.h"
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "Music.h"
@@ -162,7 +163,21 @@ void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mid
         s.highCutHz = value (Verb::highCut);
         s.shimmer = scenes.plain (sShimmer);
         s.shimmerSemitones = Verb::shimmerSemitones (choiceParam (Verb::shimInt)->getIndex());
-        s.width = value (Verb::width);
+        // Tension width: the reverb opens out on chords that pull away from home.
+        {
+            suite::Progression prog;
+            float target = 0.0f;
+            if (host.playing && host.hasPpq && suite::ChordBus::read (prog))
+            {
+                auto origin = 0.0;
+                if (sections.refresh())
+                    if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) origin = sec.startQ;
+                target = prog.isTension (prog.chordAt (host.ppq - origin)) ? 1.0f : 0.0f;
+            }
+            tensionNow.store (tensionNow.load() + 0.3f * (target - tensionNow.load()));
+        }
+        s.width = juce::jmin (2.0f, value (Verb::width) * (1.0f + 0.5f * value (Verb::tension) * tensionNow.load()));
+        reverbWidthNow.store (s.width);
         s.modulation = value (Verb::mod);
         reverb.update (s);
     }

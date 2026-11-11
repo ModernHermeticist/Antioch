@@ -30,7 +30,7 @@ private:
     suite::ui::TabBar viewTabs;
     std::unique_ptr<suite::ui::ScenePanel> scenePanel;
 
-    suite::ui::Knob lowCut, mud, presence, air, drive, satMix, mbDepth, mbTime, width, monoBelow;
+    suite::ui::Knob lowCut, mud, presence, air, drive, satMix, mbDepth, mbTime, width, monoBelow, pitchBright, tension;
 
     juce::TextButton fingerprintButton { "Lead fingerprint..." };
     juce::Label fingerprintStatus;

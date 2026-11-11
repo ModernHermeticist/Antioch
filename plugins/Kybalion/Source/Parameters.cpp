@@ -121,6 +121,7 @@ namespace Params
                                                             StringArray { "Off", "Drops", "Both" }, 2));   // Both = drops and breakdowns
         layout.add (std::make_unique<AudioParameterChoice> (id (Fill::style), "Fill Style",
                                                             StringArray { "Auto", "Stutter", "Half-time", "Gap", "Roll" }, 0));
+        layout.add (std::make_unique<AudioParameterBool> (id (Gate::dynamic), "Dynamic Gate", false));
         layout.add (std::make_unique<AudioParameterChoice> (id (Fill::chords), "Gate on Chord Changes",
                                                             StringArray { "Off", "Accent", "Restart" }, 1));
         layout.add (std::make_unique<AudioParameterBool> (id (Duck::shareKick), "Share This Kick With the Suite", false));

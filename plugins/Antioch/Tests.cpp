@@ -4,6 +4,7 @@
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "ChordBus.h"
 
 using namespace suite::test;
 
@@ -333,6 +334,27 @@ int main (int argc, char** argv)
                    + juce::String (wash, 4) + " vs " + juce::String (tail, 5) + "; the reverb in the drop: " + juce::String (inDrop, 4) + ")");
         check (rmsBetween (frozen, 6.0, 7.0) > rmsBetween (frozen, 10.0, 11.0) && rmsBetween (frozen, 12.1, 12.5) < 1.0e-4f,
                "and fades out over the 4 bars");
+    }
+
+    section ("Reverb tension width");
+    {
+        suite::Progression prog;
+        prog.root = 9; prog.scale = 0; prog.count = 2; prog.quartersPerChord = 4.0;
+        prog.chordRoots[0] = 0; prog.chordRoots[1] = 7;   // i, then v
+        auto p = make();
+        set (*p, Params::Verb::width, 1.0f);
+        set (*p, Params::Verb::tension, 1.0f);
+        FakePlayHead head;
+        head.bpm = 120.0;
+        p->setPlayHead (&head);
+        suite::ChordBus::publish (prog);
+        render (*p, 1.8, {}, nullptr, &head);
+        const auto home = p->reverbWidthNow.load();
+        render (*p, 1.8, {}, nullptr, &head);
+        const auto away = p->reverbWidthNow.load();
+        suite::ChordBus::withdraw();
+        p->setPlayHead (nullptr);
+        check (std::abs (home - 1.0f) < 0.02f && away > 1.45f, "the reverb opens out on the v chord (" + juce::String (home, 2) + " -> " + juce::String (away, 2) + ")");
     }
 
     section ("Key follow via KeyBus");

@@ -67,6 +67,10 @@ namespace Params
         layout.add (param (monoBelow, "Mono Below",     skewed (20.0f, 400.0f, 150.0f), d.monoBelow, hz (lowCutOffBelow)));
         layout.add (std::make_unique<AudioParameterBool> (id (autoGain), "Auto Gain", true));
         layout.add (param (output,    "Output",         { -24.0f, 12.0f }, 0.0f, db()));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { tensionWidth, 1 }, "Tension Width",
+                                                                 juce::NormalisableRange<float> (0.0f, 1.0f), 0.3f));
+        layout.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { pitchBright, 1 }, "Pitch-tracking Brightness",
+                                                                 juce::NormalisableRange<float> (0.0f, 1.0f), 0.0f));
         suite::SceneEngine::addParameters (layout);
         return layout;
     }

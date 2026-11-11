@@ -69,7 +69,19 @@ public:
     }
     enum SceneSlot { sEuphoria, sAir, sDrive, sMultiband, sWidth };
     suite::AudioTap inputTap, outputTap;
+    suite::SectionFollower chordSections;
+    std::vector<float> pitchRing;
+    int pitchWrite = 0;
+    float pitchAverageSemis = 0.0f;
+    bool pitchAverageSet = false;
     std::atomic<float> autoGainDb { 0.0f };
+
+    /** Tension width: wider on chords that pull away from home (Correspondence's progression,
+        counted from each section's start). Pitch-tracking brightness: Air and Presence rise as
+        the lead goes above its usual pitch and fall below it. */
+    std::atomic<float> tensionNow { 0.0f }, pitchHz { 0.0f }, pitchOffset { 0.0f };
+    void updateTension (const suite::HostInfo& host);
+    void trackPitch (const float* mono, int n);
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
