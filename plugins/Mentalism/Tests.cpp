@@ -895,6 +895,7 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
         suite::Registry::reset();
         auto p = make();
+        set (*p, Params::problemWatch, 0.0f);   // (the problem watcher resolves lasting masking too)
         suite::Registry::announce (9101, "Prima Materia", "Vox", suite::Status::roleSet, { 6.0f, 0, 0, 0 });
         masking::Clash c;
         c.carveId = 0x123; c.band = 5; c.carveTrack = "Pads"; c.keepTrack = "Vox"; c.text = "pads and vocal at 1 kHz";
@@ -942,6 +943,59 @@ int main (int argc, char** argv)
         p->sendFix (suite::Fix::Carve, suite::packCarve (9201, 3));
         check (p->undoMixIt() >= 1 && p->apvts.getRawParameterValue (Params::autoMasking)->load() < 0.5f, "and Undo Mix it takes back every move it made");
         suite::Registry::reset();
+    }
+
+    section ("The problem watcher");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        suite::Registry::announce (7001, "Prima Materia", "Lead", suite::Status::roleSet | suite::Status::clipping, { 5.0f, 0, 0, 0 });
+        suite::Registry::announce (7002, "Solve et Coagula", "Music", suite::Status::vocalBuried, { 0, 0, 0, 0 });
+        suite::Registry::announce (7003, "Azoth", "FX", suite::Status::missingFiles, { 0, 0, 0, 0 });
+        suite::Registry::announce (7004, "Kybalion", "Bass", 0, { 0, 0, 0, 0 });
+
+        watcher::Master master;
+        master.measured = true; master.truePeakDb = 0.8f; master.ceilingDb = -0.3f; master.monoLossDb = 4.5f; master.lowCorrelation = -0.4f;
+        const auto found = watcher::scan (suite::Registry::list(), master);
+        auto find = [&] (const juce::String& key) { return std::find_if (found.begin(), found.end(), [&] (const watcher::Problem& p) { return p.key.startsWith (key); }); };
+        check (find ("clip") != found.end() && find ("clip")->automatic && find ("clip")->fix == suite::Fix::GainStage, "a clipping track: gain staging, by itself");
+        check (find ("buried") != found.end() && find ("buried")->automatic && find ("buried")->fix == suite::Fix::VocalRide, "a buried vocal: the rider, by itself");
+        check (find ("missing") != found.end() && ! find ("missing")->automatic, "missing samples: offered, not done by itself");
+        check (find ("mono") != found.end() && ! find ("mono")->automatic && find ("phase") != found.end() && ! find ("phase")->automatic,
+               "mono loss and a phase problem: offered");
+        check (find ("peak") != found.end() && find ("peak")->fix == suite::Fix::None, "no limiter on a peaking master: said, nothing to click");
+
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 10.0f;
+        r.measurement.integratedLufs = -9.0f; r.measurement.truePeakDb = -1.0f; r.ceiling = -0.3f; r.measurement.monoLossDb = 4.5f; r.measurement.lowCorrelation = 0.8f;
+        check (p->watchPass (r), "always on: the first pass fixes the safe ones");
+        int gain = 0, ride = 0;
+        for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+        {
+            suite::FixBus::Message m;
+            if (suite::FixBus::read (s, m)) { gain += m.fix == suite::Fix::GainStage ? 1 : 0; ride += m.fix == suite::Fix::VocalRide ? 1 : 0; }
+        }
+        check (gain == 1 && ride == 1, "gain staging and the vocal rider sent once each");
+        const auto offered = p->problems();
+        check (offered.size() == 2, "missing samples and mono loss offered (" + juce::String ((int) offered.size()) + ")");
+        const auto sent = suite::FixBus::latest();
+        r.measuredSeconds = 14.0f;
+        p->watchPass (r);
+        check (suite::FixBus::latest() == sent, "the same problem isn't fixed again within 30 s");
+        check (p->applyProblemFix ("mono") && suite::FixBus::latest() == sent + 1 && p->problems().size() == 1, "one click fixes an offered problem");
+        r.measuredSeconds = 50.0f; p->watchPass (r);
+        r.measuredSeconds = 90.0f; p->watchPass (r);
+        const auto still = p->problems();
+        check (std::any_of (still.begin(), still.end(), [] (const watcher::Problem& q) { return q.key.startsWith ("clip") && q.text.contains ("two fixes"); }),
+               "a clip still there after two fixes is offered to you instead");
+        bool logged = false;
+        for (const auto& e : suite::MoveLog::read()) logged = logged || e.text.startsWith ("Problem watcher: 'Lead' is clipping");
+        check (logged, "fixes and problems show in What changed");
+        set (*p, Params::problemWatch, 0.0f);
+        check (! p->watchPass (r) && p->problems().empty(), "off, it does nothing");
+        suite::Registry::reset();
+        suite::FixBus::reset();
     }
 
     section ("The balance loop");

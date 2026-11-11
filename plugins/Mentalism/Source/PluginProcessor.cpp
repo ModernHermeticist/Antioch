@@ -357,7 +357,8 @@ void MentalismProcessor::watchMasking (const std::vector<masking::Clash>& clashe
         next[key] = count;
         if (count >= maskingChecksToSuggest)
         {
-            if (apvts.getRawParameterValue (Params::autoMasking)->load() > 0.5f && (autoCarves[key] < 3))
+            if ((apvts.getRawParameterValue (Params::autoMasking)->load() > 0.5f || apvts.getRawParameterValue (Params::problemWatch)->load() > 0.5f)
+                && (autoCarves[key] < 3))   // the problem watcher resolves lasting masking too
             {
                 // Resolve it: the track that matters less here gives way, while the vocal or lead it clashes with plays.
                 int keepRole = -1;
@@ -388,6 +389,8 @@ void MentalismProcessor::runAutomation()
     }
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
+    if (rep.measuredSeconds >= lastWatchAt + 4.0f) { lastWatchAt = rep.measuredSeconds; watchPass (rep); }
+    else if (rep.measuredSeconds < lastWatchAt) lastWatchAt = rep.measuredSeconds;
     if (rep.measuredSeconds >= lastBalanceAt + balanceEverySeconds)
     {
         lastBalanceAt = rep.measuredSeconds;
@@ -508,6 +511,70 @@ juce::StringArray MentalismProcessor::applyToneFixes (const Report& rep)
 juce::StringArray MentalismProcessor::translationCheck() const
 {
     return mixfix::translation (suite::Registry::list(), report().measurement.monoLossDb);
+}
+
+bool MentalismProcessor::watchPass (const Report& rep)
+{
+    if (apvts.getRawParameterValue (Params::problemWatch)->load() < 0.5f)
+    {
+        const juce::ScopedLock sl (historyLock);
+        offered.clear();
+        return false;
+    }
+    watcher::Master master;
+    master.measured = rep.measurement.integratedLufs > -70.0f;
+    master.truePeakDb = rep.measurement.truePeakDb;
+    master.ceilingDb = rep.ceiling;
+    master.monoLossDb = rep.measurement.monoLossDb;
+    master.lowCorrelation = rep.measurement.lowCorrelation;
+    const auto found = watcher::scan (suite::Registry::list(), master);
+
+    std::vector<watcher::Problem> offer;
+    std::set<juce::String> present;
+    bool acted = false;
+    const auto now = rep.measuredSeconds;
+    for (auto p : found)
+    {
+        present.insert (p.key);
+        auto& [when, tries] = watchActed.try_emplace (p.key, std::make_pair (-1000.0f, 0)).first->second;
+        if (p.automatic && p.fix != suite::Fix::None && tries < 2)
+        {
+            if (now - when < 30.0f) continue;   // give the last fix time to work
+            sendFix (p.fix, p.data);
+            when = now;
+            ++tries;
+            acted = true;
+            suite::MoveLog::add (getName(), getTrackName(), "Problem watcher: " + p.text + ". Fixed: " + p.fixText, suite::MoveLog::fix);
+            continue;
+        }
+        if (p.automatic && tries >= 2) p.text << " (still there after two fixes)";
+        offer.push_back (p);
+        if (watchAnnounced.insert (p.key).second)
+            suite::MoveLog::add (getName(), getTrackName(), "Problem: " + p.text + ". Suggested (Mentalism's Problems): " + p.fixText);
+    }
+    // Problems that went away can come back as new ones
+    for (auto it = watchAnnounced.begin(); it != watchAnnounced.end();)
+        it = present.count (*it) ? std::next (it) : watchAnnounced.erase (it);
+    for (auto it = watchActed.begin(); it != watchActed.end();)
+        it = present.count (it->first) ? std::next (it) : watchActed.erase (it);
+    const juce::ScopedLock sl (historyLock);
+    offered = std::move (offer);
+    return acted;
+}
+
+bool MentalismProcessor::applyProblemFix (const juce::String& key)
+{
+    watcher::Problem p;
+    {
+        const juce::ScopedLock sl (historyLock);
+        const auto it = std::find_if (offered.begin(), offered.end(), [&] (const watcher::Problem& q) { return q.key == key; });
+        if (it == offered.end() || it->fix == suite::Fix::None) return false;
+        p = *it;
+        offered.erase (it);
+    }
+    sendFix (p.fix, p.data);
+    suite::MoveLog::add (getName(), getTrackName(), "Fixed (you chose it): " + p.text + ": " + p.fixText, suite::MoveLog::fix);
+    return true;
 }
 
 bool MentalismProcessor::balancePass (const Report& rep)

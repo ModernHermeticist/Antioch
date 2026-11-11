@@ -788,6 +788,18 @@ int main (int argc, char** argv)
         pad->fixes->poll();
         check (std::abs (pad->apvts.getRawParameterValue (pm::trimId)->load() + 2.0f) < 0.01f, "then takes the next step");
 
+        // The problem watcher's fixes
+        auto vox = make (roleIndex ("Vocal"));
+        suite::FixBus::send (suite::Fix::VocalRide);
+        vox->fixes->poll();
+        pad->fixes->poll();
+        check (std::abs (vox->apvts.getRawParameterValue (pm::rideVocalId)->load() - 6.0f) < 0.01f && pad->apvts.getRawParameterValue (pm::rideVocalId)->load() < 0.01f,
+               "a buried vocal: the vocal track rides itself 6 dB over the music (the pad doesn't)");
+        set (*pad, pm::monoLowsId, 0.0f);
+        suite::FixBus::send (suite::Fix::MonoLows);
+        pad->fixes->poll();
+        check ((int) pad->apvts.getRawParameterValue (pm::monoLowsId)->load() == 2, "mono lows back on (below 120 Hz) where they were off");
+
         auto loner = make (roleIndex ("Lead"));
         suite::Registry::reset();
         measure (*loner, 0.3f, 800.0f);

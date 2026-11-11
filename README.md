@@ -438,6 +438,24 @@ has been heard before it steps again. On the next pass Mentalism checks the mast
 moved away from its tonal target by more than 0.5 dB, the step is undone. When no track
 needs a step, it rests for a while.
 
+### Problem watcher
+
+Always on (the **Watch** switch), it checks the session every 4 s of music, from what every
+suite plugin reports and what Mentalism measures on the master:
+
+- **Fixed by themselves** (small and reversible): a **clipping track** gets gain staging, a
+  **buried vocal** gets the vocal rider (Prima Materia on the vocal rides it 6 dB over the
+  music), and **lasting masking** gets a carve that opens only while the vocal or lead plays.
+  Each problem is fixed at most once every 30 s. If it's still there after two fixes, it's
+  offered to you instead.
+- **Offered as one click** (the **Problems** button, with a count): **mono loss** (mono lows
+  on every Prima Materia), a **phase problem** in the low end (Kybalion flips the polarity
+  where it cancels against the kick), and **missing samples** (Ouroboros' session fix). A
+  peaking master with **no limiter** is pointed out, since that one needs Lapis placing.
+
+Every problem and every fix shows in *What changed?*, and every fix can be undone like any
+other.
+
 ## Ouroboros: arrangement conductor
 
 ![Ouroboros](docs/ouroboros.png)

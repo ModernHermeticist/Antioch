@@ -87,6 +87,8 @@ private:
                      matchButton { "Match reference" }, mySoundButton { "Learn my sound..." };
     uint32_t matchSeq = 0;
     juce::TextButton finishButton { "Finish the song" };
+    juce::TextButton problemsButton { "Problems" };
+    std::unique_ptr<suite::ui::Toggle> problemWatch;
     std::unique_ptr<suite::ui::Toggle> autoCoach, compareAB, autoMasking, autoBalance;
     juce::Label automationStatus;
     juce::Label roughStatus;

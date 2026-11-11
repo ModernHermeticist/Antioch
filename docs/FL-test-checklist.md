@@ -112,6 +112,9 @@ between versions.
   sounds only.
 - [ ] **6b.14** Vibration on a clean lead: *Drive trim* rises until it cuts through. Lapis with *Auto
   tone*: the *Tilt* moves towards your masters' balance.
+- [ ] **6b.15** Push a track into clipping: within a few seconds Mentalism's watcher gain-stages it, and
+  *What changed?* says so. Turn a Prima Materia's *Mono lows* off on a wide bass: *Problems (1)* offers
+  to put it back.
 
 ## 7. A song end to end
 

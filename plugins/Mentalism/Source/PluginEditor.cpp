@@ -226,6 +226,25 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     autoMasking = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoMasking, "Resolve masking", Colours::ember);
     autoMasking->setTooltip ("Clashes that last over a minute are resolved by themselves: the track that matters less gives way in that band, "
                              "only while the vocal or lead it clashes with plays (undo in History)");
+    problemWatch = std::make_unique<suite::ui::Toggle> (p.apvts, Params::problemWatch, "Watch", Colours::ember);
+    problemWatch->setTooltip ("The problem watcher: clipping tracks, a buried vocal and lasting masking are fixed by themselves; "
+                              "mono, phase and session problems are offered under Problems. Everything shows in What changed (Ouroboros).");
+    problemsButton.setTooltip ("Problems the watcher found that need your OK: click one to fix it");
+    problemsButton.onClick = [this]
+    {
+        juce::PopupMenu m;
+        const auto list = processor.problems();
+        if (list.empty()) m.addItem (1, "No problems right now", false);
+        for (size_t i = 0; i < list.size(); ++i)
+            m.addItem (100 + (int) i, list[i].text + (list[i].fix != suite::Fix::None ? "  ->  " + list[i].fixText : "  (" + list[i].fixText + ")"),
+                       list[i].fix != suite::Fix::None);
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&problemsButton), [this, list] (int id)
+        {
+            if (id >= 100 && id - 100 < (int) list.size()) processor.applyProblemFix (list[(size_t) (id - 100)].key);
+        });
+    };
+    addAndMakeVisible (problemsButton);
+    addAndMakeVisible (*problemWatch);
     autoBalance = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoBalance, "Balance", Colours::ember);
     autoBalance->setTooltip ("Every 4 s of music, each track that's off its rough-mix balance moves 1 dB towards it; the step is kept "
                              "only if the master didn't move away from its tonal target (see What changed in Ouroboros)");
@@ -423,6 +442,11 @@ void MentalismEditor::layoutFixButtons()
 
 void MentalismEditor::timerCallback()
 {
+    {
+        const auto n = (int) processor.problems().size();
+        problemsButton.setButtonText (n > 0 ? "Problems (" + juce::String (n) + ")" : "Problems");
+        problemsButton.setColour (juce::TextButton::textColourOffId, n > 0 ? Colours::ember : Colours::text);
+    }
     rep = processor.report();
     {
         const auto finish = processor.finishStatus(), coachText = processor.autoCoachStatus();
@@ -787,5 +811,7 @@ void MentalismEditor::resized()
     autoCoach->setBounds (adviceArea.getRight() - 456, adviceArea.getY() + 6, 124, 26);
     autoMasking->setBounds (adviceArea.getRight() - 608, adviceArea.getY() + 6, 146, 26);
     autoBalance->setBounds (adviceArea.getRight() - 704, adviceArea.getY() + 6, 90, 26);
+    problemWatch->setBounds (adviceArea.getRight() - 788, adviceArea.getY() + 6, 78, 26);
+    problemsButton.setBounds (adviceArea.getRight() - 900, adviceArea.getY() + 6, 106, 26);
     automationStatus.setBounds (adviceContent.removeFromBottom (20));
 }

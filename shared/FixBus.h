@@ -18,7 +18,8 @@ namespace suite
 {
     enum class Fix : uint8_t { None = 0, BreakdownQuieter, BreakdownLouder, BuildRise, IntroQuieter, LaterDropBigger, RoughMix, DjIntroOutro, ReferenceTone, Carve, GainStage, ArcMatch, DjPhrasing, ExtendSection, SessionHealth, ArrangeFromLoop, DraftSong,
                                     LearnStart, KickFit, PhaseFlip, FinishSong,     // the learning pass (Ouroboros)
-                                    BalanceStep };                                  // Mentalism's balance loop: each track a step towards its balance
+                                    BalanceStep,                                    // Mentalism's balance loop: each track a step towards its balance
+                                    VocalRide, MonoLows };                          // the problem watcher: ride a buried vocal; mono lows where they're off
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)
@@ -26,7 +27,8 @@ namespace suite
         static const char* names[] = { "None", "Breakdowns quieter", "Breakdowns louder", "Build rise", "Intro quieter", "Later drop bigger",
                                        "Rough mix", "DJ intro and outro", "Reference tone", "Masking carve", "Gain staging", "Arc match",
                                        "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
-                                       "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step" };
+                                       "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
+                                       "Ride the vocal", "Mono lows" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }

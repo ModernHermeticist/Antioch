@@ -97,6 +97,13 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 if (const auto t = roughMixTrim()) return { { pm::trimId, *t } };
                 return {};
             }
+            case suite::Fix::VocalRide:
+                // The problem watcher: the vocal is buried, so the vocal track rides itself over the music
+                if (getRole() == 6 && apvts.getRawParameterValue (pm::rideVocalId)->load() < 3.0f) return { { pm::rideVocalId, 6.0f } };
+                return {};
+            case suite::Fix::MonoLows:
+                if ((int) apvts.getRawParameterValue (pm::monoLowsId)->load() == 0) return { { pm::monoLowsId, 2.0f } };   // below 120 Hz
+                return {};
             case suite::Fix::BalanceStep:
             {
                 // Mentalism's balance loop: a 1 dB step towards the rough-mix balance, if more than 1 dB off

@@ -11,6 +11,9 @@
 #include "Masking.h"
 #include "HostInfo.h"
 #include "FixBus.h"
+#include "Watcher.h"
+#include <map>
+#include <set>
 #include <thread>
 #include <map>
 
@@ -226,6 +229,15 @@ public:
         the master didn't move away from its tonal target, undone if it did. When nobody needs a
         step, it rests. Called by the timer; tests call it directly. Returns true if it sent or undid. */
     bool balancePass (const Report& rep);
+
+    /** The problem watcher (always on unless switched off): every 4 s of music, what's wrong in
+        the session (watcher::scan). Safe fixes are sent by themselves, at most once every 30 s per
+        problem; a problem still there after two tries is offered instead. The rest are offered as
+        one click (problems()). New problems and every fix go into What changed. Returns true if
+        it fixed something. Message thread (tests call it). */
+    bool watchPass (const Report& rep);
+    std::vector<watcher::Problem> problems() const { const juce::ScopedLock sl (historyLock); return offered; }
+    bool applyProblemFix (const juce::String& key);
     static constexpr float balanceEverySeconds = 4.0f;
     std::atomic<int> balanceKept { 0 }, balanceUndone { 0 };
     uint32_t balanceSeq = 0;   // the step waiting to be checked
@@ -290,6 +302,10 @@ private:
     std::atomic<FinishStage> finishState { FinishStage::Idle };
     float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f, lastBalanceAt = 0.0f, balanceBefore = -1.0f;
     int balanceRest = 0;
+    float lastWatchAt = 0.0f;
+    std::vector<watcher::Problem> offered;
+    std::map<juce::String, std::pair<float, int>> watchActed;   // key -> (when last fixed, tries)
+    std::set<juce::String> watchAnnounced;
     std::vector<uint32_t> keptBalance;
     std::map<juce::String, int> maskingCounts;
     juce::StringArray persistentMasking;
