@@ -60,3 +60,11 @@ Hopeful horn swells | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c-
 Dark horn swells | 0 | K | TYO | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o-o- o--- o-o- o---
 Driving brass stabs | 1 | D | TCU | 0.45 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c.
 Melancholic brass chorale | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + <r--- ---- d--- ---- | c--- ---- C--- ---- + <r--- d--- d--- n--- | c--- ---- c--- ---- + <r--- u--- d--- N--- | c--- c--- c--- ---- + <r--- d--- r--- ----
+
+# --- batch 8
+Classic brass offbeats | 1 | ED | C | 0.5 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..c. ..cc ..c. ..cc | ..cc ..cc ..cc cccc | .ccc ..cc .ccc cccc | ..cc ..c. ..cc ..c.
+Vocal horn answers | 0 | HM | V | 1.0 | - | c--- ---- .... .... | c--- ---- ..c- ---- | c--- ..c- ..c- ---- | c--- ..c- ..c- C--- | ..c- c--- ..c- C--- | c--- ..c- c--- ..c-
+Uplifting trumpet line | 1 | E | U | 0.65 | - | >r... .... .... .... | >r..r ..f. .... .... | >r..r ..f. t..t ..R. | >r..r ..f. R..R RRRR | >R..R ..f. t..t RRRR | >r.rr ..f. t.tt ..R.
+Prog brass fog | 0 | RM | P | 1.0 | - | o--- ---- ---- ---- | o--- ---- c--- ---- | o--- c--- o--- c--- | o--- c--- C--- ---- | c--- o--- C--- ---- | o--- ---- c--- c---
+Psy brass pulse | 1 | K | Y | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
+Tech horn stabs | 1 | DK | T | 0.4 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | .c.c ..c. c..c cccc | c..c ..c. .c.. c.c.

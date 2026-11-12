@@ -43,3 +43,11 @@ Choir rises | 0 | HP | OUV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ----
 Driving choir pad | 0 | D | TCU | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- c-c- C-C- c-c- | c-c- c--- c-c- c---
 Dark choir pulse | 1 | K | TYC | 0.5 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
 Euphoric choir stabs | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c.
+
+# --- batch 8
+Classic choir wash | 0 | ED | C | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c---
+Vocal ooh bed | 0 | HM | V | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- ---- | C--- ---- c--- c--- | c--- c--- ---- c---
+Tech choir drones | 0 | DK | T | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o-o- o--- o-o- o---
+Uplifting choir lift | 0 | E | U | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- ---- ---- | C--- ---- ---- ---- + >r--- ---- u--- ---- | C--- ---- C--- ---- + >r--- u--- u--- R--- | C--- ---- C--- ---- + >R--- d--- d--- r--- | C--- C--- ---- ---- + >r--- u--- r--- u---
+Prog choir chant | 1 | RM | P | 0.7 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c- | ..c- c--- ..c- c--- | c--- ..c- ..c- ....
+Orchestral choir march | 1 | P | O | 0.6 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc CCCC CCCC | CCCC c.cc CCCC c.cc | cc.c c.c. cc.c c.c.

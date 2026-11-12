@@ -47,3 +47,10 @@ Slide machine | 0 | K | TY | 0.7 | - | r--- ---- r--- ---- | r~u. r~d. r~u. r~d.
 Acid stabs | 0 | DK | TC | 0.5 | - | r... .... r... .... | r..R .... r..R .... | r.rR ..r. r.rR ..r. | r.rR .rR. r.rR NNNN | rRrR ..r. rRrR NNNN | r.RR ..r. r.RR ..R.
 Psy acid rain | 0 | K | Y | 0.45 | - | .rrr .rrr .rrr .rrr | .rRr .rrR .rRr .rrR | .rRr .uRd .rRr .dRu | .rRr .uRu .dRd uuuu | .dRd .uRu .rRr dddd | .rRR .rrR .rRR .rrR
 Euphoric acid arps | 0 | E | UCT | 0.55 | - | r... t... f... t... | r.t. f.R. r.t. f.R. | rtfR rtfR rtfR rtf~ | rtfR tfRT fRTF nnnn | RTFR fRTF rtfR nnnN | rtfR tfR. rtfR tfR.
+
+# --- batch 8
+Acid shuffle | 0 | DK | TC | 0.55 | - | r..r ..r. r..r ..r. | r..R ..r~ r..R ..r. | r.rR .~r. rR.r ~.rR | r.rR ~.rR ~.rR NNNN | rR.r ~.rR rR.r NNNN | r.rR .rr. r.rR .rR.
+Acid sixteenth wave | 0 | KD | TY | 0.5 | - | r.r. r.r. r.r. r.r. | rrrR rrrR rrrR rrrR | rruR rrdR rruR rrdR | rruR rrdR uuuR nnnN | uuuR dddR rruR nnnN | rrRr rruR rrRr rrdR
+Minimal acid | 0 | K | TP | 0.6 | - | r... .... .... .... | r... ..r. .... .... | r... ..r. .R.. .... | r... ..r. .R.~ r... | r..r ..r. .R.~ r... | r... ..R. .r.. ..R.
+Acid fifths | 0 | DK | TC | 0.55 | - | r... f... r... f... | r.f. R.f. r.f. R.f. | rfRf r~fR rfRf u~fR | rfRf rfRf uuuu nnnn | rfRf uuuu rfRf nnnN | rfRf rfR. rfRf rfR.
+Acid octave run | 0 | DE | TC | 0.5 | - | r.R. r.R. r.R. r.R. | rRrR rR.R rRrR rR.R | rRrR rR~R rRrR rRrR | rRrR fFfF tTtT rRnN | fFfF rRrR tTtT rRnN | rRRr rRRr rRRr rRRr

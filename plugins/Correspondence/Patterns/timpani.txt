@@ -40,3 +40,10 @@ Melancholic roll | 1 | M | VPC | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- 
 Epic hit variations | 0 | PE | OU | 0.85 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f--- | r--- f--- rrrr ffff | r--- r--- f--- f---
 Driving hit variations | 0 | D | TCU | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr | rrrr r..r rrrr r..r | r..r r... r..r r...
 Build roll variations | 1 | PEH | OU | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-
+
+# --- batch 8
+Tech hits | 0 | DK | T | 0.7 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r..r ..r. r..r rrrr | rrrr ..r. r..r rrrr | r..r .... r..r ..r.
+Vocal soft timpani | 0 | HM | V | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- n--- | r--- ---- f--- N--- | r--- r--- ---- f---
+Psy war drums | 0 | K | Y | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..r. r..r .... | r..r ..r. r.rr rrrr | rrrr r..r ..r. rrrr | r..r ..r. r..r ..r.
+Classic roll | 1 | ED | C | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-
+Tech roll | 1 | DK | T | 0.9 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | rrrr ---- z--- ---- | z--- --z- z--- ----

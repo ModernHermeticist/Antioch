@@ -42,3 +42,9 @@ Tech chop stutter | 0 | DK | T | 0.4 | - | r... .... .... .... | r.r. .... r... 
 Vocal chop answer | 0 | HM | V | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR | .... ..f. t..r RRRR | .... .rr. r..t .ff.
 Prog chop drift | 0 | RM | P | 0.8 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r--- | t--- --d- r--- f--- | f--- -uu- t--- ....
 Psy chop riff | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..rr r.rr rrrr | rrrr ..rr rrrr ..dd | r.rr .rr. r.rr .dd.
+
+# --- batch 8
+Classic chop rhythm | 0 | ED | C | 0.5 | - | r... .... r... .... | r..r .... r..r .... | r..r ..r. r..r ..r. | r..r ..f. r..r ..RR | r..r ..R. r..r ..RR | r.rr ..r. r.rr ..r.
+Uplifting chop melody | 0 | E | U | 0.6 | - | r... .... f... .... | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. R..R ..R. | R..f ..t. r..u ..R. | r.ff ..t. r.uu ..d.
+Hopeful chop bounce | 0 | H | UV | 0.55 | - | ..r. .... ..r. .... | ..r. ..r. ..t. .... | ..r. ..r. ..t. ..f. | ..r. ..t. ..f. ..R. | ..R. ..f. ..t. ..r. | .rr. ..r. .tt. ..f.
+Dreamy chop haze | 0 | R | PV | 0.85 | - | 9--- ---- .... .... | 9--- ---- f--- .... | 9--- --f- r--- .... | 9--- --f- r--- 9--- | f--- --9- r--- 9--- | 9--- -ff- r--- ....
