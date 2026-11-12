@@ -86,6 +86,7 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (libStyle), "Library Style", patterns::styleNames(), 0));
         layout.add (std::make_unique<AudioParameterInt> (id (libSeed), "Library Seed", 1, 9999, 1));
         layout.add (std::make_unique<AudioParameterBool> (id (libLead), "Library Lead Hooks", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (libKits), "Library Kits", true));
         for (int i = 0; i < layerNames().size(); ++i)
             layout.add (std::make_unique<AudioParameterBool> (id (layerId (i)), "Library " + layerNames()[i], true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
@@ -155,6 +156,7 @@ namespace Params
         p.libStyle = (int) state.getRawParameterValue (libStyle)->load();
         p.libSeed = (uint32_t) state.getRawParameterValue (libSeed)->load();
         p.libLead = state.getRawParameterValue (libLead)->load() > 0.5f;
+        p.libKits = state.getRawParameterValue (libKits)->load() > 0.5f;
         p.libLayers = 0;
         for (int i = 0; i < layerNames().size(); ++i)
             if (state.getRawParameterValue (layerId (i))->load() > 0.5f) p.libLayers |= 1u << i;

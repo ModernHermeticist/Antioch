@@ -153,6 +153,50 @@ namespace patterns
         return lib;
     }
 
+    /** A kit: one family per role, chosen to go together (Patterns/kits.txt). A role can list a
+        family per kind (a long, an offbeat and a rolling bass, say) and section figures. */
+    struct Kit
+    {
+        std::string name;
+        uint32_t moods = 0, styles = 0;
+        std::array<std::vector<std::string>, (size_t) Part::count> parts;
+    };
+    inline const std::vector<Kit>& kits()
+    {
+        static const std::vector<Kit> all = []
+        {
+            std::vector<Kit> out;
+            for (int i = 0; i < PatternData::namedResourceListSize; ++i)
+            {
+                if (juce::String (PatternData::originalFilenames[i]) != "kits.txt") continue;
+                int size = 0;
+                const auto* data = PatternData::getNamedResource (PatternData::namedResourceList[i], size);
+                if (data == nullptr) continue;
+                for (auto line : juce::StringArray::fromLines (juce::String::fromUTF8 (data, size)))
+                {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWithChar ('#')) continue;
+                    auto f = juce::StringArray::fromTokens (line, "|", "");
+                    if (f.size() < 3) continue;
+                    Kit k;
+                    k.name = f[0].trim().toStdString();
+                    k.moods = detail::tagBits (f[1].trim(), "EHMKDRP");
+                    k.styles = detail::tagBits (f[2].trim(), "UCPTYVO");
+                    for (int j = 3; j < f.size(); ++j)   // role: family, family, ...
+                    {
+                        const auto role = partFiles().indexOf (f[j].upToFirstOccurrenceOf (":", false, false).trim());
+                        if (role < 0) continue;
+                        for (auto n : juce::StringArray::fromTokens (f[j].fromFirstOccurrenceOf (":", false, false), ",", ""))
+                            if (n.trim().isNotEmpty()) k.parts[(size_t) role].push_back (n.trim().toStdString());
+                    }
+                    out.push_back (std::move (k));
+                }
+            }
+            return out;
+        }();
+        return all;
+    }
+
     /** A voice's bars and its octave shift. A bar is 16 steps (16ths), 12 (8th-note triplets) or
         24 (16th triplets); '!' before a step accents it, an apostrophe softens it (neither takes a step). */
     struct Voice
@@ -232,6 +276,35 @@ namespace patterns
         return library()[(size_t) c[hash (seed * 2654435761u + (uint32_t) part * 977u + (uint32_t) kind * 131u) % c.size()]];
     }
 
+    /** The song's kit: one that fits the mood and the style (the style must match), chosen by the
+        seed; nullptr when no kit fits the style. */
+    inline const Kit* pickKit (Mood mood, Style style, uint32_t seed)
+    {
+        std::vector<const Kit*> best;
+        int bestScore = -1;
+        for (const auto& k : kits())
+        {
+            if (((k.styles >> (int) style) & 1u) == 0) continue;
+            const auto score = (int) ((k.moods >> (int) mood) & 1u);
+            if (score > bestScore) { bestScore = score; best.clear(); }
+            if (score == bestScore) best.push_back (&k);
+        }
+        return best.empty() ? nullptr : best[hash (seed * 40503u + 17u) % best.size()];
+    }
+    /** The kit's family for a role and kind (a section figure first, where one is listed for the section). */
+    inline const Family* kitFamily (const Kit& kit, Part part, int kind, int section)
+    {
+        const Family* plain = nullptr;
+        for (const auto& name : kit.parts[(size_t) part])
+            for (const auto& f : library())
+                if (f.part == part && f.kind == kind && f.name == name)
+                {
+                    if (section >= 0 && ((f.where >> section) & 1u) != 0) return &f;
+                    if (f.where == 0 && plain == nullptr) plain = &f;
+                }
+        return plain;
+    }
+
     /** Where a family's notes start in its drop pattern (first voice, first bar, on a 16th grid). */
     inline std::array<bool, 16> onsets16 (const Family& f)
     {
@@ -251,6 +324,19 @@ namespace patterns
         return na == 0 || nb == 0 ? 0.0f : (float) both / (float) std::min (na, nb);
     }
 
+    /** A family's feel: 0 straight, 1 shuffled, 2 triplets. */
+    inline int feelOf (const Family& f)
+    {
+        for (const auto& v : voices (f.level[2])) for (const auto& b : v.bars) if (b.size() == 12 || b.size() == 24) return 2;
+        return f.swing > 0.01f ? 1 : 0;
+    }
+    /** Whether a family anticipates the next chord ('p' / 'P'). */
+    inline bool pushes (const Family& f)
+    {
+        for (const auto& t : { f.level[1], f.level[2], f.high2 }) if (t.find ('p') != std::string::npos || t.find ('P') != std::string::npos) return true;
+        return false;
+    }
+
     /** Like pick, but among the best fits it prefers rhythms that interlock with the parts already
         chosen (`others`): an arp that fills the gaps of the bass, chords that leave both room. A
         section figure (a build riser, an intro version) is chosen where one fits that section. */
@@ -263,6 +349,17 @@ namespace patterns
         if (c.empty()) c = candidates (part, 0, mood, style);
         if (c.empty()) { static const Family none; return none; }
         const auto& lib = library();
+        // Coherence with the first reference (the bass): the same feel (straight, shuffled or
+        // triplets), and for chord parts the same habit of pushing into the next chord, where the
+        // library has such families
+        if (! others.empty() && others.front() != nullptr && ! others.front()->name.empty() && ! sectionFigure && c.size() > 1)
+        {
+            const auto& ref = *others.front();
+            auto keepIf = [&] (auto pred) { std::vector<int> k; for (auto i : c) if (pred (lib[(size_t) i])) k.push_back (i); if (! k.empty()) c = k; };
+            keepIf ([&] (const Family& f) { return feelOf (f) == feelOf (ref); });
+            if (part == Part::Chords || part == Part::Piano || part == Part::Strings || part == Part::Brass || part == Part::Choir)
+                keepIf ([&] (const Family& f) { return pushes (f) == pushes (ref); });
+        }
         if (! others.empty() && ! sectionFigure && c.size() > 1)
         {
             std::vector<std::pair<float, int>> scored;

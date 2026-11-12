@@ -1097,6 +1097,15 @@ What keeps a song cohesive and alive:
   carry their own shuffle, mark accents and soft notes, push the next chord a 16th or an 8th early
   (the anticipations trance stabs and basses live on), and colour chord parts with 7ths, 9ths and
   inversions.
+- **Kits.** 43 hand-picked sets (at least four per style), each naming a family for every role
+  (and each kind of it: a long, an offbeat and a rolling bass; a pad, stabs and a gate) chosen to
+  share one sound, one groove and one character: *Sunrise anthem*, *Warehouse classic*,
+  *Shuffled tech*, *Forest night*, *Heartbreak vocal*, *Heroic score*, ... A song plays the kit that
+  fits its mood and style; **New patterns** picks another. Song patterns shows the kit's name;
+  turn **Kits** off to have each part picked on its own.
+- **Coherence without a kit.** The parts follow the bass's feel (straight, shuffled or triplets),
+  chord parts push into the next chord only when the bass does, and an arp that would sit on
+  top of the hook moves an octave away from it.
 - **Parts that fit together.** The arp is chosen to fill the gaps the bass leaves, and the chords,
   acid and piano to leave room for both, among the families that fit the mood and style.
 - **Long hooks.** Hooks can be two, four or eight bars; an eight-bar melody is written through,

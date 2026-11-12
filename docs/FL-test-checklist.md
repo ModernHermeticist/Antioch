@@ -150,6 +150,8 @@ between versions.
   has piano, strings and choir; the build has timpani rolling and strings climbing; the last drop gets brass and choir.
 - [ ] **6c.5** Switch the style to Tech trance: SONG ACID has a line in the grooves and drops (a 303 with slide on), and the
   last drop's choir chants instead of holding. Switch to Vocal: the acid tile is empty.
+- [ ] **6c.6** Song patterns shows a kit name (e.g. *Shuffled tech*). Drag SONG BASS, ARP, CHORDS and LEAD: they share one feel
+  (all shuffled, or all straight), the arp sits clear of the hook, and New patterns gives another kit that also hangs together.
 - [ ] **6c.3** Drop a MIDI motif on Correspondence: the lead is your motif again while the bass, arp and chords stay
   from the library.
 

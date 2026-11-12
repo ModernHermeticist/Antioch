@@ -1649,13 +1649,85 @@ int main (int argc, char** argv)
             float fitted = 0.0f, random = 0.0f;
             for (uint32_t seed = 1; seed <= 30; ++seed)
             {
-                auto fp = sp; fp.libSeed = seed; fp.bass = { 1, 1, 1, 1, 1, 1 };   // offbeat basses
+                auto fp = sp; fp.libSeed = seed; fp.bass = { 1, 1, 1, 1, 1, 1 }; fp.libKits = false;   // offbeat basses, no kit
                 const auto& b = chords::songFamily (chords::SongPart::Bass, 1, fp, -1);
                 fitted += overlap (chords::songFamily (chords::SongPart::Arp, 1, fp, -1), b);
-                random += overlap (pick (Part::Arp, 1, Mood::Euphoric, Style::Uplifting, seed), b);
+                // a blind pick among the arps in the bass's feel (the feel lock comes first): their average
+                float sum = 0.0f; int n = 0;
+                for (auto i : candidates (Part::Arp, 1, Mood::Euphoric, Style::Uplifting))
+                    if (feelOf (lib[(size_t) i]) == feelOf (b)) { sum += overlap (lib[(size_t) i], b); ++n; }
+                random += n > 0 ? sum / (float) n : 0.0f;
             }
             check (fitted <= random, "the song's arp interlocks with its bass at least as well as a blind pick (" + juce::String (fitted / 30.0f, 2) + " vs "
                                          + juce::String (random / 30.0f, 2) + " overlap)");
+        }
+
+        // Kits: families chosen to go together
+        {
+            bool resolved = true;
+            juce::String missing;
+            std::array<int, (size_t) Style::count> perStyle {};
+            for (const auto& k : kits())
+            {
+                for (int st = 0; st < (int) Style::count; ++st) perStyle[(size_t) st] += (k.styles >> st) & 1u;
+                for (size_t role = 0; role < k.parts.size(); ++role)
+                    for (const auto& n : k.parts[role])
+                        if (std::none_of (lib.begin(), lib.end(), [&] (const Family& f) { return f.name == n && (size_t) f.part == role; }))
+                        { resolved = false; missing = juce::String (k.name) + ": " + n; }
+            }
+            check (kits().size() >= 40 && resolved, juce::String ((int) kits().size()) + " kits, every family they name is in the library" + (resolved ? juce::String() : " (" + missing + ")"));
+            check (*std::min_element (perStyle.begin(), perStyle.end()) >= 4, "every style has at least four kits");
+            auto kp = sp;
+            kp.libStyle = (int) Style::Tech; kp.libMood = (int) Mood::Dark; kp.libKits = true;
+            int fromKit = 0;
+            for (uint32_t seed = 1; seed <= 20; ++seed)
+            {
+                kp.libSeed = seed;
+                const auto* kit = pickKit (Mood::Dark, Style::Tech, seed);
+                const auto& bass = chords::songFamily (chords::SongPart::Bass, 2, kp, -1);
+                if (kit != nullptr && std::find (kit->parts[(size_t) Part::Bass].begin(), kit->parts[(size_t) Part::Bass].end(), bass.name) != kit->parts[(size_t) Part::Bass].end()) ++fromKit;
+            }
+            check (fromKit == 20, "a dark tech song plays its kit's bass (" + juce::String (fromKit) + " of 20 seeds)");
+
+            // Without a kit: the parts keep the bass's feel and pushing habit where the library allows
+            auto rp = sp; rp.libKits = false;
+            int feelChecks = 0, feelKept = 0, pushChecks = 0, pushKept = 0;
+            for (int st = 0; st < (int) Style::count; ++st)
+                for (uint32_t seed = 1; seed <= 25; ++seed)
+                {
+                    rp.libStyle = st; rp.libSeed = seed;
+                    const auto& b = chords::songFamily (chords::SongPart::Bass, 2, rp, -1);
+                    const auto& a = chords::songFamily (chords::SongPart::Arp, 1, rp, -1);
+                    const auto& c = chords::songFamily (chords::SongPart::Chords, 2, rp, -1);
+                    const auto arpOptions = candidates (Part::Arp, 1, (Mood) rp.libMood, (Style) st);
+                    if (std::any_of (arpOptions.begin(), arpOptions.end(), [&] (int i) { return feelOf (lib[(size_t) i]) == feelOf (b); }))
+                    { ++feelChecks; feelKept += feelOf (a) == feelOf (b) ? 1 : 0; }
+                    const auto chordOptions = candidates (Part::Chords, 2, (Mood) rp.libMood, (Style) st);
+                    if (std::any_of (chordOptions.begin(), chordOptions.end(), [&] (int i) { return pushes (lib[(size_t) i]) == pushes (b); }))
+                    { ++pushChecks; pushKept += pushes (c) == pushes (b) ? 1 : 0; }
+                }
+            check (feelChecks > 0 && feelKept == feelChecks, "the arp keeps the bass's feel (straight, shuffled, triplets) wherever it can (" + juce::String (feelKept) + "/" + juce::String (feelChecks) + ")");
+            check (pushChecks > 0 && pushKept == pushChecks, "chords push into the next chord when the bass does, and not when it doesn't (" + juce::String (pushKept) + "/" + juce::String (pushChecks) + ")");
+
+            // Register: the arp stays clear of the hook
+            int clear = 0, songs = 0;
+            auto mp = sp; mp.arp = { 2, 2, 2, 2, 2, 2 }; mp.lead = { 0, 0, 0, 0, 1, 0 };
+            for (uint32_t seed = 1; seed <= 12; ++seed)
+            {
+                mp.libSeed = seed;
+                auto median = [] (std::vector<chords::Note> v, double a, double b)
+                {
+                    std::vector<int> p;
+                    for (const auto& n : v) if (n.start >= a && n.start < b) p.push_back (n.pitch);
+                    std::sort (p.begin(), p.end());
+                    return p.empty() ? 0 : p[p.size() / 2];
+                };
+                const auto arp = median (chords::songClip (s, map, mp, chords::SongPart::Arp), 96.0, 160.0);
+                const auto hook = median (chords::songClip (s, map, mp, chords::SongPart::Lead), 96.0, 160.0);
+                if (arp == 0 || hook == 0) continue;
+                ++songs; clear += std::abs (arp - hook) >= 5 ? 1 : 0;
+            }
+            check (songs > 0 && clear == songs, "the arp sits at least 5 semitones from the hook (" + juce::String (clear) + "/" + juce::String (songs) + " songs)");
         }
 
         // The layers: piano and orchestra in breakdowns and the last drop, timpani rolling into it, acid where the style uses it

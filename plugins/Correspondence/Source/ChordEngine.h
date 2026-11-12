@@ -1234,6 +1234,7 @@ namespace chords
         int libMood = 0, libStyle = 0;
         uint32_t libSeed = 1;
         bool libLead = true;          // the lead hook from the library too (a learned motif or style always wins)
+        bool libKits = true;          // a kit (families chosen to go together) where one fits the mood and style
         uint32_t libLayers = 0xffffffffu;   // which layers play (bit per SongPart from Piano on)
     };
 
@@ -1278,6 +1279,11 @@ namespace chords
             if (const auto k = lib::kindFor (SongPart::Arp, sp.arp[drop], T::Drop); k >= 0) others.push_back (&songFamily (SongPart::Arp, k, sp, -1));
         const auto figures = section == (int) T::Intro || section == (int) T::Build || section == (int) T::Outro;
         const auto melodicPart = part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter;
+        // A kit first: its family for this role and kind (and its section figure, where it lists one)
+        if (sp.libKits)
+            if (const auto* kit = patterns::pickKit (mood, style, sp.libSeed))
+                if (const auto* f = patterns::kitFamily (*kit, lib::libraryPart (part), kind, figures && ! melodicPart ? section : -1))
+                    return *f;
         return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1);
     }
 
@@ -1354,6 +1360,20 @@ namespace chords
             const auto* family = useLib ? &songFamily (libLead ? SongPart::Lead : part, kind, patterns, (int) secType) : nullptr;
             const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
+            // Register: an arp sitting on top of the library's hook moves an octave away from it (one
+            // decision for the section, so its fills and variations move with it)
+            int arpShift = 0;
+            if (part == SongPart::Arp && family != nullptr && ! libLead && patterns.library && patterns.libLead && patterns.melody.motif.empty() && ! patterns.melody.dna.valid)
+            {
+                const auto& hookFamily = songFamily (SongPart::Lead, 0, patterns, -1);
+                if (! hookFamily.name.empty())
+                {
+                    auto median = [] (std::vector<Note> v) { std::sort (v.begin(), v.end(), [] (const Note& a, const Note& b) { return a.pitch < b.pitch; }); return v.empty() ? 0 : v[v.size() / 2].pitch; };
+                    const auto hook = median (lib::render (hookFamily, 1, false, s, 32.0, patterns.melody.octave));
+                    const auto arp = median (lib::render (*family, 2, false, s, progressionQ));
+                    if (hook > 0 && arp > 0 && std::abs (arp - hook) < 5) arpShift = arp > hook || arp - 12 < 48 ? 12 : -12;
+                }
+            }
             auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false, int variant = 0)
             {
                 std::vector<Note> c;
@@ -1361,6 +1381,7 @@ namespace chords
                 {
                     c = lib::render (*family, level, fill, cs, progressionQ, 5, variant);
                     if (part == SongPart::Chords && laterDrop && patterns.climbLaterDrops) c = climbVoicing (c);
+                    for (auto& n : c) n.pitch = juce::jlimit (0, 127, n.pitch + arpShift);   // clear of the hook (below)
                     return c;
                 }
                 if (part == SongPart::Chords)

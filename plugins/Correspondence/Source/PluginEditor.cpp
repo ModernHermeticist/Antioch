@@ -511,6 +511,12 @@ namespace
                                "quiet in intros and breakdowns, climbing through builds, full in the drops, with a fill at each phrase end");
             libOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::libOn, *libOn);
             addAndMakeVisible (*libOn);
+            kitsToggle = std::make_unique<juce::ToggleButton> ("Kits");
+            kitsToggle->setTooltip ("Kits: a family for every part chosen to go together (a sound, a groove, a character). "
+                                    "Off: each part picked on its own, kept in the same feel and interlocking with the bass");
+            kitsAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::libKits, *kitsToggle);
+            kitsToggle->onClick = [this] { showFamilies(); };
+            addAndMakeVisible (*kitsToggle);
             libLead = std::make_unique<juce::ToggleButton> ("Lead hooks too");
             libLead->setTooltip ("The lead from the library's hooks (a motif or melody style you taught it always wins)");
             libLeadAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::libLead, *libLead);
@@ -554,14 +560,17 @@ namespace
         void showFamilies()
         {
             if (stateRef == nullptr) return;
-            auto v = [this] (const juce::String& id) { return stateRef->getRawParameterValue (id)->load(); };
-            const auto mood = (patterns::Mood) (int) v (Params::libMood);
-            const auto style = (patterns::Style) (int) v (Params::libStyle);
-            const auto seed = (uint32_t) v (Params::libSeed);
+            const auto sp = Params::readSongPatterns (*stateRef);
             juce::StringArray names;
-            for (auto [part, kind, label] : { std::tuple { patterns::Part::Bass, 2, "bass" }, std::tuple { patterns::Part::Arp, 1, "arp" },
-                                              std::tuple { patterns::Part::Chords, 2, "chords" }, std::tuple { patterns::Part::Lead, 0, "hook" } })
-                names.add (juce::String (label) + ": " + juce::String (patterns::pick (part, kind, mood, style, seed).name));
+            if (sp.libKits)
+                if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, sp.libMood), (patterns::Style) juce::jlimit (0, 6, sp.libStyle), sp.libSeed))
+                    names.add ("Kit: " + juce::String (kit->name));
+            using T = suite::SectionType;
+            const auto drop = (size_t) T::Drop;
+            for (auto [part, choice, label] : { std::tuple { chords::SongPart::Bass, sp.bass[drop], "bass" }, std::tuple { chords::SongPart::Arp, sp.arp[drop], "arp" },
+                                                std::tuple { chords::SongPart::Chords, sp.chords[drop], "chords" }, std::tuple { chords::SongPart::Lead, 1, "hook" } })
+                if (const auto kind = chords::lib::kindFor (part, choice, T::Drop); kind >= 0)
+                    names.add (juce::String (label) + ": " + juce::String (chords::songFamily (part, kind, sp, -1).name));
             families.setText (names.joinIntoString ("   "), juce::dontSendNotification);
         }
 
@@ -592,6 +601,7 @@ namespace
                 styleBox->setBounds (row.removeFromLeft (140).reduced (2));
                 rollButton.setBounds (row.removeFromLeft (120).reduced (2));
                 libLead->setBounds (row.removeFromLeft (130));
+                kitsToggle->setBounds (row.removeFromLeft (70));
                 families.setBounds (row);
             }
             {
@@ -650,7 +660,8 @@ namespace
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> accentAttachment;
         juce::TextEditor title, artist;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> breakdownAttachment;
-        std::unique_ptr<juce::ToggleButton> libOn, libLead;
+        std::unique_ptr<juce::ToggleButton> libOn, libLead, kitsToggle;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> kitsAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> libOnAttachment, libLeadAttachment;
         std::unique_ptr<juce::ComboBox> moodBox, styleBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> moodAttachment, styleAttachment;

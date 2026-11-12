@@ -41,6 +41,7 @@ namespace Params
     inline const juce::String libStyle     { "lib_style" };
     inline const juce::String libSeed      { "lib_seed" };       // which of the fitting families (New patterns rolls it)
     inline const juce::String libLead      { "lib_lead" };       // the lead hook from the library too
+    inline const juce::String libKits      { "lib_kits" };       // kits: families chosen to go together
     /** The library's layers, from Piano on (SongPart order): each on or off. */
     inline const juce::StringArray& layerNames() { static const juce::StringArray n { "Piano", "Strings", "Brass", "Choir", "Timpani", "Acid", "Chops", "Candy" }; return n; }
     inline juce::String layerId (int i) { return "lib_layer_" + layerNames()[i].toLowerCase(); }     // ghost notes in bass and arp exports
