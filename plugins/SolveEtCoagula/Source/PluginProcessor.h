@@ -7,6 +7,7 @@
 #include "VocalChops.h"
 #include "VocalMelody.h"
 #include "Alias.h"
+#include "WritingBus.h"
 #include "KeyBus.h"
 #include "VocalBus.h"
 #include "SuiteDSP.h"
@@ -85,7 +86,16 @@ public:
     {
         const auto key = suite::KeyBus::read();
         melody.collect (key.valid ? key.root : -1, key.valid ? key.scale : 0);
+        // ...and tell the suite what the vocal sings, so Correspondence writes around it
+        if (melody.notes().size() != publishedNotes)
+        {
+            std::vector<suite::WritingBus::SungNote> sung;
+            for (const auto& n : melody.notes()) sung.push_back ({ n.pitch, n.start, n.length });
+            suite::WritingBus::publishSung (sung);
+            publishedNotes = melody.notes().size();
+        }
     }
+    size_t publishedNotes = 0;
     /** Writes "Vocal melody.mid" and (with a key) "Vocal harmony.mid", a third above, into `folder`. */
     juce::String saveVocalMidi (const juce::File& folder)
     {

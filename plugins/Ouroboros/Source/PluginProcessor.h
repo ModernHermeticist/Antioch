@@ -135,6 +135,26 @@ public:
 
     /** Render plan: what to export, how loud, in what order (from the versions made). */
     juce::String renderPlan() const;
+    /** One-click finish: the learning pass starts (play the song once), Mentalism mixes it (Mix
+        it), Correspondence exports every part, and the render plan follows. Returns what was set
+        going, as a report to read while the song plays. */
+    juce::String finishEverything()
+    {
+        const auto learn = startLearningPass();
+        const auto mix = suite::FixBus::send (suite::Fix::MixItAll);
+        const auto exported = suite::FixBus::send (suite::Fix::ExportAll);
+        suite::MoveLog::add (getName(), getTrackName(), "Finish everything: the learning pass, Mix it and Export all, started together", suite::MoveLog::fix);
+        juce::StringArray report;
+        report.add ("Finish everything, started:");
+        report.add (juce::String ("1. The learning pass") + (learn != 0 ? ": play the song once from the top; the suite sets itself up as it hears it." : " couldn't start (no section map yet)."));
+        report.add ("2. Mix it (Mentalism): gain staging now, the rough mix once the drop is heard, then the arc, masking, mud and harshness.");
+        report.add ("3. Export all (Correspondence): every part as MIDI, into the Exports folder.");
+        report.add ("Every move shows in What changed? as it happens. When the song has played through, render it:");
+        report.add ("");
+        report.add (renderPlan());
+        juce::ignoreUnused (mix, exported);
+        return report.joinIntoString ("\n");
+    }
 
     /** Mentalism's DJ phrasing fix (undoable). */
     std::unique_ptr<suite::FixReceiver> fixes;

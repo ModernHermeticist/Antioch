@@ -5,12 +5,14 @@
 #include "SpireTools.h"
 #include "Harmony.h"
 #include "Clash.h"
+#include "VocalAware.h"
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
 #include "ChordBus.h"
 #include "VocalBus.h"
+#include "WritingBus.h"
 #include "StyleLog.h"
 
 using namespace suite::test;
@@ -62,6 +64,8 @@ namespace
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    suite::WritingBus::clearSung();   // nothing left over from another plugin's tests
+    suite::WritingBus::publishThin (0);
     suite::TempoBus::clear();   // no tempo map left over from another test run
     // Never write the real style log from tests.
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");
@@ -1312,6 +1316,42 @@ int main (int argc, char** argv)
         check (! found.empty() && found[0].text.startsWith ("Drop") && found[0].paramId == "mel_octave" && std::abs (found[0].newValue - 6.0f) < 0.01f,
                "the clash check finds the lead on top of the arp in the drop, and offers the lead up an octave ("
                    + (found.empty() ? juce::String ("none") : found[0].text) + ")");
+    }
+
+    section ("Writing around the vocal; a layer for thin sections; the mix re-learns what changed");
+    {
+        auto s = aMinor();
+        // The vocal holds C5 (72) for two bars; a written B4 (71) and C#5 would rub against it
+        std::vector<suite::WritingBus::SungNote> sung { { 72, 0.0, 8.0 } };
+        std::vector<chords::Note> line { { 71, 1.0, 0.5, 100 }, { 69, 2.0, 0.5, 100 }, { 71, 12.0, 0.5, 100 } };
+        const auto moved = vocalaware::avoidVocal (line, sung, s);
+        check (moved == 1 && line[0].pitch != 71 && ! vocalaware::rubs (line[0].pitch, 72) && line[1].pitch == 69 && line[2].pitch == 71,
+               "a note rubbing against the vocal's held note steps off it (" + juce::String (line[0].pitch) + "); the others and the ones after it stay");
+
+        suite::SectionMap map;
+        map.totalBars = 16; map.count = 2;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 9, suite::SectionType::Drop };
+        const auto layer = vocalaware::layerClip (s, map, 1u << (int) suite::SectionType::Groove);
+        bool inGroove = ! layer.empty();
+        for (const auto& n : layer) inGroove = inGroove && n.start < 32.0 && n.pitch >= 55 && n.pitch <= 79;
+        check (inGroove, "a thin groove gets a sustained chord layer (and only the groove)");
+
+        auto p = make();
+        suite::SectionBus::publish (map);
+        suite::FixBus::reset();
+        const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceRelearn");
+        parent.deleteRecursively();
+        p->exportEverything (parent);
+        check (p->lastRelearnMask.load() == 0, "a first export has nothing to compare with");
+        set (*p, Params::melodySeed, 123.0f);   // a new lead
+        p->exportEverything (parent);
+        suite::FixBus::Message m;
+        check ((p->lastRelearnMask.load() & (1u << 5)) != 0 && (p->lastRelearnMask.load() & (1u << 2)) == 0 && suite::FixBus::read (suite::FixBus::latest(), m) && m.fix == suite::Fix::Relearn,
+               "a new lead exported: the lead's tracks re-learn, the bass's don't");
+        parent.deleteRecursively();
+        suite::SectionBus::withdraw();
+        suite::FixBus::reset();
     }
 
     section ("Song pack for a vocalist");

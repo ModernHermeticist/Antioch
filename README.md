@@ -125,6 +125,23 @@ the suite, with the track, the bar, the reason, and whether it was kept or undon
 - **Stereo field.** *Start from a template... > Stereo field* shows how wide each track sits
   (from its Quintessence), widest first.
 
+### Writing and mixing feed each other
+
+- **Thin sections get a layer.** Mentalism hears each kind of section's mids against the
+  target. A groove or build running 4 dB thinner than the drops, or drops 3 dB under the
+  target, is listed under *Problems*. Correspondence's Export all then writes **SONG LAYER**,
+  a sustained chord pad (open voicing, around middle C) for just those sections.
+- **The mix follows the writing.** Each Export all compares every part with the last export.
+  Parts whose notes changed (a new lead, new chords) tell the Quintessences and Prima Materias
+  on those roles to measure afresh; the rest keep what they've learned.
+- **Writing around the vocal.** Solve et Coagula shares what the vocal sang. In the exported
+  lead, arp, counter-melody and harmony, a note that rubs against a note the vocal holds (a
+  semitone, a major seventh or a tritone away, held a beat or longer) steps to the nearest
+  note in key that doesn't.
+- **Finish everything.** *Start from a template... > Finish everything* starts the learning
+  pass, Mentalism's Mix it and Correspondence's Export all together, and shows the render
+  plan. Play the song once from the top; every move shows in *What changed?*.
+
 ## Correspondence: key and chord engine
 
 ![Correspondence](docs/correspondence.png)

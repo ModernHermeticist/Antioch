@@ -13,6 +13,7 @@
 #include "FixBus.h"
 #include "Watcher.h"
 #include "ConductorBus.h"
+#include "WritingBus.h"
 #include <map>
 #include <set>
 #include <thread>
@@ -315,6 +316,7 @@ public:
     std::atomic<int> sectionTypeNow { -1 };   // the section playing (from the map), for the section-by-section check
     std::array<float, (size_t) suite::SectionType::count> lowsSum {};
     std::array<int, (size_t) suite::SectionType::count> lowsCount {};
+    std::array<float, (size_t) suite::SectionType::count> midsSum {};
 private:
     float turnBefore = -1.0f;
     bool turnJudged = true;

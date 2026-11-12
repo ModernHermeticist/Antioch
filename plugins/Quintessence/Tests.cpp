@@ -493,6 +493,16 @@ int main (int argc, char** argv)
         check (std::abs (v (*q, qn::widthId) - widthBefore * 1.15f) < 0.01f, "the mood 'wider' widens the pad 15%");
     }
 
+    section ("New notes written: the part re-learns");
+    {
+        auto pad = make (4), bassP = make (2);
+        suite::FixBus::send (suite::Fix::Relearn, 1u << 4);   // Correspondence exported new chords (the pads' part)
+        pad->fixes->poll();
+        bassP->fixes->poll();
+        check (pad->moveLog().joinIntoString ("\n").contains ("Correspondence wrote new notes") && ! bassP->moveLog().joinIntoString ("\n").contains ("Correspondence wrote"),
+               "new chords exported: the pads re-learn, the bass doesn't");
+    }
+
     section ("Spire tips");
     {
         qn::spire::Reading dull;

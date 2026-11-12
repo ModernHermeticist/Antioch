@@ -9,6 +9,9 @@
 #include "FixBus.h"
 #include "Harmony.h"
 #include "Clash.h"
+#include "VocalAware.h"
+#include "MoveLog.h"
+#include <map>
 #include <optional>
 #include "Alias.h"
 
@@ -67,6 +70,9 @@ public:
     /** Export all: a song folder inside `parent` with every clip, plus "<song> - all parts.mid"
         (song parts on separate tracks, sections as markers) when Ouroboros has a map. Returns the folder. */
     juce::File exportEverything (const juce::File& parent) const;
+    mutable std::map<juce::String, juce::int64> lastExportHash;   // what each part was at the last export (the mix re-learns the parts that change)
+    mutable std::atomic<uint32_t> lastRelearnMask { 0 };
+    mutable std::atomic<int> movedForVocal { 0 };   // notes moved off the vocal's held notes in the last clip
     /** Song pack for a collaborator (a vocalist): a folder with the song sheet, the chords,
         bass and lead guide MIDI, the section markers and a note on key, range and structure. */
     juce::File exportSongPack (const juce::File& parent) const;

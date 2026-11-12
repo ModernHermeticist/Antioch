@@ -8,6 +8,7 @@
 #include "PluginEditor.h"
 #include "TestUtils.h"
 #include "ConductorBus.h"
+#include "WritingBus.h"
 #include "StyleLog.h"
 #include "SectionBus.h"
 #include "SuiteUI.h"
@@ -1059,6 +1060,28 @@ int main (int argc, char** argv)
         suite::FixBus::Message m;
         check (suite::FixBus::latest() >= 1 && suite::FixBus::read (suite::FixBus::latest(), m) && m.fix == suite::Fix::SectionLowsDown && m.target == (uint32_t) suite::SectionType::Intro,
                "the intro's lows run 5 dB heavier than the drops': the bass comes down there, by itself");
+        suite::FixBus::reset();
+    }
+
+    section ("Thin sections, and Mix it from one click");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 10.0f;
+        using T = suite::SectionType;
+        p->lowsCount[(size_t) T::Drop] = 40; p->midsSum[(size_t) T::Drop] = 0.0f;
+        p->lowsCount[(size_t) T::Groove] = 40; p->midsSum[(size_t) T::Groove] = 40.0f * -6.0f;   // the groove's mids 6 dB under the drops'
+        p->watchPass (r);
+        const auto offered = p->problems();
+        check ((suite::WritingBus::thin() & (1u << (int) T::Groove)) != 0
+                   && std::any_of (offered.begin(), offered.end(), [] (const watcher::Problem& q) { return q.key.startsWith ("thin:"); }),
+               "a groove 6 dB thinner in the mids than the drops: Correspondence is told to offer a layer, and it's listed");
+        suite::WritingBus::publishThin (0);
+        suite::FixBus::send (suite::Fix::MixItAll);
+        p->learnReceiver->poll();
+        check (p->mixItPending, "one click in Ouroboros starts Mix it here");
         suite::FixBus::reset();
     }
 

@@ -102,6 +102,10 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 // The problem watcher: the vocal is buried, so the vocal track rides itself over the music
                 if (getRole() == 6 && apvts.getRawParameterValue (pm::rideVocalId)->load() < 3.0f) return { { pm::rideVocalId, 6.0f } };
                 return {};
+            case suite::Fix::Relearn:
+                // New notes written for this part (Correspondence): measure it afresh
+                if (getRole() > 0 && (data & (1u << getRole())) != 0) learnReset.store (true);
+                return {};
             case suite::Fix::SectionLowsDown:
             {
                 // The watcher: one kind of section is heavier in the lows than the drops: the bass 2 dB down there

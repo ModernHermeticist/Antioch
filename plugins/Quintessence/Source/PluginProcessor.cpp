@@ -53,6 +53,12 @@ QuintessenceProcessor::QuintessenceProcessor()
     {
         if (fix == suite::Fix::Carve) return carve (data);
         if (fix == suite::Fix::LearnStart) { relearn(); return [] {}; }
+        if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
+        {
+            relearn();
+            addLog ("Re-learning: Correspondence wrote new notes for this part");
+            return [] {};
+        }
         if (fix == suite::Fix::Wider && value (qn::widthLockId) < 0.5f)
         {
             const auto r = effectiveRole();

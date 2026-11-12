@@ -22,6 +22,12 @@ CorrespondenceProcessor::CorrespondenceProcessor()
     fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
     {
         if (fix == suite::Fix::DraftSong) draftAt.store (juce::Time::getMillisecondCounterHiRes() + 1000.0);   // after the new song's key and chords
+        if (fix == suite::Fix::ExportAll)   // one-click finish (Ouroboros)
+        {
+            lastDraft = exportEverything (suite::Alias::file ("Exports"));
+            suite::MoveLog::add (getName(), getTrackName(), "Exported every part to " + lastDraft.getFullPathName(), suite::MoveLog::fix);
+            return [] {};
+        }
         return {};
     });
 }
@@ -399,6 +405,11 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
             if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return none();
             notes = chords::fillsClip (map);
         }
+        else if (kind == "Song Layer")   // a sustained layer for the sections Mentalism hears as thin
+        {
+            notes = vocalaware::layerClip (s, map, suite::WritingBus::thin());
+            if (notes.empty()) return none();
+        }
         else if (kind == "Song Vocal Answer")   // a line in the vocal's gaps (needs Solve et Coagula's vocal bars)
         {
             notes = chords::vocalAnswer (s, map, currentSongPatterns().vocalBars);
@@ -418,6 +429,9 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
         notes = chords::songClip (s, map, currentSongPatterns(), part);
         if (notes.empty() && (part == chords::SongPart::Harmony || part == chords::SongPart::Counter))
             return none();   // the harmony line only exists when there's a later drop
+        // Around the vocal: melodic lines step off notes that rub against what the vocal holds
+        if (part == chords::SongPart::Lead || part == chords::SongPart::Arp || part == chords::SongPart::Counter || part == chords::SongPart::Harmony)
+            movedForVocal.store (vocalaware::avoidVocal (notes, suite::WritingBus::sung(), s));
         }
     }
     else
@@ -596,8 +610,27 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder.createDirectory();
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano",
-                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer" })
+                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
+    // The mix follows the writing: parts whose notes changed since the last export are measured
+    // afresh (Quintessence and Prima Materia on those roles re-learn)
+    {
+        uint32_t changed = 0;
+        const std::pair<const char*, int> parts[] { { "Song Chords", 4 }, { "Song Bass", 2 }, { "Song Arp", 5 }, { "Song Lead", 5 }, { "Song Counter", 5 }, { "Song Layer", 4 } };
+        for (const auto& [kind, role] : parts)
+        {
+            std::vector<std::pair<double, bool>> pedal;
+            bool available = false;
+            const auto notes = clipNotes (kind, pedal, available);
+            juce::int64 h = 17;
+            for (const auto& n : notes) h = h * 31 + n.pitch * 1009 + (juce::int64) std::llround (n.start * 960.0);
+            auto& last = lastExportHash[kind];
+            if (last != 0 && last != h) changed |= 1u << role;
+            last = h;
+        }
+        if (changed != 0) suite::FixBus::send (suite::Fix::Relearn, changed);
+        lastRelearnMask.store (changed);
+    }
     // The Spire macro plan on its own (four CC lanes for the whole song)
     if (suite::SectionMap macroMap; suite::SectionBus::read (macroMap) && macroMap.count > 0)
         if (auto stream = folder.getChildFile ("Spire macros.mid").createOutputStream())

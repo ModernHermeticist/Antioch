@@ -128,6 +128,8 @@ between versions.
   Try *Mood: darker* and *wider*. Draw a drop's energy down: the gate softens and Euphoria drops there.
 - [ ] **6b.20** While the vocal sings, an arp track steps back more than the pads; while the lead plays, other
   tracks' throws wait. *Stereo field* lists each track's width.
+- [ ] **6b.21** Ouroboros *Finish everything*: play the song once; Mix it runs, the parts are exported, and the render
+  plan is shown. Export again after changing the lead: only the lead's Quintessence re-learns.
 
 ## 7. A song end to end
 

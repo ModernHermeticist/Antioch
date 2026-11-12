@@ -835,6 +835,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
             processor.undoLearningPass();
             return;
         }
+        if (id == 979)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Finish everything", processor.finishEverything());
+            return;
+        }
         if (id == 986)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1412,6 +1418,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Stem plan for a remix pack...", 993);
     templateBox.addItem ("Project tidy...", 992);
     templateBox.addItem ("Arrange from my loop (Prima Materia roles decide who plays where)", 991);
+    templateBox.addItem ("Finish everything: learning pass, Mix it, Export all, render plan...", 979);
     templateBox.addItem ("What changed? Every automatic move, and why...", 987);
     templateBox.addItem (suite::AutomationBus::bypassed() ? "Hear WITH the automation again (A/B)" : "Hear without the automation (A/B)", 985);
     templateBox.addItem ("Stereo field: how wide each track sits...", 986);

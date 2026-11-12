@@ -1063,5 +1063,21 @@ int main (int argc, char** argv)
         if (outDir != juce::File()) snapshot (panel, outDir.getChildFile ("ouroboros_changes.png"));
     }
 
+    section ("Finish everything");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        prepare (*p);
+        const auto report = p->finishEverything();
+        int mix = 0, exported = 0;
+        for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+        {
+            suite::FixBus::Message m;
+            if (suite::FixBus::read (s, m)) { mix += m.fix == suite::Fix::MixItAll ? 1 : 0; exported += m.fix == suite::Fix::ExportAll ? 1 : 0; }
+        }
+        check (mix == 1 && exported == 1 && report.contains ("render"), "one click: Mix it and Export all go out, with the render plan to follow");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

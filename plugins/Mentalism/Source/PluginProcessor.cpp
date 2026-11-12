@@ -100,6 +100,7 @@ MentalismProcessor::MentalismProcessor()
     learnReceiver->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
     {
         if (fix == suite::Fix::LearnStart) resetMeasurements();
+        if (fix == suite::Fix::MixItAll) mixIt();
         if (fix == suite::Fix::FinishSong && finishStage() != FinishStage::WaitingForDrop && finishStage() != FinishStage::Coaching) finishSong();
         return {};
     });
@@ -402,6 +403,7 @@ void MentalismProcessor::runAutomation()
     if (const auto type = sectionTypeNow.load(); type >= 0 && type < (int) lowsSum.size() && rep.tonalAvailable && rep.measurement.integratedLufs > -70.0f)
     {
         lowsSum[(size_t) type] += 0.5f * (rep.shortDiff[1] + rep.shortDiff[2]);
+        midsSum[(size_t) type] += (rep.shortDiff[4] + rep.shortDiff[5] + rep.shortDiff[6]) / 3.0f;
         ++lowsCount[(size_t) type];
     }
     if (rep.measuredSeconds >= lastWatchAt + 4.0f) { lastWatchAt = rep.measuredSeconds; watchPass (rep); }
@@ -622,13 +624,37 @@ bool MentalismProcessor::watchPass (const Report& rep)
                     when = now;
                     ++tries;
                     acted = true;
-                    lowsSum[t] = 0.0f; lowsCount[t] = 0;   // hear it afresh
+                    lowsSum[t] = 0.0f; midsSum[t] = 0.0f; lowsCount[t] = 0;   // hear it afresh
                     suite::MoveLog::add (getName(), getTrackName(), "Problem watcher: " + text + ". Fixed: the bass 2 dB down there", suite::MoveLog::fix);
                 }
                 else if (tries >= 2)
                 {
                     offer.push_back ({ key, text + " (still there after two fixes)", "the bass another 2 dB down there", suite::Fix::SectionLowsDown, (uint32_t) t, false });
                 }
+            }
+    }
+
+    // Thin sections: a groove or build whose mids run 4 dB under the drops', or drops 3 dB under
+    // the target: Correspondence offers a layer for them (Export all writes SONG LAYER)
+    {
+        using T = suite::SectionType;
+        uint32_t thin = 0;
+        const auto drop = (size_t) T::Drop;
+        const auto dropMids = lowsCount[drop] >= 40 ? midsSum[drop] / (float) lowsCount[drop] : 0.0f;
+        if (lowsCount[drop] >= 40 && dropMids < -3.0f) thin |= 1u << (int) T::Drop;
+        for (auto type : { T::Groove, T::Build })
+            if (lowsCount[drop] >= 40 && lowsCount[(size_t) type] >= 40 && midsSum[(size_t) type] / (float) lowsCount[(size_t) type] < dropMids - 4.0f)
+                thin |= 1u << (int) type;
+        suite::WritingBus::publishThin (thin);
+        for (auto type : { T::Groove, T::Build, T::Drop })
+            if (thin & (1u << (int) type))
+            {
+                const auto key = "thin:" + juce::String ((int) type);
+                present.insert (key);
+                offer.push_back ({ key, juce::String ("The ") + suite::sectionName (type) + " sounds thin in the mids",
+                                   "Export all in Correspondence writes a SONG LAYER for it (a sustained chord pad)", suite::Fix::None, 0, false });
+                if (watchAnnounced.insert (key).second)
+                    suite::MoveLog::add (getName(), getTrackName(), juce::String ("Problem: the ") + suite::sectionName (type) + " sounds thin in the mids. Correspondence's Export all writes a layer for it");
             }
     }
 

@@ -21,7 +21,9 @@ namespace suite
                                     BalanceStep,                                    // Mentalism's balance loop: each track a step towards its balance
                                     VocalRide, MonoLows,                            // the problem watcher: ride a buried vocal; mono lows where they're off
                                     Darker, Brighter, Wider, MorePump,              // moods (Ouroboros): each plugin does its share
-                                    SectionLowsDown };                              // the bass down 2 dB in one kind of section (data: the type)
+                                    SectionLowsDown,                                // the bass down 2 dB in one kind of section (data: the type)
+                                    Relearn,                                        // new parts written: these roles measure afresh (data: a bit per role)
+                                    MixItAll, ExportAll };                          // one-click finish (Ouroboros): Mentalism mixes, Correspondence exports
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)
@@ -30,7 +32,8 @@ namespace suite
                                        "Rough mix", "DJ intro and outro", "Reference tone", "Masking carve", "Gain staging", "Arc match",
                                        "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
                                        "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
-                                       "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down" };
+                                       "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
+                                       "Re-learn changed parts", "Mix it", "Export all" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }

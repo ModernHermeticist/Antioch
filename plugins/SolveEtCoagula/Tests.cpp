@@ -5,6 +5,7 @@
 #include "PluginEditor.h"
 #include "SectionBus.h"
 #include "KeyBus.h"
+#include "WritingBus.h"
 
 using namespace suite::test;
 
@@ -391,6 +392,7 @@ int main (int argc, char** argv)
         auto has = [&] (int pitch, double start) { return std::any_of (notes.begin(), notes.end(), [&] (const VocalMelody::Note& nt) { return nt.pitch == pitch && std::abs (nt.start - start) < 0.3; }); };
         check (notes.size() == 6 && has (57, 0.0) && has (60, 1.0) && has (64, 2.0) && has (57, 4.0) && has (64, 6.0),
                "the sung notes come out as MIDI on the beat: A3, C4, E4, twice (" + seen.joinIntoString (" ") + ")");
+        check (suite::WritingBus::sung().size() == notes.size(), "what the vocal sang is shared, so Correspondence can write around it");
         const auto harmony = VocalMelody::harmony (notes, 9, 0);
         check (harmony.size() == notes.size() && harmony[0].pitch == 60 && harmony[1].pitch == 64 && harmony[2].pitch == 67,
                "the harmony is a diatonic third above, in A minor: C4, E4, G4");
