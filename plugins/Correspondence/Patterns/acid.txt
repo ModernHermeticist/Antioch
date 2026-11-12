@@ -1,0 +1,34 @@
+# Acid patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Acid lines for a 303-style synth (an octave over the bass). Uppercase = accent an octave up, '~' = glide into the next note.
+# All kind 0: they play in grooves, builds and drops where the style uses them (tech, psy, classic).
+
+Classic squelch | 0 | DK | TYC | 0.6 | - | r.r. r.r. r.r. r.r. | r.rR r.r~ Rr.r r.R. | rrRr r~Rr rRr~ uRr. | rrRr u~Rd rRu~ dRnN
+Rolling acid | 0 | DK | TY | 0.55 | - | .r.r .r.r .r.r .r.r | .rrr .rRr .rrr .rRr | .rRr .rRr r.Rr .rRr | .rRr .uRu .dRd .nRN
+Minor acid riff | 0 | K | TYC | 0.55 | - | r... t... r... t... | r.t. R.t. r.t. R.t. | rtRt r~tR rtRt d~tR | rtRt dtRd utRu nNRr
+Glide line | 0 | KD | TC | 0.7 | - | r--- ---- r--- ---- | r~u. r~d. r~u. r~d. | r~u. r~d. R~u. r~d. | r~u~ u~u~ d~d~ n~N.
+Octave hopper | 0 | DE | TCU | 0.5 | - | r.R. r.R. r.R. r.R. | rRrR rR.R rRrR rR.R | rRrR rR~R rRrR rRrR | rRrR fFfF tTtT rRnN
+Psy acid | 0 | K | Y | 0.5 | - | .rrr .rrr .rrr .rrr | .rRr .rrR .rRr .rrR | .rRr .uRd .rRr .dRu | .rRr .uRu .dRd uuuu
+Fifth acid | 0 | DK | TYC | 0.55 | - | r... f... r... f... | r.f. R.f. r.f. R.f. | rfRf r~fR rfRf u~fR | rfRf rfRf uuuu nnnn
+Talking acid | 0 | K | TY | 0.6 | - | r..r ..r. r..r ..r. | r..R ..r~ r..R ..r. | r.rR .~r. rR.r ~.rR | r.rR ~.rR ~.rR NNNN
+Euphoric acid | 0 | ED | UC | 0.55 | - | r... R... r... R... | r.R. t.R. f.R. t.R. | rRtR fRtR rRtR fRtR | rRtR fRtR RTRF RTRS
+Stepper | 0 | DK | TC | 0.5 | - | r... u... r... d... | r.u. r.d. r.u. r.d. | rur~ dr.u r~dr u.r~ | ruuu dddd uuuu nnnn
+Pressure acid | 0 | K | TY | 0.45 | - | r.r. r.r. r.r. r.r. | rr.r rr.r rr.r rr.R | rrRr rr.R rrRr rR~R | rrRr rRRR RRRR NNNN
+Hypnotic acid | 0 | KD | TYP | 0.6 | - | r... .... r... .... | r..r .... r..r .... | r..r .~r. r..r .~R. | r..r .~r. r..r uuuu
+Squelch offbeats | 0 | DK | TCY | 0.5 | - | ..r. ..r. ..r. ..r. | ..rR ..rR ..rR ..rR | .rRr .rR~ .rRr .rR~ | .rRr .rRr .uRu .nRN
+Acid bounce | 0 | D | TC | 0.5 | - | r..r ..r. r..r ..r. | r..R ..r. r..R ..r. | r.rR .rr. r.rR .rR. | r.rR .rR. u.uR .nN.
+Dark slide | 0 | K | YT | 0.7 | - | r--- ---- ---- ---- | r~d. r~u. r--- ---- | r~d. r~u. r~d~ u... | r~d~ d~d~ u~u~ N...
+Trance acid | 0 | ED | CUT | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r. r.rR r.r. | r.rR r.tR r.rR r.fR | r.rR t.tT f.fF R.RR
+Acid arpeggio | 0 | DK | TC | 0.5 | - | r... t... f... t... | r.t. f.R. r.t. f.R. | rtfR rtfR rtfR rtf~ | rtfR tfRT fRTF nnnn
+Chug acid | 0 | DK | TY | 0.5 | - | .r.. .r.. .r.. .r.. | .rr. .rr. .rr. .rR. | .rrR .rr~ .rrR .rR~ | .rrR .rrR .uuR .nnN
+Warehouse acid | 0 | K | TC | 0.6 | - | r... ..r. .... r... | r... ..r. .R.. r... | r..r ..r. .R.~ r..R | r..r ..r. .R.~ uuuu
+Rising acid | 0 | DE | TCU | 0.55 | - | r.r. r.r. u.u. u.u. | r.r. u.u. u.u. d.d. | rrrr uuuu dddd uuuu | uuuu dddd uuuu nnnn
+Acid call | 0 | KD | TY | 0.55 | - | r... .... R... .... | r..r .... R..R .... | r..r ..~R R..R ..~r | r..r ..~R uuuu dddd
+Bubble acid | 0 | DK | YT | 0.45 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrR ..r~ rrrR ..r~ | rrrR ..rR rrrR NNNN
+Snaking acid | 0 | K | Y | 0.6 | - | r... d... r... u... | r.d. u.d. r.d. u.d. | rdud r~du rdud r~du | rdud uudd uudd nnnn
+Peak-time acid | 0 | DE | TC | 0.5 | - | r.R. r.R. r.R. r.R. | rrRr .rRr rrRr .rRr | rrRr r~Rr rrRr R~Rr | rrRr RRRR rrRr NNNN

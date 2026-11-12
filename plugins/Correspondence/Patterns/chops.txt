@@ -1,0 +1,30 @@
+# Chops patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Vocal-chop rhythms: trigger a chopped vocal sample (one note per syllable) on chord tones in the vocal's range.
+# All kind 0: grooves and drops where the style uses them; they step out wherever the real vocal sings.
+
+Hey chops | 0 | EHD | UVC | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..f. r..r ..t. | r..r ..f. r.rr .ttt
+Offbeat syllables | 0 | ED | UVT | 0.5 | - | ..r. .... ..r. .... | ..r. ..r. ..r. ..r. | ..r. ..t. ..r. ..f. | ..rr ..tt ..ff ..RR
+Stutter chop | 0 | DK | TVY | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr
+Melodic chop line | 0 | HM | VPU | 0.8 | - | r... .... f... ....  | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. u..u ..n.
+3-3-2 chops | 0 | EH | UVP | 0.6 | - | r..r .... .... .... | r..r ..r. .... .... | r..r ..f. t..t ..r. | r..r ..f. T..T ..RR
+Call chops | 0 | EH | VU | 0.7 | - | r--- .... .... .... | r--- ..t. .... .... | r--- ..t. f--- .... | r--- ..t. f--- ..R.
+Dreamy chops | 0 | RM | PV | 0.9 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r---
+Dark whisper chops | 0 | K | TYC | 0.5 | - | r... .... .... .... | r... .... .r.. .... | r... ..r. .r.. ..r. | r... ..r. .r.r rrrr
+Sixteenth chops | 0 | DE | TCU | 0.4 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrr ..r. rrrr ..t. | rrrr ttrr ffrr RRRR
+Answer chops | 0 | HE | VUP | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR
+Syncopated syllables | 0 | DM | PTV | 0.6 | - | r... ...r .... .... | r... ...r ..r. .... | r... ...t ..r. ..f. | r..r ...t ..r. fRfR
+Rising chops | 0 | EH | UV | 0.6 | - | r... .... u... .... | r... u... u... .... | r..u ..u. u..u .... | r..u ..u. u..u uuuu
+Echo chops | 0 | RH | PV | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r... ..r. ..r. r.r.
+Psy chops | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..r. | r.rr ..rr r.rr rrrr
+Pitched riser chops | 0 | ED | UCT | 0.5 | - | r... r... r... r... | r.r. r.r. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu
+Hook chops | 0 | EH | UV | 0.65 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R.
+Breathy pairs | 0 | MR | PV | 0.7 | - | r-.. .... .... .... | r-.. .... t-.. .... | r-.. f-.. t-.. .... | r-.. f-.. t-.. R-..
+Groove chops | 0 | D | TCV | 0.5 | - | ..r. .... .r.. .... | ..r. ..r. .r.. .... | ..r. ..r. .r.. r.r. | ..r. ..r. .r.r rrrr
+Gospel chops | 0 | HE | VU | 0.7 | - | r--- .... .... .... | r--- .... t--- .... | r--- f--- t--- .... | r--- f--- t--- R---
+Chopped answer | 0 | M | VP | 0.7 | - | .... r--- .... .... | .... r--- .... d--- | .... r--- t--- d--- | .... r--- t--- dddd

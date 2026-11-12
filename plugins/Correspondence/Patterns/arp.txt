@@ -1,0 +1,25 @@
+# Arp patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+Dreamy 8ths | 0 | RM | PV | 1.0 | w | a-a- a-a- a-a- a-a- | a-a- a-a- a-aa a-a- | a-aa a-aa a-aa a-aa | a-a- a-a- A-A- A-A-
+Sus shimmer | 0 | RH | PVO | 0.9 | - | r.9. f.9. r.9. f.9. | r9f9 R9f9 r9f9 R9f9 | r9fR 9fR9 r9fR 9fRF | r9fR 9f4f r9fR 4f9r
+Anthem 8ths | 0 | PE | UVO | 0.9 | u | a.a. a.a. a.a. a.a. | a.a. a.a. a.a. a.aa | a.aa a.aa a.aa a.aa | a.aa a.aa A.AA A.AA
+Octave ping | 0 | RKD | PT | 0.6 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rR.R rR.R rR.R rR.R | rRrR rRrR fFfF tTtT
+Classic 16th up | 1 | EPH | UCV | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA
+Pedal arp | 1 | EPD | UC | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rTrF rtrf rTrF | rtrf rTrF RtRf RTRF | rTrF RTRF rTrF RTRS
+Down cascade | 1 | MRH | UPV | 0.65 | d | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb
+Up-down wave | 1 | RHE | UPVCO | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa
+Broken chord | 1 | MHP | CVO | 0.65 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa AAAA
+Psy 16ths | 1 | KD | YT | 0.5 | - | r.r. r.r. r.r. r.r. | rrRr rrRr rrRr rrRr | rRrt rRrf rRrt rRud | uuuu dddd uuuu dddd
+Converging | 1 | PH | OU | 0.65 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA
+Dark minor pulse | 1 | K | TYC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu
+Random walk | 1 | KR | YP | 0.6 | - | r... u... d... u... | r.u. d.u. u.d. d.u. | rudu udud rudu uddu | uuuu uuuu dddd dddd
+3-3-2 pluck | 2 | EHP | UCP | 0.7 | u | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..A ..a. a..A ..aA | a..A ..A. A..A ..AA
+Gated 16ths | 2 | DKE | TCU | 0.55 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aa.a | aa.a aa.a aaaa aa.a | aaaa aaaa aaaa aaaa
+Syncopated pluck | 2 | MDR | PTV | 0.65 | u | ..a. ..a. ..a. ..a. | a..a ..a. .a.. a.a. | a.aa ..a. aa.a .aa. | a.aa .aa. aa.a AAAA
+Trance gate pluck | 2 | ED | UC | 0.6 | u | a.a. a.a. a.a. a.a. | a.aa .aa. a.aa .aa. | a.aa .aa. aa.a .aaa | aaaa aaaa aaaa aaaa
+Offbeat arp | 2 | MHP | VPO | 0.65 | w | ..a. ..a. ..a. ..a. | ..aa ..aa ..aa ..aa | .aaa .aaa .aaa .aaa | .aaa .aaa .AAA .AAA

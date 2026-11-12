@@ -96,6 +96,7 @@ private:
     suite::ui::Knob registerOct, bassOctave, arpOctaves, previewVolume, humanise;
 
     DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile, melodyTile, songLeadTile;
+    std::vector<std::unique_ptr<DragTile>> layerTiles;   // the pattern library's layers (song length)
     suite::ui::Choice melodyStyle;
     juce::TextButton newMelodyButton { "New melody" };
     std::vector<chords::Note> melodyNotes;

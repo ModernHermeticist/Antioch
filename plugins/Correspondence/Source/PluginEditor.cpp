@@ -231,6 +231,12 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       melodyStyle (p.apvts, Params::melodyStyle, "Melody")
 {
     setLookAndFeel (&lnf);
+    for (const auto& name : Params::layerNames())
+    {
+        layerTiles.push_back (std::make_unique<DragTile> (p, "Song " + name, name == "Piano" || name == "Strings" || name == "Brass" || name == "Choir" || name == "Timpani"
+                                                                                ? Colours::brass : Colours::amethyst));
+        addAndMakeVisible (*layerTiles.back());
+    }
 
     presetCaption.setText ("Progression preset", juce::dontSendNotification);
     presetCaption.setJustificationType (juce::Justification::centred);
@@ -530,9 +536,18 @@ namespace
             families.setFont (juce::FontOptions (12.0f));
             families.setColour (juce::Label::textColourId, Colours::dimText);
             addAndMakeVisible (families);
+            for (int i = 0; i < Params::layerNames().size(); ++i)
+            {
+                auto t = std::make_unique<juce::ToggleButton> (Params::layerNames()[i]);
+                t->setTooltip ("The library's " + Params::layerNames()[i].toLowerCase() + " layer in the song (piano and orchestra in breakdowns, "
+                               "intros and the final drop; acid, chops and candy where the style uses them)");
+                layerAttachments.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::layerId (i), *t));
+                addAndMakeVisible (*t);
+                layerToggles.push_back (std::move (t));
+            }
             stateRef = &state;
             showFamilies();
-            setSize (1200, 462);
+            setSize (1200, 492);
         }
 
         /** The families this song's parts play (drop rhythms), under the library row. */
@@ -546,7 +561,7 @@ namespace
             juce::StringArray names;
             for (auto [part, kind, label] : { std::tuple { patterns::Part::Bass, 2, "bass" }, std::tuple { patterns::Part::Arp, 1, "arp" },
                                               std::tuple { patterns::Part::Chords, 2, "chords" }, std::tuple { patterns::Part::Lead, 0, "hook" } })
-                names.add (juce::String (label) + ": " + patterns::pick (part, kind, mood, style, seed).name);
+                names.add (juce::String (label) + ": " + juce::String (patterns::pick (part, kind, mood, style, seed).name));
             families.setText (names.joinIntoString ("   "), juce::dontSendNotification);
         }
 
@@ -564,6 +579,12 @@ namespace
             auto r = getLocalBounds().reduced (6);
             r.removeFromTop (20);
             hint.setBounds (r.removeFromBottom (24));
+            {
+                auto row = r.removeFromBottom (28);
+                row.removeFromLeft (130);
+                const auto w = row.getWidth() / juce::jmax (1, (int) layerToggles.size());
+                for (auto& t : layerToggles) t->setBounds (row.removeFromLeft (w));
+            }
             {
                 auto row = r.removeFromBottom (30);
                 libOn->setBounds (row.removeFromLeft (130));
@@ -636,6 +657,8 @@ namespace
         juce::TextButton rollButton { "New patterns" };
         juce::Label families;
         juce::AudioProcessorValueTreeState* stateRef = nullptr;
+        std::vector<std::unique_ptr<juce::ToggleButton>> layerToggles;
+        std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> layerAttachments;
     };
 }
 
@@ -857,7 +880,7 @@ void CorrespondenceEditor::resized()
         knob->setBounds (knob->getBounds().withSizeKeepingCentre (knob->getWidth(), knob->getHeight() + 10));
 
     auto ex = inner (exportArea);
-    const auto tileRow = (ex.getHeight() - 36) / 2;
+    const auto tileRow = (ex.getHeight() - 36) * 2 / 5;
     auto placeTiles = [&] (juce::Rectangle<int> row, std::initializer_list<DragTile*> tiles)
     {
         const auto tileW = row.getWidth() / (int) tiles.size();
@@ -865,6 +888,11 @@ void CorrespondenceEditor::resized()
     };
     placeTiles (ex.removeFromTop (tileRow), { &chordTile, &bassTile, &arpTile, &melodyTile });
     placeTiles (ex.removeFromTop (tileRow), { &songChordTile, &songBassTile, &songArpTile, &songLeadTile });
+    {
+        auto row = ex.removeFromTop ((ex.getHeight() - 36));
+        const auto w = row.getWidth() / juce::jmax (1, (int) layerTiles.size());
+        for (auto& t : layerTiles) t->setBounds (row.removeFromLeft (w).reduced (2, 2));
+    }
     auto buttons = ex.withTrimmedTop (4);
     const auto bw = buttons.getWidth() / 5;
     playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));

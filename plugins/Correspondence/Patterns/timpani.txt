@@ -1,0 +1,30 @@
+# Timpani patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Timpani kinds: 0 hits (drops, on the phrase starts), 1 rolls into the drop (builds). 'z' rolls on the root.
+
+# --- 0: hits
+Downbeat hit | 0 | * | * | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- ---- r--- r---
+Root and fifth | 0 | PE | OU | 0.9 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f---
+Heartbeat | 0 | KM | OTY | 0.8 | - | r... .... .... .... | r..r .... .... .... | r..r .... r..r .... | r..r .... r..r r..r
+Boom boom | 0 | PD | OU | 0.8 | - | r... .... .... .... | r... .... r... .... | r... r... r... r... | r... r... rr.. rrrr
+Low octave strike | 0 | KP | OTC | 0.9 | - | l--- ---- ---- ---- | l--- ---- ---- ---- + >r--- ---- ---- ---- | l--- ---- l--- ---- + >r--- ---- r--- ---- | l--- ---- l--- ---- + >r--- ---- rrrr rrrr
+March | 0 | PD | OC | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr
+Syncopated hits | 0 | DE | OUT | 0.8 | - | r... .... .... .... | r... ...r .... .... | r... ...r ..r. .... | r... ...r ..r. rrrr
+Fifth answer | 0 | HP | OV | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- ffff
+Thunder | 0 | K | YTO | 0.9 | - | r--- ---- ---- ---- | z--- ---- ---- ---- | z--- ---- r--- ---- | z--- ---- z--- ----
+Gallop hits | 0 | DP | OU | 0.7 | - | r... .... .... .... | r..r .... r..r .... | r..r r..r r..r r..r | r.rr r.rr r.rr rrrr
+Phrase start | 0 | HEP | UOV | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- ---. | r--- ---- ---- r--- | r--- ---- n--- N---
+
+# --- 1: rolls
+Build roll | 1 | * | * | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- ----
+Swelling roll | 1 | PE | OU | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- ---- ---- + .... .... .... f... | z--- ---- ---- ---- + .... .... .... ffff
+Roll and strike | 1 | PD | OTU | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- ---- --r. | z--- ---- ---- rrrr
+Dark rumble | 1 | K | YTC | 1.0 | - | l--- ---- ---- ---- | z--- ---- ---- ---- | z--- ---- ---- ---- + l--- ---- ---- ---- | z--- ---- ---- ---- + l--- ---- l--- l---
+Quickening | 1 | DE | UC | 0.7 | - | r... .... r... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr z--- ----
+Fifth roll | 1 | HP | OV | 1.0 | - | z--- ---- ---- ---- | z--- ---- ---- ---- + .... .... f--- ---- | z--- ---- ---- ---- + .... f--- f--- f--- | z--- ---- ---- ---- + f... f... ffff ffff
+Pulse into roll | 1 | DP | OU | 0.7 | - | r... .... .... .... | r... ..r. r... .... | r... ..r. z--- ---- | rrrr rrrr z--- ----

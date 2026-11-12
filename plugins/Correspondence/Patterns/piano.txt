@@ -1,0 +1,72 @@
+# Piano patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Piano kinds: 0 ballad (breakdowns), 1 comping and stabs (drops), 2 broken chords and figures (intros, outros).
+# Two hands: the left hand is the first voice ('<' = an octave down), the right hand the second.
+
+# --- 0: ballads
+Ballad whole notes | 0 | MHRP | * | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- f--- ---- + c--- ---- ---- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- | <r--- ---- n--- ---- + c--- ---- C--- ----
+Ballad half notes | 0 | MH | VPO | 1.0 | - | <r--- ---- ---- ---- + c--- ---- c--- ---- | <r--- ---- r--- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- c--- c--- c--- | <r--- ---- n--- ---- + c--- c--- C--- ----
+Hymn pulse | 0 | PHM | OUV | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- c--- c--- c--- | <r--- r--- r--- r--- + c--- c--- c--- c--- | <r--- r--- n--- N--- + c--- c--- C--- C---
+Rolled chords | 0 | MRH | PVO | 1.0 | u | <r--- ---- ---- ---- + aaa- ---- ---- ---- | <r--- ---- f--- ---- + aaa- ---- aaa- ---- | <r--- ---- f--- ---- + aaaa ---- aaaa ---- | <r--- ---- n--- ---- + aaaa aaa- AAA- ----
+Melancholic octaves | 0 | MR | PV | 1.0 | - | <r--- ---- ---- ---- + >t--- ---- ---- ---- | <r--- ---- ---- ---- + >t--- ---- d--- ---- | <r--- ---- f--- ---- + >t--- --d- ---- d--- | <r--- ---- n--- ---- + >t--- u--- u--- ----
+Epic octave chords | 0 | PE | OU | 1.0 | - | <l--- ---- ---- ---- + c--- ---- ---- ---- | <l--- ---- r--- ---- + c--- ---- C--- ---- | <l--- r--- l--- r--- + C--- ---- C--- ---- | <l--- r--- n--- N--- + C--- C--- C--- C---
+Suspended ninths | 0 | RH | PV | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- + >.... .... .... .... | <r--- ---- ---- ---- + c--- ---- ---- ---- + >.... .... 9--- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- + >.... 9--- .... 4--- | <r--- ---- n--- ---- + c--- ---- c--- ---- + >9--- 4--- 9--- r---
+Dark pedal | 0 | K | TYC | 1.0 | - | <l--- ---- ---- ---- + o--- ---- ---- ---- | <l--- ---- l--- ---- + o--- ---- o--- ---- | <l--- l--- l--- l--- + o--- ---- c--- ---- | <l--- l--- N--- N--- + c--- c--- C--- ----
+Walking ballad | 0 | HE | VUC | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- u--- ---- + c--- ---- c--- ---- | <r--- u--- u--- n--- + c--- ---- c--- ---- | <r--- u--- u--- n--- + c--- c--- C--- C---
+Arpeggio ballad | 0 | MRH | PVO | 1.0 | u | <r--- ---- ---- ---- + a--- a--- a--- a--- | <r--- ---- ---- ---- + a-a- a-a- a-a- a-a- | <r--- ---- f--- ---- + a-a- a-a- a-a- a-a- | <r--- ---- n--- ---- + a-a- a-a- A-A- A-A-
+Grand ballad | 0 | PE | OUV | 1.0 | - | <l--- ---- ---- ---- + C--- ---- ---- ---- | <l--- ---- r--- ---- + C--- ---- C--- ---- | <l--- r--- l--- r--- + C--- ---- C--- C--- | <l--- r--- n--- N--- + C--- C--- C--- C---
+Breath and answer | 0 | MR | VP | 1.0 | - | <r--- ---- ---- ---- + c--- ---- .... .... | <r--- ---- ---- ---- + c--- ---- ..c- ---- | <r--- ---- f--- ---- + c--- ---- ..c- ..c- | <r--- ---- n--- ---- + c--- ..c- ..c- C---
+Falling thirds | 0 | MH | VOC | 1.0 | - | <r--- ---- ---- ---- + >T--- ---- ---- ---- | <r--- ---- ---- ---- + >T--- ---- f--- ---- | <r--- ---- f--- ---- + >T--- d--- f--- d--- | <r--- ---- n--- ---- + >T--- d--- d--- d---
+Hopeful lift | 0 | HE | UVO | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- C--- | <r--- ---- f--- ---- + c--- ---- C--- C--- | <r--- ---- n--- ---- + C--- C--- C--- CCCC
+Lullaby | 0 | RH | PV | 1.0 | - | <r--- ---- ---- ---- + >r--- ---- ---- ---- | <r--- ---- ---- ---- + >r--- ---- t--- ---- | <r--- ---- f--- ---- + >r--- t--- f--- t--- | <r--- ---- n--- ---- + >f--- t--- r--- ----
+Sorrow chords | 0 | M | VPC | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---c ---- | <r--- ---- r--- ---- + c--- ---c ---- c--- | <r--- ---- n--- ---- + c--- ---c ---c C---
+Cinematic bass walk | 0 | PM | O | 1.0 | - | <l--- ---- ---- ---- + c--- ---- ---- ---- | <l--- ---- u--- ---- + c--- ---- c--- ---- | <l--- u--- u--- u--- + c--- ---- c--- ---- | <l--- d--- d--- n--- + C--- ---- C--- ----
+Open fifths | 0 | KRP | YTO | 1.0 | - | <r--- ---- ---- ---- + o--- ---- ---- ---- | <r--- ---- f--- ---- + o--- ---- ---- ---- | <r--- ---- f--- ---- + o--- ---- o--- ---- | <r--- f--- r--- f--- + o--- o--- o--- c---
+
+# --- 1: comping and stabs
+House offbeat stabs | 1 | EHD | UCV | 0.6 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | .cc. ..c. .cc. ..c. | .cc. .cc. .cc. cccc
+Nineties house piano | 1 | ED | UC | 0.5 | - | <r... .... r... .... + ..c. ..c. ..c. ..c. | <r... ..r. r... ..r. + ..c. ..c. ..c. ..c. | <r... ..r. r... ..r. + ..cc ..c. ..cc ..c. | <r... ..r. n... N... + ..cc ..cc ..cc cccc
+Syncopated comp | 1 | MHR | PV | 0.7 | - | c... ...c ..c. .... | c..c ..c. .c.. c... | c..c ..c. .c.. c.c. | c..c ..c. .cc. cccc
+Driving eighths | 1 | DE | UTC | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
+Anthem block chords | 1 | PE | OUV | 0.9 | - | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- c--- c.cc | C--- C--- C--- CCCC
+Piano 3-3-2 | 1 | EH | UPV | 0.7 | - | c... ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. c..c ..cC | c..C ..C. C..C ..CC
+Dark minor stabs | 1 | KD | TYC | 0.45 | - | c... .... .... .... | c... ..c. .... c... | c..c ..c. .c.. c..c | c..c .c.c c.cc c.cc
+Pumped octave offbeats | 1 | DE | UCT | 0.6 | - | <..l. ..l. ..l. ..l. + ..c. ..c. ..c. ..c. | <..l. ..l. ..l. ..l. + ..c. ..c. ..c. ..cc | <.ll. .ll. .ll. .ll. + ..c. ..cc ..c. ..cc | <.ll. .ll. .rr. .nN. + ..cc ..cc ..cc cccc
+Electric piano comp | 1 | RM | P | 0.8 | - | c--- ---- ..c- ---- | c--. ..c- ---- c--. | c--. ..c- .c-. c-c. | c--. ..c- .C-. C-C.
+Gospel push | 1 | HE | VU | 0.8 | - | c--- ---- ---- ---c | c--- ---c ---- ---c | c--- -c-c ---- -c-c | c--- -c-c -c-c CCCC
+Tech piano hits | 1 | KD | T | 0.4 | - | c... .... c... .... | c... c... c... c... | c..c c... c..c c... | c..c c..c c.cc cccc
+Two-step piano | 1 | HD | VP | 0.6 | - | c... ...c .... .... | c... ...c ..c. .... | c... ...c ..c. ..cc | c..c ..cc ..c. cccc
+Chord stab and bass | 1 | ED | UC | 0.55 | - | <r... .... r... .... + ..c. .... ..c. .... | <r... .... r... .... + ..c. ..c. ..c. ..c. | <r... r... r... r... + ..c. ..c. ..c. ..cc | <r... r... n... N... + ..cc ..cc ..cc cccc
+Uplifting quarters | 1 | EHP | UO | 0.85 | - | c--- ---- ---- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- c-c- | c-c- c-c- C-C- CCCC
+Offbeat with top line | 1 | EH | UV | 0.6 | - | ..c. ..c. ..c. ..c. + >.... .... .... .... | ..c. ..c. ..c. ..c. + >r--- ---- t--- ---- | ..c. ..c. ..c. ..c. + >r--- --t- f--- --t- | ..cc ..cc ..cc ..cc + >R--- f--- t--- r---
+Melancholic stutter | 1 | MR | PV | 0.6 | - | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c ..c. | c.cc ..c. c.cc .ccc
+Euphoric sixteenth chords | 1 | EP | UC | 0.45 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccC | cccc CCCC cccc CCCC
+Ragged anticipation | 1 | HD | VCT | 0.7 | - | c... .... .... ..c. | c... ..c. .... ..c. | c... ..c. .c.. ..c. | c..c ..c. .c.c ..CC
+Orchestral piano doubling | 1 | PE | O | 0.9 | - | <l--- ---- ---- ---- + c--- ---- c--- ---- | <l--- ---- l--- ---- + c--- c--- c--- c--- | <l--- l--- l--- l--- + c--- c--- c--- c--- | <l--- l--- n--- N--- + C--- C--- C--- CCCC
+
+# --- 2: broken chords and figures
+Broken eighths | 2 | HEMR | * | 0.9 | u | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- ---- ---- + aaaa aaaa aaaa aaaa | <r--- ---- f--- ---- + aaaa aaaa aaaa aaaa | <r--- ---- n--- ---- + aaaa aaaa AAAA AAAA
+Alberti | 2 | HM | OVC | 0.9 | - | r.f. t.f. r.f. t.f. | rftf rftf rftf rftf | rftf RftF rftf RftF | rftf rftf RFTF RFTF
+Falling arpeggio | 2 | MR | PV | 0.9 | d | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb
+Wave with left hand | 2 | ED | UC | 0.8 | w | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- r--- ---- + aaaa aaaa aaaa aaaa | <r--- r--- r--- r--- + aaaa aaaa aaaa aaaa | <r--- r--- n--- N--- + aaaa aaaa AAAA AAAA
+Converging intro | 2 | PH | OU | 0.85 | c | a... ..a. a... ..a. | a..a ..a. a..a ..a. | a.aa ..a. a.aa ..aa | aaaa aaaa AAAA AAAA
+Skipping figure | 2 | MH | VC | 0.85 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA aaaa
+Pedal figure | 2 | ED | UC | 0.8 | - | r.t. r.f. r.t. r.f. | rtrf rtrf rtrf rtrf | rtrf RtRf rtrf RTRF | RTRF RTRF rtrf rtrS
+Ninth figure | 2 | RH | PV | 0.95 | - | r... 9... f... 9... | r.9. f.9. r.9. f.9. | r9f9 R9f9 r9f9 R9f9 | r9fR 9f4f r9fR 4f9r
+Dark figure | 2 | K | TYC | 0.8 | - | r... t... r... t... | r.t. f.t. r.t. f.t. | rtfR tfrt rtfR tfrt | rtfR dddd uuuu rtfR
+Two-hand arpeggio | 2 | PEH | OU | 0.85 | u | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- f--- ---- + a.aa a.aa a.aa a.aa | <r--- f--- r--- f--- + aaaa aaaa aaaa aaaa | <r--- f--- n--- N--- + aaaa AAAA aaaa AAAA
+High plinks | 2 | RK | PT | 0.6 | - | >r... .... .... .... | >r... .... f... .... | >r... ..t. f... ..t. | >r... ..t. f..t .R..
+Octave ostinato | 2 | MH | VP | 0.85 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rRtR fRtR rRtR fRtR | rRtR fRtR RtRf RTRF
+Hopeful 3-3-2 figure | 2 | HE | UV | 0.8 | u | a..a ..a. .... .... | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..a ..a. A..A ..AA
+Rippling sixteenths | 2 | EP | UO | 0.75 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaa + <r--- ---- r--- ---- | aaaa AAAA aaaa AAAA + <r--- r--- n--- N---
+Minimal intro notes | 2 | RK | PTY | 0.7 | - | r... .... .... .... | r... .... f... .... | r... ..f. R... ..f. | r..f ..R. f..R ..T.
+Arpeggio and bass | 2 | HME | VUC | 0.85 | u | <r--- ---- ---- ---- + a... a... a... a... | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- f--- ---- + a.aa a.aa a.aa a.aa | <r--- ---- n--- ---- + aaaa aaaa AAAA AAAA
+Up and over | 2 | EH | UCV | 0.8 | - | r... t... f... R... | r.t. f.R. r.t. f.R. | rtfR rtfR rtfR rtfR | rtfR TFRT RTFR rtfS
+Down and under | 2 | MR | PVO | 0.85 | - | R... f... t... r... | R.f. t.r. R.f. t.r. | Rftr Rftr Rftr Rftr | Rftr Rftr ftrd ftrn
+Broken tenths | 2 | HP | OV | 0.9 | - | <r--- ---- ---- ---- + >.... t--- .... .... | <r--- ---- f--- ---- + >.... t--- .... t--- | <r--- t--- f--- t--- + >.... t--- .... t--- | <r--- t--- f--- n--- + >t--- t--- t--- T---
+Glass arpeggio | 2 | RH | PY | 0.6 | u | >a... .... a... .... | >a... a... a... a... | >a.a. a.a. a.a. a.a. | >aaaa aaaa aaaa aaaa

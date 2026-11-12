@@ -1,3 +1,4 @@
+#include <set>
 #include "PluginProcessor.h"
 #include "TempoBus.h"
 #include "SpireTools.h"
@@ -415,10 +416,26 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
             notes = chords::vocalAnswer (s, map, currentSongPatterns().vocalBars);
             if (notes.empty()) return none();
         }
-        else if (kind == "Song Piano")
+        else if (kind == "Song Piano" && ! currentSongPatterns().library)
         {
             notes = chords::pianoClip (s, map, pianoPedal);
             if (notes.empty()) return none();   // no breakdown in the map
+        }
+        else if (const auto layer = Params::layerNames().indexOf (kind.fromFirstOccurrenceOf ("Song ", false, false)); layer >= 0)
+        {
+            // The pattern library's layers: piano, orchestra, electronic specifics
+            notes = chords::songClip (s, map, currentSongPatterns(), (chords::SongPart) ((int) chords::SongPart::Piano + layer));
+            if (notes.empty()) return none();   // not in this style, or switched off
+            if (layer == 0)   // the piano's sustain pedal: caught again at each chord change, lifted after the last note
+            {
+                const auto L = s.quartersPerChord;
+                double end = 0.0;
+                for (const auto& n : notes) end = std::max (end, n.start + n.length);
+                std::set<double> changes;
+                for (const auto& n : notes) changes.insert (std::floor (n.start / L + 1.0e-9) * L);
+                for (const auto t : changes) { pianoPedal.push_back ({ t, false }); pianoPedal.push_back ({ t + 0.05, true }); }
+                pianoPedal.push_back ({ end, false });
+            }
         }
         else
         {
@@ -610,7 +627,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder.createDirectory();
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano",
-                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer" })
+                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer",
+                       "Song Strings", "Song Brass", "Song Choir", "Song Timpani", "Song Acid", "Song Chops", "Song Candy" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
     // The mix follows the writing: parts whose notes changed since the last export are measured
     // afresh (Quintessence and Prima Materia on those roles re-learn)
@@ -687,7 +705,10 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
         for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
                                           { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead },
-                                          { "Harmony", chords::SongPart::Harmony }, { "Counter", chords::SongPart::Counter } })
+                                          { "Harmony", chords::SongPart::Harmony }, { "Counter", chords::SongPart::Counter },
+                                          { "Piano", chords::SongPart::Piano }, { "Strings", chords::SongPart::Strings }, { "Brass", chords::SongPart::Brass },
+                                          { "Choir", chords::SongPart::Choir }, { "Timpani", chords::SongPart::Timpani }, { "Acid", chords::SongPart::Acid },
+                                          { "Chops", chords::SongPart::Chops }, { "Candy", chords::SongPart::Candy } })
             if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
                                                                          || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });

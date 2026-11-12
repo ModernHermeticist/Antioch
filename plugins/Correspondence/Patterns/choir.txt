@@ -1,0 +1,29 @@
+# Choir patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Choir kinds: 0 pads and lines (breakdowns, the last drop), 1 rhythmic choir.
+
+# --- 0: pads
+Aah pad | 0 | * | * | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- + >t--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- + >t--- ---- u--- ----
+Ooh half notes | 0 | MRH | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + <r--- ---- f--- ---- | c--- ---- C--- ---- + <r--- ---- n--- ----
+Cathedral choir | 0 | PH | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- + >r--- ---- ---- ---- | c--- ---- c--- ---- + <r--- ---- ---- ---- + >r--- ---- f--- ---- | C--- ---- C--- ---- + <r--- ---- n--- ---- + >R--- ---- T--- ----
+Sopranos alone | 0 | RM | PV | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- f--- ---- | >t--- ---- f--- ---- + c--- ---- ---- ---- | >t--- f--- u--- ---- + c--- ---- ---- ----
+Dark chant | 0 | K | YTO | 1.0 | - | <o--- ---- ---- ---- | <o--- ---- ---- ---- + o--- ---- ---- ---- | <o--- ---- o--- ---- + o--- ---- o--- ---- | <o--- ---- o--- ---- + c--- ---- C--- ----
+Hopeful voices | 0 | HE | UV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... t--- ---- | c--- ---- ---- ---- + >r--- ---- t--- ---- | C--- ---- ---- ---- + >r--- t--- f--- R---
+Epic tutti | 0 | PE | OU | 1.0 | - | C--- ---- ---- ---- | C--- ---- ---- ---- + <l--- ---- ---- ---- | C--- ---- C--- ---- + <l--- ---- ---- ---- | C--- ---- C--- ---- + <l--- ---- n--- ----
+Dream voices | 0 | R | PV | 1.0 | - | >c--- ---- ---- ---- | >c--- ---- ---- ---- + >>.... .... 9--- ---- | >c--- ---- ---- ---- + >>r--- ---- 9--- ---- | >c--- ---- ---- ---- + >>9--- 4--- 9--- r---
+Lament | 0 | M | VOC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >t--- ---- d--- ---- | c--- ---- c--- ---- + >t--- ---- d--- ---- | c--- ---- c--- ---- + >t--- d--- d--- n---
+Breathing choir | 0 | MR | PV | 1.0 | - | c--- ---- ---- ---. | c--- ---- c--- ---. | c--- ---- c--- ---. + <r--- ---- ---- ---. | C--- ---- c--- ---. + <r--- ---- ---- ---.
+Rising chorale | 0 | HP | OU | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- u--- ---- | c--- ---- ---- ---- + >r--- u--- u--- ---- | c--- ---- C--- ---- + >u--- u--- u--- u---
+Euphoric choir | 0 | E | UC | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + >R--- ---- ---- ---- | C--- ---- C--- ---- + >R--- ---- T--- ----
+Night choir | 0 | KR | YP | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + >.... .... 4--- ---- | o--- ---- o--- ---- + >.... .... 4--- ---- | o--- ---- o--- ---- + >4--- ---- t--- ----
+
+# --- 1: rhythmic
+Choir stabs | 1 | ED | UC | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. c.cc cccc
+Chanting eighths | 1 | KD | YTO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
+Offbeat voices | 1 | EH | UV | 0.6 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..cc ..cc ..cc ..cc | .ccc .ccc .ccc cccc
+Choral fanfare | 1 | P | OU | 0.7 | - | c... .... .... .... | c..c ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. C..C ..CC

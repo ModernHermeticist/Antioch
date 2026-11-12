@@ -1,0 +1,52 @@
+# Strings patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Strings kinds: 0 legato, pads and lines (breakdowns, outros), 1 ostinato, spiccato, pizzicato, tremolo (builds, later drops).
+# Voices: cellos and basses ('<'), violas and violins (chords), a violin line ('>').
+
+# --- 0: legato
+Sustained section | 0 | * | * | 1.0 | - | c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >t--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >t--- ---- u--- ----
+Breathing pads | 0 | MRH | PVO | 1.0 | - | c--- ---- ---- ---. | <r--- ---- ---- ---. + c--- ---- ---- ---. | <r--- ---- ---- ---. + c--- ---- c--- ---. | <r--- ---- n--- ---. + c--- ---- C--- ---.
+Violin elegy | 0 | M | VPO | 1.0 | - | <r--- ---- ---- ---- + >t--- ---- ---- ---- | <r--- ---- ---- ---- + >t--- ---- d--- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >t--- ---- d--- d--- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >t--- u--- u--- ----
+Rising hope | 0 | HE | UOV | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >r--- ---- u--- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >r--- u--- u--- u--- | <r--- ---- n--- ---- + C--- ---- ---- ---- + >u--- u--- u--- u---
+Epic unison | 0 | P | OU | 1.0 | - | <r--- ---- ---- ---- + >r--- ---- ---- ---- | <r--- ---- ---- ---- + >r--- ---- f--- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >r--- ---- f--- t--- | <l--- ---- ---- ---- + C--- ---- ---- ---- + >R--- f--- t--- r---
+Dark low strings | 0 | K | TYC | 1.0 | - | <r--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- | <r--- ---- r--- ---- + o--- ---- o--- ---- | <r--- ---- N--- ---- + o--- ---- c--- ----
+Dream halo | 0 | R | PV | 1.0 | - | >c--- ---- ---- ---- | >c--- ---- ---- ---- + >>.... .... 9--- ---- | >c--- ---- ---- ---- + >>r--- ---- 9--- ---- | >c--- ---- ---- ---- + >>9--- r--- 9--- 4---
+Half-note chorale | 0 | HMP | OV | 1.0 | - | c--- ---- c--- ---- | <r--- ---- r--- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- + >t--- ---- f--- ---- | <r--- ---- n--- ---- + c--- ---- C--- ---- + >t--- ---- u--- ----
+Suspense hold | 0 | KR | PTY | 1.0 | - | o--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- + >.... .... 4--- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- + >4--- ---- t--- ----
+Weeping line | 0 | M | VO | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- d--- ---- | >t--- --d- d--- ---- + <r--- ---- ---- ---- | >t--- d--- d--- n--- + <r--- ---- ---- ----
+Cello song | 0 | MH | OV | 1.0 | - | <r--- ---- ---- ---- | <r--- ---- u--- ---- | <r--- ---- u--- ---- + c--- ---- ---- ---- | <r--- u--- u--- n--- + c--- ---- c--- ----
+Anthem strings | 0 | EP | UO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >r--- ---- t--- ---- | <r--- ---- ---- ---- + C--- ---- ---- ---- + >R--- f--- t--- r---
+Octave pads | 0 | ERP | UPO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- + >c--- ---- ---- ---- | <r--- ---- ---- ---- + C--- ---- ---- ---- + >C--- ---- ---- ----
+Sighing pairs | 0 | MR | VP | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + >t--- d--- t--- d--- | C--- ---- c--- ---- + >t--- d--- d--- d---
+Swelling fifths | 0 | KP | YOT | 1.0 | - | <r--- ---- ---- ---- + o--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- + >f--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- o--- ---- + >f--- ---- f--- ---- | <r--- ---- ---- ---- + o--- ---- c--- ---- + >f--- ---- R--- ----
+Morning light | 0 | HR | PVU | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... f--- ---- | c--- ---- ---- ---- + >r--- ---- f--- ---- | c--- ---- ---- ---- + >f--- t--- 9--- r---
+Last-drop choir of strings | 0 | EP | UO | 1.0 | - | c--- ---- c--- ---- | <r--- ---- ---- ---- + c--- ---- c--- ---- | <r--- ---- r--- ---- + c--- ---- c--- ---- + >R--- ---- ---- ---- | <r--- ---- n--- ---- + C--- ---- C--- ---- + >R--- ---- T--- ----
+Requiem | 0 | KM | OC | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- d--- ---- + c--- ---- ---- ---- | <r--- d--- d--- ---- + c--- ---- c--- ---- | <r--- d--- d--- N--- + c--- ---- c--- ----
+
+# --- 1: ostinato
+Spiccato eighths | 1 | DEP | UOC | 0.45 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | r.r. r.r. r.r. r.R. + <r--- ---- ---- ---- | rRrR rRrR rRrR RRRR + <r--- ---- n--- ----
+Spiccato sixteenths | 1 | DPE | OUT | 0.4 | - | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrrr rrrr ffff ffff | rrrr ffff tttt RRRR
+Galloping strings | 1 | PD | OU | 0.4 | - | r..r r..r r..r r..r | r.rr r.rr r.rr r.rr | r.rr r.rr f.ff f.ff | r.rr f.ff t.tt R.RR
+Tremolo chords | 1 | KPD | OTY | 0.5 | - | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc cccc cccc + <r--- ---- ---- ---- | cccc cccc CCCC CCCC + <r--- ---- n--- ----
+Pizzicato walk | 1 | HM | VOC | 0.3 | - | r... .... f... .... | r... t... f... t... | r.t. f.t. r.t. f.t. | r.t. f.t. u.u. n.N.
+Pizzicato offbeats | 1 | HE | VU | 0.3 | - | ..r. ..r. ..r. ..r. | ..r. ..f. ..r. ..f. | ..rf ..rf ..rf ..rf | ..rf ..tf ..rf ..nN
+Building ostinato | 1 | EPD | UOC | 0.45 | - | r.f. r.f. r.f. r.f. | rfRf rfRf rfRf rfRf | rfRf rfRf tfTf tfTf | rfRf tfTf fRfR RRRR
+Minor ostinato | 1 | KD | TYC | 0.4 | - | r..r ..r. r..r ..r. | r.rt .rt. r.rt .rt. | rrtr rtrt rrtr rtrt | rrtr dddd uuuu rrtr
+Arpeggiated strings | 1 | EHP | UOV | 0.5 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaa + <r--- ---- ---- ---- | aaaa aaaa AAAA AAAA + <r--- ---- n--- ----
+Descending arpeggio strings | 1 | MP | OV | 0.5 | d | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa AAAA
+Heroic rhythm | 1 | P | OU | 0.5 | - | c... ..c. c... .... | c..c ..c. c..c ..c. | c..c ..c. c.cc ..cc | c.cc ..cc c.cc cccc
+Stabbing strings | 1 | DK | OTC | 0.35 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc
+Rising ostinato | 1 | EHP | UO | 0.45 | - | r.r. u.u. r.r. u.u. | r.r. u.u. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu
+Driving cellos | 1 | DP | OTU | 0.45 | - | <r... r... r... r... | <r.r. r.r. r.r. r.r. | <rrrr rrrr rrrr rrrr + c--- ---- ---- ---- | <rrrr rrrr ffff nnnn + c--- ---- C--- ----
+Octave leaps | 1 | EP | UOC | 0.4 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR rRrR | rRrR fFfF tTtT RRRR
+Dark tremolo | 1 | K | YTO | 0.5 | - | o.o. o.o. o.o. o.o. | oooo oooo oooo oooo | oooo oooo oooo oooo + <r--- ---- ---- ---- | oooo oooo cccc cccc + <r--- ---- N--- ----
+Waltzing pizz | 1 | HR | VP | 0.3 | - | r... .... t... .... | r... ..t. f... ..t. | r..t ..f. r..t ..f. | r..t ..f. u..u ..n.
+Sixteenth chords | 1 | EDP | UO | 0.4 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC
+Fanfare figure | 1 | P | OU | 0.5 | - | r... .... f... .... | r..r ..f. f... .... | r..r ..f. f..f ..R. | r..r ..f. f..f ..RR
+Syncopated spiccato | 1 | DM | PT | 0.4 | - | r... ..r. .r.. .... | r..r ..r. .r.. r... | r..r ..r. .r.r r.r. | r..r ..r. .rrr rrrr
+Hopeful pulse | 1 | H | VUO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.c. c.c. c.c. c.cc | c.cc c.cc C.CC CCCC

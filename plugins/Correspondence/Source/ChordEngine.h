@@ -838,7 +838,8 @@ namespace chords
         return out;
     }
 
-    enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter };
+    enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter,
+                          Piano, Strings, Brass, Choir, Timpani, Acid, Chops, Candy };   // the pattern library's layers
 
     //==============================================================================
     /** Learns bassline DNA from bass clips (each rebased to the bar of its first note). */
@@ -1233,6 +1234,7 @@ namespace chords
         int libMood = 0, libStyle = 0;
         uint32_t libSeed = 1;
         bool libLead = true;          // the lead hook from the library too (a learned motif or style always wins)
+        uint32_t libLayers = 0xffffffffu;   // which layers play (bit per SongPart from Piano on)
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -1269,7 +1271,22 @@ namespace chords
         for (int i = 0; i < map.count; ++i)
         {
             const auto type = (size_t) map.sections[(size_t) i].type;
-            const auto choice = part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type]
+            // The library's layers (piano, orchestra, electronic specifics) have their own places in the song
+            int layerKind = -1;
+            if (lib::isLayerPart (part) && patterns.library && ((patterns.libLayers >> ((int) part - (int) SongPart::Piano)) & 1u) != 0)
+            {
+                int before = 0;
+                for (int k = 0; k < i; ++k) before += map.sections[(size_t) k].type == map.sections[(size_t) i].type ? 1 : 0;
+                const auto isDrop = map.sections[(size_t) i].type == suite::SectionType::Drop;
+                layerKind = lib::placement (part, map.sections[(size_t) i].type, isDrop && before > 0, isDrop && i == map.lastDropIndex(),
+                                            (patterns::Style) juce::jlimit (0, 6, patterns.libStyle));
+                if (layerKind >= 0 && lib::styleGated (part)
+                    && ! patterns::pick (lib::libraryPart (part), layerKind, (patterns::Mood) juce::jlimit (0, 6, patterns.libMood),
+                                         (patterns::Style) juce::jlimit (0, 6, patterns.libStyle), patterns.libSeed).tagged ((patterns::Style) juce::jlimit (0, 6, patterns.libStyle)))
+                    layerKind = -1;   // this style doesn't use it
+            }
+            const auto choice = lib::isLayerPart (part) ? (layerKind >= 0 ? 1 : 0)
+                              : part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type]
                               : part == SongPart::Arp ? patterns.arp[type] : patterns.lead[type];
             if (choice <= 0)
             {
@@ -1308,12 +1325,14 @@ namespace chords
                 s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
             // The pattern library: this part's family for the song, at the section's energy
             const auto secType = map.sections[(size_t) i].type;
-            const auto kind = patterns.library ? lib::kindFor (part, choice, secType) : -1;
+            const auto kind = lib::isLayerPart (part) ? layerKind : patterns.library ? lib::kindFor (part, choice, secType) : -1;
             const auto libLead = kind >= 0 && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter)
                                  && patterns.libLead && patterns.melody.motif.empty() && ! patterns.melody.dna.valid;
             const auto useLib = kind >= 0 && (libLead || (part != SongPart::Lead && part != SongPart::Harmony && part != SongPart::Counter));
-            const auto* family = useLib ? &patterns::pick (lib::libraryPart (part), kind, (patterns::Mood) juce::jlimit (0, 6, patterns.libMood),
-                                                           (patterns::Style) juce::jlimit (0, 6, patterns.libStyle), patterns.libSeed) : nullptr;
+            const auto libMood = (patterns::Mood) juce::jlimit (0, 6, patterns.libMood);
+            const auto libStyle = (patterns::Style) juce::jlimit (0, 6, patterns.libStyle);
+            const auto* family = useLib ? &patterns::pick (libLead ? patterns::Part::Lead : lib::libraryPart (part), kind, libMood, libStyle, patterns.libSeed) : nullptr;
+            const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
             auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false)
             {
@@ -1346,13 +1365,16 @@ namespace chords
                         else c = embellish (c, cs);
                     }
                     if (part == SongPart::Harmony) c = harmony (c, cs);
-                    if (part == SongPart::Counter) c = counterMelody (c, cs);
+                    if (part == SongPart::Counter)
+                        c = counterFamily != nullptr && ! counterFamily->name.empty() ? lib::render (*counterFamily, laterDrop ? 2 : 1, false, cs, cycleQ)
+                                                                                      : counterMelody (c, cs);
                 }
                 return c;
             };
             // The section's energy: quiet sections low, grooves mid, drops high, builds climbing
             using ST = suite::SectionType;
-            const auto sectionLevel = secType == ST::Drop ? 2 : secType == ST::Groove ? 1 : 0;
+            const auto sectionLevel = secType == ST::Drop ? 2 : secType == ST::Groove ? 1
+                                    : secType == ST::Breakdown && lib::isLayerPart (part) && part != SongPart::Candy ? 1 : 0;   // the breakdown is the orchestra's moment
             const auto cycle = makeCycle (s, sectionLevel);
             const auto useLevels = family != nullptr && ! libLead;
             std::array<std::vector<Note>, 3> levels;
@@ -1443,7 +1465,7 @@ namespace chords
 
             // Room for the vocal: where it sings, the lead keeps only its beat-1 and beat-3 notes
             // (softer), and the harmony and counter-melody step out.
-            if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter))
+            if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter || part == SongPart::Chops))
             {
                 std::vector<Note> kept;
                 for (auto n : section)

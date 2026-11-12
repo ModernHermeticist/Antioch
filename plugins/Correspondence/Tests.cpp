@@ -473,6 +473,7 @@ int main (int argc, char** argv)
     section ("Export all");
     {
         auto p = make();
+        set (*p, Params::libOn, 0.0f);   // the classic parts (the library's layers are checked with the library)
         suite::SectionMap map;
         map.totalBars = 16; map.count = 4;
         map.sections[0] = { 1, suite::SectionType::Groove };
@@ -1436,24 +1437,23 @@ int main (int argc, char** argv)
         // Every family is well formed: whole bars, known characters, density rising with the energy
         bool wellFormed = true, rising = true;
         juce::String bad;
-        const std::string known = "rtfsRTFSl94udknNaAbcCo,-.";
-        auto onsets = [&] (const char* t) { int n = 0; for (const auto& b : bars (t)) for (auto c : b) n += (c != '.' && c != '-') ? 1 : 0; return n; };
+        const std::string known = "rtfsRTFSl94udknNaAbcCoz~,-.";
+        auto onsets = [&] (const std::string& t) { int n = 0; for (const auto& v : voices (t)) for (const auto& b : v.bars) for (auto c : b) n += (c != '.' && c != '-' && c != '~') ? 1 : 0; return n; };
         for (const auto& f : lib)
         {
-            for (auto* t : { f.level[0], f.level[1], f.level[2], f.fill })
+            for (const auto& t : { f.level[0], f.level[1], f.level[2], f.fill })
             {
-                if (t == nullptr) continue;
-                int chars = 0;
-                for (const char* q = t; *q != 0; ++q)
+                for (auto v : juce::StringArray::fromTokens (juce::String (t), "+", ""))
                 {
-                    if (*q == ' ' || *q == '|') continue;
-                    ++chars;
-                    if (known.find (*q) == std::string::npos) { wellFormed = false; bad = f.name; }
+                    v = v.trimCharactersAtStart ("<>");
+                    for (auto b : juce::StringArray::fromTokens (v, "/", ""))
+                    {
+                        if (b.length() != 16) { wellFormed = false; bad = juce::String (f.name) + " (" + b + ")"; }
+                        for (auto c : b) if (known.find ((char) c) == std::string::npos) { wellFormed = false; bad = juce::String (f.name) + " ('" + juce::String::charToString (c) + "')"; }
+                    }
                 }
-                const auto barsCount = (int) bars (t).size();
-                if (chars != barsCount * 16) { wellFormed = false; bad = f.name; }
             }
-            if (! (onsets (f.level[0]) <= onsets (f.level[1]) && onsets (f.level[1]) <= onsets (f.level[2]))) { rising = false; bad = f.name; }
+            if (! (onsets (f.level[0]) <= onsets (f.level[1]) && onsets (f.level[1]) <= onsets (f.level[2]))) { rising = false; bad = juce::String (f.name); }
         }
         check (wellFormed, "every pattern is whole 16-step bars of known notation" + (wellFormed ? juce::String() : " (" + bad + ")"));
         check (rising, "every family gets busier from low to high energy" + (rising ? juce::String() : " (" + bad + ")"));
@@ -1464,7 +1464,7 @@ int main (int argc, char** argv)
         int exact = 0, pairs = 0;
         for (int m = 0; m < (int) Mood::count; ++m)
             for (int st = 0; st < (int) Style::count; ++st)
-                for (auto [part, kinds] : { std::pair { Part::Bass, 3 }, { Part::Arp, 3 }, { Part::Chords, 3 }, { Part::Lead, 1 } })
+                for (auto [part, kinds] : { std::pair { Part::Bass, 3 }, { Part::Arp, 3 }, { Part::Chords, 3 }, { Part::Lead, 1 } })   // (the layers are checked below)
                     for (int k = 0; k < kinds; ++k)
                     {
                         const auto c = candidates (part, k, (Mood) m, (Style) st);
@@ -1490,17 +1490,18 @@ int main (int argc, char** argv)
                 for (size_t i = 0; i < notes.size(); ++i)
                 {
                     const auto& n = notes[i];
-                    if (! inKey (n.pitch) && std::string (f.level[(size_t) lv]).find ('N') == std::string::npos) { allInKey = false; where = f.name; }
-                    const auto lo = f.part == Part::Bass ? 21 : f.part == Part::Lead ? 55 : 45, hi = f.part == Part::Bass ? 64 : 100;
-                    if (n.pitch < lo || n.pitch > hi || n.length <= 0.0) { inRange = false; where = f.name; }
-                    if ((f.part == Part::Bass || f.part == Part::Lead) && i + 1 < notes.size() && n.start + n.length > notes[i + 1].start + 1.0e-6) { mono = false; where = f.name; }
+                    if (! inKey (n.pitch) && f.level[(size_t) lv].find ('N') == std::string::npos && f.fill.find ('N') == std::string::npos) { allInKey = false; where = juce::String (f.name); }
+                    const auto low = f.part == Part::Bass || f.part == Part::Acid || f.part == Part::Timpani;
+                    const auto lo = low ? 21 : f.part == Part::Lead || f.part == Part::Chops || f.part == Part::Candy ? 55 : 33, hi = low ? (f.part == Part::Acid ? 76 : 64) : 108;
+                    if (n.pitch < lo || n.pitch > hi || n.length <= 0.0) { inRange = false; where = juce::String (f.name) + " (" + juce::String (n.pitch) + ")"; }
+                    if (chords::lib::monophonic (f.part) && i + 1 < notes.size() && n.start + n.length > notes[i + 1].start + 1.0e-6) { mono = false; where = juce::String (f.name); }
                 }
             }
         check (allInKey, "every family stays in the key over i-VI-III-VII" + (allInKey ? juce::String() : " (" + where + ")"));
         check (inRange, "bass, arps, chords and leads each stay in their register" + (inRange ? juce::String() : " (" + where + ")"));
         check (mono, "bass lines and hooks play one note at a time" + (mono ? juce::String() : " (" + where + ")"));
 
-        auto findFamily = [&] (const char* name) -> const Family& { for (const auto& f : lib) if (juce::String (f.name) == name) return f; return lib.front(); };
+        auto findFamily = [&] (const char* name) -> const Family& { for (const auto& f : lib) if (f.name == name) return f; return lib.front(); };
         const auto offbeat = chords::lib::render (findFamily ("Classic offbeat"), 2, false, s, 16.0);
         bool offbeats = offbeat.size() == 16;
         for (const auto& n : offbeat) offbeats = offbeats && std::abs (std::fmod (n.start, 1.0) - 0.5) < 1.0e-6;
@@ -1543,6 +1544,33 @@ int main (int argc, char** argv)
         sp.lead = { 0, 0, 0, 0, 1, 0 };   // the drop
         const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
         check (countIn (lead, 96.0, 160.0) > 0 && countIn (lead, 0.0, 96.0) == 0, "the hook plays in the drop");
+
+        // The layers: piano and orchestra in breakdowns and the last drop, timpani rolling into it, acid where the style uses it
+        {
+            suite::SectionMap song;
+            song.totalBars = 64; song.count = 5;
+            song.sections[0] = { 1, suite::SectionType::Intro };
+            song.sections[1] = { 9, suite::SectionType::Breakdown };
+            song.sections[2] = { 25, suite::SectionType::Build };
+            song.sections[3] = { 33, suite::SectionType::Drop };
+            song.sections[4] = { 49, suite::SectionType::Outro };
+            auto lp = sp;
+            lp.libStyle = (int) Style::Uplifting;
+            auto in = [&] (chords::SongPart part, double a, double b) { return countIn (chords::songClip (s, song, lp, part), a, b); };
+            check (in (chords::SongPart::Piano, 32.0, 96.0) > 0 && in (chords::SongPart::Strings, 32.0, 96.0) > 0 && in (chords::SongPart::Choir, 32.0, 96.0) > 0,
+                   "the breakdown gets piano, strings and choir");
+            check (in (chords::SongPart::Brass, 128.0, 192.0) > 0 && in (chords::SongPart::Brass, 0.0, 128.0) == 0, "brass waits for the (last) drop");
+            check (in (chords::SongPart::Timpani, 96.0, 128.0) > 0, "timpani roll through the build");
+            check (in (chords::SongPart::Piano, 0.0, 32.0) > 0, "broken piano in the intro");
+            auto tech = lp; tech.libStyle = (int) Style::Tech;
+            auto vocal = lp; vocal.libStyle = (int) Style::Vocal;
+            check (countIn (chords::songClip (s, song, tech, chords::SongPart::Acid), 128.0, 192.0) > 0 && chords::songClip (s, song, vocal, chords::SongPart::Acid).empty(),
+                   "an acid line in a tech song's drop, none in a vocal song");
+            auto off = lp; off.libLayers &= ~1u;   // piano off
+            check (chords::songClip (s, song, off, chords::SongPart::Piano).empty(), "each layer can be switched off");
+            off.library = false;
+            check (chords::songClip (s, song, off, chords::SongPart::Strings).empty(), "and none without the library");
+        }
 
         // A new song from Ouroboros sets the library's style and mood
         auto p = make();

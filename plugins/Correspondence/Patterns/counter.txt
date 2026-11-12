@@ -1,0 +1,24 @@
+# Counter patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Counter-lines: a second melody under the lead, moving when it holds, in a lower register.
+# All kind 0: wherever the full lead plays (the library's hooks). They answer themselves in bars 7-8.
+
+Moving thirds | 0 | EHM | * | 0.9 | - | t--- ---- ---- ----/f--- ---- ---- ---- | t--- ---- d--- ----/f--- ---- d--- ---- | t--- d--- d--- ----/f--- d--- d--- ---- | t--- u--- u--- ----/r--- ---- ---- ----
+Held answer | 0 | MR | PVO | 1.0 | - | f--- ---- ---- ----/t--- ---- ---- ---- | .... .... f--- ----/.... .... t--- ---- | .... ..f- f--- ----/.... ..t- t--- ---- | f--- ---- t--- ----/r--- ---- ---- ----
+Contrary motion | 0 | EP | UOC | 0.9 | - | R--- ---- ---- ----/f--- ---- ---- ---- | R--- ---- d--- ----/f--- ---- d--- ---- | R--- d--- d--- d---/f--- d--- d--- d--- | R--- d--- d--- d---/r--- ---- ---- ----
+Syncopated counter | 0 | DE | TCU | 0.7 | - | .... ..t. .... ....  /.... ..f. .... .... | .... ..t. .... ..f./.... ..f. .... ..t. | ..r. ..t. ..f. ..t./..r. ..f. ..t. ..r. | ..r. ..t. ..f. ..R./..f. ..t. ..r. ....
+Pedal counter | 0 | DK | TYC | 0.8 | - | r--- ---- ---- ----/r--- ---- ---- ---- | r--- ---- r--- ----/r--- ---- r--- ---- | r... r... r... r.../r... r... r... r... | r... r... f... f.../t... t... r... ....
+Echo of the hook | 0 | HE | UV | 0.8 | - | .... .... r--- ----/.... .... t--- ---- | .... r--- ..f- ----/.... t--- ..r- ---- | .... r..f ..t- ----/.... t..r ..f- ---- | .... r..f ..t- ----/f--- t--- r--- ----
+Rising counter | 0 | HP | OUV | 0.95 | - | r--- ---- ---- ----/u--- ---- ---- ---- | r--- ---- u--- ----/u--- ---- u--- ---- | r--- u--- u--- ----/u--- u--- u--- ---- | u--- u--- u--- u---/R--- ---- ---- ----
+Dark counter | 0 | K | TYC | 0.85 | - | r--- ---- ---- ----/d--- ---- ---- ---- | r--- ---- d--- ----/d--- ---- u--- ---- | r--- d--- d--- ----/r--- d--- u--- ---- | r--- d--- d--- N---/r--- ---- ---- ----
+Dreamy counter | 0 | R | PV | 1.0 | - | 9--- ---- ---- ----/f--- ---- ---- ---- | 9--- ---- f--- ----/t--- ---- f--- ---- | 9--- --f- ---- t---/f--- --t- ---- r--- | 9--- f--- t--- r---/r--- ---- ---- ----
+Walking counter | 0 | HM | VC | 0.85 | - | t--- ---- ---- ----/t--- ---- ---- ---- | t--- ---- u--- ----/t--- ---- d--- ---- | t--- u--- u--- n---/t--- d--- d--- n--- | t--- u--- u--- n---/r--- ---- ---- ----
+Sighing counter | 0 | M | VPO | 0.95 | - | f--- ---- ---- ----/t--- ---- ---- ---- | f--- ---- d--- ----/t--- ---- d--- ---- | f--- d--- f--- d---/t--- d--- t--- d--- | f--- d--- d--- d---/r--- ---- ---- ----
+Driving counter | 0 | D | TC | 0.6 | - | r... .... f... ..../r... .... t... .... | r..r .... f..f ..../r..r .... t..t .... | r..r ..r. f..f ..f./r..r ..r. t..t ..t. | r..r ..r. f..f ..R./R... f... t... r...
+Epic counter | 0 | PE | OU | 0.95 | - | R--- ---- ---- ----/T--- ---- ---- ---- | R--- ---- F--- ----/T--- ---- F--- ---- | R--- ---- F--- T---/T--- ---- F--- R--- | R--- F--- T--- R---/R--- ---- ---- ----
+Call back | 0 | EH | UVP | 0.85 | - | .... .... .... ..../r--- ---- ---- ---- | .... .... .... ..../r--- ---- t--- ---- | .... .... .... t.../r--- --t- f--- ---- | .... .... f... t.../r--- --t- f--- R---

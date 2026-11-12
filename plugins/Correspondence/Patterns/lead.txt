@@ -1,0 +1,19 @@
+# Lead patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+Anthem long notes | 0 | PEH | UOV | 0.95 | - | r--- ---- f--- ----/t--- ---- ---- ---- | r--- --f- --t- ----/f--- --u- d--- ---- | r--- --f- --T- ---u/F--- --u- d--- -t-- | t--- --u- --u- ----/r--- ---- ---- ----
+3-3-2 hook | 0 | EHD | UCP | 0.85 | - | r..r ..f. .... ..../t..t ..r. .... .... | r..r ..f. t..t ..f./r..r ..f. u..u ..d. | R..r ..F. t..T ..f./R..r ..F. u..u ..dd | f..f ..t. r..r ..u./t--- ---- ---- ----
+Stepwise climb | 0 | MHR | VPO | 0.95 | - | r--- ---- u--- ----/u--- ---- ---- ---- | r-.u -.u- u--- d---/t--- ---- d--- ---- | r-uu -.u- u-ud d---/t-ud ---- d-r- ---- | f--- d--- d--- d---/r--- ---- ---- ----
+Driving 16ths | 0 | DK | TCY | 0.6 | - | r.r. .r.. r.r. .f../r.r. .r.. r.r. .t.. | r.rr .r.f r.rr .f.t/r.rr .r.f r.rr .t.r | rRrr .r.f rRrr .f.t/rRrr .r.F rRrr .T.r | rrrr uuuu rrrr dddd/r.r. r.r. r--- ----
+Call and response | 0 | EHM | UVC | 0.9 | - | r--- f--- .... ..../.... .... t--- ---- | r..f ..t- ---- ..../.... .... t..r ..d- | r..f ..T- --u- ..../.... ..u. t..r ..d- | t..r ..f- ---- ..../f..t ..r- ---- ----
+Dark motif | 0 | KD | TYC | 0.8 | - | r--- ---- d--- ----/r--- ---- u--- ---- | r..r ..d- r..r ..u-/r..r ..d- d--- ---- | R..r ..d- R..r ..u-/R..r ..d- dd.d ---- | r.dd .r.u r.dd .r.u/r--- ---- ---- ----
+Dreamy float | 0 | RM | PV | 1.0 | - | f--- ---- ---- ----/t--- ---- ---- ---- | f--- --u- ---- d---/t--- ---- --d- ---- | F--- --u- --d- d---/t--- --u- --d- ---- | r--- --t- --f- ----/R--- ---- ---- ----
+Euphoric leap | 0 | EP | UCO | 0.85 | - | r--- R--- ---- ----/f--- ---- ---- ---- | r..R ..f- t..T ..f-/r..R ..F- d--- ---- | r.RR ..f- t.TT ..f-/r.RR ..F- d-d- d--- | F..f ..t- R..r ..f-/R--- ---- ---- ----
+Psy riff | 0 | KD | YT | 0.55 | - | r.r. r.r. .... ..../r.r. r.d. .... .... | rrdr udrr rrdr udrr/rrdr udrr rrud dddd | rrdr udRr rrdr udRr/rrdr udRr rrud dddd | uuuu uuuu dddd dddd/r.r. r.r. r--- ----
+Orchestral theme | 0 | PHM | OU | 1.0 | - | r--- ---- ---- ----/f--- ---- ---- ---- | r--- --u- u--- ----/f--- --d- t--- ---- | r--- -u-u u--- -u--/F--- -d-d t--- ---- | t--- u--- u--- u---/R--- ---- ---- ----
+Vocal-friendly hook | 0 | HME | VP | 0.9 | - | r--- ---- .... ..../t--- ---- .... .... | r--. ..f. t--- ..../f--. ..t. r--- .... | r--. .uf. t--- ..u./f--. .dt. r--- .... | t--. ..r. f--- ..../r--- ---- ---- ----
+Pedal hook | 0 | EDP | UCT | 0.7 | - | r.r. r.r. r.r. r.r./r.r. r.r. r.r. r.r. | r.r. r.f. r.r. r.t./r.r. r.f. r.r. R.f. | R.r. R.F. R.r. R.T./R.r. R.F. R.r. R.f. | R.R. F.F. T.T. f.f./r--- ---- ---- ----

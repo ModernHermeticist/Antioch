@@ -1,0 +1,38 @@
+# Brass patterns for Correspondence's pattern library. One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
+# A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
+# Brass kinds: 0 swells and chorales (orchestral breakdowns), 1 stabs and fanfares (the last drop).
+
+# --- 0: swells
+Horn swell | 0 | PHE | OU | 1.0 | - | o--- ---- ---- ---- | c--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ----
+Brass chorale | 0 | PM | OV | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + <r--- ---- f--- ---- | c--- ---- C--- ---- + <r--- ---- n--- ----
+Low brass pedal | 0 | KP | OTY | 1.0 | - | <r--- ---- ---- ---- | <r--- ---- ---- ---- + o--- ---- ---- ---- | <r--- ---- r--- ---- + o--- ---- o--- ---- | <r--- ---- N--- ---- + o--- ---- c--- ----
+Heroic horns | 0 | PE | OU | 1.0 | - | >r--- ---- ---- ---- | >r--- ---- f--- ---- | >r--- ---- f--- t--- + c--- ---- ---- ---- | >r--- f--- R--- ---- + c--- ---- C--- ----
+Trombone breath | 0 | MK | OC | 1.0 | - | <o--- ---- ---- ---- | <o--- ---- ---- ---- + >t--- ---- ---- ---- | <o--- ---- ---- ---- + >t--- ---- d--- ---- | <o--- ---- ---- ---- + >t--- d--- d--- n---
+Hopeful horns | 0 | H | VUO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... t--- ---- | c--- ---- ---- ---- + >r--- ---- t--- ---- | c--- ---- ---- ---- + >r--- t--- f--- R---
+Dark swell | 0 | K | YTO | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + <l--- ---- ---- ---- | o--- ---- o--- ---- + <l--- ---- ---- ---- | o--- ---- c--- ---- + <l--- ---- N--- ----
+Dreamy muted horns | 0 | R | PV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... 9--- ---- | c--- ---- c--- ---- + >.... .... 9--- ---- | c--- ---- c--- ---- + >9--- ---- r--- ----
+Victory hold | 0 | EP | UOC | 1.0 | - | C--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- n--- ----
+Mournful call | 0 | M | OV | 1.0 | - | >f--- ---- ---- ---- | >f--- ---- t--- ---- | >f--- ---- t--- ---- + c--- ---- ---- ---- | >f--- t--- d--- ---- + c--- ---- ---- ----
+Cathedral brass | 0 | PH | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- c--- ---- + <r--- ---- ---- ---- | c--- c--- c--- c--- + <r--- ---- ---- ---- | C--- C--- C--- C--- + <r--- ---- n--- ----
+Answering horns | 0 | HM | OV | 1.0 | - | c--- ---- .... .... | c--- ---- ..c- ---- | c--- ---- ..c- ---- + <r--- ---- ---- ---- | c--- ..c- ..c- C--- + <r--- ---- ---- ----
+
+# --- 1: stabs and fanfares
+Brass stabs | 1 | EPD | UOC | 0.5 | - | c... .... .... .... | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c.cc cccc
+Offbeat brass | 1 | ED | UC | 0.5 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..cc ..cc ..cc cccc
+Fanfare | 1 | PE | OU | 0.6 | - | r... .... .... .... | r..r ..f. .... .... | r..r ..f. f..f ..R. | r..r ..f. f..f RRRR
+Triplet-feel fanfare | 1 | P | OU | 0.55 | - | r... .... f... .... | r..r .r.. f... .... | r..r .r.. f..f .f.. | r..r .r.. f..f .RRR
+Hits on the one | 1 | PD | OTU | 0.6 | - | C... .... .... .... | C... .... .... .... + <r... .... .... .... | C... .... C... .... + <r... .... r... .... | C... ..C. C..C .CCC + <r... ..r. r..r .rrr
+Big band push | 1 | ED | UV | 0.55 | - | c... .... .... ..c. | c... ..c. .... ..c. | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc
+Dark brass hits | 1 | K | TYO | 0.5 | - | o... .... .... .... | o... .... o... .... | o... ..o. o... ..o. | o..o ..o. o.oo oooo
+Rising stabs | 1 | EP | UO | 0.5 | - | c... .... .... .... | c... ..c. .... C... | c... ..c. c... ..C. | c..c ..c. C..C ..CC
+3-3-2 brass | 1 | EH | UPV | 0.55 | - | c..c .... .... .... | c..c ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. C..C ..CC
+Call to arms | 1 | PD | OC | 0.6 | - | r... .... .... .... | r... ..r. f... .... | r... ..r. f... ..R. | r..r ..r. f..f ..RR
+Syncopated horns | 1 | DM | PT | 0.5 | - | c... ...c .... .... | c... ...c ..c. .... | c... ...c ..c. ..c. | c..c ...c ..cc ..cc
+Big finish | 1 | EP | UOV | 0.7 | - | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- ---- C... C... | C... C... C... CCCC
+Staccato quarters | 1 | DP | OC | 0.4 | - | c... .... c... .... | c... c... c... c... | c... c... c... c.c. | c.c. c.c. c.cc cccc
+Victory rhythm | 1 | E | UO | 0.55 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..cc | c..c ..cc c..c cccc
