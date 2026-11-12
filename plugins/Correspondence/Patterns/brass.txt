@@ -85,3 +85,10 @@ Bright brass pads | 0 | EHP | TYVCP | 1.0 | - | c--- ---- ---- ---- | c--- ---- 
 Soft brass shadows | 0 | MRK | UCTYP | 1.0 | - | o--- ---- ---- ---- | o--- ---- c--- ---- | o--- c--- o--- c--- | o--- c--- C--- ---- | c--- o--- C--- ---- | o--- ---- c--- c--- | - | 7 |
 Bright brass stabs | 1 | EHP | TYC | 0.45 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c. | - | - |
 Shadow brass hits | 1 | MRK | UCYTP | 0.5 | - | o... .... .... .... | o... .... o... .... | o..o ..o. o..o .... | o..o ..o. o.oo oooo | oooo ..o. o..o oooo | o..o .... o..o ..o. | - | - |
+
+# --- batch 16 (... | fill 2 | high 2 | feel | colour | where)
+Soaring horn line | 1 | EH | UO | 0.65 | - | >r... .... .... .... | >r..r ..f. .... .... | >r..r ..f. t..t ..R. | >r..r ..f. R..R RRRR | >R..R ..f. t..t RRRR | >r.rr ..f. t.tt ..R. | - | - |
+Intimate muted brass | 0 | MR | VP | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + >t--- ---- d--- ---- | c--- ---- C--- ---- + >t--- d--- d--- ---- | c--- ---- c--- ---- + >t--- u--- d--- ---- | c--- ---- c--- ---- + >t--- -dd- d--- ---- | - | 9 |
+Hypnotic brass pulse | 1 | KD | TC | 0.4 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c. | s | - |
+Playful brass skips | 1 | HE | UV | 0.5 | - | ..c. .... ..c. .... | ..c. ..c. .c.. .... | ..c. ..cc .c.. ..c. | ..cc ..cc .c.c cccc | .c.c ..cc ..cc cccc | ..cc .c.. ..cc .c.. | - | - |
+Triplet horn hits | 1 | PE | OU | 0.5 | - | C........... | C.....C..... | C..C..C..... | C.CC.CC.CCCC | CCCC..C..C.C | C..C..C..C.C | - | - |

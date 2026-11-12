@@ -1071,7 +1071,7 @@ section plays. The defaults:
 ### The pattern library
 
 With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
-rhythms and lead hook come from a library of original pattern families (863 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
+rhythms and lead hook come from a library of original pattern families (899 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
 arps and plucks, chord rhythms (pads, stabs and gates), two-bar hooks, piano, strings, brass, choir, timpani, acid lines, vocal-chop rhythms, ear candy and counter-lines). They're
 written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
 trance gates, anthem hooks), not copied from records. Each family is tagged with the
@@ -1097,7 +1097,7 @@ What keeps a song cohesive and alive:
   carry their own shuffle, mark accents and soft notes, push the next chord a 16th or an 8th early
   (the anticipations trance stabs and basses live on), and colour chord parts with 7ths, 9ths and
   inversions.
-- **Kits.** 55 hand-picked sets (every mood x style has one), each naming a family for every role
+- **Kits.** 61 hand-picked sets (every mood x style has one), each naming a family for every role
   (and each kind of it: a long, an offbeat and a rolling bass; a pad, stabs and a gate) chosen to
   share one sound, one groove and one character: *Sunrise anthem*, *Warehouse classic*,
   *Shuffled tech*, *Forest night*, *Heartbreak vocal*, *Heroic score*, ... A song plays the kit that

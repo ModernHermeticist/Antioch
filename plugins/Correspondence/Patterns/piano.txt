@@ -110,3 +110,9 @@ Triplet comp | 1 | HE | UVO | 0.6 | - | c.....c..... | c..c..c..c.. | c.cc.cc.cc
 Bright psy piano | 1 | EHP | Y | 0.4 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | .cc. ..c. .cc. ..c. | .cc. .cc. .CC. CCCC | .CC. .cc. .CC. cccc | ..c. .cc. ..c. .cc. | - | - |
 Melancholic tech piano | 1 | MRK | TCU | 0.5 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. .c.. .... | c... ..c. .c.. c.c. | c... .cc. ..c. ..cc | c... ..cc ..c. .... | 0.15 | 7 |
 Dark orchestral piano stabs | 1 | KDP | OVP | 0.5 | - | <l... .... .... .... + o... .... .... .... | <l... .... l... .... + o... .... o... .... | <l... l... l... l... + o..o ..o. o..o ..o. | <l... l... N... N... + c..c ..c. c..c cccc | <N... l... N... l... + cccc ..c. c..c cccc | <l... l... l... l... + o..o ..o. o... ..o. | - | - |
+
+# --- batch 16 (... | fill 2 | high 2 | feel | colour | where)
+Soaring piano anthem | 1 | EH | UC | 0.85 | - | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- c-c- | c-c- c-c- C-C- CCCC | C-C- c-c- C-C- cccc | c-cc c-c- c-cc c-c- | - | - |
+Hypnotic piano loop | 2 | KD | TY | 0.75 | - | r... t... r... t... | r.t. f.t. r.t. f.t. | rtfr tfrt rtfr tfrt | rtfr tfrt dddd uuuu | uuuu dddd rtfr tfrt | rtfR rtfr rtfR rtfr | s | - |
+Playful two hands | 1 | HE | UV | 0.55 | - | <r... .... r... .... + ..c. .... ..c. .... | <r... ..r. r... ..r. + ..c. ..c. ..c. ..c. | <r... ..r. r... ..r. + ..cc ..c. ..cc ..c. | <r... ..r. n... N... + ..cc ..cc ..cc cccc | <r... ..r. u... N... + .ccc ..cc .ccc cccc | <r... ..r. r... ..r. + .cc. ..c. .cc. ..c. | - | - |
+Heroic octave march | 1 | P | OU | 0.6 | - | <l... .... l... .... + c... .... c... .... | <l... l... l... l... + c... c... c... c... | <l... l... l... l... + c.c. c.c. c.c. c.c. | <l... l... N... N... + c.cc c.cc CCCC CCCC | <N... l... N... l... + CCCC c.cc CCCC c.cc | <l... l... l... l... + cc.c c.c. cc.c c.c. | - | - |

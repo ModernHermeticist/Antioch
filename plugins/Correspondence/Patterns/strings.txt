@@ -89,3 +89,13 @@ Accented spiccato | 1 | DEP | UOC | 0.4 | - | r... r... r... r... | !r.r. !r.r. 
 # --- batch 12 (... | fill 2 | high 2 | feel | colour | where)
 DJ intro strings | 0 | * | * | 1.0 | - | .... .... .... .... | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- C--- ---- | C--- ---- c--- ---- | c--- ---- c--- ---- | - | - | IO
 Driving pushed ostinato | 1 | D | TCU | 0.45 | - | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rp.. | rrrr rrrr ffff fp.. | rrrr ffff tttt RP.. | RRRR tttt ffff rp.. | rrrr rrrr rrrr rp.. | - | - |
+
+# --- batch 16 (... | fill 2 | high 2 | feel | colour | where)
+Heroic string swells | 0 | PE | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- | C--- C--- C--- C--- + <r--- r--- n--- N--- | C--- ---- C--- CCCC + <r--- ---- n--- N--- | C--- C--- ---- C--- + <r--- r--- ---- r---
+Intimate string quartet | 0 | MR | VP | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >t--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- + >t--- ---- d--- ---- | c--- ---- c--- ---- + <r--- ---- n--- ---- + >t--- d--- d--- ---- | c--- ---- c--- ---- + <r--- ---- d--- ---- + >t--- u--- d--- ---- | c--- ---- c--- ---- + <r--- ---- ---- ---- + >t--- -dd- d--- ----
+Hypnotic string loop | 1 | KD | TYC | 0.45 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rrfr rrfr rrfr rrfr | rrfr rrfr ffff nnnn | ffff rrfr nnnn rrfr | rrfr rrRr rrfr rrRr | - | - |
+Playful pizzicato bounce | 1 | HE | UVO | 0.3 | - | r... .... f... .... | r... t... f... R... | r.t. f.R. r.t. f.R. | r.t. f.R. T.F. R... | R.F. T.F. r.t. f.R. | r.tt f.R. r.tt f.R. | - | - |
+Soaring violins | 0 | EH | UO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >R--- ---- ---- ---- | c--- ---- ---- ---- + >R--- ---- u--- ---- | C--- ---- ---- ---- + >R--- u--- u--- u--- | C--- ---- ---- ---- + >u--- u--- d--- R--- | c--- ---- c--- ---- + >R--- -uu- u--- ----
+Triplet string ostinato | 1 | EP | UO | 0.4 | - | r.....r..... | r..r..r..r.. | r.rr.rr.rr.r | rrrrrrffffff | ffffffrrrrrr | r.rr.rf.ff.f | - | - |
+Swung string pulse | 1 | RM | P | 0.45 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c. | s | 7 |
+Dark pushed legato | 0 | K | TYC | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- --p- | o--- ---- o--- --p- + <r--- ---- ---- ---- | o--- ---- c--- --P- + <r--- ---- N--- ---- | c--- ---- o--- --P- + <r--- ---- N--- ---- | o--- o--- ---- --p- + <r--- r--- ---- ----

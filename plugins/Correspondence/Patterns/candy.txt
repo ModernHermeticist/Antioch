@@ -59,3 +59,10 @@ Psy ripples | 0 | K | Y | 0.25 | - | ..r. .... .... .... | ..r. .... ..r. .... |
 Vocal glints | 0 | HM | V | 0.45 | - | .... T... .... .... | .... T... .... F... | .... T..F .... R... | ..T. ..F. ..R. ..T. | ..R. ..F. ..T. ..F. | .... T.FF .... R... | - | - |
 Driving zaps | 0 | D | TCU | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR | ..RR ..R. ..RR RRRR | .R.. ...R .R.. ...R | - | - |
 Melancholic chimes | 0 | M | VPC | 0.6 | d | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa | a.aa ..a. a..a ..a. | a... a... a... a... | - | - |
+
+# --- batch 16 (... | fill 2 | high 2 | feel | colour | where)
+Heroic bells | 0 | PE | OU | 0.5 | - | R... .... .... .... | R... .... F... .... | R... F... T... F... | R.F. T.F. R.F. T.R. | T.F. R.F. T.F. R.R. | R.F. R.F. R.F. R... | - | - |
+Pushed sparkles | 0 | EH | UCV | 0.35 | - | ..R. .... .... .... | ..R. .... ..p. .... | ..R. ..T. ..p. .... | ..R. ..T. ..P. ..R. | ..T. ..R. ..P. ..R. | ..R. .TT. ..p. ..R. | - | - |
+Triplet blips | 0 | KD | TY | 0.25 | - | r........... | r.....r..... | r..r..r..r.. | r.rr.rr.rrrr | rrrr.rr.rr.r | r..r..r..r.r | - | - |
+Intimate music box | 0 | MR | VP | 0.6 | u | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa | a.aa ..a. a..a ..a. | a... a... a... a... | - | - |
+Soaring comet tails | 0 | EH | U | 0.3 | - | .... .... .... ...R | .... .... ..R. ..RR | .... ..RR .RR. RRRR | ..RR .RRR RRRR RRRR | .RRR RRRR ..RR RRRR | ..RR ..RR .RR. .RRR | - | - |

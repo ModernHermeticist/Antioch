@@ -65,3 +65,10 @@ Melancholic choir pulses | 1 | M | VPC | 0.75 | - | c--- .... .... .... | c--- .
 # --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
 Bright choir syllables | 1 | EHP | *  | 0.55 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c. | - | - |
 Shadow choir chant | 1 | MRK | * | 0.6 | - | o... .... .... .... | o... .... o... .... | o..o ..o. o..o .... | o..o ..o. c..c cccc | c..c ..o. o..o oooo | o..o .... o..o ..o. | - | 7 |
+
+# --- batch 16 (... | fill 2 | high 2 | feel | colour | where)
+Soaring choir | 0 | EH | UV | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- + >R--- ---- ---- ---- | c--- ---- c--- ---- + >R--- ---- T--- ---- | C--- ---- C--- ---- + >R--- T--- F--- R--- | C--- ---- c--- ---- + >T--- F--- R--- ---- | c--- c--- c--- ---- + >R--- -TT- T--- ----
+Hypnotic choir loop | 1 | KD | TY | 0.5 | - | o... .... o... .... | o..o .... o..o .... | o..o ..o. o..o ..o. | o..o ..o. o.oo oooo | oooo ..o. o..o oooo | o.oo ..o. o.oo ..o. | s | - |
+Triplet choir | 1 | PE | OU | 0.55 | - | c........... | c.....c..... | c..c..c..c.. | c.cc.cc.cccc | CCCC..c..c.c | c..c..c..c.c | - | - |
+Pushed choir stabs | 1 | EH | UCV | 0.6 | - | c... .... .... .... | c... ..c. .... ..p. | c... ..c. c... ..p. | c..c ..c. C... .P.. | C..c ..c. c... .P.. | c... ..c. c..c ..p. | - | - |
+Intimate humming | 0 | MR | VP | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- d--- ---- | >t--- d--- d--- ---- + c--- ---- ---- ---- | >t--- d--- d--- n--- + c--- ---- ---- ---- | >t--- u--- d--- N--- + c--- ---- ---- ---- | >t--- -dd- d--- ---- + c--- ---- ---- ---- | - | 9 |
