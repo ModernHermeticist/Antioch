@@ -94,7 +94,16 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &monoLows, &status })
         addAndMakeVisible (c);
 
-    setSize (1290, 670);
+    autopilotStrip.moves = [&p]
+    {
+        juce::StringArray m;
+        const auto n = p.planLines().size();
+        m.add ("suggesting " + juce::String (n) + (n == 1 ? " mixer move" : " mixer moves") + " (it changes nothing itself)");
+        if (p.previewPlan.load()) m.add ("previewing them now");
+        return m;
+    };
+    addAndMakeVisible (autopilotStrip);
+    setSize (1290, 700);
     timerCallback();
     startTimerHz (15);
 }
@@ -207,7 +216,8 @@ void PrimaMateriaEditor::paint (juce::Graphics& g)
 
 void PrimaMateriaEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (16);
+    autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     auto header = bounds.removeFromTop (48);
     follow.setBounds (header.removeFromRight (180).reduced (4, 8));
     previewButton.setBounds (header.removeFromRight (100).reduced (4, 8));

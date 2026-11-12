@@ -1038,7 +1038,15 @@ aligned.
 
 ![Prima Materia](docs/prima_materia.png)
 
-**Prima Materia suggests; it never changes the track.** Its track goes out exactly as it came
+**Prima Materia suggests; it never changes the track.** Ouroboros' menu has **Mixer**: every
+track's suggested moves in one table (the fader per section, filters, the gap before drops),
+and **Export all fader moves…** (one MIDI file, a MIDI track per FL track, CC 7). Mentalism's
+level fixes (breakdown and intro levels, gain staging, the rough mix, the energy curve, a
+buried vocal) are suggested once, listed in Problems as suggested mixer moves, and never
+checked or undone like the fixes that act. Each plugin's window has an **Autopilot** strip
+along the bottom saying what it's doing on that track right now.
+
+ Its track goes out exactly as it came
 in (apart from the autopilot's DC and rumble filter). Everything below is worked out as before,
 but as **Suggested mixer moves…**: per section, the fader (or mute), the high- and low-pass,
 the build's rise, the gap before drops, the low end left to the kick and bass, carves, the room

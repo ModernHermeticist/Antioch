@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "AutopilotStrip.h"
 #include "SuiteUI.h"
 #include "Checklist.h"
 #include "Masking.h"
@@ -98,6 +99,8 @@ private:
     MentalismProcessor::Report rep;
     juce::Rectangle<int> loudArea, stereoArea, balanceArea, adviceArea;
     juce::Rectangle<int> loudContent, stereoContent, balanceContent, adviceContent;
+
+    suite::ui::AutopilotStrip autopilotStrip;   // what the autopilot is doing on this track now
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MentalismEditor)
 };

@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "AutopilotBus.h"
+#include "PlanBus.h"
 #include "PluginEditor.h"
 #include "TestUtils.h"
 #include "SuiteCheck.h"
@@ -1100,6 +1101,34 @@ int main (int argc, char** argv)
         check (suite::Autopilot::countOf (suite::Autopilot::peaksCaught) == 3 && juce::String (suite::Autopilot::counterName (suite::Autopilot::peaksCaught)) == "peaks caught",
                "the readout counts what was done");
         suite::Autopilot::reset();
+    }
+
+
+    section ("Mixer page: every track's suggested moves, and one export");
+    {
+        suite::PlanBus::reset();
+        suite::PlanBus::Plan kick, pad;
+        kick.id = 0x501; kick.track = "Kick"; kick.role = 1;
+        kick.levelDb[(size_t) suite::SectionType::Breakdown] = suite::PlanBus::offDb;
+        pad.id = 0x502; pad.track = "Pads"; pad.role = 4; pad.ramp = true;
+        pad.levelDb[(size_t) suite::SectionType::Drop] = -2.0f; pad.highCutHz[(size_t) suite::SectionType::Outro] = 8000.0f; pad.gapQuarters = 1.0;
+        suite::PlanBus::publish (kick); suite::PlanBus::publish (pad);
+        suite::SectionMap map;
+        map.totalBars = 32; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove }; map.sections[1] = { 9, suite::SectionType::Breakdown };
+        map.sections[2] = { 17, suite::SectionType::Build }; map.sections[3] = { 25, suite::SectionType::Drop };
+        const auto table = MixerPanel::tableText (map).joinIntoString ("\n");
+        check (table.contains ("Kick") && table.contains ("mute") && table.contains ("Pads") && table.contains ("-2.0") && table.contains ("rising"),
+               "the table has each track's moves per section (" + table.replace ("\n", " | ").replace ("\t", " ") + ")");
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("ouro-mixer-test");
+        dir.deleteRecursively();
+        const auto mid = MixerPanel::exportAll (dir, map, 138.0);
+        juce::MidiFile f;
+        juce::FileInputStream in (mid);
+        check (in.openedOk() && f.readFrom (in) && f.getNumTracks() == 3 && dir.getChildFile ("Mixer moves.txt").existsAsFile(),
+               "one MIDI file: a tempo track and a track per FL track, plus the table as text");
+        dir.deleteRecursively();
+        suite::PlanBus::reset();
     }
 
     return finish();

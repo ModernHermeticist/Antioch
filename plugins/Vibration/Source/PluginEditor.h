@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "AutopilotStrip.h"
 #include "SuiteUI.h"
 #include "Spectrum.h"
 #include "SceneUI.h"
@@ -40,6 +41,8 @@ private:
     juce::Rectangle<int> macroArea, spectrumArea, eqArea, satArea, mbArea, widthArea;
 
     std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
+    suite::ui::AutopilotStrip autopilotStrip;   // what the autopilot is doing on this track now
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VibrationEditor)
 };

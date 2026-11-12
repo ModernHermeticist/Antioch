@@ -289,43 +289,36 @@ juce::StringArray PrimaMateriaProcessor::planLines() const
     return out;
 }
 
+suite::PlanBus::Plan PrimaMateriaProcessor::makePlan() const
+{
+    auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
+    suite::PlanBus::Plan p;
+    p.id = getInstanceId();
+    p.role = getRole();
+    p.track = getTrackName().isNotEmpty() ? getTrackName() : (p.role > 0 ? juce::String (pm::roles()[(size_t) p.role].name) : juce::String ("Track"));
+    for (int t = 0; t < pm::numTypes; ++t)
+    {
+        const auto st = settingFor (t);
+        p.levelDb[(size_t) t] = st.levelDb;
+        p.lowCutHz[(size_t) t] = st.lowCut > pm::lowCutOff + 1.0f ? st.lowCut : 0.0f;
+        p.highCutHz[(size_t) t] = st.highCut < pm::highCutOff - 1.0f ? st.highCut : 0.0f;
+    }
+    p.laterDropDb = v (pm::laterOnId) > 0.5f ? settingFor (pm::laterDrop).levelDb : 0.0f;
+    p.trimDb = v (pm::trimId);
+    p.gainDb = v (pm::inputGainId);
+    p.gapQuarters = pm::gapQuarters ((int) v (pm::gapId));
+    p.ramp = v (pm::rampId) > 0.5f && p.role > 0 && pm::roles()[(size_t) p.role].ramp;
+    return p;
+}
+
 juce::File PrimaMateriaProcessor::exportPlan (const juce::File& folder) const
 {
     suite::SectionMap map;
-    if (! suite::SectionBus::read (map) || map.count == 0) return {};
-    using T = suite::SectionType;
-    const auto role = getRole();
-    if (role <= 0) return {};
-    const double ppq = 960.0;
-    juce::MidiMessageSequence seq;
-    const auto bpm = juce::jlimit (60.0, 200.0, lastBpm.load());
-    seq.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::lround (60000000.0 / bpm)), 0.0);
-    const auto barQ = 4.0;
-    auto cc = [&] (double q, int value) { seq.addEvent (juce::MidiMessage::controllerEvent (1, 7, juce::jlimit (0, 127, value)), q * ppq); };
-    const auto gapQ = pm::gapQuarters ((int) apvts.getRawParameterValue (pm::gapId)->load());
-    const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f && pm::roles()[(size_t) role].ramp;
-    const auto dropDb = settingFor ((int) T::Drop).levelDb;
-    int drops = 0;
-    for (int i = 0; i < map.count; ++i)
-    {
-        const auto type = map.sections[(size_t) i].type;
-        const auto startQ = (map.sections[(size_t) i].startBar - 1) * barQ, endQ = (map.endBar (i) - 1) * barQ;
-        auto level = settingFor ((int) type).levelDb;
-        if (type == T::Drop && drops++ > 0 && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f && level > pm::offDb) level += settingFor (pm::laterDrop).levelDb;
-        if (type == T::Build && ramp && level > pm::offDb && dropDb > pm::offDb)
-            for (double q = startQ; q < endQ - 1.0e-9; q += 1.0)   // a step a beat, rising to the drop's level
-                cc (q, faderCc (level + (dropDb - level) * (float) ((q - startQ) / juce::jmax (1.0, endQ - startQ))));
-        else
-            cc (startQ, faderCc (level));
-        if (gapQ > 0.0 && i + 1 < map.count && map.sections[(size_t) i + 1].type == T::Drop)
-            cc (endQ - gapQ, 0);
-    }
-    seq.updateMatchedPairs();
-    juce::MidiFile file;
-    file.setTicksPerQuarterNote ((int) ppq);
-    file.addTrack (seq);
+    if (! suite::SectionBus::read (map) || map.count == 0 || getRole() <= 0) return {};
+    const auto plan = makePlan();
+    const auto file = suite::PlanBus::allFaderMoves ({ plan }, map, lastBpm.load());
     folder.createDirectory();
-    const auto name = juce::File::createLegalFileName ((getTrackName().isNotEmpty() ? getTrackName() : juce::String (pm::roles()[(size_t) role].name)) + " - mixer moves");
+    const auto name = juce::File::createLegalFileName (plan.track + " - mixer moves");
     auto mid = folder.getChildFile (name + ".mid");
     mid.deleteFile();
     if (auto stream = mid.createOutputStream()) file.writeTo (*stream);

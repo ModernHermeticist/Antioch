@@ -31,7 +31,23 @@ namespace suite
                                     ReverbLowCut,                                   // every Antioch's reverb low cut up (mud from the reverb returns)
                                     DriveSofter,                                    // every Vibration's drive down (harshness)
                                     SectionDown,                                    // every track 1 dB down in one kind of section (data: the type)
-                                    BuildImpact };                                  // a bigger build-to-drop jump (data 0: Cause & Effect builds deeper; 1: a gap before the drop)
+                                    BuildImpact };
+
+    /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
+        suggestions now (it never changes the track), so they're suggested once, not checked or
+        retried. (Bigger later drops and build impact also act on Azoth and Cause & Effect.) */
+    inline bool mixerOnly (Fix f) noexcept
+    {
+        switch (f)
+        {
+            case Fix::BreakdownQuieter: case Fix::BreakdownLouder: case Fix::IntroQuieter: case Fix::DjIntroOutro:
+            case Fix::GainStage: case Fix::RoughMix: case Fix::SectionLowsDown: case Fix::SectionDown: case Fix::BalanceStep:
+            case Fix::ArcMatch: case Fix::VocalRide: case Fix::MonoLows:
+                return true;
+            default:
+                return false;
+        }
+    }                                  // a bigger build-to-drop jump (data 0: Cause & Effect builds deeper; 1: a gap before the drop)
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)

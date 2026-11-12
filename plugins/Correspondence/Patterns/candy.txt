@@ -66,3 +66,13 @@ Pushed sparkles | 0 | EH | UCV | 0.35 | - | ..R. .... .... .... | ..R. .... ..p.
 Triplet blips | 0 | KD | TY | 0.25 | - | r........... | r.....r..... | r..r..r..r.. | r.rr.rr.rrrr | rrrr.rr.rr.r | r..r..r..r.r | - | - |
 Intimate music box | 0 | MR | VP | 0.6 | u | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa | a.aa ..a. a..a ..a. | a... a... a... a... | - | - |
 Soaring comet tails | 0 | EH | U | 0.3 | - | .... .... .... ...R | .... .... ..R. ..RR | .... ..RR .RR. RRRR | ..RR .RRR RRRR RRRR | .RRR RRRR ..RR RRRR | ..RR ..RR .RR. .RRR | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Music box spin | 0 | RM | PVO | 0.4 | - | R... .... .... .... | R... T... .... .... | R... T... F... T... | R.T. F.T. R.T. F.R. | F.T. R.T. F.T. R.R. | R... T... F... R...
+Starfield | 0 | EH | UP | 0.3 | - | ..R. .... .... .... | ..R. .... ..F. .... | ..R. ..T. ..F. ..R. | ..R. ..T. .FT. RRRR | ..F. ..T. .TF. RRRR | ..R. ..T. ..F. ..T.
+Laser ladder | 0 | DK | TY | 0.3 | - | r... .... .... .... | r... u... .... .... | r.u. u.u. r.u. u.u. | ruuu uuuu ruuu uuuu | uuuu ruuu uuuu ruuu | r.u. u.u. r.u. r.u.
+Chiptune hops | 0 | HE | UC | 0.35 | - | R... .... .... .... | R..T .... R..T .... | R..T ..F. R..T ..F. | R.T. F.T. R.T. FFRR | F.T. R.T. F.T. RRFF | R..T ..F. R..T ..R.
+Raindrop scatter | 0 | MR | VP | 0.4 | - | .... ..R. .... .... | .... ..R. .... T... | .R.. ..R. .... T..F | .R.. ..R. .T.. T.FF | .T.. ..F. .R.. R.TT | .R.. ..R. .... T...
+Comet trail | 0 | EP | UO | 0.5 | - | R--- ---- ---- ---- | R--- ---- T--- ---- | R--- T--- F--- T--- | R--- T--- F-T- R-R- | F--- T--- R-T- F-F- | R--- T--- F--- R---
+Psy glitch rain | 0 | K | Y | 0.25 | - | r... .... .... .... | r.r. .... ..r. .... | r.r. ..r. r..r ..r. | rrr. r.rr .rrr rrrr | r.rr rrr. rrrr .rrr | r.r. ..r. r..r .rr.
+Build glitter rise | 0 | E | UCT | 0.3 | - | ..R. .... ..R. .... | ..R. ..R. ..R. ..R. | .RR. .RR. .RR. .RR. | RRRR RRRR TTTT FFFF | RRRR TTTT FFFF RRRR | .RR. .RR. .TT. .FF. | - | - | B

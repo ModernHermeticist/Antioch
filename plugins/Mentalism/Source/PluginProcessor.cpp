@@ -452,10 +452,19 @@ void MentalismProcessor::runAutomation()
     // Check the last pass's fixes against this pass: keep what helped, undo what didn't.
     const auto verdict = verifyLastPass (rep.arrangement);
 
-    if (rep.arrangement.problems == 0 || autoPasses.load() >= maxAutoPasses)
+    // What's left only wants mixer moves that were already suggested: nothing more to do here
+    bool onlySuggested = rep.arrangement.problems > 0;
+    for (int i = 0; i < rep.arrangement.problems && i < (int) rep.arrangement.fixes.size(); ++i)
+    {
+        const auto f = rep.arrangement.fixes[(size_t) i];
+        const auto d = i < (int) rep.arrangement.fixData.size() ? rep.arrangement.fixData[(size_t) i] : 0u;
+        onlySuggested = onlySuggested && suite::mixerOnly (f) && suggestedMoves.count ({ f, d }) > 0;
+    }
+    if (rep.arrangement.problems == 0 || onlySuggested || autoPasses.load() >= maxAutoPasses)
     {
         const auto happy = rep.arrangement.problems == 0;
         setText (autoStatus, happy ? juce::String ("The coach is happy.")
+                           : onlySuggested ? juce::String ("The rest are mixer moves: each track's Prima Materia lists them (Suggested mixer moves).")
                                    : "Stopped after " + juce::String (maxAutoPasses) + " passes: " + juce::String (rep.arrangement.problems) + " note(s) left for you.");
         if (finishState.load() == FinishStage::Coaching)
         {
@@ -498,6 +507,14 @@ void MentalismProcessor::runAutomation()
         if (std::find (sent.begin(), sent.end(), std::make_pair (fix, data)) != sent.end()) continue;
         if (std::find (revertedFixes.begin(), revertedFixes.end(), std::make_pair (fix, data)) != revertedFixes.end()) continue;   // tried: didn't help
         sent.push_back ({ fix, data });
+        if (suite::mixerOnly (fix))
+        {
+            // A mixer move: suggested once (each track's Prima Materia lists it), never checked or retried
+            if (! suggestedMoves.insert ({ fix, data }).second) continue;
+            applyCoachFix (fix, data, rep.map);
+            applied.add ("suggested in the mixer: " + coach::describe (fix).fromFirstOccurrenceOf (": ", false, false));
+            continue;
+        }
         lastApplied.push_back ({ fix, data, applyCoachFix (fix, data, rep.map) });
         applied.add (coach::describe (fix).fromFirstOccurrenceOf (": ", false, false));
     }
@@ -560,6 +577,17 @@ bool MentalismProcessor::watchPass (const Report& rep)
         if (p.key == "mono" || p.key == "phase") continue;   // the fix ladders handle these (judged by slower readings)
         present.insert (p.key);
         auto& [when, tries] = watchActed.try_emplace (p.key, std::make_pair (-1000.0f, 0)).first->second;
+        if (suite::mixerOnly (p.fix))
+        {
+            // A mixer move: put it in the track's suggestions once, and show it here
+            if (tries == 0) { sendFix (p.fix, p.data); tries = 1; when = now; acted = true; }
+            p.automatic = false;
+            p.fixText << " (suggested: see the track's Prima Materia)";
+            offer.push_back (p);
+            if (watchAnnounced.insert (p.key).second)
+                suite::MoveLog::add (getName(), getTrackName(), "Problem: " + p.text + ". Suggested mixer move: " + p.fixText);
+            continue;
+        }
         if (p.automatic && p.fix != suite::Fix::None && tries < 2)
         {
             if (now - when < 30.0f) continue;   // give the last fix time to work
@@ -591,6 +619,18 @@ bool MentalismProcessor::watchPass (const Report& rep)
             const auto note = i < rep.arrangement.notes.size() ? rep.arrangement.notes[i] : suite::fixName (fix);
             present.insert (key);
             auto& [when, tries] = watchActed.try_emplace (key, std::make_pair (-1000.0f, 0)).first->second;
+            if (level && suite::mixerOnly (fix))
+            {
+                // A section level: Prima Materia suggests it (once); it stays listed here
+                if (tries == 0)
+                {
+                    applyCoachFix (fix, data, rep.map);
+                    tries = 2;
+                    suite::MoveLog::add (getName(), getTrackName(), "Section loudness: " + note + ". Suggested mixer move: " + suite::fixName (fix) + " (each track's Prima Materia lists it)");
+                }
+                offer.push_back ({ key, note, suite::fixName (fix) + juce::String (" (suggested: see each track's Prima Materia)"), fix, data, false });
+                continue;
+            }
             if (level && tries < 2)
             {
                 if (fixedSection) continue;   // one section at a time: the next is judged after it's heard again
@@ -624,19 +664,14 @@ bool MentalismProcessor::watchPass (const Report& rep)
                 const juce::String text = juce::String ("The ") + suite::sectionName (type) + "'s low end is " + juce::String (heavier, 1) + " dB heavier than the drops'";
                 present.insert (key);
                 auto& [when, tries] = watchActed.try_emplace (key, std::make_pair (-1000.0f, 0)).first->second;
-                if (tries < 2 && now - when >= 30.0f)
+                if (tries == 0)
                 {
-                    sendFix (suite::Fix::SectionLowsDown, (uint32_t) t);
+                    sendFix (suite::Fix::SectionLowsDown, (uint32_t) t);   // the bass track's Prima Materia suggests it
                     when = now;
-                    ++tries;
-                    acted = true;
-                    lowsSum[t] = 0.0f; midsSum[t] = 0.0f; lowsCount[t] = 0;   // hear it afresh
-                    suite::MoveLog::add (getName(), getTrackName(), "Problem watcher: " + text + ". Fixed: the bass 2 dB down there", suite::MoveLog::fix);
+                    tries = 1;
+                    suite::MoveLog::add (getName(), getTrackName(), "Problem watcher: " + text + ". Suggested mixer move: the bass 2 dB down there");
                 }
-                else if (tries >= 2)
-                {
-                    offer.push_back ({ key, text + " (still there after two fixes)", "the bass another 2 dB down there", suite::Fix::SectionLowsDown, (uint32_t) t, false });
-                }
+                offer.push_back ({ key, text, "the bass 2 dB down there (suggested: see the bass track's Prima Materia)", suite::Fix::SectionLowsDown, (uint32_t) t, false });
             }
     }
 

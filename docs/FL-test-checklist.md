@@ -181,6 +181,11 @@ between versions.
   *Suggested mixer moves…* lists "Breakdown: mute". Export: the .mid has CC 7 moves; link the kick's mixer fader to CC 7,
   play the clip from a MIDI Out channel and the fader follows. *Preview* on: you hear the moves; reload the project: off.
 
+- [ ] **6d.12** Ouroboros menu, *Mixer*: one row per track with Prima Materia, its fader per section. *Export all fader moves*:
+  one .mid with a MIDI track per FL track. The Autopilot strip at the bottom of Quintessence, Antioch, Vibration, Prima
+  Materia and Mentalism says what's happening (e.g. "making room for a more important part").
+- [ ] **6d.13** Cause & Effect on the music bus through a build: the master meter doesn't climb in the build.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

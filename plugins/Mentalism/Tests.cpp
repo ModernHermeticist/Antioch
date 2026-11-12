@@ -972,29 +972,36 @@ int main (int argc, char** argv)
         MentalismProcessor::Report r = p->report();
         r.measuredSeconds = 10.0f;
         r.measurement.integratedLufs = -9.0f; r.measurement.truePeakDb = -1.0f; r.ceiling = -0.3f; r.measurement.monoLossDb = 4.5f; r.measurement.lowCorrelation = 0.8f;
-        check (p->watchPass (r), "always on: the first pass fixes the safe ones");
-        int gain = 0, ride = 0;
-        for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+        check (p->watchPass (r), "always on: the first pass puts the level moves in the tracks' suggestions");
+        auto count = [] (suite::Fix f)
         {
-            suite::FixBus::Message m;
-            if (suite::FixBus::read (s, m)) { gain += m.fix == suite::Fix::GainStage ? 1 : 0; ride += m.fix == suite::Fix::VocalRide ? 1 : 0; }
-        }
-        check (gain == 1 && ride == 1, "gain staging and the vocal rider sent once each");
-        const auto offered = p->problems();
-        check (offered.size() == 1, "missing samples offered; mono loss goes to its fix ladder, judged by a slower reading (" + juce::String ((int) offered.size()) + ")");
+            int n = 0;
+            for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+            {
+                suite::FixBus::Message m;
+                if (suite::FixBus::read (s, m) && m.fix == f) ++n;
+            }
+            return n;
+        };
+        check (count (suite::Fix::GainStage) == 1 && count (suite::Fix::VocalRide) == 1, "gain staging and the vocal rider suggested once each (Prima Materia lists them)");
+        auto offered = p->problems();
+        auto has = [&offered] (const char* k) { return std::any_of (offered.begin(), offered.end(), [k] (const watcher::Problem& q) { return q.key.startsWith (k); }); };
+        check (offered.size() == 3 && has ("clip") && has ("buried") && has ("missing"),
+               "the level moves stay listed (they're for you to make in the mixer), missing samples offered; mono loss goes to its fix ladder (" + juce::String ((int) offered.size()) + ")");
+        check (std::all_of (offered.begin(), offered.end(), [] (const watcher::Problem& q) { return ! q.key.startsWith ("clip") || q.fixText.contains ("suggested"); }), "marked as suggested");
         const auto sent = suite::FixBus::latest();
         r.measuredSeconds = 14.0f;
         p->watchPass (r);
-        check (suite::FixBus::latest() == sent, "the same problem isn't fixed again within 30 s");
-        check (p->applyProblemFix ("missing:FX") && suite::FixBus::latest() == sent + 1 && p->problems().empty(), "one click fixes an offered problem");
+        check (suite::FixBus::latest() == sent, "the same problem isn't sent again");
+        check (p->applyProblemFix ("missing:FX") && suite::FixBus::latest() == sent + 1, "one click fixes an offered problem");
+        offered = p->problems();
+        check (! has ("missing"), "and it leaves the list");
         r.measuredSeconds = 50.0f; p->watchPass (r);
         r.measuredSeconds = 90.0f; p->watchPass (r);
-        const auto still = p->problems();
-        check (std::any_of (still.begin(), still.end(), [] (const watcher::Problem& q) { return q.key.startsWith ("clip") && q.text.contains ("two fixes"); }),
-               "a clip still there after two fixes is offered to you instead");
+        check (count (suite::Fix::GainStage) == 1, "a mixer move is suggested once, never retried");
         bool logged = false;
-        for (const auto& e : suite::MoveLog::read()) logged = logged || e.text.startsWith ("Problem watcher: 'Lead' is clipping");
-        check (logged, "fixes and problems show in What changed");
+        for (const auto& e : suite::MoveLog::read()) logged = logged || (e.text.startsWith ("Problem: 'Lead' is clipping") && e.text.contains ("Suggested mixer move"));
+        check (logged, "problems and suggested moves show in What changed");
         set (*p, Params::problemWatch, 0.0f);
         check (! p->watchPass (r) && p->problems().empty(), "off, it does nothing");
         suite::Registry::reset();

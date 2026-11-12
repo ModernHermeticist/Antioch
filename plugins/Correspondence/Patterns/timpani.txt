@@ -61,3 +61,13 @@ Hopeful roll | 1 | H | UVO | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ----
 Euphoric roll | 1 | E | UC | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | rrrr ---- z--- ---- | z--- --z- z--- ---- | - | - |
 Psy roll | 1 | K | Y | 0.9 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | z--- z--- rrrr rrrr | z--- --z- z--- ---- | - | - |
 Dreamy swell roll | 1 | R | PV | 1.0 | - | .... .... z--- ---- | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- ---- ---- r--- | z--- ---- z--- r--- | z--- ---- z--- ---- | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Tribal toms | 0 | DK | TYO | 0.8 | - | r... .... .... .... | r... ..r. .... r... | r..r ..r. r... r.r. | r.rr ..rr rrrr rrrr | rrrr r.r. rrrr ffff | r..r ..r. r.r. r..r
+Cinematic stomp | 0 | PK | OC | 0.9 | - | l--- ---- ---- ---- | l--- ---- r--- ---- | l--- r--- l--- r--- | l--- r--- rrrr rrrr | l--- l--- rrrr ffff | l--- r--- l--- rr--
+Rolling fifths | 0 | EP | UO | 0.8 | - | r... .... .... .... | r... .... f... .... | r... f... r... f... | r.f. r.f. rrff rrff | rrrr ffff rrrr ffff | r... f... r..f r...
+Melancholic pulse | 0 | M | PVO | 0.8 | - | r--- ---- ---- ---- | r--- ---- ---- r--- | r--- ---- r--- ---r | r--- ---r r--- rrrr | r--- r--- rrrr ---- | r--- ---- r--- -r--
+Breakdown heartbeat | 0 | MR | OVP | 0.7 | - | r... .... .... .... | r..r .... .... .... | r..r .... ..r. .r.. | r..r .... rrrr .... | r..r ..r. rrrr rrrr | r..r .... r..r ....
+Euphoric gallop hits | 0 | E | UC | 0.7 | - | r... .... .... .... | r... .... r.rr .... | r.rr .... r.rr .... | r.rr r.rr r.rr rrrr | r.rr rrrr rrrr rrrr | r.rr .... r.rr r...
+Dreamy tide roll | 1 | RM | PVO | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- ---- ---- | z--- ---- ---- r--- | z--- ---- z--- rrrr | .... z--- ---- ----
+Driving thunder roll | 1 | DK | TYC | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- z--- z--- z--- | z--- z--- rrrr rrrr | z--- rrrr rrrr rrrr | z--- z--- z--- r.r.

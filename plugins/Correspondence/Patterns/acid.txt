@@ -65,3 +65,13 @@ Playful acid hops | 0 | HE | TC | 0.5 | - | r..R ..r. r..R ..r. | r.rR .rr. r.rR
 Pushed acid | 0 | DK | TC | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r. r.rR rp.. | rrRr r~Rr rRr~ rp.. | rrRr u~Rd rRu~ dP.. | rRu~ dRnN rrRr uP.. | rRrr r~rR rRrr dp.. | - | - |
 Heroic acid | 0 | P | TCU | 0.55 | - | r.R. r.R. r.R. r.R. | rRfR rR.R rRtR rR.R | rRfR rRfR rRtR RRRR | rRfR tTfF RRRR NNNN | RRRR fFtT rRfR NNNN | rRRr fRRr tRRr fRRr | - | - |
 Intimate acid | 0 | MR | TYP | 0.7 | - | r--- ---- ---- ---- | r~f. ---- r~t. ---- | r~f. ..r. r~t. ..d. | r~f~ t~r. r~d~ n~N. | r~d~ t~r. r~f~ n~N. | r~f. ..r. r~t. ..r. | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Night acid | 0 | K | TC | 0.55 | - | r... r... r... r... | r.rR r..r r.rR r..r | r.rR r~rr R.rr r~R. | r.rR r~Rr d~Rr nNrr | rRr~ dRr~ uRr~ nNRr | r.rR r~rr R.rr r~Rd
+Psy acid tumble | 0 | K | Y | 0.5 | - | .r.r .r.r .r.r .r.r | .rRr .rRr .rRr .rRr | .rRr .rRR .rRr .dRR | .rRr .u~R .d~R .nNr | .dRr .u~R .rRr .NnR | .rRr .rRR .rRu .dRR
+Hopeful acid lift | 0 | H | UP | 0.6 | - | r... .... r... .... | r..R ..r. r..R ..r. | r.uR .r~. r.uR .d~. | r.uR .u~. u.uR .nN. | u.uR .u~. r.uR .Nn. | r.uR .r~. r.dR .u~.
+Driving acid octaves | 0 | D | TCU | 0.55 | - | r.R. r.R. r.R. r.R. | rrRr .rRr rrRr .rRr | rrR~ rrRr rrR~ rrRd | rrR~ urRu drRd nNRR | urR~ drRd urRu NnRR | rrRr rrR~ rrRr rrRu
+Melancholic acid sigh | 0 | M | PC | 0.6 | - | r--- ---- r--- ---- | r~d- ---- r~d- ---- | r~d. r~d. r~d. R~d. | r~d. r~d. d~d~ n~N. | R~d. r~d. d~d~ N~n. | r~d. r~d. r~u. R~d.
+Tech acid stab | 0 | DK | T | 0.45 | - | r... .... .... .... | r... ..r. .... ..R. | r... ..r. r.R. ..R. | r..r ..r. rrR~ rRrR | rrR~ rRrR r..r ..R. | r... ..r. r.R. .rR.
+Euphoric acid lead-in | 0 | E | UC | 0.6 | - | r... .... .... .... | r... .... r.u. .... | r.u. R.u. r.u. R.u. | r.u. R.u. uuRR nNRR | R.u. r.u. RRuu NnRR | r.u. R.u. r.d. R.u. | - | - | I
+Dreamy acid haze | 0 | R | PY | 0.7 | - | r--- ---- ---- ---- | r~R- ---- r~f- ---- | r~R- r~f- r~R- r~t- | r~R- r~f- u~u- n~N- | r~f- r~R- d~d- N~n- | r~R- r~f- r~R- d~t-

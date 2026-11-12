@@ -344,7 +344,17 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     addChildComponent (undoFixButton);
     addChildComponent (fixStatus);
 
-    setSize (1040, 720);
+    autopilotStrip.moves = [&p]
+    {
+        juce::StringArray m;
+        int band = -1;
+        if (const auto h = suite::Autopilot::harshNow (&band); h > 0.0f)
+            m.add ("harsh moment at " + juce::String (band == 6 ? "2 kHz" : band == 7 ? "4 kHz" : "8 kHz") + ": the tracks causing it are dipping");
+        if (! p.mixChecks().isEmpty()) m.add (juce::String (p.mixChecks().size()) + " mixing suggestion(s) in Problems");
+        return m;
+    };
+    addAndMakeVisible (autopilotStrip);
+    setSize (1040, 750);
     timerCallback();
     startTimerHz (10);
 }
@@ -760,7 +770,8 @@ void MentalismEditor::paintAdvice (juce::Graphics& g, juce::Rectangle<int> area)
 
 void MentalismEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (16);
+    autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     auto header = bounds.removeFromTop (48);
     resetButton.setBounds (header.removeFromRight (110).reduced (4, 8));
     roughUndoButton.setBounds (header.removeFromRight (70).reduced (4, 8));

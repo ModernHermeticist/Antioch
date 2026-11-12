@@ -397,7 +397,17 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
 
     tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
     addChildComponent (*tweakBanner);
-    setSize (960, 740);
+    autopilotStrip.moves = [&p]
+    {
+        juce::StringArray m;
+        if (p.noteRoomNow.load() > 0.3f) m.add ("the tail making room at the lead's note");
+        if (p.pumpNow.load() < 0.9f) m.add ("the tail pumping with the kick");
+        if (p.leadRoomNow.load() < 0.9f) m.add ("stepping back while the lead or vocal plays");
+        if (p.timedNow.load()) m.add ("pre-delay and decay on the tempo");
+        return m;
+    };
+    addAndMakeVisible (autopilotStrip);
+    setSize (960, 770);
     timerCallback();
     startTimerHz (20);
 }
@@ -439,7 +449,8 @@ void AntiochEditor::paint (juce::Graphics& g)
 
 void AntiochEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (16);
+    autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
 
     auto header = bounds.removeFromTop (40);
     bpmLabel.setBounds (header.removeFromRight (100));

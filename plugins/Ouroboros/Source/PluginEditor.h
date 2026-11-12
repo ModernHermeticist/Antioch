@@ -1,4 +1,5 @@
 #pragma once
+#include "PlanBus.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
@@ -80,6 +81,26 @@ public:
     void paint (juce::Graphics&) override;
 private:
     void timerCallback() override { repaint(); }
+};
+
+/** Mixer: every track's suggested mixer moves (from each Prima Materia), section by section, and
+    one export of every track's fader moves. */
+class MixerPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit MixerPanel (std::function<suite::SectionMap()> map, std::function<double()> bpm);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    juce::TextButton exportButton { "Export all fader moves..." };
+    /** Writes "Mixer moves.mid" (one MIDI track per FL track, CC 7) and "Mixer moves.txt" into folder. */
+    static juce::File exportAll (const juce::File& folder, const suite::SectionMap&, double bpm);
+    static juce::StringArray tableText (const suite::SectionMap&);
+
+private:
+    void timerCallback() override { repaint(); }
+    std::function<suite::SectionMap()> getMap;
+    std::function<double()> getBpm;
+    std::unique_ptr<juce::FileChooser> chooser;
 };
 
 /** Autopilot: what the suite manages by itself (one switch per group), and what it has done. */

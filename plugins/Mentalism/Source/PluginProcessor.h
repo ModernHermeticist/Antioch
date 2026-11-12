@@ -216,6 +216,7 @@ public:
     std::atomic<int> clippedSamples { 0 };
 
     /** Fix history (fixes and rough mixes sent from here), newest last. */
+    std::set<std::pair<suite::Fix, uint32_t>> suggestedMoves;   // mixer moves already suggested this song (sent once)
     struct FixRecord { uint32_t seq = 0; suite::Fix fix = suite::Fix::None; juce::Time when; uint32_t undoSeq = 0; };
     uint32_t sendFix (suite::Fix fix, uint32_t data = 0)
     {

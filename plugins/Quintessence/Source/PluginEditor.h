@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "AutopilotStrip.h"
 #include "SuiteUI.h"
 
 class QuintessenceEditor : public juce::AudioProcessorEditor, private juce::Timer
@@ -28,6 +29,8 @@ private:
     juce::Rectangle<int> curveArea, controlArea, cutArea, mbArea, logArea;
     std::array<juce::Rectangle<int>, qn::numSlots> slotAreas;
     std::array<juce::Rectangle<int>, qn::numMbBands> meterAreas;
+
+    suite::ui::AutopilotStrip autopilotStrip;   // what the autopilot is doing on this track now
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (QuintessenceEditor)
 };

@@ -11,6 +11,7 @@
 #include "HostInfo.h"
 #include "Analysis.h"
 #include "Registry.h"
+#include "PlanBus.h"
 #include "AutomationBus.h"
 #include "KickBus.h"
 #include <optional>
@@ -19,7 +20,7 @@ class PrimaMateriaProcessor : public suite::SuiteProcessor
 {
 public:
     PrimaMateriaProcessor();
-    ~PrimaMateriaProcessor() override = default;
+    ~PrimaMateriaProcessor() override { suite::PlanBus::withdraw (getInstanceId()); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -68,7 +69,10 @@ public:
         MIDI file, or an empty File if there's no map. */
     juce::File exportPlan (const juce::File& folder) const;
     /** The CC 7 value for a fader change of `db` (100 = unchanged; FL's linked fader at 100%). */
-    static int faderCc (float db) { return db <= pm::offDb + 0.5f ? 0 : juce::jlimit (1, 127, juce::roundToInt (100.0f * std::pow (10.0f, db / 40.0f))); }
+    /** The plan as numbers (shared with Ouroboros' Mixer page through the plan bus). */
+    suite::PlanBus::Plan makePlan() const;
+    void pollTick() override { if (getRole() > 0) suite::PlanBus::publish (makePlan()); else suite::PlanBus::withdraw (getInstanceId()); }
+    static int faderCc (float db) { return suite::PlanBus::faderCc (db); }
     SuiteStatus suiteStatus() override;
 
     /** Your own role settings: "Save as my <role>" keeps this track's section levels, cuts,

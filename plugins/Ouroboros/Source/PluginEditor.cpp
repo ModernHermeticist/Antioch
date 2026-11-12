@@ -353,6 +353,149 @@ void SectionSnapPanel::resized()
 }
 
 //==============================================================================
+namespace
+{
+    /** The kinds of section the map has, in order of first appearance (and "Drop 2+" if it has later drops). */
+    std::vector<int> mixerColumns (const suite::SectionMap& m)
+    {
+        std::vector<int> cols;
+        int drops = 0;
+        for (int i = 0; i < m.count; ++i)
+        {
+            const auto t = (int) m.sections[(size_t) i].type;
+            if (t == (int) suite::SectionType::Drop) ++drops;
+            if (std::find (cols.begin(), cols.end(), t) == cols.end()) cols.push_back (t);
+        }
+        if (cols.empty()) for (int t = 0; t < (int) suite::SectionType::count; ++t) cols.push_back (t);
+        if (drops > 1) cols.push_back (-1);   // drop 2+
+        return cols;
+    }
+    juce::String cellText (const suite::PlanBus::Plan& p, int col)
+    {
+        if (col < 0) return std::abs (p.laterDropDb) < 0.05f ? juce::String ("same") : (p.laterDropDb > 0.0f ? "+" : "") + juce::String (p.laterDropDb, 1);
+        const auto db = p.levelDb[(size_t) col];
+        if (db <= suite::PlanBus::offDb + 0.5f) return "mute";
+        juce::String t = std::abs (db) < 0.05f ? juce::String ("0") : (db > 0.0f ? "+" : "") + juce::String (db, 1);
+        if (p.lowCutHz[(size_t) col] > 0.0f) t << "  HP " << juce::roundToInt (p.lowCutHz[(size_t) col]);
+        if (p.highCutHz[(size_t) col] > 0.0f) t << "  LP " << juce::String (p.highCutHz[(size_t) col] / 1000.0f, 1) << "k";
+        if (col == (int) suite::SectionType::Build && p.ramp) t << "  rising";
+        return t;
+    }
+    juce::String columnName (int col) { return col < 0 ? juce::String ("Drop 2+") : juce::String (suite::sectionName ((suite::SectionType) col)); }
+}
+
+MixerPanel::MixerPanel (std::function<suite::SectionMap()> map, std::function<double()> bpm) : getMap (std::move (map)), getBpm (std::move (bpm))
+{
+    exportButton.setTooltip ("One MIDI file with every track's fader moves (a MIDI track each, named after the FL track; CC 7: 100 = unchanged, 0 = muted), and the table as text");
+    exportButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> ("Folder for the mixer moves", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
+        chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+        {
+            const auto dir = fc.getResult();
+            if (dir == juce::File()) return;
+            const auto f = exportAll (dir, getMap(), getBpm());
+            if (f == juce::File())
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Mixer moves", "Nothing to export yet: put Prima Materia on your tracks (with a role) and make a map.");
+            else f.revealToUser();
+        });
+    };
+    addAndMakeVisible (exportButton);
+    setSize (900, 520);
+    startTimerHz (2);
+}
+
+juce::StringArray MixerPanel::tableText (const suite::SectionMap& map)
+{
+    juce::StringArray out;
+    const auto cols = mixerColumns (map);
+    juce::StringArray head { "Track", "Gain", "Fader" };
+    for (auto c : cols) head.add (columnName (c));
+    head.add ("Before drops");
+    out.add (head.joinIntoString ("\t"));
+    for (const auto& p : suite::PlanBus::read())
+    {
+        juce::StringArray row { p.track, juce::String (p.gainDb, 1), juce::String (p.trimDb, 1) };
+        for (auto c : cols) row.add (cellText (p, c));
+        row.add (p.gapQuarters > 0.0 ? "mute " + juce::String (p.gapQuarters, 1) + " beats" : juce::String ("-"));
+        out.add (row.joinIntoString ("\t"));
+    }
+    return out;
+}
+
+juce::File MixerPanel::exportAll (const juce::File& folder, const suite::SectionMap& map, double bpm)
+{
+    const auto plans = suite::PlanBus::read();
+    if (plans.empty() || map.count == 0) return {};
+    folder.createDirectory();
+    auto mid = folder.getChildFile ("Mixer moves.mid");
+    mid.deleteFile();
+    const auto file = suite::PlanBus::allFaderMoves (plans, map, bpm);
+    if (auto stream = mid.createOutputStream()) file.writeTo (*stream);
+    folder.getChildFile ("Mixer moves.txt").replaceWithText ("Every track's suggested mixer moves (dB on the fader; HP / LP = high- / low-pass)\n\n"
+        + tableText (map).joinIntoString ("\n")
+        + "\n\nMixer moves.mid has a MIDI track per FL track with its fader as CC 7 (100 = unchanged, 0 = muted). In FL, link each mixer "
+          "track's fader to CC 7 on its own MIDI Out channel, play the clips, and record or convert them to automation clips.\n");
+    return mid;
+}
+
+void MixerPanel::resized()
+{
+    exportButton.setBounds (getLocalBounds().reduced (14).removeFromBottom (30).removeFromRight (230));
+}
+
+void MixerPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (14);
+    g.setColour (Colours::text);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("Mixer: suggested moves", r.removeFromTop (22), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    g.drawText ("From each track's Prima Materia (it changes nothing itself): the fader per section, in dB, and its filters. Make them in FL's mixer, or export them.",
+                r.removeFromTop (18), juce::Justification::centredLeft);
+    r.removeFromTop (8);
+    r.removeFromBottom (40);
+    const auto map = getMap();
+    const auto cols = mixerColumns (map);
+    const auto plans = suite::PlanBus::read();
+    if (plans.empty())
+    {
+        g.drawFittedText ("No suggestions yet: put Prima Materia on your tracks and give each a role (or name the tracks Kick, Bass, Pads...).", r, juce::Justification::topLeft, 3);
+        return;
+    }
+    const auto nameW = 150, gainW = 60, gapW = 90;
+    const auto colW = juce::jmax (60, (r.getWidth() - nameW - 2 * gainW - gapW) / juce::jmax (1, (int) cols.size()));
+    auto header = r.removeFromTop (22);
+    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    g.setColour (Colours::dimText);
+    g.drawText ("TRACK", header.removeFromLeft (nameW), juce::Justification::centredLeft);
+    g.drawText ("GAIN", header.removeFromLeft (gainW), juce::Justification::centred);
+    g.drawText ("FADER", header.removeFromLeft (gainW), juce::Justification::centred);
+    for (auto c : cols) g.drawText (columnName (c).toUpperCase(), header.removeFromLeft (colW), juce::Justification::centred);
+    g.drawText ("BEFORE DROPS", header, juce::Justification::centred);
+    g.setFont (juce::FontOptions (12.0f));
+    for (const auto& p : plans)
+    {
+        if (r.getHeight() < 20) break;
+        auto row = r.removeFromTop (20);
+        g.setColour (Colours::text);
+        g.drawText (p.track, row.removeFromLeft (nameW), juce::Justification::centredLeft, true);
+        g.setColour (Colours::dimText);
+        g.drawText (std::abs (p.gainDb) < 0.05f ? juce::String ("-") : juce::String (p.gainDb, 1), row.removeFromLeft (gainW), juce::Justification::centred);
+        g.drawText (std::abs (p.trimDb) < 0.05f ? juce::String ("-") : juce::String (p.trimDb, 1), row.removeFromLeft (gainW), juce::Justification::centred);
+        for (auto c : cols)
+        {
+            const auto t = cellText (p, c);
+            g.setColour (t == "mute" ? Colours::ember : t == "0" || t == "same" ? Colours::dimText : Colours::text);
+            g.drawText (t, row.removeFromLeft (colW), juce::Justification::centred, true);
+        }
+        g.setColour (Colours::dimText);
+        g.drawText (p.gapQuarters > 0.0 ? "mute " + juce::String (p.gapQuarters, 1) : juce::String ("-"), row, juce::Justification::centred);
+    }
+}
+
 AutopilotPanel::AutopilotPanel()
 {
     static const char* names[] { "Harshness: harsh moments, spiky bands, drive on high notes, bright tails, shared resonances",
@@ -899,6 +1042,13 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
             juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Finish everything", processor.finishEverything());
+            return;
+        }
+        if (id == 978)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<MixerPanel> ([this] { return processor.getMap(); }, [this] { return (double) processor.bpm.load(); }),
+                                                    templateBox.getScreenBounds(), nullptr);
             return;
         }
         if (id == 984)
@@ -1489,6 +1639,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem (suite::AutomationBus::bypassed() ? "Hear WITH the automation again (A/B)" : "Hear without the automation (A/B)", 985);
     templateBox.addItem ("Stereo field: how wide each track sits...", 986);
     templateBox.addItem ("Autopilot: what the suite manages by itself...", 984);
+    templateBox.addItem ("Mixer: every track's suggested moves (and export)...", 978);
     templateBox.addItem ("Mood: darker (the master's tilt)", 980);
     templateBox.addItem ("Mood: brighter (the master's tilt)", 981);
     templateBox.addItem ("Mood: wider (pads, leads, FX)", 982);

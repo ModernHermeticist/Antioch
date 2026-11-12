@@ -63,3 +63,13 @@ Pushed chops | 0 | EH | UCV | 0.6 | - | r... .... .... .... | r..r .... ..p. ...
 Accent chops | 0 | ED | UCT | 0.45 | - | r... .... r... .... | !r..r .... !r..r .... | !r..r ..!r. !r..r ..!f. | !r..r ..!f. !R..R ..!RR | !R..R ..!f. !r..r ..!RR | !r.rr ..!r. !r.rr ..!f. | - | - |
 Melancholic chop sighs | 0 | M | VPC | 0.8 | - | t--- .... .... .... | t--- .... d--- .... | t--- ..d- d--- .... | t--- ..d- d--- n--- | d--- ..t- d--- N--- | t--- -dd- d--- .... | - | - |
 Heroic chop hits | 0 | P | OUC | 0.55 | - | R... .... .... .... | R... .... R... .... | R..R ..R. R... .... | R..R ..R. R.RR RRRR | RRRR ..R. R..R RRRR | R.RR ..R. R.RR .... | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Tech vowel stabs | 0 | DK | TC | 0.4 | - | r... .... .... .... | r... ..r. .... .... | r... ..r. ..r. .... | r..r ..r. r.rr rrrr | rrrr ..r. r.rr ..rr | r... ..r. ..r. r...
+Psy syllable roll | 0 | K | Y | 0.35 | - | .r.. .... .... .... | .r.r .... .r.r .... | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr rrrr | rrrr .rrr rrrr .rrr | .r.r .r.r .r.r .t.t
+Dreamy breath chops | 0 | R | PV | 0.7 | - | .... r--- .... .... | .... r--- .... f--- | .... r--- t--- f--- | .... r--- t--- u-d- | .... f--- t--- r-r- | .... r--- .... t---
+Euphoric oh-oh | 0 | E | UV | 0.6 | - | r... .... .... .... | r... r... .... .... | r... r... f... t... | r... r... f.f. t.u. | r.r. f.f. t.t. R... | r... r... t... f...
+Melancholic echo chops | 0 | M | VP | 0.7 | - | r--- .... .... .... | r--- .... r... .... | r--- .r.. r... .r.. | r--- .r.. rr.. .rrr | r--- .r.. d... .d.. | r--- .... d... ....
+Classic vocal gate | 0 | ED | CU | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.r. r.r. r.r. r.r. | rrrr r.r. rrrr rrrr | r.r. rrrr r.r. rrrr | r.r. r.r. r.rr r.r.
+Orchestral chant chops | 0 | PK | O | 0.8 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- f--- r--- | r--- r--- rrrr f--- | r--- f--- RRRR r--- | r--- f--- r--- t---
+Build stutter climb | 0 | DE | UTC | 0.4 | - | r... .... .... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr uuuu uuuu | rrrr uuuu uuuu uuuu | r.r. r.r. rrrr rrrr | - | - | B

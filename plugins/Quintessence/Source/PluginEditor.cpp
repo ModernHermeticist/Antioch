@@ -76,7 +76,26 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         addAndMakeVisible (*mbLocks.back());
     }
     lowCut.maxHeight = highCut.maxHeight = width.maxHeight = 74;
-    setSize (1100, 700);
+    autopilotStrip.moves = [&p]
+    {
+        juce::StringArray m;
+        auto& l = p.live;
+        if (l.maskNow.load() < -0.5f) m.add ("making room for a more important part (" + juce::String (l.maskNow.load(), 1) + " dB)");
+        if (l.liftNow.load() > 0.5f) m.add ("lifting its presence through a busy moment");
+        if (l.lowOwnerNow.load() > 0.5f) m.add ("leaving the lows to the kick and bass");
+        if (l.sootheNow.load() < -1.0f) m.add ("soothing a ringing band (" + juce::String (l.sootheNow.load(), 1) + " dB)");
+        if (l.harmonicsNow.load() > 0.5f) m.add ("adding harmonics for small speakers");
+        if (l.hitNowDb.load() < -1.0f) m.add ("evening out a loud hit");
+        if (l.noteGainDb.load() < -1.0f || l.noteGainDb.load() > 1.0f) m.add ("evening this bass note (" + juce::String (l.noteGainDb.load(), 1) + " dB)");
+        if (l.floorNowDb.load() < -3.0f) m.add ("quietening the tail");
+        if (std::abs (l.spreadNow.load()) > 0.08f) m.add (juce::String ("sitting a little ") + (l.spreadNow.load() > 0.0f ? "right" : "left") + " of the other layer");
+        if (l.tuneRatioNow.load() < 0.999f) m.add ("kick tuned down " + juce::String (-12.0f * std::log2 (l.tuneRatioNow.load()), 1) + " semitones to the key");
+        if (p.widthRideNow.load() < 0.9f) m.add ("narrowing an image that cancels in mono");
+        if (p.keyNotchHz.load() > 0.0f) m.add ("notching an out-of-key note at " + juce::String (juce::roundToInt (p.keyNotchHz.load())) + " Hz");
+        return m;
+    };
+    addAndMakeVisible (autopilotStrip);
+    setSize (1100, 730);
     startTimerHz (10);
 }
 
@@ -235,7 +254,8 @@ void QuintessenceEditor::paint (juce::Graphics& g)
 
 void QuintessenceEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (16);
+    autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     bounds.removeFromTop (48);
     auto top = bounds.removeFromTop (230);
     controlArea = top.removeFromRight (300);
