@@ -72,6 +72,9 @@ namespace suite::Autopilot
         if (enabled) d.fetch_and (~(uint32_t) g); else d.fetch_or ((uint32_t) g);
     }
 
+    inline uint32_t disabledGroups() noexcept { return detail::shared().disabled.load(); }   // saved with Ouroboros
+    inline void setDisabledGroups (uint32_t mask) noexcept { detail::shared().disabled.store (mask & 7u); }
+
     inline void count (Counter c, uint32_t n = 1) noexcept { detail::shared().counters[c].fetch_add (n); }
     inline uint32_t countOf (Counter c) noexcept { return detail::shared().counters[c].load(); }
 

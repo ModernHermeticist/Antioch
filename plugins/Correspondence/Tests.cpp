@@ -1800,5 +1800,63 @@ int main (int argc, char** argv)
                "a tech trance session: tech patterns, driving (or dark, if the mood says so)");
     }
 
+
+    section ("Autopilot (arrangement and stability): density, turn-taking, low bass");
+    {
+        using patterns::Mood; using patterns::Style;
+        chords::Settings s;
+        suite::SectionMap map;
+        map.totalBars = 64; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Groove };
+        map.sections[1] = { 17, suite::SectionType::Breakdown };
+        map.sections[2] = { 33, suite::SectionType::Drop };
+        map.sections[3] = { 49, suite::SectionType::Drop };
+        auto layersIn = [&] (const chords::SongPatterns& sp, double a, double b)
+        {
+            int n = 0;
+            for (int p = (int) chords::SongPart::Piano; p <= (int) chords::SongPart::Candy; ++p)
+            {
+                const auto notes = chords::songClip (s, map, sp, (chords::SongPart) p);
+                n += std::any_of (notes.begin(), notes.end(), [a, b] (const chords::Note& x) { return x.start >= a && x.start < b; }) ? 1 : 0;
+            }
+            return n;
+        };
+        chords::SongPatterns sp;
+        sp.library = true; sp.libMood = (int) Mood::Euphoric; sp.libStyle = (int) Style::Orchestral; sp.libSeed = 7;
+        auto off = sp;
+        off.manageDensity = off.takeTurns = false;
+        const auto managed = layersIn (sp, 192.0, 256.0), all = layersIn (off, 192.0, 256.0);
+        check (all > managed && managed >= 1, "the final drop of an orchestral song thins its layers (" + juce::String (all) + " -> " + juce::String (managed) + ")");
+        check (chords::thinnedLayers (map, sp, 3) != 0 && chords::thinnedLayers (map, off, 3) == 0, "and only with the manager on");
+        const auto piano = chords::songClip (s, map, sp, chords::SongPart::Piano);
+        check (std::any_of (piano.begin(), piano.end(), [] (const chords::Note& x) { return x.start >= 64.0 && x.start < 128.0; }), "the breakdown keeps its piano");
+        int thinned = 0, turned = 0;
+        for (int p = (int) chords::SongPart::Piano; p <= (int) chords::SongPart::Candy; ++p) chords::songClip (s, map, sp, (chords::SongPart) p, &thinned, &turned);
+        check (thinned > 0, juce::String (thinned) + " layer-sections thinned, counted for the health readout");
+
+        // Turn-taking: in a style that uses chops or candy, they never start while the hook is moving
+        bool found = false;
+        for (int st = 0; st < 7 && ! found; ++st)
+            for (const auto part : { chords::SongPart::Chops, chords::SongPart::Candy })
+            {
+                auto q = sp; q.libStyle = st; q.lead = { 0, 0, 0, 0, 1, 0 };
+                auto qo = q; qo.takeTurns = false;
+                const auto hook = chords::songClip (s, map, q, chords::SongPart::Lead);
+                const auto with = chords::songClip (s, map, q, part), without = chords::songClip (s, map, qo, part);
+                if (without.empty() || hook.empty()) continue;
+                int clashes = 0;
+                for (const auto& n : with)
+                    for (const auto& h : hook) clashes += h.start >= n.start - 0.5 - 1.0e-6 && h.start <= n.start + 0.25 + 1.0e-6 ? 1 : 0;
+                check (clashes == 0 && with.size() < without.size(), juce::String (part == chords::SongPart::Chops ? "chops" : "candy") + " step back while the hook moves ("
+                           + juce::String ((int) without.size()) + " -> " + juce::String ((int) with.size()) + " notes)");
+                found = true;
+                break;
+            }
+        check (found, "(a style with chops or candy was found)");
+
+        std::vector<chords::Note> low { { 21, 0.0, 1.0, 100 }, { 33, 1.0, 1.0, 100 }, { 24, 2.0, 1.0, 100 } };
+        check (chords::foldLowBass (low) == 1 && low[0].pitch == 33 && low[1].pitch == 33 && low[2].pitch == 24, "a bass note under C1 folds up an octave; the rest stay");
+    }
+
     return finish();
 }

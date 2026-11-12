@@ -155,6 +155,17 @@ between versions.
 - [ ] **6c.3** Drop a MIDI motif on Correspondence: the lead is your motif again while the bass, arp and chords stay
   from the library.
 
+## 6d. Autopilot (new)
+
+- [ ] **6d.1** Ouroboros menu, *Autopilot*: three switches, all on, and a list of counts. Save the project with Arrangement
+  off, reload: it's still off.
+- [ ] **6d.2** Push a lead's drive hard with a bright patch and play the drop: Mentalism's log names the track in a "Harsh
+  moment" line, the lead's Quintessence dips there, and *harsh moments dipped* counts up. Turn Harshness off: no dips.
+- [ ] **6d.3** Turn Antioch's echo feedback right up and stop the input: within a second it backs off ("runaway" in What
+  changed). Same with Cause & Effect's filter resonance at maximum.
+- [ ] **6d.4** Orchestral song with every layer on: *Export all* — the final drop doesn't have every layer at once, the
+  breakdown keeps its piano, and *parts thinned* counts up. In a style with chops, they never land on the hook's notes.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

@@ -8,6 +8,7 @@
 #include "PluginEditor.h"
 #include "HostInfo.h"
 #include "KeyBus.h"
+#include "AutopilotBus.h"
 
 CorrespondenceProcessor::CorrespondenceProcessor()
     : SuiteProcessor (BusesProperties()
@@ -457,6 +458,9 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
               : kind == "Melody" ? chords::melody (s, melodySettings())
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
+    // Autopilot (stability): bass notes under D1 move up an octave
+    if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::stability))
+        if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
     return chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
                              apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
 }
@@ -551,6 +555,7 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     auto patterns = Params::readSongPatterns (apvts);
     patterns.melody = melodySettings();
     patterns.vocalBars = suite::VocalBus::read();
+    patterns.manageDensity = patterns.takeTurns = suite::Autopilot::on (suite::Autopilot::arrangement);
     return patterns;
 }
 
@@ -703,17 +708,23 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     {
         const auto patterns = currentSongPatterns();
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
+        int thinned = 0, turned = 0;
         for (const auto& [name, part] : { std::pair<const char*, chords::SongPart> { "Chords", chords::SongPart::Chords },
                                           { "Bass", chords::SongPart::Bass }, { "Arp", chords::SongPart::Arp }, { "Lead", chords::SongPart::Lead },
                                           { "Harmony", chords::SongPart::Harmony }, { "Counter", chords::SongPart::Counter },
                                           { "Piano", chords::SongPart::Piano }, { "Strings", chords::SongPart::Strings }, { "Brass", chords::SongPart::Brass },
                                           { "Choir", chords::SongPart::Choir }, { "Timpani", chords::SongPart::Timpani }, { "Acid", chords::SongPart::Acid },
                                           { "Chops", chords::SongPart::Chops }, { "Candy", chords::SongPart::Candy } })
-            if (auto notes = chords::songClip (s, map, patterns, part); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
+            if (auto notes = chords::songClip (s, map, patterns, part, &thinned, &turned); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
                                                                          || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });
         if (apvts.getRawParameterValue (Params::songFills)->load() > 0.5f)
             parts.push_back ({ "Fills", chords::fillsClip (map) });   // General MIDI drums: use FPC or a drum kit
+        for (auto& [name, notes] : parts)
+            if (name == "Bass" && suite::Autopilot::on (suite::Autopilot::stability))
+                if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
+        if (thinned > 0) suite::Autopilot::count (suite::Autopilot::partsThinned, (uint32_t) thinned);
+        if (turned > 0) suite::Autopilot::count (suite::Autopilot::turnsTaken, (uint32_t) turned);
 
         std::vector<std::pair<double, juce::String>> markers;
         std::array<int, (size_t) suite::SectionType::count> seen {};

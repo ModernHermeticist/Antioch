@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "AutopilotBus.h"
 #include "AutomationBus.h"
 #include "Alias.h"
 #include "SceneUI.h"
@@ -352,6 +353,64 @@ void SectionSnapPanel::resized()
 }
 
 //==============================================================================
+AutopilotPanel::AutopilotPanel()
+{
+    static const char* names[] { "Harshness: harsh moments, spiky bands, drive on high notes, bright tails, shared resonances",
+                                 "Stability: runaway feedback, peaks, DC and rumble, low bass notes, level wobble, stereo collapse, clicks",
+                                 "Arrangement: thins parts when too many play at once; chops and candy take turns with the hook" };
+    const suite::Autopilot::Group groups[] { suite::Autopilot::harshness, suite::Autopilot::stability, suite::Autopilot::arrangement };
+    for (size_t i = 0; i < switches.size(); ++i)
+    {
+        auto& b = switches[i];
+        b.setButtonText (names[i]);
+        b.setToggleState (suite::Autopilot::on (groups[i]), juce::dontSendNotification);
+        b.setColour (juce::ToggleButton::textColourId, Colours::text);
+        b.setColour (juce::ToggleButton::tickColourId, Colours::ember);
+        const auto g = groups[i];
+        b.onClick = [&b, g]
+        {
+            suite::Autopilot::set (g, b.getToggleState());
+            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot ") + (g == suite::Autopilot::harshness ? "harshness" : g == suite::Autopilot::stability ? "stability" : "arrangement")
+                                                      + (b.getToggleState() ? " on" : " off"));
+        };
+        addAndMakeVisible (b);
+    }
+    setSize (600, 120 + 3 * 28 + suite::Autopilot::numCounters * 20);
+    startTimerHz (2);
+}
+
+void AutopilotPanel::resized()
+{
+    auto r = getLocalBounds().reduced (14);
+    r.removeFromTop (48);
+    for (auto& b : switches) b.setBounds (r.removeFromTop (28));
+}
+
+void AutopilotPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (14);
+    g.setColour (Colours::text);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("Autopilot", r.removeFromTop (22), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    g.drawText ("What the suite manages by itself while you choose sounds and effects. Each move is in What changed.", r.removeFromTop (18), juce::Justification::centredLeft);
+    r.removeFromTop (8 + 3 * 28 + 10);
+    g.setColour (Colours::text);
+    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    g.drawText ("Done so far (all instances on this computer)", r.removeFromTop (20), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    for (int c = 0; c < suite::Autopilot::numCounters; ++c)
+    {
+        auto row = r.removeFromTop (20);
+        const auto n = suite::Autopilot::countOf ((suite::Autopilot::Counter) c);
+        g.setColour (n > 0 ? Colours::text : Colours::dimText);
+        g.drawText (suite::Autopilot::counterName (c), row.removeFromLeft (row.getWidth() - 80), juce::Justification::centredLeft);
+        g.drawText (juce::String ((int) n), row, juce::Justification::centredRight);
+    }
+}
+
 void StereoPanel::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::panel);
@@ -839,6 +898,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
             juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Finish everything", processor.finishEverything());
+            return;
+        }
+        if (id == 984)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<AutopilotPanel>(), templateBox.getScreenBounds(), nullptr);
             return;
         }
         if (id == 986)
@@ -1422,6 +1487,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("What changed? Every automatic move, and why...", 987);
     templateBox.addItem (suite::AutomationBus::bypassed() ? "Hear WITH the automation again (A/B)" : "Hear without the automation (A/B)", 985);
     templateBox.addItem ("Stereo field: how wide each track sits...", 986);
+    templateBox.addItem ("Autopilot: what the suite manages by itself...", 984);
     templateBox.addItem ("Mood: darker (the master's tilt)", 980);
     templateBox.addItem ("Mood: brighter (the master's tilt)", 981);
     templateBox.addItem ("Mood: wider (pads, leads, FX)", 982);

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "AutopilotBus.h"
 #include "TempoBus.h"
 #include "PluginEditor.h"
 #include "Music.h"
@@ -552,6 +553,10 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     juce::ValueTree notesTree ("Notes");
     notesTree.setProperty ("text", getNotes().joinIntoString ("\n"), nullptr);
     state.appendChild (notesTree, nullptr);
+    state.removeChild (state.getChildWithName ("Autopilot"), nullptr);
+    juce::ValueTree autopilotTree ("Autopilot");
+    autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
+    state.appendChild (autopilotTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -593,6 +598,11 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         return;
 
     auto state = juce::ValueTree::fromXml (*xml);
+    if (const auto ap = state.getChildWithName ("Autopilot"); ap.isValid())
+    {
+        suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
+        state.removeChild (ap, nullptr);
+    }
     if (const auto mt = state.getChildWithName ("Moments"); mt.isValid())
     {
         setMomentsText (mt["text"].toString());

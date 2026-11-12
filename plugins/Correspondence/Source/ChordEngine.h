@@ -1236,7 +1236,69 @@ namespace chords
         bool libLead = true;          // the lead hook from the library too (a learned motif or style always wins)
         bool libKits = true;          // a kit (families chosen to go together) where one fits the mood and style
         uint32_t libLayers = 0xffffffffu;   // which layers play (bit per SongPart from Piano on)
+        // The autopilot's arrangement group: too many parts at once thins the least important layers
+        // for that section; chops and candy step back while the hook is moving
+        bool manageDensity = true;
+        bool takeTurns = true;
     };
+
+    /** Where a library layer plays in section i before the density manager (kind, or -1). */
+    inline int layerKindAt (SongPart part, const suite::SectionMap& map, const SongPatterns& patterns, int i)
+    {
+        if (! lib::isLayerPart (part) || ! patterns.library || ((patterns.libLayers >> ((int) part - (int) SongPart::Piano)) & 1u) == 0) return -1;
+        int before = 0;
+        for (int k = 0; k < i; ++k) before += map.sections[(size_t) k].type == map.sections[(size_t) i].type ? 1 : 0;
+        const auto isDrop = map.sections[(size_t) i].type == suite::SectionType::Drop;
+        const auto style = (patterns::Style) juce::jlimit (0, 6, patterns.libStyle);
+        auto kind = lib::placement (part, map.sections[(size_t) i].type, isDrop && before > 0, isDrop && i == map.lastDropIndex(), style);
+        if (kind >= 0 && lib::styleGated (part)
+            && ! patterns::pick (lib::libraryPart (part), kind, (patterns::Mood) juce::jlimit (0, 6, patterns.libMood), style, patterns.libSeed).tagged (style))
+            kind = -1;   // this style doesn't use it
+        return kind;
+    }
+
+    /** The density manager: the layers that sit out section i because too many parts would play at
+        once. Each section type has a budget of parts (the core parts count first), and the layers
+        that matter least there go first: in a breakdown the piano, strings and choir stay, in a build
+        the timpani and strings, in a drop the strings, acid and brass. */
+    inline uint32_t thinnedLayers (const suite::SectionMap& map, const SongPatterns& patterns, int i)
+    {
+        if (! patterns.manageDensity || ! patterns.library || i < 0 || i >= map.count) return 0;
+        using ST = suite::SectionType;
+        const auto type = map.sections[(size_t) i].type;
+        const auto t = (size_t) type;
+        int core = (patterns.chords[t] > 0) + (patterns.bass[t] > 0) + (patterns.arp[t] > 0) + (patterns.lead[t] > 0);
+        if (patterns.lead[t] == 1 && patterns.counter) ++core;
+        const auto budget = type == ST::Drop ? 8 : type == ST::Breakdown || type == ST::Build ? 6 : 5;
+        auto priority = [type] (SongPart p)
+        {
+            //                              Piano Strings Brass Choir Timpani Acid Chops Candy
+            static const int breakdown[] { 9,    8,      5,    7,    2,      1,   2,    3 };
+            static const int build[]     { 3,    7,      3,    3,    8,      5,   3,    3 };
+            static const int drop[]      { 4,    7,      6,    5,    5,      7,   3,    2 };
+            static const int other[]     { 6,    5,      3,    4,    3,      5,   3,    2 };
+            const auto k = (size_t) ((int) p - (int) SongPart::Piano);
+            return type == ST::Breakdown ? breakdown[k] : type == ST::Build ? build[k] : type == ST::Drop ? drop[k] : other[k];
+        };
+        std::vector<SongPart> playing;
+        for (int p = (int) SongPart::Piano; p <= (int) SongPart::Candy; ++p)
+            if (layerKindAt ((SongPart) p, map, patterns, i) >= 0) playing.push_back ((SongPart) p);
+        std::stable_sort (playing.begin(), playing.end(), [&] (SongPart a, SongPart b) { return priority (a) > priority (b); });
+        uint32_t out = 0;
+        for (size_t k = 0; k < playing.size(); ++k)
+            if (core + (int) k + 1 > budget) out |= 1u << ((int) playing[k] - (int) SongPart::Piano);
+        return out;
+    }
+
+    /** Bass notes under C1 (MIDI 24, 33 Hz) move up an octave: below that they're felt as rumble, not
+        heard as notes, and eat headroom. Returns how many moved. */
+    inline int foldLowBass (std::vector<Note>& notes, int lowest = 24)
+    {
+        int moved = 0;
+        for (auto& n : notes)
+            if (n.pitch < lowest) { while (n.pitch < lowest) n.pitch += 12; ++moved; }
+        return moved;
+    }
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
     {
@@ -1291,27 +1353,23 @@ namespace chords
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
         the section start and never spilling into the next section. Assumes 4/4 bars. */
-    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part)
+    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned = nullptr, int* turned = nullptr)
     {
         std::vector<Note> out;
+        // Turn-taking: chops and candy fill the hook's gaps (where the hook plays at all)
+        const auto turns = patterns.takeTurns && patterns.library && (part == SongPart::Chops || part == SongPart::Candy);
+        const auto hook = turns ? songClip (base, map, patterns, SongPart::Lead) : std::vector<Note> {};
         const auto progressionQ = base.quartersPerChord * juce::jlimit (1, maxSlots, base.count);
 
         for (int i = 0; i < map.count; ++i)
         {
             const auto type = (size_t) map.sections[(size_t) i].type;
             // The library's layers (piano, orchestra, electronic specifics) have their own places in the song
-            int layerKind = -1;
-            if (lib::isLayerPart (part) && patterns.library && ((patterns.libLayers >> ((int) part - (int) SongPart::Piano)) & 1u) != 0)
+            int layerKind = layerKindAt (part, map, patterns, i);
+            if (layerKind >= 0 && ((thinnedLayers (map, patterns, i) >> ((int) part - (int) SongPart::Piano)) & 1u) != 0)
             {
-                int before = 0;
-                for (int k = 0; k < i; ++k) before += map.sections[(size_t) k].type == map.sections[(size_t) i].type ? 1 : 0;
-                const auto isDrop = map.sections[(size_t) i].type == suite::SectionType::Drop;
-                layerKind = lib::placement (part, map.sections[(size_t) i].type, isDrop && before > 0, isDrop && i == map.lastDropIndex(),
-                                            (patterns::Style) juce::jlimit (0, 6, patterns.libStyle));
-                if (layerKind >= 0 && lib::styleGated (part)
-                    && ! patterns::pick (lib::libraryPart (part), layerKind, (patterns::Mood) juce::jlimit (0, 6, patterns.libMood),
-                                         (patterns::Style) juce::jlimit (0, 6, patterns.libStyle), patterns.libSeed).tagged ((patterns::Style) juce::jlimit (0, 6, patterns.libStyle)))
-                    layerKind = -1;   // this style doesn't use it
+                layerKind = -1;   // too much at once here: this layer sits the section out
+                if (thinned != nullptr) ++*thinned;
             }
             const auto choice = lib::isLayerPart (part) ? (layerKind >= 0 ? 1 : 0)
                               : part == SongPart::Chords ? patterns.chords[type] : part == SongPart::Bass ? patterns.bass[type]
@@ -1525,11 +1583,28 @@ namespace chords
                 {
                     auto d = section[k];
                     if (part == SongPart::Lead) d.pitch += d.pitch + 12 <= 96 ? 12 : -12;
-                    else if (d.pitch - 12 >= 24) d.pitch -= 12;
+                    else if (d.pitch - 12 >= 24) d.pitch -= 12;   // never under C1 (see foldLowBass)
                     else continue;
                     d.velocity = juce::jmax (1, d.velocity - 15);
                     section.push_back (d);
                 }
+            }
+
+            // Who's speaking: while the hook is moving (a hook note starting half a beat before to a
+            // 16th after), chops and candy hold back, so they answer in its gaps
+            if (turns && ! hook.empty())
+            {
+                std::vector<Note> kept;
+                int lastBar = -1;
+                for (const auto& n : section)
+                {
+                    const auto busy = std::any_of (hook.begin(), hook.end(), [&n] (const Note& h) { return h.start >= n.start - 0.5 - 1.0e-6 && h.start <= n.start + 0.25 + 1.0e-6; });
+                    if (! busy) { kept.push_back (n); continue; }
+                    const auto bar = (int) std::floor (n.start / 4.0 + 1.0e-9);
+                    if (turned != nullptr && bar != lastBar) ++*turned;
+                    lastBar = bar;
+                }
+                section = std::move (kept);
             }
 
             // Room for the vocal: where it sings, the lead keeps only its beat-1 and beat-3 notes

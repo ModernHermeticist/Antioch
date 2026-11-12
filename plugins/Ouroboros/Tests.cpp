@@ -2,6 +2,8 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AutopilotBus.h"
+#include "PluginEditor.h"
 #include "TestUtils.h"
 #include "SuiteCheck.h"
 #include "Alias.h"
@@ -1077,6 +1079,27 @@ int main (int argc, char** argv)
         }
         check (mix == 1 && exported == 1 && report.contains ("render"), "one click: Mix it and Export all go out, with the render plan to follow");
         suite::FixBus::reset();
+    }
+
+
+    section ("Autopilot page: one switch per group, saved with the project");
+    {
+        suite::Autopilot::reset();
+        AutopilotPanel panel;
+        check (panel.switches[0].getToggleState() && panel.switches[1].getToggleState() && panel.switches[2].getToggleState(), "every group starts on");
+        panel.switches[2].setToggleState (false, juce::sendNotificationSync);
+        check (! suite::Autopilot::on (suite::Autopilot::arrangement) && suite::Autopilot::on (suite::Autopilot::harshness), "switching one off affects only that group");
+        auto p = std::make_unique<OuroborosProcessor>();
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        suite::Autopilot::reset();
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (! suite::Autopilot::on (suite::Autopilot::arrangement) && suite::Autopilot::on (suite::Autopilot::stability), "a saved project brings its switches back");
+        suite::Autopilot::count (suite::Autopilot::peaksCaught, 3);
+        check (suite::Autopilot::countOf (suite::Autopilot::peaksCaught) == 3 && juce::String (suite::Autopilot::counterName (suite::Autopilot::peaksCaught)) == "peaks caught",
+               "the readout counts what was done");
+        suite::Autopilot::reset();
     }
 
     return finish();

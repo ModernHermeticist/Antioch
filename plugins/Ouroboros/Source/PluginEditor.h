@@ -82,6 +82,19 @@ private:
     void timerCallback() override { repaint(); }
 };
 
+/** Autopilot: what the suite manages by itself (one switch per group), and what it has done. */
+class AutopilotPanel : public juce::Component, private juce::Timer
+{
+public:
+    AutopilotPanel();
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    std::array<juce::ToggleButton, 3> switches;
+
+private:
+    void timerCallback() override { repaint(); }
+};
+
 /** What changed: every automatic move in the suite, newest first, with a search. */
 class ChangesPanel : public juce::Component, private juce::Timer
 {

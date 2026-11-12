@@ -52,6 +52,8 @@ With the full suite loaded, here is everything that happens without automation c
     sounds like, checking every move and undoing the ones that don't help.
 13. **Snapshots** save and compare whole versions of the song across every plugin, and
     **Export all** writes the song's MIDI in one go.
+14. **The autopilot** handles harshness, instability and crowding while you choose sounds
+    and effects (see below).
 
 What's left to you is writing and arranging the music, plus choosing taste settings.
 
@@ -59,6 +61,29 @@ What's left to you is writing and arranging the music, plus choosing taste setti
 has the track names, the plugin order on each track, the routing, and how to save it as
 your FL template. **What it did:** Ouroboros' *What changed?* lists every automatic move in
 the suite, with the track, the bar, the reason, and whether it was kept or undone.
+
+### The autopilot: harshness, stability, crowding
+
+The tune should come out of the sounds and effects you pick, so the suite handles the rest
+by itself, moment to moment. Ouroboros' menu has *Autopilot*: one switch per group (saved
+with the project), and a count of everything done. Every move is also in *What changed?*.
+
+- **Harshness.** Mentalism hears a harsh moment on the master (2-8 kHz jumping well over its
+  own average) and names the one or two tracks causing it; their Quintessences dip that band
+  by up to 4 dB while it lasts. Leads, pads and FX get a spike tamer on bright bands, Vibration
+  eases its drive by up to 6 dB as the lead climbs, Antioch darkens its reverb and echo tails
+  during harsh moments, and a resonance that several tracks share is cut a little on each
+  instead of a lot on one.
+- **Stability.** Antioch catches runaway echo or shimmer feedback (tails that grow with no
+  input) and Cause & Effect catches a filter ringing far over its input, and each backs off.
+  Prima Materia removes DC and sub-18 Hz rumble, holds a one-off peak far over the part's
+  normal level, rides slow level wobble on bass and pads (2 dB at most; deliberate level
+  changes are left alone) and smooths section-change jumps. Quintessence narrows a track whose
+  stereo sides start cancelling. Correspondence moves bass notes under C1 up an octave.
+- **Arrangement.** In the song draft, when too many parts would play at once the layers that
+  matter least in that section sit it out (a breakdown keeps its piano, strings and choir; a
+  build its timpani and strings; a drop its strings, acid and brass), and chops and candy step
+  back while the hook is moving so they answer it in its gaps.
 
 ## How the suite glues itself together
 
