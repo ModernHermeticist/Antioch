@@ -16,7 +16,7 @@ namespace
         {
             std::map<juce::String, int> out;
             for (int s = 0; s < qn::numSlots; ++s)
-                for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s), qn::bdId (s) }) out[id] = s;
+                for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s), qn::bdId (s), qn::grId (s) }) out[id] = s;
             out[qn::lowCutId] = 6;
             out[qn::highCutId] = 7;
             out[qn::widthId] = 11;
@@ -80,6 +80,7 @@ QuintessenceProcessor::QuintessenceProcessor()
 QuintessenceProcessor::~QuintessenceProcessor()
 {
     suite::Conductor::forget (getInstanceId());
+    live.forget (getInstanceId());
     for (const auto& [id, bit] : lockBits()) apvts.removeParameterListener (id, this);
 }
 
@@ -129,6 +130,9 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     blockMono.clear();
     blockMono.reserve (8192);
     mbWinLength = juce::jmax (1, (int) std::round (sr * 0.05));
+    live.prepare (sr);
+    for (auto& f : keyNotch) f.reset();
+    keyNotchSet = 0.0f;
     resetMeasurement();
 }
 
@@ -166,6 +170,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     {
         const auto pos = follower.locate (info.ppq, info.barQuarters());
         if (pos.valid && pos.type == suite::SectionType::Breakdown) group = 1;
+        // The drops are the main correction; grooves, intro and outro get their own on top (with the autopilot)
+        if (pos.valid && (pos.type == suite::SectionType::Groove || pos.type == suite::SectionType::Intro || pos.type == suite::SectionType::Outro)
+            && suite::Autopilot::on (suite::Autopilot::mixing)) group = 3;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
         if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; }
     }
@@ -189,7 +196,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     for (int s = 0; s < qn::numSlots; ++s)
     {
         const auto f = value (qn::freqId (s)), q = value (qn::qId (s));
-        auto g = value (qn::gainId (s)) + (group == 1 ? value (qn::bdId (s)) : 0.0f);
+        auto g = value (qn::gainId (s)) + (group == 1 ? value (qn::bdId (s)) : group == 3 ? value (qn::grId (s)) : 0.0f);
         if (const auto when = (int) value (qn::whenId (s)); when > 0)
             g = std::round (2.0f * g * suite::ActivityBus::read (when == 1 ? suite::ActivityBus::vocal : suite::ActivityBus::lead)) * 0.5f;
         auto& now = peakNow[(size_t) s];
@@ -296,6 +303,30 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         slope[(size_t) b] = 1.0f - 1.0f / juce::jmax (1.0f, ratio);
     }
 
+    // Autopilot (mixing): the live moves, with the shared kick's position for every role
+    const auto mixing = suite::Autopilot::on (suite::Autopilot::mixing);
+    {
+        qn::LiveMix::Context lc;
+        lc.role = (int) value (qn::roleId) > 0 ? (int) value (qn::roleId) : roleNow;   // the chosen role from the start
+        lc.id = getInstanceId(); lc.mixing = mixing; lc.stability = suite::Autopilot::on (suite::Autopilot::stability);
+        if (mixing && info.hasPpq && info.playing)
+            if (const auto kick = suite::KickBus::read(); kick.valid)
+            {
+                auto phase = std::fmod (info.ppq, info.barQuarters());
+                if (phase < 0.0) phase += info.barQuarters();
+                lc.kickMs = kick.msSinceHit (sectionType, phase, info.barQuarters(), 60000.0 / juce::jmax (1.0, info.bpm));
+                lc.msPerSample = (float) (1000.0 / sr);
+            }
+        live.beginBlock (lc, n);
+        if (mixing && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
+    }
+    const auto notchHz = mixing ? keyNotchHz.load() : 0.0f;
+    if (std::abs (notchHz - keyNotchSet) > 0.5f)
+    {
+        for (auto& f : keyNotch) { f.setPeak (juce::jmax (20.0f, notchHz), 8.0f, notchHz > 0.0f ? -6.0f : 0.0f, fs); f.reset(); }
+        keyNotchSet = notchHz;
+    }
+
     for (int i = 0; i < n; ++i)
     {
         float x[2] = { ch[0][i], ch[1] != nullptr ? ch[1][i] : ch[0][i] };
@@ -308,6 +339,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (highOn) v = highCuts[(size_t) c * 2 + 1].lowpass (highCuts[(size_t) c * 2].lowpass (v));
             if (chordDipHz > 0.0f) v = chordDip[(size_t) c].process (v);
             if (riserDipDb < -0.01f) v = riserDip[(size_t) c].process (v);
+            if (keyNotchSet > 0.0f) v = keyNotch[(size_t) c].process (v);
             x[c] = v;
         }
 
@@ -398,6 +430,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (! dipping && harshDipDb < -1.0f) { dipping = true; suite::Autopilot::count (suite::Autopilot::harshDips); }
         }
         if (harshDipDb > -0.5f) dipping = false;
+        // Autopilot (mixing): masking, the low end's owner, transients on the kick, mono lows, bass
+        // notes, harmonics, moving resonances, drum hits, the noise floor (LiveMix.h)
+        live.process (out[0], out[1], ch[1] != nullptr);
         // Autopilot: stereo stability - where the image would cancel in mono (correlation under -0.25,
         // over the last 50 ms), the width rides down to 60% until it's safe again
         corrLR += corrCoeff * ((double) out[0] * out[1] - corrLR);
@@ -490,6 +525,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (n2 > 0) std::copy (blockMono.begin() + n1, blockMono.begin() + n1 + n2, fifoData.begin() + s2);
         fifo.finishedWrite (n1 + n2);
     }
+    live.endBlock();
 }
 
 //==============================================================================
@@ -832,6 +868,9 @@ bool QuintessenceProcessor::autoPass()
         if (! helped) return true;   // this pass measured the undone move: decide again next pass
     }
 
+    // The autopilot's quick, unjudged moves: an out-of-key FX note, an effect return's cuts
+    if (suite::Autopilot::on (suite::Autopilot::mixing)) { keyMove (role); returnsMove(); }
+
     // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
     // move (EQ, dynamics, width, resonances) take turns going first.
     // One move at a time across the whole mix: wait for the conductor's turn
@@ -846,6 +885,56 @@ bool QuintessenceProcessor::autoPass()
     }
     suite::Conductor::release (getInstanceId());   // nothing to do: the turn goes on
     return false;
+}
+
+void QuintessenceProcessor::keyMove (int role)
+{
+    // A pitched FX (a tonal riser, a vocal shot, a sample's note) holding a note outside the song's
+    // key: that note is notched 6 dB while it's there. Moving keys clears a notch that now fits.
+    const auto key = suite::KeyBus::read();
+    if (role != 7 || ! key.valid) { if (keyNotchHz.load() > 0.0f && role != 7) keyNotchHz.store (0.0f); return; }
+    const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, key.scale)].steps;
+    auto inKey = [&] (float hz)
+    {
+        const auto midi = 69.0f + 12.0f * std::log2 (hz / 440.0f);
+        const auto pc = ((int) std::lround (midi) % 12 + 12) % 12;
+        return std::find (steps.begin(), steps.end(), ((pc - key.root) % 12 + 12) % 12) != steps.end();
+    };
+    if (const auto now = keyNotchHz.load(); now > 0.0f && inKey (now)) keyNotchHz.store (0.0f);
+    for (const auto& c : candidates)
+    {
+        if (c.passes < 2 || c.hz < 80.0f || c.hz > 4000.0f) continue;
+        const auto midi = 69.0f + 12.0f * std::log2 (c.hz / 440.0f);
+        if (std::abs (midi - std::round (midi)) > 0.35f || inKey (c.hz)) continue;   // a clear note, out of the key
+        if (std::abs (keyNotchHz.load() - c.hz) < 1.0f) return;
+        keyNotchHz.store (c.hz);
+        suite::Autopilot::count (suite::Autopilot::outOfKeyNotched);
+        addLog (juce::String (juce::roundToInt (c.hz)) + " Hz notched 6 dB: the FX holds " + suite::music::noteNames()[((int) std::lround (midi) % 12 + 12) % 12]
+                + ", outside the song's key");
+        return;
+    }
+}
+
+void QuintessenceProcessor::returnsMove()
+{
+    // An effect return (a track named reverb, delay, echo, return, send or space, or one with
+    // Antioch on it): low cut at 180 Hz and high cut at 12 kHz, so the space doesn't muddy the low
+    // end or fizz on top. Once; your own cut settings are left alone.
+    if (returnsDone) return;
+    const auto track = getTrackName().toLowerCase();
+    if (track.isEmpty()) return;
+    returnsDone = true;
+    bool isReturn = false;
+    for (const auto* w : { "reverb", "verb", "delay", "echo", "return", "send", "space" }) isReturn = isReturn || track.contains (w);
+    for (const auto& e : suite::Registry::list()) isReturn = isReturn || (e.plugin == "Antioch" && e.track.toLowerCase() == track);
+    if (! isReturn) return;
+    juce::StringArray did;
+    if (value (qn::lowCutLockId) < 0.5f && value (qn::lowCutId) < 180.0f) { write (qn::lowCutId, 180.0f); did.add ("low cut at 180 Hz"); }
+    if (value (qn::highCutLockId) < 0.5f && value (qn::highCutId) > 12000.0f) { write (qn::highCutId, 12000.0f); did.add ("high cut at 12 kHz"); }
+    if (did.isEmpty()) return;
+    lowCutTried = true;
+    suite::Autopilot::count (suite::Autopilot::returnsCleaned);
+    addLog ("Effect return: " + did.joinIntoString (" and ") + ", so the space stays out of the low end and off the top");
 }
 
 float QuintessenceProcessor::needNow (const Measurement& m, int role) const
@@ -883,7 +972,7 @@ std::function<void()> QuintessenceProcessor::masterTone (uint32_t data)
                 if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == (pass == 0 ? qn::free : qn::roleTone)) slot = s;
     if (slot < 0) { addLog ("Mentalism's master balance for " + hzText (centre) + " arrived, but every band is locked or busy"); return {}; }
     std::vector<std::pair<juce::String, float>> before;
-    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot) }) before.push_back ({ id, value (id) });
+    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot), qn::grId (slot) }) before.push_back ({ id, value (id) });
     const auto already = (int) value (qn::reasonId (slot)) == qn::masterBalance ? value (qn::gainId (slot)) : 0.0f;
     const auto gain = juce::jlimit (-qn::maxToneDb, qn::maxToneDb, already + db);
     if (pending.index == slot) pending.kind = Pending::none;
@@ -891,7 +980,7 @@ std::function<void()> QuintessenceProcessor::masterTone (uint32_t data)
     write (qn::qId (slot), 1.0f);
     write (qn::reasonId (slot), (float) qn::masterBalance);
     write (qn::whenId (slot), 0.0f);
-    write (qn::bdId (slot), 0.0f);
+    write (qn::bdId (slot), 0.0f); write (qn::grId (slot), 0.0f);
     write (qn::gainId (slot), gain);
     addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (gain) + " (master balance: this track's share of the master's "
             + dbText (-db).replace ("+", "") + " at " + hzText (centre) + ", from Mentalism)");
@@ -970,7 +1059,7 @@ bool QuintessenceProcessor::budgetMove (const Measurement& m, int role)
     // Tone budget: the vocal owns 2 kHz (where its words are), the lead 4 kHz over the pads.
     // Another part that's strong there gives it room: a gentle 1.5 dB dip that opens only while
     // the owner plays.
-    if (value (qn::autoEqId) < 0.5f || m.group != 0) return false;
+    if (value (qn::autoEqId) < 0.5f || (m.group != 0 && m.group != 3)) return false;
     const auto track = getTrackName();
     bool vocal = false, lead = false;
     juce::String vocalTrack, leadTrack;
@@ -996,13 +1085,13 @@ bool QuintessenceProcessor::budgetMove (const Measurement& m, int role)
     const auto centre = analysis::bandCentres()[(size_t) band];
     pending = { Pending::budget, slot, band,
                 { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) }, { qn::qId (slot), value (qn::qId (slot)) },
-                  { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::whenId (slot), value (qn::whenId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) } },
+                  { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::whenId (slot), value (qn::whenId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) }, { qn::grId (slot), value (qn::grId (slot)) } },
                 toneError (m, role), "room for the " + owner + " at " + hzText (centre) };
     write (qn::freqId (slot), centre);
     write (qn::qId (slot), 1.0f);
     write (qn::reasonId (slot), (float) qn::masking);
     write (qn::whenId (slot), (float) when);
-    write (qn::bdId (slot), 0.0f);
+    write (qn::bdId (slot), 0.0f); write (qn::grId (slot), 0.0f);
     write (qn::gainId (slot), -1.5f);
     addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " -1.5 dB while the " + owner + " plays: room for the " + owner
             + (ownerTrack.isNotEmpty() ? " ('" + ownerTrack + "')" : juce::String()) + ", which owns that part of the spectrum");
@@ -1150,13 +1239,13 @@ bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
         if (again && std::abs (gain - value (qn::gainId (slot))) < 0.05f) continue;   // as deep as it goes
         pending = { Pending::resonance, slot, -1,
                     { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
-                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) } },
+                      { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) }, { qn::bdId (slot), value (qn::bdId (slot)) }, { qn::grId (slot), value (qn::grId (slot)) } },
                     c.prominence, "band " + juce::String (slot + 1) + " " + juce::String (juce::roundToInt (c.hz)) + " Hz " + dbText (gain) + " (resonance)",
                     toneError (m, role) };
         write (qn::freqId (slot), c.hz);
         write (qn::qId (slot), 6.0f);
         write (qn::reasonId (slot), (float) qn::resonance);
-        write (qn::bdId (slot), 0.0f);
+        write (qn::bdId (slot), 0.0f); write (qn::grId (slot), 0.0f);
         write (qn::gainId (slot), gain);
         addLog ("Band " + juce::String (slot + 1) + ": " + juce::String (juce::roundToInt (c.hz)) + " Hz " + dbText (gain) + ", narrow (a ringing peak "
                 + juce::String (c.prominence, 1) + " dB above the sound around it, there for " + juce::String (juce::roundToInt (c.seconds)) + " s"
@@ -1208,7 +1297,7 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
     const auto& t = qn::targets::roles()[(size_t) role];
 
     // Low cut where the part has no job (once; it's checked like any move)
-    const auto breakdown = m.group == 1;
+    const auto breakdown = m.group == 1, groove = m.group == 3;   // each gets its own correction
     if (! breakdown && t.lowCutHz > 0.0f && ! lowCutTried && value (qn::lowCutLockId) < 0.5f && value (qn::lowCutId) <= qn::lowCutOff)
     {
         float below = -200.0f, loudest = -200.0f;
@@ -1250,24 +1339,25 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
         // In breakdowns the move goes into the band's breakdown gain (on top of its main gain), so
         // the breakdown gets its own correction without touching the drops
         const auto gainNow = fresh ? 0.0f : value (qn::gainId (slot));
-        const auto& id = breakdown ? qn::bdId (slot) : qn::gainId (slot);
+        const auto& id = breakdown ? qn::bdId (slot) : groove ? qn::grId (slot) : qn::gainId (slot);
         const auto current = fresh ? 0.0f : value (id);
-        const auto next = breakdown ? juce::jlimit (-qn::maxToneDb - gainNow, qn::maxToneDb - gainNow, current + step)
+        const auto next = breakdown || groove ? juce::jlimit (-qn::maxToneDb - gainNow, qn::maxToneDb - gainNow, current + step)
                                     : juce::jlimit (-qn::maxToneDb, qn::maxToneDb, current + step);
         if (std::abs (next - current) < 0.05f) { toneCooldown[(size_t) band] = 8; continue; }   // as far as it goes
 
         const auto centre = analysis::bandCentres()[(size_t) band];
-        const auto where = breakdown ? juce::String (" in breakdowns") : juce::String();
+        const auto where = breakdown ? juce::String (" in breakdowns") : groove ? juce::String (" in grooves, intro and outro") : juce::String();
+        if (groove) suite::Autopilot::count (suite::Autopilot::sectionCorrections);
         pending = { Pending::eqSlot, slot, band,
                     { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
                       { qn::qId (slot), value (qn::qId (slot)) }, { qn::reasonId (slot), value (qn::reasonId (slot)) },
-                      { qn::bdId (slot), value (qn::bdId (slot)) } },
+                      { qn::bdId (slot), value (qn::bdId (slot)) }, { qn::grId (slot), value (qn::grId (slot)) } },
                     before,
                     "band " + juce::String (slot + 1) + " " + hzText (centre) + " " + dbText (next) + where };
         write (qn::freqId (slot), centre);
         write (qn::qId (slot), 1.0f);
         write (qn::reasonId (slot), (float) qn::roleTone);
-        if (fresh) { write (qn::gainId (slot), 0.0f); write (qn::bdId (slot), 0.0f); }
+        if (fresh) { write (qn::gainId (slot), 0.0f); write (qn::bdId (slot), 0.0f); write (qn::grId (slot), 0.0f); }
         write (id, next);
         const auto yours = learnedSongs (role) >= 3;
         addLog ("Band " + juce::String (slot + 1) + where + ": " + hzText (centre) + " " + dbText (next) + " (" + juce::String (std::abs (err), 1) + " dB "
@@ -1383,7 +1473,7 @@ std::function<void()> QuintessenceProcessor::carve (uint32_t data)
     const auto centre = analysis::bandCentres()[(size_t) band];
 
     std::vector<std::pair<juce::String, float>> before;
-    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot) }) before.push_back ({ id, value (id) });
+    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot), qn::grId (slot) }) before.push_back ({ id, value (id) });
     if (pending.kind == Pending::eqSlot && pending.index == slot) pending.kind = Pending::none;
     write (qn::freqId (slot), centre);
     write (qn::qId (slot), 1.4f);

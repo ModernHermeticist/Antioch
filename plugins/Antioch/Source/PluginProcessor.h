@@ -93,6 +93,7 @@ public:
     std::atomic<float> leadRoomNow { 1.0f };
     std::atomic<int> chordShift { 0 };   // semitones the resonators follow the chord (tests, UI)    // the wet gain lead-aware space is applying (tests, UI)
     float leadRoomGain = 1.0f;
+    bool madeRoom = false;
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

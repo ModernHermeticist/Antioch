@@ -31,6 +31,8 @@
 #include "ActivityBus.h"
 #include "Music.h"
 #include "Registry.h"
+#include "LiveMix.h"
+#include "KeyBus.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
 {
@@ -136,6 +138,9 @@ private:
     bool glueMove (const Measurement&, int role);
     bool deessMove (const Measurement&, int role);
     bool budgetMove (const Measurement&, int role);
+    void keyMove (int role);       // the autopilot: a pitched FX note out of the song's key is notched
+    void returnsMove();            // ... and an effect return gets its cuts
+    bool returnsDone = false, monoCounted = false;
     float needNow (const Measurement&, int role) const;
     std::function<void()> masterTone (uint32_t data);
     int budgetDone = -1;
@@ -150,7 +155,8 @@ private:
     // Audio thread
     double sr = 48000.0;
     double tempoNow = -1.0;
-    std::array<suite::Biquad, 2> chordDip, riserDip;
+    std::array<suite::Biquad, 2> chordDip, riserDip, keyNotch;
+    float keyNotchSet = 0.0f;
     float chordDipHz = 0.0f, riserDipDb = 0.0f;
     suite::SectionFollower follower;
     int passGroup = -1;
@@ -188,6 +194,8 @@ private:
     bool dipping = false, riding = false;
 public:
     std::atomic<float> widthRideNow { 1.0f };   // (tests, UI)
+    std::atomic<float> keyNotchHz { 0.0f };     // an out-of-key FX note being cut (0 = none)
+    qn::LiveMix live;                           // the autopilot's live mixing moves
 private:
     suite::Svf sibPostAnalyser;
     suite::EnvelopeFollower deessEnv, fastEnv, slowEnv, glueEnv, outFast, outSlow;

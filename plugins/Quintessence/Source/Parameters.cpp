@@ -53,6 +53,8 @@ namespace qn
             l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { lockId (s), 1 }, n + "locked", false, boolNotAutomatable));
             l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { bdId (s), 1 }, n + "breakdown gain",
                        juce::NormalisableRange<float> (-8.0f, 8.0f, 0.1f), 0.0f, dbAttr));
+            l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { grId (s), 1 }, n + "groove gain",
+                       juce::NormalisableRange<float> (-8.0f, 8.0f, 0.1f), 0.0f, dbAttr));
         }
 
         for (int b = 0; b < numMbBands; ++b)

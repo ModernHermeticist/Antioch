@@ -107,6 +107,7 @@ void VibrationProcessor::trackPitch (const float* mono, int n)
     if (bestLag == 0 || best < 0.3f * energy / 512.0f) return;   // not clearly pitched
     const auto hz = (float) (rate / bestLag);
     pitchHz.store (hz);
+    suite::Autopilot::publishLeadPitch (hz);   // pads and FX make room for the lead's note
     const auto semis = 12.0f * std::log2 (hz / 440.0f);
     if (! pitchAverageSet) { pitchAverageSemis = semis; pitchAverageSet = true; }
     pitchAverageSemis += 0.002f * (semis - pitchAverageSemis);   // the lead's usual pitch (slow)

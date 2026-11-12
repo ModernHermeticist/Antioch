@@ -248,14 +248,20 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     const auto vocalThrows = autoIndex == Throw::autoAtVocalEnds && host.playing && host.hasPpq && suite::VocalBus::any();
     vocalMarksFound.store (suite::VocalBus::any());
     // Reverb pump: the tail ducks to the kick pattern a Kybalion shares (no routing).
-    const auto pumpDepth = value (Verb::pump);
+    // Autopilot (mixing): the space always makes room - it pumps with the kick (at least 35%) and
+    // steps back for the vocal as well as the lead
+    const auto mixingRoom = suite::Autopilot::on (suite::Autopilot::mixing);
+    const auto pumpDepth = mixingRoom ? juce::jmax (0.35f, value (Verb::pump)) : value (Verb::pump);
     const auto kickPattern = pumpDepth > 0.0f && host.playing && host.hasPpq ? suite::KickBus::read() : suite::KickPatternSet {};
     const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
     const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.003f * sr));
     float minPump = 1.0f;
     // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
     const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
-    const auto leadTarget = 1.0f - 0.6f * leadAmount * suite::ActivityBus::read (suite::ActivityBus::lead);
+    const auto leadNow = mixingRoom ? juce::jmax (suite::ActivityBus::read (suite::ActivityBus::lead), suite::ActivityBus::read (suite::ActivityBus::vocal))
+                                    : suite::ActivityBus::read (suite::ActivityBus::lead);
+    const auto leadTarget = 1.0f - 0.6f * leadAmount * juce::jlimit (0.0f, 1.0f, leadNow);
+    if (mixingRoom && (leadTarget < 0.8f || (kickPattern.valid && pumpDepth > 0.0f && host.playing)) && ! madeRoom) { madeRoom = true; suite::Autopilot::count (suite::Autopilot::reverbMadeRoom); }
     const auto leadAttack = 1.0f - std::exp (-1.0f / (0.02f * sr)), leadRelease = 1.0f - std::exp (-1.0f / (0.25f * sr));
     const auto barQ = host.barQuarters();
     const auto phraseQ = autoBars * host.barQuarters();

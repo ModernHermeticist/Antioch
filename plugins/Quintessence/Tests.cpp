@@ -14,6 +14,7 @@
 #include "ChordBus.h"
 #include "FixBus.h"
 #include "AutopilotBus.h"
+#include "KeyBus.h"
 
 using namespace suite::test;
 
@@ -321,18 +322,21 @@ int main (int argc, char** argv)
                "a soft kick gets punch, checked step by step (" + juce::String (punchBefore, 1) + " -> " + juce::String (punchAfter, 1)
                    + " dB; punch " + juce::String (juce::roundToInt (v (*p, qn::punchId) * 100.0f)) + "%)");
 
-        // The music bus: glue to about 1.5 dB of reduction
+        // The music bus: glue to about 1.5 dB of reduction (the kick's last move no longer holds the turn)
+        suite::Conductor::forget (p->getInstanceId());
         auto bus = make (qn::targets::musicBus);
         set (*bus, qn::autoEqId, 0.0f);
         Player music { bands (heavyPad) };
         passes (*bus, music, 10);
         music.play (*bus, QuintessenceProcessor::passSeconds + 0.3);
         const auto gr = bus->measurement().glueGrDb;
+        if (std::getenv ("QDEBUG")) std::cout << "BUS\n" << bus->moveLog().joinIntoString ("\n") << " role " << bus->roleShown.load() << " passes " << bus->passes.load() << std::endl;
         check (v (*bus, qn::glueThrId) < -0.05f && std::abs (gr - qn::targets::glueTargetDb) < 0.6f,
                "on the music bus the glue settles near 1.5 dB of reduction (" + juce::String (gr, 2) + " dB at " + juce::String (v (*bus, qn::glueThrId), 1) + " dB)");
         check (v (*bus, qn::ratioId (1)) < 1.01f && std::abs (v (*bus, qn::gainId (1))) < 0.05f, "and leaves the EQ and multiband alone");
 
         // A vocal with spiky 's' sounds around 7.5 kHz
+        suite::Conductor::forget (bus->getInstanceId());
         auto vox = make (6);
         set (*vox, qn::autoEqId, 0.0f);
         auto essFilter = std::make_shared<suite::Svf>();
@@ -558,11 +562,14 @@ int main (int argc, char** argv)
     {
         auto p = make (5);   // lead
         set (*p, qn::autoMbId, 0.0f);
+        if (std::getenv ("QOFF")) suite::Autopilot::set (suite::Autopilot::mixing, false);
         // A bare sine: no EQ move can change its shape (there's nothing else there to bring up or down)
         Player player { sine (500.0f, 0.3f) };
         passes (*p, player, 10);
         bool flat = true;
         for (int sl = 0; sl < qn::numSlots; ++sl) flat = flat && std::abs (v (*p, qn::gainId (sl))) < 0.05f;
+        if (std::getenv ("QDEBUG")) std::cout << p->moveLog().joinIntoString ("\n") << "\nlive: mask " << p->live.maskNow.load() << " lift " << p->live.liftNow.load()
+                                              << " soothe " << p->live.sootheNow.load() << " floor " << p->live.floorNowDb.load() << " low " << p->live.lowOwnerNow.load() << std::endl;
         check (p->undone.load() >= 2 && p->kept.load() == 0, "every move was checked and undone (" + juce::String (p->undone.load()) + " undone, " + juce::String (p->kept.load()) + " kept)");
         check (flat, "and the EQ ends where it started");
     }
@@ -729,6 +736,233 @@ int main (int argc, char** argv)
         const auto dipped = run (true, true), other = run (true, false), calm = run (false, true);
         check (dipped < -2.0f, "the named track dips at 4 kHz (" + juce::String (dipped, 1) + " dB)");
         check (std::abs (other) < 0.3f && std::abs (calm) < 0.3f, "other tracks, and calm moments, are untouched (" + juce::String (other, 2) + ", " + juce::String (calm, 2) + " dB)");
+    }
+
+
+    section ("Autopilot (mixing): tracks making room for each other");
+    {
+        suite::Autopilot::reset();
+        suite::SectionBus::withdraw();
+        // Another track, as the bus would hear it: its role and its ten bands (dB)
+        auto other = [] (int role, std::array<float, 10> db) { return [role, db] (int64_t) { suite::Autopilot::postLive (0x777u, role, db.data()); }; };
+        auto levelDb = [] (QuintessenceProcessor& p, InputFn in, std::function<void (int64_t)> before, double seconds = 1.5)
+        {
+            juce::AudioBuffer<float> a;
+            Player player { in };
+            player.play (p, seconds, &a, before);
+            return juce::Decibels::gainToDecibels (rmsBetween (a, seconds - 0.5, seconds));
+        };
+        std::array<float, 10> quiet; quiet.fill (-100.0f);
+        auto leadAt2k = quiet; leadAt2k[6] = -10.0f;
+        {
+            auto pad = make (4); set (*pad, qn::autoEqId, 0.0f); set (*pad, qn::autoMbId, 0.0f);
+            const auto alone = levelDb (*pad, sine (2000.0f, 0.3f), {});
+            auto pad2 = make (4); set (*pad2, qn::autoEqId, 0.0f); set (*pad2, qn::autoMbId, 0.0f);
+            const auto withLead = levelDb (*pad2, sine (2000.0f, 0.3f), other (5, leadAt2k));
+            check (withLead < alone - 1.0f, "a pad dips where the lead plays at the same time (" + juce::String (withLead - alone, 1) + " dB at 2 kHz)");
+        }
+        {
+            auto withNote = [&] (float padHz)
+            {
+                auto pad = make (4); set (*pad, qn::autoEqId, 0.0f); set (*pad, qn::autoMbId, 0.0f);
+                const auto alone = levelDb (*pad, sine (padHz, 0.3f), {});
+                auto pad2 = make (4); set (*pad2, qn::autoEqId, 0.0f); set (*pad2, qn::autoMbId, 0.0f);
+                auto lead = quiet; lead[5] = -10.0f;
+                const auto post = other (5, lead);
+                return levelDb (*pad2, sine (padHz, 0.3f), [post] (int64_t t) { post (t); suite::Autopilot::publishLeadPitch (880.0f); }) - alone;
+            };
+            const auto onNote = withNote (880.0f), offNote = withNote (1300.0f);
+            check (onNote < -1.5f && std::abs (offNote) < 0.6f, "with the lead's note known, the pad dips at that note only (" + juce::String (onNote, 1) + " dB at the note, "
+                       + juce::String (offNote, 1) + " dB beside it)");
+        }
+        {
+            auto lead = make (5); set (*lead, qn::autoEqId, 0.0f); set (*lead, qn::autoMbId, 0.0f);
+            const auto alone = levelDb (*lead, sine (2500.0f, 0.1f), {});
+            auto lead2 = make (5); set (*lead2, qn::autoEqId, 0.0f); set (*lead2, qn::autoMbId, 0.0f);
+            auto busyPad = quiet; busyPad[5] = busyPad[6] = busyPad[7] = -5.0f;
+            const auto masked = levelDb (*lead2, sine (2500.0f, 0.1f), other (4, busyPad));
+            check (masked > alone + 1.0f, "a lead under a louder pad lifts its presence (" + juce::String (masked - alone, 1) + " dB)");
+        }
+        {
+            auto pad = make (4); set (*pad, qn::autoEqId, 0.0f); set (*pad, qn::autoMbId, 0.0f);
+            const auto alone = levelDb (*pad, sine (40.0f, 0.3f), {}, 2.0);
+            auto pad2 = make (4); set (*pad2, qn::autoEqId, 0.0f); set (*pad2, qn::autoMbId, 0.0f);
+            auto bass = quiet; bass[0] = bass[1] = -10.0f;
+            const auto owned = levelDb (*pad2, sine (40.0f, 0.3f), other (2, bass), 2.0);
+            check (owned < alone - 4.0f, "with a bass playing, a pad's 40 Hz goes (" + juce::String (owned - alone, 1) + " dB)");
+        }
+        suite::Autopilot::reset();
+        {
+            auto pad = make (4); set (*pad, qn::autoEqId, 0.0f); set (*pad, qn::autoMbId, 0.0f);
+            suite::Autopilot::set (suite::Autopilot::mixing, false);
+            const auto off = levelDb (*pad, sine (2000.0f, 0.3f), other (5, leadAt2k));
+            suite::Autopilot::reset();
+            check (std::abs (off) - std::abs (juce::Decibels::gainToDecibels (0.3f / std::sqrt (2.0f))) < 0.2f, "switched off: no dip");
+        }
+
+        // The live moves on their own (LiveMix, as Quintessence runs it)
+        struct Out { std::vector<float> l, r; };
+        auto liveRun = [] (int role, double seconds, std::function<std::pair<float, float> (int64_t)> sig, bool kicks = false, qn::LiveMix* keep = nullptr)
+        {
+            auto lm = std::make_unique<qn::LiveMix>();
+            auto& m = keep != nullptr ? *keep : *lm;
+            m.prepare (sampleRate);
+            Out o;
+            const auto total = (int64_t) (seconds * sampleRate);
+            for (int64_t start = 0; start < total; start += 256)
+            {
+                qn::LiveMix::Context c;
+                c.role = role;
+                if (kicks) { c.kickMs = (float) std::fmod ((double) start / sampleRate * 1000.0, 500.0); c.msPerSample = (float) (1000.0 / sampleRate); }
+                const auto n = (int) std::min<int64_t> (256, total - start);
+                m.beginBlock (c, n);
+                for (int i = 0; i < n; ++i)
+                {
+                    auto [l, r] = sig (start + i);
+                    m.process (l, r, true);
+                    o.l.push_back (l); o.r.push_back (r);
+                }
+                m.endBlock();
+            }
+            return o;
+        };
+        auto rmsOf = [] (const std::vector<float>& v, double a, double b)
+        {
+            double sum = 0.0; int n = 0;
+            for (auto i = (size_t) (a * sampleRate); i < (size_t) (b * sampleRate) && i < v.size(); ++i) { sum += (double) v[i] * v[i]; ++n; }
+            return (float) std::sqrt (sum / juce::jmax (1, n));
+        };
+        auto mono = [] (std::function<float (double)> f) { return [f] (int64_t i) { const auto x = f ((double) i / sampleRate); return std::make_pair (x, x); }; };
+        // A short decaying click every half second (on the kick's beats)
+        auto clicks = [] (double t, float amp) { const auto ph = std::fmod (t, 0.5); return amp * (float) (std::exp (-ph / 0.02) * std::sin (juce::MathConstants<double>::twoPi * 3000.0 * t)); };
+        {
+            const auto onKick = liveRun (3, 3.0, mono ([&] (double t) { return clicks (t, 0.3f); }), true);
+            const auto free = liveRun (3, 3.0, mono ([&] (double t) { return clicks (t, 0.3f); }), false);
+            const auto d = juce::Decibels::gainToDecibels (rmsOf (onKick.l, 2.5, 2.52) / rmsOf (free.l, 2.5, 2.52));
+            check (d < -1.5f, "a percussion attack landing on the kick is softened (" + juce::String (d, 1) + " dB)");
+        }
+        {
+            // Even hits: one in eight four times as loud
+            auto hits = [&] (double t) { const auto k = (int) std::floor (t / 0.5); return clicks (t, k % 8 == 7 ? 0.8f : 0.2f); };
+            const auto evened = liveRun (3, 4.0, mono (hits));
+            const auto plain = liveRun (0, 4.0, mono (hits));
+            const auto d = juce::Decibels::gainToDecibels (rmsOf (evened.l, 3.51, 3.56) / rmsOf (plain.l, 3.51, 3.56));
+            check (d < -3.0f, "a drum hit far louder than the others is evened out (" + juce::String (d, 1) + " dB)");
+            const auto normal = juce::Decibels::gainToDecibels (rmsOf (evened.l, 3.01, 3.06) / rmsOf (plain.l, 3.01, 3.06));
+            check (std::abs (normal) < 0.5f, "the ordinary hits are untouched (" + juce::String (normal, 2) + " dB)");
+        }
+        {
+            // Bass notes: A1 loud, E2 quiet, half a second each
+            auto notes = [] (double t)
+            {
+                const auto loud = std::fmod (t, 1.0) < 0.5;
+                return (loud ? 0.3f : 0.1f) * (float) std::sin (juce::MathConstants<double>::twoPi * (loud ? 55.0 : 82.41) * t);
+            };
+            qn::LiveMix keep;
+            const auto o = liveRun (2, 12.0, mono (notes), false, &keep);
+            const auto spread = juce::Decibels::gainToDecibels (rmsOf (o.l, 11.1, 11.45) / rmsOf (o.l, 11.6, 11.95));
+            check (spread < 6.5f, "bass notes that boom and vanish are evened (9.5 dB apart in, " + juce::String (spread, 1) + " dB out)");
+        }
+        {
+            qn::LiveMix keep;
+            const auto o = liveRun (2, 6.0, mono ([] (double t) { return 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 50.0 * t); }), false, &keep);
+            double diff = 0.0; int n = 0;
+            for (auto i = (size_t) (5.0 * sampleRate); i < o.l.size(); ++i)
+            {
+                const auto in = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 50.0 * (double) i / sampleRate);
+                diff += (double) (o.l[i] - in) * (o.l[i] - in); ++n;
+            }
+            if (std::getenv ("QDEBUG")) std::cout << "harm " << keep.harmonicsNow.load() << " bands " << keep.bands()[1] << " " << keep.bands()[2] << " " << keep.bands()[3] << " " << keep.bands()[4] << std::endl;
+            check (keep.harmonicsNow.load() > 0.5f && std::sqrt (diff / n) > 0.003, "a bare sub bass gets harmonics for small speakers");
+        }
+        {
+            juce::Random rng (5);
+            qn::LiveMix ring, plain;
+            // A resonance that rings now and then (a tenth of a second in every half), over a steady noise
+            liveRun (4, 6.0, mono ([&] (double t) { return 0.3f * (rng.nextFloat() * 2.0f - 1.0f)
+                                                       + (std::fmod (t, 0.5) < 0.1 ? 0.12f * (float) std::sin (juce::MathConstants<double>::twoPi * 2520.0 * t) : 0.0f); }), false, &ring);
+            liveRun (4, 6.0, mono ([&] (double) { return 0.3f * (rng.nextFloat() * 2.0f - 1.0f); }), false, &plain);
+            check (ring.sootheDeepest.load() < -1.0f && plain.sootheDeepest.load() > -0.5f, "a resonance ringing now and then in a pad is soothed while it rings (" + juce::String (ring.sootheDeepest.load(), 1)
+                       + " dB; plain noise " + juce::String (plain.sootheDeepest.load(), 1) + " dB)");
+        }
+        {
+            juce::Random rng (6);
+            const auto o = liveRun (4, 2.0, mono ([&] (double t) { return t < 1.0 ? 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * t)
+                                                                                    : 0.0003f * (rng.nextFloat() * 2.0f - 1.0f); }));
+            const auto tail = juce::Decibels::gainToDecibels (rmsOf (o.l, 1.6, 2.0) / (0.0003f / std::sqrt (3.0f)));
+            const auto body = juce::Decibels::gainToDecibels (rmsOf (o.l, 0.5, 0.9) / (0.3f / std::sqrt (2.0f)));
+            check (tail < -6.0f && std::abs (body) < 0.1f, "hiss under -60 dBFS is pulled down (" + juce::String (tail, 1) + " dB), the music untouched");
+        }
+        {
+            const auto o = liveRun (4, 1.0, [] (int64_t i)
+            {
+                const auto t = (double) i / sampleRate;
+                const auto lo = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 50.0 * t), hi = 0.1f * (float) std::sin (juce::MathConstants<double>::twoPi * 2000.0 * t);
+                return std::make_pair (lo + hi, -lo - hi);   // all side
+            });
+            std::vector<float> side (o.l.size());
+            for (size_t i = 0; i < side.size(); ++i) side[i] = 0.5f * (o.l[i] - o.r[i]);
+            const auto all = rmsOf (side, 0.5, 1.0);
+            check (all < 0.09f && all > 0.06f, "mono lows: the stereo part under 120 Hz goes, above it stays (side " + juce::String (all, 3) + ", 2 kHz alone 0.071)");
+        }
+
+        // An FX holding a note outside the key
+        {
+            suite::KeyBus::publish (0, 1);   // C major
+            auto run = [] (float hz)
+            {
+                auto fx = make (7);
+                set (*fx, qn::autoMbId, 0.0f);
+                juce::Random rng (9);
+                Player player { [hz, &rng] (juce::AudioBuffer<float>& b, int64_t pos)
+                {
+                    for (int i = 0; i < b.getNumSamples(); ++i)
+                    {
+                        const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate) + 0.02f * (rng.nextFloat() * 2.0f - 1.0f);
+                        b.setSample (0, i, v); b.setSample (1, i, v);
+                    }
+                } };
+                for (int k = 0; k < 8; ++k) { suite::KeyBus::publish (0, 1); passes (*fx, player, 1); }
+                if (std::getenv ("QDEBUG")) { std::cout << "FX role " << fx->effectiveRole() << " res:"; for (auto r : fx->lastResonances()) std::cout << " " << r; std::cout << "\n" << fx->moveLog().joinIntoString ("\n") << std::endl; }
+                return fx->keyNotchHz.load();
+            };
+            const auto outside = run (369.99f), inside = run (392.0f);
+            suite::KeyBus::withdraw();
+            check (std::abs (outside - 370.0f) < 8.0f && inside == 0.0f, "an FX holding F# in C major is notched there (" + juce::String (outside, 0) + " Hz); G is left alone");
+        }
+
+        // Grooves get their own correction on top of the drop's
+        {
+            suite::Conductor::reset();
+            auto pad = make (4);
+            set (*pad, qn::autoMbId, 0.0f);
+            suite::SectionMap map;
+            map.totalBars = 999; map.count = 1;
+            map.sections[0] = { 1, suite::SectionType::Groove };
+            suite::SectionBus::publish (map);
+            FakePlayHead head; head.bpm = 120.0;
+            pad->setPlayHead (&head);
+            Player player { bands (heavyPad) };
+            player.head = &head;
+            passes (*pad, player, 6);
+            pad->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            const auto slot = toneSlotAt (*pad, 250.0f);
+            check (slot >= 0 && v (*pad, qn::grId (slot)) < -0.5f && std::abs (v (*pad, qn::gainId (slot))) < 0.05f,
+                   "in a groove the move goes into the groove's own gain, the drop's stays");
+        }
+
+        // An effect return
+        {
+            auto ret = make (4);
+            juce::AudioProcessor::TrackProperties props;
+            props.name = "Reverb Return";
+            ret->updateTrackProperties (props);
+            Player player { bands (heavyPad) };
+            passes (*ret, player, 2);
+            check (v (*ret, qn::lowCutId) >= 179.0f && v (*ret, qn::highCutId) <= 12001.0f, "a reverb return gets a 180 Hz low cut and a 12 kHz high cut");
+        }
+        suite::Autopilot::reset();
     }
 
     return finish();
