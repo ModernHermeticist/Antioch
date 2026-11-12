@@ -135,20 +135,30 @@ namespace chords::lib
         std::vector<Ev> evs;
         int prev = -1, arpIndex = 0;
         bool holding = false;
-        const auto totalSteps = (int) std::lround (lengthQ * 4.0);
+        const auto totalBars = (int) std::ceil (lengthQ / 4.0 - 1.0e-9);
         static const float levelVel[] = { 0.86f, 0.93f, 1.0f };
 
-        for (int g = 0; g < totalSteps; ++g)
+        for (int bar = 0; bar < totalBars; ++bar)
         {
-            const auto q = g * 0.25;
-            const auto chordIdx = (int) std::floor (q / L + 1.0e-9) % count;
-            const auto bar = g / 16, stepInBar = g % 16;
-            const auto answer = mel && bar % 8 >= 6;   // hooks and lines answer themselves in bars 7-8
-            const auto& src = fillAll || answer ? fill : main;
-            const auto barIndex = mel ? (answer ? bar % 8 - 6 : bar % 8) : bar;
-            const auto ch = src.bars[(size_t) barIndex % src.bars.size()][(size_t) stepInBar];
+          const auto answer = mel && bar % 8 >= 6;   // hooks and lines answer themselves in bars 7-8
+          const auto& src = fillAll || answer ? fill : main;
+          const auto barIndex = (size_t) (mel ? (answer ? bar % 8 - 6 : bar % 8) : bar) % src.bars.size();
+          const auto& barText = src.bars[barIndex];
+          const auto& barMarks = src.marks[barIndex];
+          const auto steps = (int) barText.size();     // 16 (16ths), 12 (8th triplets) or 24 (16th triplets)
+          const auto stepLen = 4.0 / steps;
+          for (int k = 0; k < steps; ++k)
+          {
+            const auto straight = bar * 4.0 + k * stepLen;
+            if (straight >= lengthQ - 1.0e-9) break;
+            const auto q = straight + (steps == 16 && k % 2 == 1 ? (double) f.swing * 0.25 : 0.0);   // the family's own shuffle
+            const auto inBeat = std::fmod (straight, 1.0);
+            const auto ch = barText[(size_t) k];
+            const auto mark = barMarks[(size_t) k];
+            const auto push = ch == 'p' || ch == 'P';   // the next chord, early
+            const auto chordIdx = ((int) std::floor (q / L + 1.0e-9) + (push ? 1 : 0)) % count;
             if (ch == '.') { holding = false; continue; }
-            if (ch == '-') { if (holding && ! evs.empty()) evs.back().holdEnd = q + 0.25; continue; }
+            if (ch == '-') { if (holding && ! evs.empty()) evs.back().holdEnd = straight + stepLen; continue; }
             if (ch == '~') { if (! evs.empty()) evs.back().slide = true; continue; }
 
             const auto chord = buildChord (s, s.slots[(size_t) chordIdx]);
@@ -172,10 +182,21 @@ namespace chords::lib
             auto nextRoot = [&] { return nearest (nextPc, mel ? from : base); };
 
             std::vector<int> pitches;
-            auto velocity = stepInBar % 4 == 0 ? 112 : stepInBar % 2 == 0 ? 102 : 92;
+            auto velocity = inBeat < 1.0e-6 ? 112 : std::abs (inBeat - 0.5) < 1.0e-6 ? 102 : 92;
             auto ghost = false, roll = false;
             switch (ch)
             {
+                case 'p': case 'P':
+                    if (chordal (f.part))
+                    {
+                        pitches = voiced.empty() ? std::vector<int> { base, base + toneOffset ('t'), base + toneOffset ('f') } : voiced[(size_t) chordIdx];
+                        if (! voiced.empty()) for (auto& p : pitches) p += shift;
+                        if (ch == 'P') pitches.push_back (*std::max_element (pitches.begin(), pitches.end()) + 12);
+                        velocity -= 8;
+                    }
+                    else
+                        pitches = { (mel ? nearest (rootPc, from) : base) + (ch == 'P' ? 12 : 0) };
+                    break;
                 case 'r': case 't': case 'f': case 's': case 'R': case 'T': case 'F': case 'S':
                 {
                     const auto up = std::isupper ((unsigned char) ch) ? 12 : 0;
@@ -231,6 +252,24 @@ namespace chords::lib
                 }
                 default: holding = false; continue;
             }
+            // Chord colours: the 7th or 9th added near the top, inversions
+            if (chordal (f.part) && (ch == 'c' || ch == 'C' || ch == 'p' || ch == 'P' || (ch == ',' && ! voiced.empty())) && pitches.size() >= 2)
+            {
+                const auto degree = juce::jlimit (1, 7, s.slots[(size_t) chordIdx].degree) - 1;
+                auto addTone = [&] (int stepsUp)
+                {
+                    const auto pc = ((s.root + suite::music::scaleStep (s.scale, degree + stepsUp)) % 12 + 12) % 12;
+                    auto p = *std::max_element (pitches.begin(), pitches.end());
+                    while (((p % 12) + 12) % 12 != pc) --p;
+                    if (std::find (pitches.begin(), pitches.end(), p) == pitches.end()) pitches.push_back (p);
+                };
+                if (f.add7) addTone (6);
+                if (f.add9) addTone (1);
+                std::sort (pitches.begin(), pitches.end());
+                for (int inv = 0; inv < f.inversion && inv < (int) pitches.size() - 1; ++inv) pitches[(size_t) inv] += 12;
+            }
+            if (mark == '!') velocity += 14;        // written accents
+            if (mark == '\'') velocity = 60;        // ...and soft notes
             for (auto& p : pitches)
             {
                 if (mel) { while (p > centre + 19) p -= 12; while (p < centre - 10) p += 12; }   // singable
@@ -240,6 +279,7 @@ namespace chords::lib
             evs.push_back ({ q, pitches, velocity, -1.0, ghost, roll, false });
             prev = pitches.front();
             holding = ! ghost;
+          }
         }
 
         // Lengths: held notes to the end of their hold, slides into the next note, rolls as

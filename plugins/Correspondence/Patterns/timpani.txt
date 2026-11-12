@@ -1,5 +1,7 @@
 # Timpani patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -9,11 +11,11 @@
 
 # --- 0: hits
 Downbeat hit | 0 | * | * | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- ---- r--- r---
-Root and fifth | 0 | PE | OU | 0.9 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f---
+Root and fifth | 0 | EP | UO | 0.9 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f--- | r--- f--- rrrr ffff | r--- r--- f--- f---
 Heartbeat | 0 | KM | OTY | 0.8 | - | r... .... .... .... | r..r .... .... .... | r..r .... r..r .... | r..r .... r..r r..r
 Boom boom | 0 | PD | OU | 0.8 | - | r... .... .... .... | r... .... r... .... | r... r... r... r... | r... r... rr.. rrrr
 Low octave strike | 0 | KP | OTC | 0.9 | - | l--- ---- ---- ---- | l--- ---- ---- ---- + >r--- ---- ---- ---- | l--- ---- l--- ---- + >r--- ---- r--- ---- | l--- ---- l--- ---- + >r--- ---- rrrr rrrr
-March | 0 | PD | OC | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr
+March | 0 | DP | UCTO | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr | rrrr r..r rrrr r..r | r..r r... r..r r...
 Syncopated hits | 0 | DE | OUT | 0.8 | - | r... .... .... .... | r... ...r .... .... | r... ...r ..r. .... | r... ...r ..r. rrrr
 Fifth answer | 0 | HP | OV | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- ffff
 Thunder | 0 | K | YTO | 0.9 | - | r--- ---- ---- ---- | z--- ---- ---- ---- | z--- ---- r--- ---- | z--- ---- z--- ----
@@ -30,20 +32,21 @@ Fifth roll | 1 | HP | OV | 1.0 | - | z--- ---- ---- ---- | z--- ---- ---- ---- +
 Pulse into roll | 1 | DP | OU | 0.7 | - | r... .... .... .... | r... ..r. r... .... | r... ..r. z--- ---- | rrrr rrrr z--- ----
 
 # --- batch 2
-Prog soft hits | 0 | RM | P | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- n---
+Prog soft hits | 0 | HMR | PV | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- n--- | r--- ---- f--- N--- | r--- r--- ---- f---
 Dreamy distant hits | 0 | R | PV | 0.9 | - | .... .... r--- ---- | r--- ---- ---- ---- + .... .... f--- ---- | r--- ---- f--- ---- + .... .... .... r--- | r--- f--- r--- ffff
 Prog roll | 1 | RM | P | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | .... z--- z--- ---- | z--- ---- z--- ----
 Dreamy roll | 1 | R | PV | 1.0 | - | .... .... z--- ---- | z--- ---- ---- ---- + .... .... f--- ---- | z--- ---- z--- ---- + .... .... f--- ---- | z--- ---- z--- ---- + .... f--- f--- ffff
 Melancholic roll | 1 | M | VPC | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- r---
 
 # --- batch 7
-Epic hit variations | 0 | PE | OU | 0.85 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f--- | r--- f--- rrrr ffff | r--- r--- f--- f---
-Driving hit variations | 0 | D | TCU | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr | rrrr r..r rrrr r..r | r..r r... r..r r...
-Build roll variations | 1 | PEH | OU | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-
+Build roll variations | 1 | EHDP | UCO | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-
 
 # --- batch 8
 Tech hits | 0 | DK | T | 0.7 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r..r ..r. r..r rrrr | rrrr ..r. r..r rrrr | r..r .... r..r ..r.
-Vocal soft timpani | 0 | HM | V | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- n--- | r--- ---- f--- N--- | r--- r--- ---- f---
 Psy war drums | 0 | K | Y | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..r. r..r .... | r..r ..r. r.rr rrrr | rrrr r..r ..r. rrrr | r..r ..r. r..r ..r.
-Classic roll | 1 | ED | C | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-
 Tech roll | 1 | DK | T | 0.9 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | rrrr ---- z--- ---- | z--- --z- z--- ----
+
+# --- batch 9 (... | fill 2 | high 2 | feel | colour | where)
+Triplet war drums | 0 | PK | OY | 0.6 | - | r........... | r..r........ | r..r..r..... | r..r..r.rrrr | rrrr..r..r.. | r..r..r..r.. | - | - |
+Accented hits | 0 | PE | OU | 0.85 | - | r--- ---- ---- ---- | !r--- ---- f--- ---- | !r--- ---- !f--- r--- | !r--- !f--- !r--- !f--- | !r--- !f--- rrrr ffff | !r--- r--- !f--- f--- | - | - |
+Build timpani climb | 1 | * | * | 0.7 | - | r... .... r... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr z--- ---- | z--- ---- rrrr rrrr | rrrr rrrr rrrr rrrr | - | - | B

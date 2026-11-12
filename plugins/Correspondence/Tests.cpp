@@ -1437,7 +1437,7 @@ int main (int argc, char** argv)
         // Every family is well formed: whole bars, known characters, density rising with the energy
         bool wellFormed = true, rising = true;
         juce::String bad;
-        const std::string known = "rtfsRTFSl94udknNaAbcCoz~,-.";
+        const std::string known = "rtfsRTFSl94udknNaAbcCozpP~,-.!'";
         auto onsets = [&] (const std::string& t) { int n = 0; for (const auto& v : voices (t)) for (const auto& b : v.bars) for (auto c : b) n += (c != '.' && c != '-' && c != '~') ? 1 : 0; return n; };
         for (const auto& f : lib)
         {
@@ -1448,7 +1448,8 @@ int main (int argc, char** argv)
                     v = v.trimCharactersAtStart ("<>");
                     for (auto b : juce::StringArray::fromTokens (v, "/", ""))
                     {
-                        if (b.length() != 16) { wellFormed = false; bad = juce::String (f.name) + " (" + b + ")"; }
+                        const auto steps = b.removeCharacters ("!'").length();
+                        if (steps != 16 && steps != 12 && steps != 24) { wellFormed = false; bad = juce::String (f.name) + " (" + b + ")"; }
                         for (auto c : b) if (known.find ((char) c) == std::string::npos) { wellFormed = false; bad = juce::String (f.name) + " ('" + juce::String::charToString (c) + "')"; }
                     }
                 }
@@ -1570,6 +1571,75 @@ int main (int argc, char** argv)
                 alternates = first != second;
             }
             check (alternates, "a 32-bar drop: its second phrase plays the second high energy, not a copy of the first");
+        }
+
+        // The notation: triplets, the family's own shuffle, accents, pushes, chord colours
+        {
+            auto make = [] (Part part, const std::string& high)
+            {
+                Family f;
+                f.name = "test"; f.part = part; f.level = { high, high, high }; f.fill = high; f.gate = 0.5f;
+                return f;
+            };
+            const auto triplets = chords::lib::render (make (Part::Bass, "rrr rrr rrr rrr"), 2, false, s, 4.0);
+            check (triplets.size() == 12 && std::abs (triplets[1].start - 1.0 / 3.0) < 1.0e-6 && std::abs (triplets[3].start - 1.0) < 1.0e-6,
+                   "a 12-step bar plays 8th-note triplets");
+            auto swung = make (Part::Bass, "rrrr rrrr rrrr rrrr");
+            swung.swing = 0.33f;
+            const auto sw = chords::lib::render (swung, 2, false, s, 4.0);
+            check (sw.size() == 16 && std::abs (sw[1].start - (0.25 + 0.33 * 0.25)) < 1.0e-4 && std::abs (sw[2].start - 0.5) < 1.0e-6,
+                   "a family's own shuffle delays the off 16ths only");
+            const auto acc = chords::lib::render (make (Part::Bass, "!r.r. 'r.r. r... ...."), 2, false, s, 4.0);
+            check (acc.size() == 5 && acc[0].velocity > acc[1].velocity && acc[2].velocity == 60, "written accents and soft notes");
+            const auto push = chords::lib::render (make (Part::Chords, "c--- ---- ---- ---p"), 2, false, s, 8.0);
+            const auto voicedProg = chords::voiceProgression (s);
+            std::vector<int> pushed;
+            for (const auto& n : push) if (std::abs (n.start - 3.75) < 1.0e-6) pushed.push_back (n.pitch);
+            std::sort (pushed.begin(), pushed.end());
+            auto second = voicedProg[1];
+            std::sort (second.begin(), second.end());
+            check (pushed == second, "'p' plays the next chord a 16th early (the push)");
+            auto coloured = make (Part::Chords, "c... .... .... ....");
+            coloured.add7 = true;
+            const auto seventh = chords::lib::render (coloured, 2, false, s, 4.0);   // Am7: G in the chord
+            check (seventh.size() == voicedProg[0].size() + 1 && std::any_of (seventh.begin(), seventh.end(), [] (const chords::Note& n) { return n.pitch % 12 == 7; }),
+                   "a 7th colour adds the chord's 7th (G over A minor)");
+            auto inverted = make (Part::Chords, "c... .... .... ....");
+            inverted.inversion = 1;
+            const auto inv = chords::lib::render (inverted, 2, false, s, 4.0);
+            int lowPlain = 200, lowInv = 200;
+            for (auto pch : voicedProg[0]) lowPlain = std::min (lowPlain, pch);
+            for (const auto& n : inv) lowInv = std::min (lowInv, n.pitch);
+            check (lowInv > lowPlain, "an inversion lifts the lowest note an octave");
+
+            // The fit check: an offbeat bass and an offbeat arp land together; a 16th arp around them doesn't
+            const auto bassF = make (Part::Bass, "..r. ..r. ..r. ..r.");
+            check (overlap (make (Part::Arp, "..a. ..a. ..a. ..a."), bassF) > 0.99f && overlap (make (Part::Arp, "a... a... a... a..."), bassF) < 0.01f,
+                   "interlocking rhythms score 0, unison 1");
+            // Section figures: a build-only family plays in the build and nowhere else
+            int buildOnly = 0, misplaced = 0;
+            for (const auto& f : lib) if (f.where != 0) ++buildOnly;
+            for (uint32_t seed = 1; seed < 20; ++seed)
+                for (int k = 0; k < 3; ++k)
+                    misplaced += pickFitted (Part::Arp, k, Mood::Euphoric, Style::Uplifting, seed, {}).where != 0 ? 1 : 0;
+            check (buildOnly >= 10 && misplaced == 0, juce::String (buildOnly) + " section figures, never picked for the whole song");
+            bool buildFigure = false;
+            for (uint32_t seed = 1; seed < 20 && ! buildFigure; ++seed)
+                for (int k = 0; k < 3 && ! buildFigure; ++k)
+                    buildFigure = (pickFitted (Part::Arp, k, Mood::Euphoric, Style::Uplifting, seed, {}, (int) suite::SectionType::Build).where
+                                   & (1u << (int) suite::SectionType::Build)) != 0;
+            check (buildFigure, "a build gets a build figure where the library has one");
+            // In a song, the arp is chosen to interlock with the bass
+            float fitted = 0.0f, random = 0.0f;
+            for (uint32_t seed = 1; seed <= 30; ++seed)
+            {
+                auto fp = sp; fp.libSeed = seed; fp.bass = { 1, 1, 1, 1, 1, 1 };   // offbeat basses
+                const auto& b = chords::songFamily (chords::SongPart::Bass, 1, fp, -1);
+                fitted += overlap (chords::songFamily (chords::SongPart::Arp, 1, fp, -1), b);
+                random += overlap (pick (Part::Arp, 1, Mood::Euphoric, Style::Uplifting, seed), b);
+            }
+            check (fitted <= random, "the song's arp interlocks with its bass at least as well as a blind pick (" + juce::String (fitted / 30.0f, 2) + " vs "
+                                         + juce::String (random / 30.0f, 2) + " overlap)");
         }
 
         // The layers: piano and orchestra in breakdowns and the last drop, timpani rolling into it, acid where the style uses it

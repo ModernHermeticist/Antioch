@@ -73,6 +73,10 @@ namespace patterns
         std::string fill2, high2;           // optional: a second fill and a second high energy, for every other phrase
         float gate = 0.8f;                  // a note's length as a share of the gap to the next one
         int order = up;
+        float swing = 0.0f;                 // the off 16ths late by this share of a 16th (a shuffle written into the pattern)
+        bool add7 = false, add9 = false;    // chord colours: the chord's 7th / 9th added to every chord hit
+        int inversion = 0;                  // chord hits with their lowest 1 or 2 notes an octave up
+        uint32_t where = 0;                 // only for these kinds of section (bit per SectionType); 0 = the song's family everywhere
         bool tagged (Mood m) const { return ((moods >> (int) m) & 1u) != 0; }
         bool tagged (Style s) const { return ((styles >> (int) s) & 1u) != 0; }
     };
@@ -108,8 +112,22 @@ namespace patterns
                 fam.order = o == 'd' ? down : o == 'w' ? upDown : o == 'c' ? converge : o == 's' ? skip : up;
                 for (int k = 0; k < 3; ++k) fam.level[(size_t) k] = f[6 + k].removeCharacters (" ").toStdString();
                 fam.fill = f[9].removeCharacters (" ").toStdString();
-                if (f.size() > 10) fam.fill2 = f[10].removeCharacters (" ").toStdString();
-                if (f.size() > 11) fam.high2 = f[11].removeCharacters (" ").toStdString();
+                auto opt = [&] (int i) { return f.size() > i && f[i] != "-" ? f[i].removeCharacters (" ").toStdString() : std::string(); };
+                fam.fill2 = opt (10);
+                fam.high2 = opt (11);
+                // feel: "s" a trance shuffle, or a number (share of a 16th)
+                if (const auto feel = juce::String (opt (12)); feel.isNotEmpty())
+                    fam.swing = feel == "s" ? 0.33f : juce::jlimit (0.0f, 0.6f, (float) feel.getDoubleValue());
+                // colour: 7, 9, i1, i2
+                if (const auto colour = juce::String (opt (13)); colour.isNotEmpty())
+                {
+                    fam.add7 = colour.containsChar ('7');
+                    fam.add9 = colour.containsChar ('9');
+                    fam.inversion = colour.contains ("i2") ? 2 : colour.contains ("i1") ? 1 : 0;
+                }
+                // where: I intro, G groove, K breakdown, B build, D drop, O outro
+                if (const auto where = juce::String (opt (14)); where.isNotEmpty())
+                    for (int t = 0; t < 6; ++t) if (where.containsChar ("IGKBDO"[t])) fam.where |= 1u << t;
                 into.push_back (std::move (fam));
             }
         }
@@ -135,8 +153,13 @@ namespace patterns
         return lib;
     }
 
-    /** A voice's bars: 16 characters each (padded with rests), and its octave shift. */
-    struct Voice { std::vector<std::string> bars; int octave = 0; };
+    /** A voice's bars and its octave shift. A bar is 16 steps (16ths), 12 (8th-note triplets) or
+        24 (16th triplets); '!' before a step accents it, an apostrophe softens it (neither takes a step). */
+    struct Voice
+    {
+        std::vector<std::string> bars, marks;   // marks: per step ' ', '!' or '\''
+        int octave = 0;
+    };
     inline std::vector<Voice> voices (const std::string& text)
     {
         std::vector<Voice> out;
@@ -147,15 +170,27 @@ namespace patterns
             while (v.startsWithChar ('<') || v.startsWithChar ('>')) { voice.octave += v[0] == '>' ? 1 : -1; v = v.substring (1); }
             for (auto b : juce::StringArray::fromTokens (v, "/", ""))
             {
-                auto bar = b.toStdString();
-                if (bar.size() > 16) bar.resize (16);
-                while (bar.size() < 16) bar.push_back ('.');
+                std::string bar, mark;
+                char pending = ' ';
+                for (auto c : b)
+                {
+                    if (c == '!' || c == '\'') { pending = (char) c; continue; }
+                    bar.push_back ((char) c);
+                    mark.push_back (pending);
+                    pending = ' ';
+                }
+                if (bar.size() != 12 && bar.size() != 24)
+                {
+                    if (bar.size() > 16) { bar.resize (16); mark.resize (16); }
+                    while (bar.size() < 16) { bar.push_back ('.'); mark.push_back (' '); }
+                }
                 voice.bars.push_back (bar);
+                voice.marks.push_back (mark);
             }
-            if (voice.bars.empty()) voice.bars.push_back (std::string (16, '.'));
+            if (voice.bars.empty()) { voice.bars.push_back (std::string (16, '.')); voice.marks.push_back (std::string (16, ' ')); }
             out.push_back (std::move (voice));
         }
-        if (out.empty()) out.push_back ({ { std::string (16, '.') }, 0 });
+        if (out.empty()) out.push_back ({ { std::string (16, '.') }, { std::string (16, ' ') }, 0 });
         return out;
     }
 
@@ -170,7 +205,7 @@ namespace patterns
 
     /** All the families for a part and kind that fit the mood and style best (style counts more:
         it's the rhythm language; the mood colours it). */
-    inline std::vector<int> candidates (Part part, int kind, Mood mood, Style style)
+    inline std::vector<int> candidates (Part part, int kind, Mood mood, Style style, int section = -1)
     {
         std::vector<int> best;
         int bestScore = -1;
@@ -179,6 +214,7 @@ namespace patterns
         {
             const auto& f = lib[(size_t) i];
             if (f.part != part || f.kind != kind) continue;
+            if (section < 0 ? f.where != 0 : ((f.where >> section) & 1u) == 0) continue;   // section figures only where they belong
             const auto score = ((f.styles >> (int) style) & 1u) * 3 + ((f.moods >> (int) mood) & 1u) * 2;
             if ((int) score > bestScore) { bestScore = (int) score; best.clear(); }
             if ((int) score == bestScore) best.push_back (i);
@@ -194,5 +230,52 @@ namespace patterns
         if (c.empty()) c = candidates (part, 0, mood, style);
         if (c.empty()) { static const Family none; return none; }
         return library()[(size_t) c[hash (seed * 2654435761u + (uint32_t) part * 977u + (uint32_t) kind * 131u) % c.size()]];
+    }
+
+    /** Where a family's notes start in its drop pattern (first voice, first bar, on a 16th grid). */
+    inline std::array<bool, 16> onsets16 (const Family& f)
+    {
+        std::array<bool, 16> o {};
+        const auto v = voices (f.level[2]).front();
+        const auto& bar = v.bars.front();
+        for (size_t k = 0; k < bar.size(); ++k)
+            if (bar[k] != '.' && bar[k] != '-' && bar[k] != '~') o[(k * 16) / bar.size()] = true;
+        return o;
+    }
+    /** How much two families' rhythms land on the same 16ths (0: they interlock, 1: in unison). */
+    inline float overlap (const Family& a, const Family& b)
+    {
+        const auto x = onsets16 (a), y = onsets16 (b);
+        int na = 0, nb = 0, both = 0;
+        for (size_t k = 0; k < 16; ++k) { na += x[k]; nb += y[k]; both += x[k] && y[k]; }
+        return na == 0 || nb == 0 ? 0.0f : (float) both / (float) std::min (na, nb);
+    }
+
+    /** Like pick, but among the best fits it prefers rhythms that interlock with the parts already
+        chosen (`others`): an arp that fills the gaps of the bass, chords that leave both room. A
+        section figure (a build riser, an intro version) is chosen where one fits that section. */
+    inline const Family& pickFitted (Part part, int kind, Mood mood, Style style, uint32_t seed,
+                                     const std::vector<const Family*>& others, int section = -1)
+    {
+        auto c = section >= 0 ? candidates (part, kind, mood, style, section) : std::vector<int> {};
+        const auto sectionFigure = ! c.empty();
+        if (c.empty()) c = candidates (part, kind, mood, style);
+        if (c.empty()) c = candidates (part, 0, mood, style);
+        if (c.empty()) { static const Family none; return none; }
+        const auto& lib = library();
+        if (! others.empty() && ! sectionFigure && c.size() > 1)
+        {
+            std::vector<std::pair<float, int>> scored;
+            for (auto i : c)
+            {
+                float worst = 0.0f;
+                for (const auto* o : others) if (o != nullptr && ! o->name.empty()) worst = std::max (worst, overlap (lib[(size_t) i], *o));
+                scored.push_back ({ worst, i });
+            }
+            const auto best = std::min_element (scored.begin(), scored.end())->first;
+            c.clear();
+            for (const auto& [score, i] : scored) if (score <= best + 0.15f) c.push_back (i);
+        }
+        return lib[(size_t) c[hash (seed * 2654435761u + (uint32_t) part * 977u + (uint32_t) kind * 131u + (uint32_t) (section + 1) * 7919u) % c.size()]];
     }
 }

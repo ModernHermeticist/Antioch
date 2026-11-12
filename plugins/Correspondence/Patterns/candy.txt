@@ -1,5 +1,7 @@
 # Candy patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -12,38 +14,39 @@ Sparkle blips | 0 | EHR | UPV | 0.3 | - | .... .... ..R. .... | ..R. .... .... .
 Sample-and-hold | 0 | KD | TYP | 0.3 | - | r... .... .... .... | r... ..u. .... d... | r..u ..d. u..d .u.. | rudu dudu udud nnnn
 Bubble sequence | 0 | DK | TY | 0.35 | - | r.r. .... .... .... | r.r. .... r.u. .... | r.r. u.d. r.u. d.r. | rrrr uuuu dddd nnnn
 Glass droplets | 0 | RH | PVO | 0.5 | - | R... .... .... .... | R... .... F... .... | R... ..F. T... ..F. | R... ..F. T..F ..R.
-Laser zaps | 0 | DK | TYC | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR
+Laser zaps | 0 | EKD | CTY | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR | ..RR ..R. ..RR RRRR | .R.. ...R .R.. ...R
 Twinkle | 0 | HER | UVO | 0.4 | - | f... .... .... .... | f... .... t... .... | f... t... R... t... | f.t. R.t. f.t. R.R.
 Morse code | 0 | K | TY | 0.25 | - | r... .... r.r. .... | r... r.r. .... r... | r.r. r... r.r. r.rr | r.r. r.rr r.rr rrrr
 Dew | 0 | R | PV | 0.6 | - | 9... .... .... .... | 9... .... f... .... | 9... ..f. R... .... | 9... ..f. R... ..9.
-Stardust run | 0 | EP | UO | 0.35 | u | .... .... .... .... | .... .... ..aa aa.. | .... ..aa aa.. aaaa | aaaa aaaa AAAA AAAA
+Stardust run | 0 | EHP | UCVO | 0.35 | u | .... .... .... .... | .... .... ..aa aa.. | .... ..aa aa.. aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | .... aaaa aa.. aaaa
 Pinball | 0 | DE | TCU | 0.3 | - | r... .... R... .... | r..R .... r..R .... | r.Rr .R.. r.Rr .R.. | rRrR rRrR RRRR RRRR
 Raindrops | 0 | MR | PV | 0.4 | - | .... R... .... .... | .... R... .... t... | .... R..t .... f... | ..R. ..t. ..f. ..r.
 Signal | 0 | KD | TY | 0.3 | - | r... .... .... .... | r... .... .r.. .... | r... .r.. r... .r.. | r..r .r.r r..r .rrr
 Wind chimes | 0 | HR | VPO | 0.6 | w | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa
-Telemetry | 0 | K | Y | 0.25 | - | ..r. .... .... .... | ..r. .... ..u. .... | ..r. ..u. ..d. ..u. | ..ru ..du ..ud ..nn
+Telemetry | 0 | MKR | PY | 0.25 | - | ..r. .... .... .... | ..r. .... ..u. .... | ..r. ..u. ..d. ..u. | ..ru ..du ..ud ..nn | ..du ..ud ..ru ..nn | .rr. ..u. .dd. ..u.
 Fireflies | 0 | EH | UVC | 0.35 | - | .... ..R. .... .... | .... ..R. .... ..T. | ..F. ..R. ..T. ..R. | ..F. ..R. .TR. FTRR
 Cosmic arpeggio | 0 | RE | PU | 0.4 | u | a... .... .... .... | a... a... a... .... | a.a. a.a. a.a. .... | aaaa aaaa aaaa AAAA
 Tick tock | 0 | DK | TC | 0.25 | - | r... .... R... .... | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR RRRR
 Comet | 0 | ED | UT | 0.3 | - | .... .... .... ...R | .... .... ..R. ..RR | .... ..RR .RR. RRRR | ..RR .RRR RRRR RRRR
-Bell sprinkle | 0 | HP | OVU | 0.5 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
+Bell sprinkle | 0 | HP | UVO | 0.5 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
 Glitch | 0 | K | TY | 0.2 | - | r... .... .... .... | rr.. .... .... r... | rr.. ..r. .rr. r... | rr.r ..rr .rr. rrrr
 
 # --- batch 2
 Melancholic droplets | 0 | M | VP | 0.6 | - | .... T... .... .... | .... T... .... d... | .... T..d .... d... | ..T. ..d. ..d. ..n.
-Orchestral celesta | 0 | PH | O | 0.6 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
 Psy sparks | 0 | K | Y | 0.2 | - | ...r .... .... .... | ...r .... ...r .... | ...r ..r. ...r ..r. | .r.r ..rr .r.r rrrr
 Hopeful sparkle | 0 | H | UV | 0.4 | - | .... ..R. .... .... | .... ..R. .... ..F. | ..T. ..R. ..F. ..R. | ..T. ..R. .FR. TFRR
 
 # --- batch 7
-Glittering run | 0 | EH | UCV | 0.35 | u | .... .... .... .... | .... .... ..aa aa.. | .... ..aa aa.. aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | .... aaaa aa.. aaaa
 Deep space pings | 0 | KR | YP | 0.4 | - | R... .... .... .... | R... .... .... R... | R... ..R. .... R... | R..R ..R. R..R ..RR | RR.. ..R. RR.. ..RR | R... .RR. .... R...
 Clockwork | 0 | DK | TC | 0.25 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rRrR rRrR rRrR rRrR | rRrR RRRR rRrR RRRR | RRRR rRrR RRRR rRrR | rr.R rr.R rr.R rr.R
 Snowfall | 0 | RM | PV | 0.6 | - | .... F... .... .... | .... F... .... T... | .... F..T .... R... | ..F. ..T. ..R. ..9. | ..9. ..R. ..T. ..F. | ..F. F..T ..R. R...
 Bubblegum blips | 0 | EH | U | 0.3 | - | ..R. .... .... .... | ..R. .... ..T. .... | ..R. ..T. ..F. ..T. | .RR. .TT. .FF. .RR. | .FF. .TT. .RR. .FF. | ..R. .TT. ..F. .TT.
 
 # --- batch 8
-Classic laser chirps | 0 | ED | C | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR | ..RR ..R. ..RR RRRR | .R.. ...R .R.. ...R
 Vocal sparkle | 0 | HM | V | 0.45 | - | .... R... .... .... | .... R... .... T... | .... R..T .... F... | ..R. ..T. ..F. ..R. | ..F. ..T. ..R. ..T. | .... R.TT .... F...
 Epic shimmer | 0 | P | OU | 0.5 | - | R... .... .... .... | R... .... F... .... | R... F... T... F... | R.F. T.F. R.F. T.R. | T.F. R.F. T.F. R.R. | R.F. R... R.F. R...
-Prog blips | 0 | RM | P | 0.35 | - | ..r. .... .... .... | ..r. .... ..u. .... | ..r. ..u. ..d. ..u. | ..ru ..du ..ud ..nn | ..du ..ud ..ru ..nn | .rr. ..u. .dd. ..u.
+
+# --- batch 9 (... | fill 2 | high 2 | feel | colour | where)
+Build sparkle riser | 0 | * | * | 0.3 | u | a... .... a... .... | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa AAAA AAAA | AAAA AAAA AAAA AAAA | aaaa aaaa aaaa aaaa | - | - | B
+Triplet twinkles | 0 | EHR | UPV | 0.35 | - | R........... | R.....F..... | R..F..T..F.. | R.FR.FT.FR.F | T.FR.FT.FR.F | R.FR.FR.FR.F | - | - |
+Swung blips | 0 | DK | TP | 0.3 | - | r... .... .... .... | r... ..u. .... d... | r..u ..d. u..d .u.. | rudu dudu udud nnnn | udud rudu dudu nnnn | ru.d ud.u ru.d ud.u | s | - |

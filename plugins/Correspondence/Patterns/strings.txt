@@ -1,5 +1,7 @@
 # Strings patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -33,14 +35,14 @@ Spiccato eighths | 1 | DEP | UOC | 0.45 | - | r... r... r... r... | r.r. r.r. r.
 Spiccato sixteenths | 1 | DPE | OUT | 0.4 | - | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrrr rrrr ffff ffff | rrrr ffff tttt RRRR
 Galloping strings | 1 | PD | OU | 0.4 | - | r..r r..r r..r r..r | r.rr r.rr r.rr r.rr | r.rr r.rr f.ff f.ff | r.rr f.ff t.tt R.RR
 Tremolo chords | 1 | KPD | OTY | 0.5 | - | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc cccc cccc + <r--- ---- ---- ---- | cccc cccc CCCC CCCC + <r--- ---- n--- ----
-Pizzicato walk | 1 | HM | VOC | 0.3 | - | r... .... f... .... | r... t... f... t... | r.t. f.t. r.t. f.t. | r.t. f.t. u.u. n.N.
+Pizzicato walk | 1 | HM | UCVO | 0.3 | - | r... .... f... .... | r... t... f... t... | r.t. f.t. r.t. f.t. | r.t. f.t. u.u. n.N. | u.u. f.t. r.t. n.N. | r.t. f.R. r.t. f.R.
 Pizzicato offbeats | 1 | HE | VU | 0.3 | - | ..r. ..r. ..r. ..r. | ..r. ..f. ..r. ..f. | ..rf ..rf ..rf ..rf | ..rf ..tf ..rf ..nN
 Building ostinato | 1 | EPD | UOC | 0.45 | - | r.f. r.f. r.f. r.f. | rfRf rfRf rfRf rfRf | rfRf rfRf tfTf tfTf | rfRf tfTf fRfR RRRR
 Minor ostinato | 1 | KD | TYC | 0.4 | - | r..r ..r. r..r ..r. | r.rt .rt. r.rt .rt. | rrtr rtrt rrtr rtrt | rrtr dddd uuuu rrtr
 Arpeggiated strings | 1 | EHP | UOV | 0.5 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaa + <r--- ---- ---- ---- | aaaa aaaa AAAA AAAA + <r--- ---- n--- ----
 Descending arpeggio strings | 1 | MP | OV | 0.5 | d | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa AAAA
 Heroic rhythm | 1 | P | OU | 0.5 | - | c... ..c. c... .... | c..c ..c. c..c ..c. | c..c ..c. c.cc ..cc | c.cc ..cc c.cc cccc
-Stabbing strings | 1 | DK | OTC | 0.35 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc
+Stabbing strings | 1 | KD | CTO | 0.35 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c.
 Rising ostinato | 1 | EHP | UO | 0.45 | - | r.r. u.u. r.r. u.u. | r.r. u.u. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu
 Driving cellos | 1 | DP | OTU | 0.45 | - | <r... r... r... r... | <r.r. r.r. r.r. r.r. | <rrrr rrrr rrrr rrrr + c--- ---- ---- ---- | <rrrr rrrr ffff nnnn + c--- ---- C--- ----
 Octave leaps | 1 | EP | UOC | 0.4 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR rRrR | rRrR fFfF tTtT RRRR
@@ -63,7 +65,6 @@ Melancholic ostinato | 1 | M | VPC | 0.5 | - | r..t ..r. r..t ..r. | r.t. d.t. r
 Psy string pulse | 1 | K | Y | 0.45 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rRr .rRr .rRr .rRr | .rRr .uRu .dRd .nRN | .uRu .dRd .rRr .rRr | .rrR .rrR .rrR .rrR
 Hopeful string arp | 1 | H | UVO | 0.5 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaAa aaAa aaAa aaAa
 Epic string legato | 0 | P | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- + >r--- ---- f--- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- + >r--- ---- f--- t--- | C--- ---- ---- ---- + <r--- ---- n--- ---- + >R--- f--- t--- r--- | C--- ---- ---- ---- + <r--- ---- N--- ---- + >t--- f--- R--- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- + >r--- f--- R--- t---
-Tech staccato strings | 1 | DK | T | 0.35 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c.
 Dreamy string halo | 0 | R | PV | 1.0 | - | >c--- ---- ---- ---- | >c--- ---- ---- ---- + >>.... .... 9--- ---- | >c--- ---- c--- ---- + >>r--- ---- 9--- ---- | >c--- ---- C--- ---- + >>9--- 4--- 9--- r--- | >C--- ---- c--- ---- + >>4--- 9--- r--- ---- | >c--- c--- c--- ---- + >>r--- 9--- r--- 9---
 
 # --- batch 8
@@ -74,4 +75,9 @@ Vocal string bed | 0 | HM | V | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- -
 Psy dark strings | 0 | K | Y | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + <r--- ---- ---- ---- | o--- ---- o--- ---- + <r--- ---- r--- ---- | o--- ---- c--- ---- + <r--- ---- N--- ---- | c--- ---- o--- ---- + <r--- ---- N--- ---- | o--- o--- o--- ---- + <r--- r--- r--- ----
 Uplifting spiccato | 1 | EH | U | 0.4 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | r.r. r.R. r.r. r.R. | rRrR rRrR rRrR RRRR | RRRR rRrR rRrR rRrR | r.R. r.R. r.R. r.R.
 Progressive pulse strings | 1 | RM | P | 0.5 | - | c... ..c. .... .... | c..c ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. C..C ..CC | C..C ..c. c..c ..cc | c.cc ..c. c.cc ..c.
-Hopeful pizzicato | 1 | H | UVO | 0.3 | - | r... .... f... .... | r... t... f... t... | r.t. f.t. r.t. f.t. | r.t. f.t. u.u. n.N. | u.u. f.t. r.t. n.N. | r.t. f.R. r.t. f.R.
+
+# --- batch 9 (... | fill 2 | high 2 | feel | colour | where)
+Build string riser | 1 | * | * | 0.45 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrrr uuuu uuuu uuuu | rrrr RRRR rrrr RRRR | rrrr rrrr uuuu uuuu | - | - | B
+Build tremolo swell | 1 | PEK | OUY | 0.5 | - | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc cccc cccc + <r--- ---- ---- ---- | cccc cccc CCCC CCCC + <r--- ---- n--- ---- | CCCC CCCC CCCC CCCC + <r--- ---- N--- ---- | cccc CCCC cccc CCCC + <r--- ---- r--- ---- | - | - | B
+Triplet spiccato | 1 | PD | OU | 0.4 | - | r..r..r..r.. | r.rr.rr.rr.r | rrrrrrffffff | rrrfffttRRRR | RRRtttfffrrr | rrrrrrffffff | - | - |
+Seventh strings | 0 | MR | PVC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- c--- ---- + <r--- ---- ---- ---- | c--- ---- C--- ---- + <r--- ---- n--- ---- | - | - | - | 7 |

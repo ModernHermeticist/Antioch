@@ -1,5 +1,7 @@
 # Chords patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -16,77 +18,59 @@ Tech hits | 1 | KD | TY | 0.5 | - | c... .... c... .... | c..c .... c..c .... | 
 Euphoric 16th pluck | 1 | EP | UC | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccC | cccc cccc CCCC CCCC | CCCC cccc CCCC cccc | cccc cccC cccc CCCC
 Orchestral stabs | 1 | PH | OU | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c.cc ..c. c.cc ..C. | c.cc ..C. C.CC .CCC | C..C ..c. c..C .CCC | c.cc ..C. c.cc ..CC
 Classic gate | 2 | EHP | UCV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc .cc. c.cc .cc. | cc.c cc.c c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | c.cc c.cc cc.c cc.c
-Rolling gate | 2 | DK | TC | 0.6 | - | c.c. c.c. c.c. c.c. | ccc. ccc. ccc. ccc. | cccc ccc. cccc ccc. | cccc cccc cccc cccc | cc.c cc.c cccc cccc | ccc. cccc ccc. cccc
-Stutter gate | 2 | DE | UTY | 0.55 | - | c..c ..c. c..c ..c. | c.cc ..cc c.cc ..cc | cc.c c.cc cc.c c.cc | cccc .ccc cccc .ccc | .ccc cccc .ccc cccc | c.cc cc.c c.cc cc.c
+Rolling gate | 2 | KD | CT | 0.6 | - | c.c. c.c. c.c. c.c. | ccc. ccc. ccc. ccc. | cccc ccc. cccc ccc. | cccc cccc cccc cccc | cc.c cc.c cccc cccc | ccc. cccc ccc. cccc
+Stutter gate | 2 | ED | UCTY | 0.55 | - | c..c ..c. c..c ..c. | c.cc ..cc c.cc ..cc | cc.c c.cc cc.c c.cc | cccc .ccc cccc .ccc | .ccc cccc .ccc cccc | c.cc cc.c c.cc cc.c
 Dreamy gate | 2 | RM | PV | 0.9 | - | c-.. c-.. c-.. c-.. | c-.c -.c- .c-. c-.c | c-cc -cc- c-cc -cc- | c-cc c-cc C-CC C-CC | C-cc -cc- c-CC -CC- | c-.c -.c- .c-. c-.c
-Dark gate | 2 | K | TYC | 0.55 | - | c... c... c... c... | c.c. .c.c c.c. .c.c | c.cc .c.c c.cc .ccc | cccc .c.c cccc cccc | .c.c cccc .c.c cccc | cc.c .c.c cc.c .ccc
-Anthem gate | 2 | PE | OUV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccC
+Dark gate | 2 | KD | CTY | 0.55 | - | c... c... c... c... | c.c. .c.c c.c. .c.c | c.cc .c.c c.cc .ccc | cccc .c.c cccc cccc | .c.c cccc .c.c cccc | cc.c .c.c cc.c .ccc
+Anthem gate | 2 | EP | UVO | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccC
 
 # --- batch 1: pads
 Two-bar swell | 0 | RMH | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... ..r- ---- | c--- ---- c--- ---- + >.... .... ..r- ---- | C--- ---- C--- ---- + >r--- ---- t--- ----
 Driving pad | 0 | DE | TCU | 0.9 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- C-C- | C-C- c-c- C-C- c-c- | c-c- c--- c-c- c---
 Dark drone pad | 0 | K | YTC | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + <r--- ---- ---- ---- | o--- ---- o--- ---- + <r--- ---- ---- ---- | c--- ---- o--- ---- + <r--- ---- N--- ----
 Euphoric wash | 0 | E | UC | 1.0 | - | c--- ---- ---- ---- | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- C--- C--- C--- | C--- ---- C--- CCCC | C--- C--- ---- C---
-Hopeful pad | 0 | H | UV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- C---
-Melancholic pad | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---. ..c- | c--- ---. ..c- ---- | c--- ---. ..c- C---
+Hopeful pad | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c--- c--- ---- c---
+Melancholic pad | 0 | M | CPV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---. ..c- | c--- ---. ..c- ---- | c--- ---. ..c- C--- | c--- ---- C--- ---- | c--- ---. ..c- ..c-
 Dreamy pad | 0 | R | PV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >9--- ---- ---- ---- | c--- ---- c--- ---- + >9--- ---- 4--- ---- | c--- ---- C--- ---- + >9--- 4--- 9--- r---
-Epic pad | 0 | P | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- | C--- C--- C--- C--- + <r--- r--- n--- N---
+Epic pad | 0 | EP | UO | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- | C--- C--- C--- C--- + <r--- r--- n--- N--- | C--- ---- C--- CCCC + <r--- ---- n--- N--- | C--- C--- ---- C--- + <r--- r--- ---- r---
 Psy pad | 0 | KR | Y | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + >.... .... 4--- ---- | o--- ---- o--- ---- + >.... .... 4--- ---- | o--- ---- c--- ---- + >4--- ---- t--- ----
 
 # --- batch 1: stabs and plucks
-Psy stabs | 1 | KD | Y | 0.4 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc
-Orchestral chops | 1 | P | O | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..C. C..C .CCC
+Psy stabs | 1 | KD | Y | 0.4 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc | c.c. ..c. c.cc cccc | c..c ..c. c... ....
+Orchestral chops | 1 | P | O | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..C. C..C .CCC | C..C ..c. c..C .CCC | c.cc ..c. c..c ..cc
 Melancholic plucks | 1 | M | VPC | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. .c.. .... | c... ..c. .c.. c.c.
 Dreamy plucks | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c-
 Hopeful stabs | 1 | H | UVO | 0.65 | - | ..c. .... ..c. .... | ..c. ..c. ..c. .... | ..c. ..c. ..c. ..c. | ..c. ..c. ..cc ..CC
 Dark offbeat stabs | 1 | K | TYC | 0.45 | - | ..o. .... ..o. .... | ..o. ..o. ..o. ..o. | ..o. ..c. ..o. ..c. | ..oo ..cc ..oo cccc
-Euphoric supersaw stabs | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC
+Euphoric supersaw stabs | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..C. c..c ..cc | c..c .... c..c ..c.
 Driving chord riff | 1 | D | TCU | 0.5 | - | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c ..c. | c..c ..cc c..c cccc
 Epic hits | 1 | PE | OU | 0.7 | - | C... .... .... .... | C... .... C... .... | C... ..C. C... ..C. | C..C ..C. C..C CCCC
-Vocal-friendly stabs | 1 | HM | V | 0.6 | - | c... .... .... .... | c... .... ..c. .... | c... ..c. ..c. .... | c... ..c. ..c. ..cc
+Vocal-friendly stabs | 1 | HM | V | 0.6 | - | c... .... .... .... | c... .... ..c. .... | c... ..c. ..c. .... | c... ..c. ..c. ..cc | c... ..c. .cc. ..cc | c... .cc. ..c. ....
 Psy chord blips | 1 | K | Y | 0.3 | - | ..c. .... .... .... | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | .cc. .cc. .cc. cccc
 Prog stab answer | 1 | RMK | P | 0.6 | - | .... .... ..c. .... | c... .... ..c. .... | c... ..c. ..c. .c.. | c... ..c. ..c. .ccc
 Orchestral pizz chords | 1 | PH | O | 0.3 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.c. c.c. C.C. CCCC
-Tech chord chops | 1 | DK | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc
+Tech chord chops | 1 | KD | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | c..c .c.. .c.c cccc | c..c ..c. .c.. ..c.
 Melancholic offbeat chords | 1 | M | VC | 0.55 | - | ..c. .... .... .... | ..c. .... ..c. .... | ..c. ..c. ..c. .... | ..c. ..c. ..c. ..cc
-Dreamy echo chords | 1 | R | PV | 0.7 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. ..c. .... | c... ..c. ..c. ..c.
+Dreamy echo chords | 1 | MR | CPV | 0.7 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. ..c. .... | c... ..c. ..c. ..c. | c... .cc. ..c. ..cc | c... ..cc ..c. ....
 
 # --- batch 1: gates
 Prog gate | 2 | RMK | P | 0.65 | - | c... ..c. .... ..c. | c..c ..c. .c.. ..c. | c..c ..c. .c.c ..c. | c.cc ..c. .ccc ..cc
 Orchestral tremolo gate | 2 | P | O | 0.55 | - | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc cccc cccc + <r--- ---- ---- ---- | cccc cccc CCCC CCCC + <r--- ---- n--- ----
-Hopeful gate | 2 | H | UVO | 0.6 | - | c.c. .... c.c. .... | c.c. c.c. c.c. .c.. | c.cc c.cc c.cc .c.c | c.cc c.cc C.CC CCCC
-Melancholic gate | 2 | M | VPC | 0.65 | - | c... c... c... c... | c.c. c... c.c. c... | c.c. c.c. c.c. c.c. | c.cc c.c. c.cc c.cc
-Dreamy wide gate | 2 | R | PV | 0.85 | - | c-.. .... c-.. .... | c-.. c-.. c-.. c-.. | c-.c -.c- c-.c -.c- | c-cc -cc- C-CC -CC-
-Psy gate | 2 | K | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc cccc cccc
+Hopeful gate | 2 | H | UVO | 0.6 | - | c.c. .... c.c. .... | c.c. c.c. c.c. .c.. | c.cc c.cc c.cc .c.c | c.cc c.cc C.CC CCCC | C.CC c.cc C.CC cccc | cc.c c.cc cc.c .c.c
+Melancholic gate | 2 | M | CPV | 0.65 | - | c... c... c... c... | c.c. c... c.c. c... | c.c. c.c. c.c. c.c. | c.cc c.c. c.cc c.cc | c.c. c.cc c.c. c.cc | c.cc c... c.cc c.c.
+Dreamy wide gate | 2 | R | PV | 0.85 | - | c-.. .... c-.. .... | c-.. c-.. c-.. c-.. | c-.c -.c- c-.c -.c- | c-cc -cc- C-CC -CC- | C-cc -cc- c-CC -CC- | c-.c -.c- .c-. c-.c
+Psy gate | 2 | K | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc cccc cccc | .c.c cccc .c.c cccc | cccc .ccc cccc .ccc
 Euphoric triplet-feel gate | 2 | E | UC | 0.55 | - | c..c ..c. c..c ..c. | c.cc .cc. c.cc .cc. | cc.c c.cc cc.c c.cc | cc.c cccc cc.c CCCC
 Epic gate | 2 | PE | OU | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cc | cccc CCCC cccc CCCC
-Vocal gate | 2 | HM | V | 0.6 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc ..c. c.cc ..c. | c.cc .cc. c.cc .ccc
-Driving gate | 2 | D | TCU | 0.5 | - | c.c. c.c. c.c. c.c. | cc.c cc.c cc.c cc.c | cccc cc.c cccc cc.c | cccc cccc cccc cccc
+Vocal gate | 2 | HM | V | 0.6 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc ..c. c.cc ..c. | c.cc .cc. c.cc .ccc | .cc. c.cc .ccc c.cc | c..c .cc. c..c .cc.
+Driving gate | 2 | D | UCT | 0.5 | - | c.c. c.c. c.c. c.c. | cc.c cc.c cc.c cc.c | cccc cc.c cccc cc.c | cccc cccc cccc cccc | cc.c cccc cc.c CCCC | cc.c cc.c cccc cccc
 
 # --- batch 5 (... | fill | fill 2 | high 2)
-Anthem gate variations | 2 | EP | UC | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc .cc. c.cc .cc. | cc.c cc.c c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | c.cc c.cc cc.c cc.c
-Rolling gate variations | 2 | DK | TC | 0.55 | - | c.c. c.c. c.c. c.c. | ccc. ccc. ccc. ccc. | cccc ccc. cccc ccc. | cccc cccc cccc cccc | cc.c cc.c cccc cccc | ccc. cccc ccc. cccc
-Hopeful gate variations | 2 | H | UV | 0.6 | - | c.c. .... c.c. .... | c.c. c.c. c.c. .c.. | c.cc c.cc c.cc .c.c | c.cc c.cc C.CC CCCC | C.CC c.cc C.CC cccc | cc.c c.cc cc.c .c.c
-Dreamy gate variations | 2 | R | PV | 0.85 | - | c-.. .... c-.. .... | c-.. c-.. c-.. c-.. | c-.c -.c- c-.c -.c- | c-cc -cc- C-CC -CC- | C-cc -cc- c-CC -CC- | c-.c -.c- .c-. c-.c
-Psy gate variations | 2 | K | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc cccc cccc | .c.c cccc .c.c cccc | cccc .ccc cccc .ccc
-Melancholic gate variations | 2 | M | VPC | 0.65 | - | c... c... c... c... | c.c. c... c.c. c... | c.c. c.c. c.c. c.c. | c.cc c.c. c.cc c.cc | c.c. c.cc c.c. c.cc | c.cc c... c.cc c.c.
-Supersaw stab variations | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..C. c..c ..cc | c..c .... c..c ..c.
-Tech chop variations | 1 | DK | T | 0.4 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | c..c .c.. .c.c cccc | c..c ..c. .c.. ..c.
 Prog chop variations | 1 | RM | P | 0.65 | - | c... ...c ..c. .... | c..c ..c. .c.. c... | c.cc ..c. .cc. c.c. | c.cc ..c. .CC. C.C. | c..c .cc. .c.c c.c. | c.c. ..cc .c.. c.cc
-Orchestral stab variations | 1 | P | O | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..C. C..C .CCC | C..C ..c. c..C .CCC | c.cc ..c. c..c ..cc
-Vocal stab variations | 1 | HM | V | 0.6 | - | c... .... .... .... | c... .... ..c. .... | c... ..c. ..c. .... | c... ..c. ..c. ..cc | c... ..c. .cc. ..cc | c... .cc. ..c. ....
-Euphoric pad variations | 0 | E | UC | 1.0 | - | c--- ---- ---- ---- | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- C--- C--- C--- | C--- ---- C--- CCCC | C--- C--- ---- C---
 Dark pad variations | 0 | K | TYC | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o--- ---- o--- o---
-Hopeful pad variations | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c--- c--- ---- c---
-Psy stab variations | 1 | K | Y | 0.35 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc | c.c. ..c. c.cc cccc | c..c ..c. c... ....
-Driving gate variations | 2 | D | TCU | 0.5 | - | c.c. c.c. c.c. c.c. | cc.c cc.c cc.c cc.c | cccc cc.c cccc cc.c | cccc cccc cccc cccc | cc.c cccc cc.c CCCC | cc.c cc.c cccc cccc
 
 # --- batch 6
-Uplifting supersaw gate | 2 | E | U | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccc
-Classic stutter gate | 2 | ED | C | 0.55 | - | c..c ..c. c..c ..c. | c.cc ..cc c.cc ..cc | cc.c c.cc cc.c c.cc | cccc .ccc cccc .ccc | .ccc cccc .ccc cccc | c.cc c.cc cc.c c.cc
-Tech gate pulse | 2 | DK | T | 0.5 | - | c... c... c... c... | c.c. .c.c c.c. .c.c | c.cc .c.c c.cc .ccc | cccc .c.c cccc cccc | c.cc cccc c.cc cccc | cc.c .c.c cc.c .ccc
 Prog breathing gate | 2 | RM | P | 0.7 | - | c-.. ..c- .... ..c- | c-.c ..c- .c-. ..c- | c-.c .cc- .c-. .cc- | c-cc .cc- .CC- .CC- | .cc- c-cc .cc- C-CC | c-.c .cc- c-.c .cc-
-Vocal soft gate | 2 | HM | V | 0.65 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc ..c. c.cc ..c. | c.cc .cc. c.cc .ccc | .cc. c.cc .ccc c.cc | c..c .cc. c..c .cc.
 Orchestral gate | 2 | P | O | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | CCCC CCCC cccc cccc | c.cc cccc c.cc cccc
 Psy stutter gate | 2 | K | Y | 0.4 | - | .c.c .c.c .c.c .c.c | .cc. .cc. .cc. .cc. | .ccc .cc. .ccc .cc. | cccc .ccc cccc .ccc | .ccc cccc .ccc cccc | cc.c .cc. cc.c .ccc
 Euphoric offbeat plucks | 1 | E | UC | 0.6 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | .cc. ..c. .cc. ..cC | .cc. .cc. .CC. CCCC | .CC. .cc. .CC. cccc | .cc. ..cc .cc. ..cc
@@ -94,7 +78,17 @@ Hopeful pluck chords | 1 | H | UVP | 0.65 | - | c... ..c. .... .... | c..c ..c. 
 Dreamy airy stabs | 1 | R | PV | 0.75 | - | c--- .... .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c- | ..c- c--- ..c- C--- | c--- ..c- c--- ..c-
 Dark stab rhythm | 1 | K | TYC | 0.4 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | .c.c ..c. c..c cccc | c..c ..c. .c.. c.c.
 Driving stab eighths | 1 | D | TCU | 0.45 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC | CCCC cccc CCCC cccc | cc.c cc.c cc.c cc.c
-Melancholic chord echoes | 1 | M | VPC | 0.7 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. ..c. .... | c... ..c. ..c. ..c. | c... .cc. ..c. ..cc | c... ..cc ..c. ....
-Epic chorus pads | 0 | PE | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- | C--- C--- C--- C--- + <r--- r--- n--- N--- | C--- ---- C--- CCCC + <r--- ---- n--- N--- | C--- C--- ---- C--- + <r--- r--- ---- r---
-Melancholic swell pads | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---. ..c- | c--- ---. ..c- ---- | c--- ---. ..c- C--- | c--- ---- C--- ---- | c--- ---. ..c- ..c-
 Tech pad pulses | 0 | DK | T | 0.9 | - | c--- ---- ---- ---- | c--- ---. c--- ---. | c--. c--. c--. c--. | c--. c--. C--. C--. | C--. c--. C--. c--. | c--. c--. ---. c--.
+
+# --- batch 9 (... | fill 2 | high 2 | feel | colour | where)
+Pushed stabs | 1 | EH | UCV | 0.6 | - | c... .... .... .... | c... ..c. .... ..p- | c... ..c. c... ..p- | c..c ..c. C... .P-- | C..c ..c. c... .P-- | c... ..c. c..c ..p- | - | - |
+Pushed pad | 0 | EHMR | UPVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- --p- | c--- ---- c--- --p- | c--- ---- C--- --P- | C--- ---- c--- --P- | c--- c--- ---- --p- | - | - |
+Seventh pads | 0 | RM | PV | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c--- ---- c--- c--- | - | 7 |
+Ninth plucks | 1 | RH | PV | 0.7 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. ..c. .... | c... ..c. ..c. ..c. | ..c. c... ..c. C... | c... ..c. c... ..c. | - | 9 |
+Inverted gate | 2 | EH | UC | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc .cc. c.cc .cc. | cc.c cc.c c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | c.cc c.cc cc.c cc.c | - | i1 |
+Triplet gate | 2 | EDP | UTO | 0.5 | - | c.c.c.c.c.c. | cc.cc.cc.cc. | cccccccccccc | cccccccccccc | CCCCCCcccccc | cc.ccccc.ccc | - | - |
+Shuffled prog chops | 1 | RM | P | 0.65 | - | c... ...c ..c. .... | c..c ..c. .c.. c... | c.cc ..c. .cc. c.c. | c.cc ..c. .CC. C.C. | c..c .cc. .c.c c.c. | c.c. ..cc .c.. c.cc | s | 7 |
+Accented anthem gate | 2 | EP | UO | 0.55 | - | c.c. c.c. c.c. c.c. | !c.cc !c.cc !c.cc !c.cc | !cccc !c.cc !cccc !c.cC | !cccc !CCCC !cccc !CCCC | !CCCC !cccc !CCCC !cccc | !cc.c !cccc !cc.c !cccc | - | - |
+Build gate rise | 2 | * | * | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc CCCC CCCC | CCCC CCCC CCCC CCCC | cccc CCCC cccc CCCC | - | - | B
+Build swell chords | 0 | HMRP | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- C-C- C-C- CCCC | c-c- c-c- c-c- c-c- | - | - | B
+DJ intro chords | 1 | * | * | 0.6 | - | .... .... .... .... | c... .... .... .... | c... .... c... .... | c... .... c... .... | c... ..c. c... .... | c... .... c... .... | - | - | IO

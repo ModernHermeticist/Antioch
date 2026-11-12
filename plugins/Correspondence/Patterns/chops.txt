@@ -1,5 +1,7 @@
 # Chops patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -10,20 +12,20 @@
 
 Hey chops | 0 | EHD | UVC | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..f. r..r ..t. | r..r ..f. r.rr .ttt
 Offbeat syllables | 0 | ED | UVT | 0.5 | - | ..r. .... ..r. .... | ..r. ..r. ..r. ..r. | ..r. ..t. ..r. ..f. | ..rr ..tt ..ff ..RR
-Stutter chop | 0 | DK | TVY | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr
+Stutter chop | 0 | KD | TYV | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr | rrrr rrrr .... rrrr | r.rr ..r. r.rr ..r.
 Melodic chop line | 0 | HM | VPU | 0.8 | - | r... .... f... ....  | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. u..u ..n.
 3-3-2 chops | 0 | EH | UVP | 0.6 | - | r..r .... .... .... | r..r ..r. .... .... | r..r ..f. t..t ..r. | r..r ..f. T..T ..RR
 Call chops | 0 | EH | VU | 0.7 | - | r--- .... .... .... | r--- ..t. .... .... | r--- ..t. f--- .... | r--- ..t. f--- ..R.
-Dreamy chops | 0 | RM | PV | 0.9 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r---
+Dreamy chops | 0 | MR | PV | 0.9 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r--- | t--- --d- r--- f--- | f--- -uu- t--- ....
 Dark whisper chops | 0 | K | TYC | 0.5 | - | r... .... .... .... | r... .... .r.. .... | r... ..r. .r.. ..r. | r... ..r. .r.r rrrr
 Sixteenth chops | 0 | DE | TCU | 0.4 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrr ..r. rrrr ..t. | rrrr ttrr ffrr RRRR
-Answer chops | 0 | HE | VUP | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR
+Answer chops | 0 | EHM | UPV | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR | .... ..f. t..r RRRR | .... .rr. r..t .ff.
 Syncopated syllables | 0 | DM | PTV | 0.6 | - | r... ...r .... .... | r... ...r ..r. .... | r... ...t ..r. ..f. | r..r ...t ..r. fRfR
 Rising chops | 0 | EH | UV | 0.6 | - | r... .... u... .... | r... u... u... .... | r..u ..u. u..u .... | r..u ..u. u..u uuuu
 Echo chops | 0 | RH | PV | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r... ..r. ..r. r.r.
 Psy chops | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..r. | r.rr ..rr r.rr rrrr
 Pitched riser chops | 0 | ED | UCT | 0.5 | - | r... r... r... r... | r.r. r.r. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu
-Hook chops | 0 | EH | UV | 0.65 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R.
+Hook chops | 0 | EH | UCV | 0.65 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R. | R..f ..R. T..f ..R. | r.ff ..R. t.ff ..r.
 Breathy pairs | 0 | MR | PV | 0.7 | - | r-.. .... .... .... | r-.. .... t-.. .... | r-.. f-.. t-.. .... | r-.. f-.. t-.. R-..
 Groove chops | 0 | D | TCV | 0.5 | - | ..r. .... .r.. .... | ..r. ..r. .r.. .... | ..r. ..r. .r.. r.r. | ..r. ..r. .r.r rrrr
 Gospel chops | 0 | HE | VU | 0.7 | - | r--- .... .... .... | r--- .... t--- .... | r--- f--- t--- .... | r--- f--- t--- R---
@@ -37,10 +39,6 @@ Melancholic vowels | 0 | M | VP | 0.85 | - | t--- ---- .... .... | t--- ---- d--
 Psy chant | 0 | K | Y | 0.45 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..d. r.rr dddd
 
 # --- batch 7
-Euphoric chop hook | 0 | E | UC | 0.6 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R. | R..f ..R. T..f ..R. | r.ff ..R. t.ff ..r.
-Tech chop stutter | 0 | DK | T | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr | rrrr rrrr .... rrrr | r.rr ..r. r.rr ..r.
-Vocal chop answer | 0 | HM | V | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR | .... ..f. t..r RRRR | .... .rr. r..t .ff.
-Prog chop drift | 0 | RM | P | 0.8 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r--- | t--- --d- r--- f--- | f--- -uu- t--- ....
 Psy chop riff | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..rr r.rr rrrr | rrrr ..rr rrrr ..dd | r.rr .rr. r.rr .dd.
 
 # --- batch 8

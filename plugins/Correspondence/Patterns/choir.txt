@@ -1,5 +1,7 @@
 # Choir patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -24,24 +26,22 @@ Night choir | 0 | KR | YP | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- 
 
 # --- 1: rhythmic
 Choir stabs | 1 | ED | UC | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. c.cc cccc
-Chanting eighths | 1 | KD | YTO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
+Chanting eighths | 1 | KD | UCTYO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
 Offbeat voices | 1 | EH | UV | 0.6 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..cc ..cc ..cc ..cc | .ccc .ccc .ccc cccc
 Choral fanfare | 1 | P | OU | 0.7 | - | c... .... .... .... | c..c ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. C..C ..CC
 
 # --- batch 4: rhythmic choir (driving and dark drops)
 Tech chant | 1 | KD | TC | 0.45 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc
-Psy chant pulse | 1 | K | Y | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo
+Psy chant pulse | 1 | K | CTY | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
 Euphoric choir pulse | 1 | E | UC | 0.6 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..cc ..c. ..cc ..c. | ..cc ..cc ..CC ..CC
 Epic choir hits | 1 | P | OU | 0.7 | - | C... .... .... .... | C... .... C... .... | C... ..C. C... ..C. | C..C ..C. C..C CCCC
 Hopeful choir syllables | 1 | H | UV | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. c..c ..CC
-Melancholic choir sighs | 1 | M | VP | 0.8 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c-
+Melancholic choir sighs | 1 | MR | PV | 0.8 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c- | ..c- c--- ..c- c--- | c--- ..c- ..c- ....
 Dreamy choir echoes | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c-
-Driving choir eighths | 1 | D | TCU | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
 
 # --- batch 7
 Choir rises | 0 | HP | OUV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- u--- ---- | c--- ---- c--- ---- + >r--- u--- u--- ---- | C--- ---- C--- ---- + >u--- u--- u--- R--- | C--- ---- c--- ---- + >R--- d--- d--- r--- | c--- c--- c--- ---- + >r--- u--- r--- u---
 Driving choir pad | 0 | D | TCU | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- c-c- C-C- c-c- | c-c- c--- c-c- c---
-Dark choir pulse | 1 | K | TYC | 0.5 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
 Euphoric choir stabs | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c.
 
 # --- batch 8
@@ -49,5 +49,4 @@ Classic choir wash | 0 | ED | C | 1.0 | - | c--- ---- ---- ---- | c--- ---- c---
 Vocal ooh bed | 0 | HM | V | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- ---- | C--- ---- c--- c--- | c--- c--- ---- c---
 Tech choir drones | 0 | DK | T | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o-o- o--- o-o- o---
 Uplifting choir lift | 0 | E | U | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- ---- ---- | C--- ---- ---- ---- + >r--- ---- u--- ---- | C--- ---- C--- ---- + >r--- u--- u--- R--- | C--- ---- C--- ---- + >R--- d--- d--- r--- | C--- C--- ---- ---- + >r--- u--- r--- u---
-Prog choir chant | 1 | RM | P | 0.7 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c- | ..c- c--- ..c- c--- | c--- ..c- ..c- ....
 Orchestral choir march | 1 | P | O | 0.6 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc CCCC CCCC | CCCC c.cc CCCC c.cc | cc.c c.c. cc.c c.c.

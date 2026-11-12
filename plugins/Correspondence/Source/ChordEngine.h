@@ -1261,6 +1261,26 @@ namespace chords
         return s;
     }
 
+    /** The library family a part plays in a song: the best fit for the mood and style, chosen by
+        the seed, preferring rhythms that interlock with the parts chosen before it (the arp with
+        the bass; the chords, acid and piano with those), and a section figure (a build riser, an
+        intro or outro version) where the library has one for that section. */
+    inline const patterns::Family& songFamily (SongPart part, int kind, const SongPatterns& sp, int section)
+    {
+        const auto mood = (patterns::Mood) juce::jlimit (0, 6, sp.libMood);
+        const auto style = (patterns::Style) juce::jlimit (0, 6, sp.libStyle);
+        using T = suite::SectionType;
+        const auto drop = (size_t) T::Drop;
+        std::vector<const patterns::Family*> others;
+        if (part == SongPart::Arp || part == SongPart::Chords || part == SongPart::Acid || part == SongPart::Piano)
+            if (const auto k = lib::kindFor (SongPart::Bass, sp.bass[drop], T::Drop); k >= 0) others.push_back (&songFamily (SongPart::Bass, k, sp, -1));
+        if (part == SongPart::Chords)
+            if (const auto k = lib::kindFor (SongPart::Arp, sp.arp[drop], T::Drop); k >= 0) others.push_back (&songFamily (SongPart::Arp, k, sp, -1));
+        const auto figures = section == (int) T::Intro || section == (int) T::Build || section == (int) T::Outro;
+        const auto melodicPart = part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter;
+        return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1);
+    }
+
     /** Song-length notes: each section plays its own pattern, restarting the progression at
         the section start and never spilling into the next section. Assumes 4/4 bars. */
     inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part)
@@ -1331,7 +1351,7 @@ namespace chords
             const auto useLib = kind >= 0 && (libLead || (part != SongPart::Lead && part != SongPart::Harmony && part != SongPart::Counter));
             const auto libMood = (patterns::Mood) juce::jlimit (0, 6, patterns.libMood);
             const auto libStyle = (patterns::Style) juce::jlimit (0, 6, patterns.libStyle);
-            const auto* family = useLib ? &patterns::pick (libLead ? patterns::Part::Lead : lib::libraryPart (part), kind, libMood, libStyle, patterns.libSeed) : nullptr;
+            const auto* family = useLib ? &songFamily (libLead ? SongPart::Lead : part, kind, patterns, (int) secType) : nullptr;
             const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
             auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false, int variant = 0)

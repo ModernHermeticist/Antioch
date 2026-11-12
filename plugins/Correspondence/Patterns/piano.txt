@@ -1,5 +1,7 @@
 # Piano patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -90,3 +92,12 @@ Hopeful broken eighths | 2 | H | UVO | 0.9 | u | <r--- ---- ---- ---- + a.a. a.a
 Dark broken triplets | 2 | K | TYC | 0.8 | - | r..t ..f. r..t ..f. | r.tf .tr. r.tf .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu | dddd rtfR uuuu rtfR | rtfR rtfr rtfR rtfr
 Dreamy ninths broken | 2 | R | PV | 0.95 | - | r... 9... f... .... | r.9. f.9. r.9. f.9. | r9f9 R9f9 r9f9 R9f9 | r9fR 9f4f r9fR 4f9r | 9f4f r9fR 4f9r r9fR | r9fR r9fR r9fR r9fR
 Epic arpeggio cascade | 2 | P | OU | 0.85 | d | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- f--- ---- + aaaa aaaa aaaa aaaa | <r--- f--- r--- f--- + aaaa aaaa aaaa aaaa | <r--- f--- n--- N--- + aaaa aaaa AAAA AAAA | <r--- r--- n--- N--- + AAAA AAAA aaaa aaaa | <r--- f--- r--- f--- + aaaa AAAA aaaa AAAA
+
+# --- batch 9 (... | fill 2 | high 2 | feel | colour | where)
+Seventh ballad | 0 | MR | PV | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- c--- c--- c--- | <r--- ---- n--- ---- + c--- c--- C--- ---- | - | - | - | 7 |
+Ninth broken | 2 | RH | PV | 0.9 | u | <r--- ---- ---- ---- + a.a. a.a. a.a. a.a. | <r--- ---- ---- ---- + aaaa aaaa aaaa aaaa | <r--- ---- f--- ---- + aaaa aaaa aaaa aaaa | <r--- ---- n--- ---- + aaaa aaaa AAAA AAAA | - | - | - | 9 |
+Pushed house piano | 1 | EHD | UCV | 0.55 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. .p-- | .cc. ..c. .cc. .p-- | .cc. .cc. .CC. .P-- | .CC. .cc. .cc. .P-- | .cc. .cc. .cc. .p-- | - | - |
+Swing piano | 1 | HR | PV | 0.6 | - | c... ...c .... .... | c... ...c ..c. .... | c... ...c ..c. ..cc | c..c ..cc ..c. cccc | c..c ..c. ..cc cccc | c... ..cc ..c. ..cc | s | 7 |
+Triplet ballad arpeggio | 0 | MHP | VOP | 1.0 | u | <r--- ---- ---- ---- + a..a..a..a.. | <r--- ---- ---- ---- + a.aa.aa.aa.a | <r--- ---- f--- ---- + aaaaaaaaaaaa | <r--- ---- n--- ---- + aaaaaaAAAAAA | - | - | - | - |
+Build piano octaves | 1 | * | * | 0.6 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | cccc cccc CCCC CCCC | CCCC CCCC CCCC CCCC | c.cc c.cc c.cc c.cc | - | - | B
+DJ intro piano | 2 | * | * | 0.8 | u | a... .... .... .... | a... .... a... .... | a... a... a... a... | a... a... a... a... | a... ..a. a... ..a. | a... a... a... a... | - | - | IO

@@ -1,5 +1,7 @@
 # Brass patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# feel: s = shuffle, or a share of a 16th. colour: 7, 9, i1, i2. where: only in I intro, G groove, K breakdown, B build, D drop, O outro.
+# Bars: 16 steps, or 12 (8th triplets) or 24 (16th triplets). "!" before a step accents it, an apostrophe softens it. p/P = the next chord, early.
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -24,7 +26,7 @@ Answering horns | 0 | HM | OV | 1.0 | - | c--- ---- .... .... | c--- ---- ..c- -
 # --- 1: stabs and fanfares
 Brass stabs | 1 | EPD | UOC | 0.5 | - | c... .... .... .... | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c.cc cccc
 Offbeat brass | 1 | ED | UC | 0.5 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..cc ..cc ..cc cccc
-Fanfare | 1 | PE | OU | 0.6 | - | r... .... .... .... | r..r ..f. .... .... | r..r ..f. f..f ..R. | r..r ..f. f..f RRRR
+Fanfare | 1 | EP | UO | 0.6 | - | r... .... .... .... | r..r ..f. .... .... | r..r ..f. f..f ..R. | r..r ..f. f..f RRRR | R..R ..f. R..R RRRR | r.rr ..f. f.ff ..R.
 Triplet-feel fanfare | 1 | P | OU | 0.55 | - | r... .... f... .... | r..r .r.. f... .... | r..r .r.. f..f .f.. | r..r .r.. f..f .RRR
 Hits on the one | 1 | PD | OTU | 0.6 | - | C... .... .... .... | C... .... .... .... + <r... .... .... .... | C... .... C... .... + <r... .... r... .... | C... ..C. C..C .CCC + <r... ..r. r..r .rrr
 Big band push | 1 | ED | UV | 0.55 | - | c... .... .... ..c. | c... ..c. .... ..c. | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc
@@ -51,10 +53,9 @@ Hopeful brass push | 1 | H | UVO | 0.6 | - | c... .... .... ..c. | c... ..c. ...
 Melancholic brass sighs | 1 | M | VPC | 0.7 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C-
 Dark brass offbeats | 1 | K | TC | 0.45 | - | ..o. .... ..o. .... | ..o. ..o. ..o. ..o. | ..o. ..o. ..oo ..o. | ..oo ..oo ..oo oooo
 Dreamy brass swells | 1 | R | PV | 0.85 | - | c--- ---- .... .... | c--- ---- c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C-
-Tech brass hits | 1 | DK | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc
+Tech brass hits | 1 | KD | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | .c.c ..c. c..c cccc | c..c ..c. .c.. c.c.
 
 # --- batch 7
-Fanfare variations | 1 | PE | OU | 0.6 | - | r... .... .... .... | r..r ..f. .... .... | r..r ..f. f..f ..R. | r..r ..f. f..f RRRR | R..R ..f. R..R RRRR | r.rr ..f. f.ff ..R.
 Euphoric brass hits | 1 | E | UC | 0.55 | - | C... .... .... .... | C... ..C. .... .... | C... ..C. C... ..C. | C..C ..C. C..C CCCC | CCCC ..C. C..C CCCC | C..C ..C. C... ..CC
 Hopeful horn swells | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c---
 Dark horn swells | 0 | K | TYO | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o-o- o--- o-o- o---
@@ -67,4 +68,3 @@ Vocal horn answers | 0 | HM | V | 1.0 | - | c--- ---- .... .... | c--- ---- ..c-
 Uplifting trumpet line | 1 | E | U | 0.65 | - | >r... .... .... .... | >r..r ..f. .... .... | >r..r ..f. t..t ..R. | >r..r ..f. R..R RRRR | >R..R ..f. t..t RRRR | >r.rr ..f. t.tt ..R.
 Prog brass fog | 0 | RM | P | 1.0 | - | o--- ---- ---- ---- | o--- ---- c--- ---- | o--- c--- o--- c--- | o--- c--- C--- ---- | c--- o--- C--- ---- | o--- ---- c--- c---
 Psy brass pulse | 1 | K | Y | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
-Tech horn stabs | 1 | DK | T | 0.4 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | .c.c ..c. c..c cccc | c..c ..c. .c.. c.c.
