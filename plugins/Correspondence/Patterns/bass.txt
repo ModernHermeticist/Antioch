@@ -25,3 +25,39 @@ Acid line | 2 | KD | YT | 0.55 | - | .r.r .r.r .r.r .r.r | .rRr .rRr .rRr .rRr |
 Euphoric roll | 2 | EHP | UV | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrR .rrr .rRR | .rrr .rrR .fff .fnN
 Epic gallop | 2 | P | OU | 0.7 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | ..rr ..RR ..rr ..RR | ..rr ..RR ..ff ..nn
 Driving 8ths | 2 | D | TC | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrR | .rrr .rrr .uuu .nnn
+
+# --- batch 1: long
+Classic breakdown sub | 0 | EKD | CUT | 1.0 | - | r--- ---- ---- ---- | r--- ---- ---- r--- | r--- ---- r--- r--- | r--- ---- n--- N---
+Dark drone | 0 | K | TYC | 1.0 | - | l--- ---- ---- ---- | l--- ---- l--- ---- | l--- l--- l--- l--- | l--- l--- N--- N---
+Driving long notes | 0 | D | TCU | 0.95 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- r--- r--- | r-r- r-r- r-r- n-N-
+Euphoric swell bass | 0 | E | UC | 1.0 | - | r--- ---- ---- ---- | r--- ---- ---- R--- | r--- ---- R--- ---- | r--- R--- f--- n---
+Dreamy sub | 0 | R | PV | 1.0 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- 9--- | r--- 9--- f--- n---
+Melancholic descent | 0 | M | VPC | 1.0 | - | r--- ---- ---- ---- | r--- ---- d--- ---- | r--- d--- d--- ---- | r--- d--- d--- n---
+Hopeful rise | 0 | H | UVO | 1.0 | - | r--- ---- ---- ---- | r--- ---- u--- ---- | r--- u--- u--- ---- | r--- u--- u--- n---
+Psy drone | 0 | KD | Y | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- ---. | r--- ---. r--- ---. | r--- ---. rrrr rrrr
+Epic pedal | 0 | P | OU | 1.0 | - | l--- ---- ---- ---- | l--- ---- r--- ---- | l--- r--- l--- r--- | l--- r--- n--- N---
+Prog long sync | 0 | RM | P | 0.95 | - | r--- ---- ---- ---- | r--- ---- --r- ---- | r--- --r- ---- r--- | r--- --r- --r- n---
+
+# --- batch 1: offbeat
+Psy offbeat | 1 | K | Y | 0.6 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | .rrr .rrr .rrr .rrr | .rrr .rrr .uuu .ddd
+Tech offbeat | 1 | DK | T | 0.6 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..rr ..r. | ..rr ..r. ..rr ..rR | ..rr ..rR ..rr ..NN
+Orchestral offbeat | 1 | P | OU | 0.75 | - | ..r. ..r. ..r. ..r. | ..r. ..f. ..r. ..f. | ..r. ..f. ..R. ..f. | ..r. ..f. ..R. ..n.
+Dreamy bounce | 1 | R | PV | 0.85 | - | ..r- ---- ..r- ---- | ..r- ..r- ..r- ..r- | ..r- ..R- ..r- ..R- | ..r- ..R- ..f- ..n-
+Melancholic offbeat | 1 | M | VPC | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..t. | ..r. ..t. ..r. ..d. | ..r. ..t. ..d. ..n.
+Euphoric octave offbeat | 1 | E | UC | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..R. ..r. ..R. | ..rR ..rR ..rR ..rR | ..rR ..rR ..RR ..RR
+Hopeful walking offbeat | 1 | H | UVC | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..u. ..u. | ..r. ..u. ..u. ..n. | ..r. ..u. ..u. ..N.
+Driving offbeat pairs | 1 | D | TCU | 0.6 | - | ..r. ..r. ..r. ..r. | ..rr ..r. ..rr ..r. | ..rr ..rr ..rr ..rr | .rrr .rrr .rrr .nnN
+Vocal offbeat | 1 | HM | V | 0.85 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..f. | ..r. ..f. ..r. ..t. | ..r. ..f. ..t. ..n.
+Epic offbeat | 1 | P | OU | 0.75 | - | ..r. ..r. ..r. ..r. | ..r. ..R. ..r. ..R. | ..rR ..rR ..fF ..rR | ..rR ..fF ..tT ..nN
+
+# --- batch 1: rolling
+Prog roll | 2 | RM | P | 0.7 | - | ..r. ..r. ..r. ..r. | .r.r .r.r .r.r .r.r | .rrr .r.r .rrr .r.r | .rrr .rrr .uuu .nnn
+Vocal roll | 2 | HM | V | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rrr .fff .nnn
+Orchestral roll | 2 | P | O | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .fff .rrr .fff | .rrr .fff .ttt .nnn
+Hopeful roll | 2 | H | UV | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrr .uuu .rrr | .rrr .uuu .uuu .nnn
+Melancholic roll | 2 | M | VPC | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrr .ddd .rrr | .rrr .ddd .ddd .nnn
+Dreamy roll | 2 | R | PV | 0.75 | - | ..r. ..r. ..r. ..r. | .r.r .r.r .r.r .r.r | .rr. .rr. .rr. .rrr | .rrr .rrr .fff .nnn
+Euphoric gallop | 2 | E | UC | 0.65 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | .rrr .rRr .rrr .rRr | .rRr .rRr .RRR .nnN
+Dark roll | 2 | K | TYC | 0.6 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rrr .rrr .rrr .rrl | .rrl .rrl .rrl .NNN
+Psy triplet roll | 2 | K | Y | 0.55 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rRr .rrr .rdr | .rrr .rdr .rur .rRr
+Tech roll | 2 | D | T | 0.6 | - | .r.r .r.r .r.r .r.r | .rr. .rrr .rr. .rrr | .rrr .rrr .rrr .rrR | .rrr .rrR .rrr .NNN

@@ -23,3 +23,44 @@ Gated 16ths | 2 | DKE | TCU | 0.55 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aa
 Syncopated pluck | 2 | MDR | PTV | 0.65 | u | ..a. ..a. ..a. ..a. | a..a ..a. .a.. a.a. | a.aa ..a. aa.a .aa. | a.aa .aa. aa.a AAAA
 Trance gate pluck | 2 | ED | UC | 0.6 | u | a.a. a.a. a.a. a.a. | a.aa .aa. a.aa .aa. | a.aa .aa. aa.a .aaa | aaaa aaaa aaaa aaaa
 Offbeat arp | 2 | MHP | VPO | 0.65 | w | ..a. ..a. ..a. ..a. | ..aa ..aa ..aa ..aa | .aaa .aaa .aaa .aaa | .aaa .aaa .AAA .AAA
+
+# --- batch 1: melodic arps (intros, outros, breakdowns)
+Quarter-note bells | 0 | HRE | UPVO | 0.9 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a--- | a-a- a-a- A-A- A---
+Harp glissando | 0 | PHR | OV | 0.95 | u | a... .... .... .... | aaaa ---- ---- ---- | aaaa aaaa ---- ---- | aaaa aaaa AAAA ----
+Slow cascade | 0 | M | VPC | 1.0 | d | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a--- a--- | a-a- a-a- a-a- b---
+Lullaby arp | 0 | RH | PV | 1.0 | w | a--- a--- ---- ---- | a--- a--- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a---
+Dark bells | 0 | K | TYC | 0.9 | - | r--- ---- ---- ---- | r--- ---- t--- ---- | r--- t--- r--- t--- | r--- t--- f--- N---
+Open-fifth arp | 0 | KRP | YPO | 0.95 | - | r--- ---- f--- ---- | r--- f--- R--- f--- | r-f- R-f- r-f- R-f- | r-f- R-f- R-F- R-F-
+Euphoric eighths up | 0 | E | UC | 0.85 | u | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- a-a- a-aa | a-aa a-aa A-AA A-AA
+Ninth halo | 0 | R | PV | 1.0 | - | 9--- ---- ---- ---- | r--- 9--- f--- 9--- | r-9- f-9- R-9- f-9- | r-9- f-9- R-9- 4---
+Hopeful climb | 0 | H | VUO | 0.9 | - | r--- ---- t--- ---- | r--- t--- f--- R--- | r-t- f-R- r-t- f-R- | r-t- f-R- T-F- R---
+Weeping arp | 0 | M | VP | 1.0 | - | t--- ---- ---- ---- | t--- ---- d--- ---- | t--- d--- t--- d--- | t-d- t-d- d-d- n---
+Epic broad arp | 0 | P | OU | 0.95 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- A-A- A-A-
+Prog drifting | 0 | RM | P | 0.95 | w | a--- ---- ---- a--- | a--- ---- a--- a--- | a--- a--- a--- a--- | a-a- a--- a-a- a---
+Tech minimal arp | 0 | KD | T | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r..r ..r. r..r ..r.
+Psy pad arp | 0 | K | Y | 0.8 | - | r--- ---- ---- ---- | r--- ---- d--- ---- | r--- d--- r--- u--- | r-d- r-u- r-d- r-u-
+Vocal-space arp | 0 | HM | V | 0.9 | u | a--- ---- ---- ---- | a--- ---- a--- ---- | a--- a--- a--- ---- | a--- a--- a--- a---
+Starlight | 0 | RE | PU | 0.9 | - | R--- ---- ---- ---- | R--- ---- F--- ---- | R--- F--- T--- F--- | R-F- T-F- R-F- 9---
+Requiem arp | 0 | MK | OC | 1.0 | d | a--- ---- ---- ---- | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a---
+Dotted dream | 0 | RH | PV | 0.9 | u | a--- --a- ---- ---- | a--- --a- ---- a--- | a--- --a- --a- -a-- | a--- --a- --a- --a-
+
+# --- batch 1: 16ths
+Sixteenth skipper | 1 | EHD | UCT | 0.6 | s | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaA | aaaa aaaa AAAA AAAA
+Trance roller | 1 | ED | UC | 0.55 | u | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa AAAA aaaa AAAA
+Orchestral sixteenths | 1 | PH | OU | 0.6 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA
+Melancholic sixteenths | 1 | M | VPC | 0.65 | d | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb
+Psy acid arp | 1 | K | Y | 0.45 | - | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrRr rrdr rrRr rrur | rrRr ddRd uuRu nnRN
+Dreamy sixteenths | 1 | R | PV | 0.7 | w | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA aaaa
+Tech sixteenths | 1 | DK | T | 0.45 | - | r.r. r.r. r.r. r.r. | rrtr rrtr rrtr rrtr | rrtr rrfr rrtr rrfR | rrtr rrfr RRTR RRFR
+
+# --- batch 1: syncopated
+Prog syncopation | 2 | RM | P | 0.7 | u | ..a. ..a. .... .... | ..a. ..a. ..a. .... | ..a. ..a. ..a. .a.. | ..aa ..aa ..aa .aa.
+Dark gated arp | 2 | K | TYC | 0.5 | - | r.r. .... r.r. .... | r.r. ..r. r.r. ..r. | rr.r ..r. rr.r ..r. | rr.r ..rr rr.r rrrr
+Psy triplet feel | 2 | KD | Y | 0.45 | - | r..r ..r. .... .... | r..r ..r. r..r ..r. | r..R ..r. r..R ..r. | r..R ..R. R..R ..RR
+Orchestral pluck rhythm | 2 | PH | OU | 0.6 | u | a... ..a. a... .... | a..a ..a. a..a .... | a..a ..a. a..a ..a. | a..a ..A. A..A ..AA
+Vocal offbeat arp | 2 | HM | V | 0.6 | u | ..a. .... ..a. .... | ..a. ..a. ..a. ..a. | ..aa ..a. ..aa ..a. | ..aa ..aa ..AA ..AA
+Dreamy gate | 2 | R | PV | 0.8 | w | a-.. a-.. a-.. a-.. | a-.a -.a- .a-. a-.. | a-.a -.a- .a-. a-.a | a-aa -aa- a-aa -aa-
+Euphoric bounce arp | 2 | E | UC | 0.55 | u | a..a ..a. a..a ..a. | a.aa ..a. a.aa ..a. | a.aa .aa. a.aa .aa. | a.aa .aaa A.AA .AAA
+Tech stutter arp | 2 | D | T | 0.45 | u | a... a... a... a... | aa.. aa.. aa.. aa.. | aa.a aa.. aa.a aa.. | aa.a aa.a aaaa aaaa
+Hopeful 3-3-2 arp | 2 | H | VUP | 0.65 | w | a..a ..a. .... .... | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..a ..a. A..A ..AA
+Melancholic syncopation | 2 | M | VPC | 0.7 | d | a... ..a. .... .... | a... ..a. .a.. .... | a... ..a. .a.. a.a. | a..a ..a. .a.a a.a.
