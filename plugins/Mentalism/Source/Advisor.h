@@ -18,12 +18,11 @@ namespace advisor
             { "Club master (-8 LUFS)",  -8.0f, -0.3f },
             { "Loud club (-6 LUFS)",    -6.0f, -0.3f },
             { "Streaming (-14 LUFS)",  -14.0f, -1.0f },
-            { "Match reference track",   0.0f, -0.3f },   // lufs taken from the reference
             { "My sound (your tracks)",  0.0f, -0.3f },   // learned from your finished tracks
         };
         return t;
     }
-    constexpr int matchReferenceIndex = 3, mySoundIndex = 4;
+    constexpr int mySoundIndex = 3;   // (a reference never sets the loudness: it plays at the project's target)
 
     struct TonalTarget { const char* name; Bands curve; };
 

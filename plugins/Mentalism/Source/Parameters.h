@@ -4,7 +4,7 @@
 
 namespace Params
 {
-    inline const juce::String loudnessTarget { "loudtarget" };
+    inline const juce::String loudnessTarget { "loudtarget2" };   // (was "loudtarget", with "Match reference track" at 3: see setPluginState)
     inline const juce::String tonalTarget    { "tonaltarget" };
     inline const juce::String autoCoach      { "autocoach" };   // apply the coach's fixes by itself after each play-through
     inline const juce::String compareAB      { "compare_ab" };

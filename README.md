@@ -188,6 +188,13 @@ with the project), and a count of everything done. Every move is also in *What c
 
 ![Correspondence](docs/correspondence.png)
 
+Two pages (top right): **Chords** has the key, the progression, voicing, rhythm and the loop
+clips; **Song** has the section-by-section patterns, the pattern library (mood, style, kit,
+layers, the families in use) and every song clip to drag into FL, each tile full size. The
+window can be dragged bigger; its size and page are saved with the project.
+
+![Correspondence: the Song page](docs/correspondence_song.png)
+
 - **Key and scale** (minor, major, harmonic minor, Dorian, Phrygian, Mixolydian) are
   broadcast to the other plugins. Turn **Broadcast key** off to stop that.
 - **Progression:** 2–8 chords, each set by scale degree (I–VII) and type (Auto, Major,
@@ -406,8 +413,8 @@ track (or its loudest section) and read the numbers:
 
 - **Loudness:** momentary, short-term and gated integrated LUFS (ITU-R BS.1770 / EBU
   R128), plus true peak with 4x oversampling. A gauge shows integrated loudness against
-  the target: Club master −8 LUFS, Loud club −6, Streaming −14, or **Match reference
-  track**.
+  the target: Club master −8 LUFS, Loud club −6, Streaming −14, or **My sound**. A reference
+  never sets the loudness: it's normalized to the project's target.
 - **Stereo:** full-band correlation, correlation below 120 Hz (is the low end mono?),
   and how much level the mix loses when summed to mono.
 - **Tonal balance:** 10 octave bands compared with a target. Bars show the whole song,
@@ -435,7 +442,7 @@ appears among the Suggestions. It never carves anything by itself: the Fix stays
 **Match reference** (Tonal Balance tab, with a reference loaded and at least 10 s of the
 song measured) compares your mix's long-term balance with the reference and moves Lapis'
 new **Low tone** (100 Hz shelf) and **High tone** (8 kHz shelf) half-way towards it, at
-most 4 dB each, and sets the loudness target to match the reference. It's deliberately
+most 4 dB each. It leaves the loudness target alone. It's deliberately
 gentle, so press it again if you want to go further, and it's in History to undo.
 
 **Reset** starts a new measurement, for example after changing the mix.
@@ -472,7 +479,8 @@ over 0 dBFS (from its Prima Materia), a vocal buried under the music for 4 bars 
 and a drop that has been almost mono for 8 s.
 
 **A/B** (Tonal Balance tab, next to the reference) plays the reference's loudest 20 s, looped,
-at the loudness your mix had when you switched, so you compare sound, not level. Map it to a
+normalized to the project's loudness target (Club −8 LUFS, or whichever you chose), so you
+compare sound, not level. Map it to a
 key or automate it to flip quickly. Mentalism has to be last on the master to be heard.
 
 **Pick the closest from a folder** (in *Load reference…*): point it at a folder of reference
@@ -1790,7 +1798,7 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   drop) and land on CC 20-23 in the Song Lead clip, none when off; the layers play where they
   should; 11 piano roll scripts carry every note of their clip.
 - **Round 11, automation:** a clipping track, a buried vocal and a mono drop are flagged
-  live; A/B plays the reference's loudest part at the mix's loudness; the closest reference
+  live; A/B plays the reference's loudest part at the project's loudness target; the closest reference
   is picked from a folder by tone, key and tempo; arrange-from-loop sets each track's
   sections from its role (undoable); the stem plan, project tidy and session health (missing
   samples, fixed and undone; older projects) say the right things; Lapis dithers only at

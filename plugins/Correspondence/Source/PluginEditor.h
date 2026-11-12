@@ -53,6 +53,11 @@ public:
     void fileDragEnter (const juce::StringArray&, int, int) override { dropHover = true; repaint(); }
     void fileDragExit (const juce::StringArray&) override { dropHover = false; repaint(); }
 
+    /** 0 = the Chords page (key, progression, loop clips), 1 = the Song page (song patterns, the
+        library, every song clip). */
+    void showPage (int);
+    int currentPage() const { return page; }
+
 private:
     bool dropHover = false;
     struct SlotView : public juce::Component
@@ -97,6 +102,12 @@ private:
 
     DragTile chordTile, bassTile, arpTile, songChordTile, songBassTile, songArpTile, melodyTile, songLeadTile;
     std::vector<std::unique_ptr<DragTile>> layerTiles;   // the pattern library's layers (song length)
+    DragTile songHarmonyTile, songCounterTile, songSubTile, songFillsTile;
+    juce::TextButton chordsTab { "CHORDS" }, songTab { "SONG" }, songExportButton { "Export all..." };
+    std::unique_ptr<juce::Component> songGrid;
+    int page = 0;
+    std::vector<juce::Component*> chordsPageParts() ;
+    std::vector<juce::Component*> songPageParts();
     suite::ui::Choice melodyStyle;
     juce::TextButton newMelodyButton { "New melody" };
     std::vector<chords::Note> melodyNotes;
@@ -104,6 +115,7 @@ private:
     juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." },
                      colourButton { "Colour..." }, varyButton { "Vary..." };
     void showSongPatterns();
+    void layoutKeyRow();
     std::unique_ptr<juce::FileChooser> chooser;
 
     chords::Settings settings;
@@ -112,7 +124,7 @@ private:
     double playStart = 0.0, auditionStopAt = 0.0;
     bool playing = false;
 
-    juce::Rectangle<int> keyArea, progressionArea, voicingArea, patternArea, exportArea;
+    juce::Rectangle<int> keyArea, progressionArea, voicingArea, patternArea, exportArea, songGridArea, songTilesArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceEditor)
 };

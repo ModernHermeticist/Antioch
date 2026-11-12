@@ -147,6 +147,16 @@ public:
         not level. Put Mentalism last on the master to hear it. */
     std::atomic<bool> abPlaying { false };
     std::atomic<float> abGainDb { 0.0f };
+    /** The project's loudness target (LUFS): what a reference is normalized to for A/B. Kept up to
+        date from the loudness target setting (message thread). */
+    std::atomic<float> projectTargetLufs { -8.0f };
+    void refreshProjectTarget()
+    {
+        const auto i = (int) apvts.getRawParameterValue (Params::loudnessTarget)->load();
+        const auto mine = getMySound();
+        projectTargetLufs.store (i == advisor::mySoundIndex ? (mine.valid ? mine.lufs : advisor::loudnessTargets()[0].lufs)
+                                                            : advisor::loudnessTargets()[(size_t) juce::jlimit (0, (int) advisor::loudnessTargets().size() - 1, i)].lufs);
+    }
 private:
     juce::SpinLock abLock;
     std::shared_ptr<const ReferenceProfile::Excerpt> abShared, abExcerpt;   // abExcerpt: the audio thread's copy

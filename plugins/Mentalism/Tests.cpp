@@ -170,8 +170,7 @@ int main (int argc, char** argv)
 
         auto p = make();
         p->setReference (profile);
-        set (*p, Params::loudnessTarget, (float) advisor::matchReferenceIndex);
-        check (std::abs (p->report().targetLufs + 23.0f) < 0.2f, "'Match reference track' uses the reference loudness");
+        check (std::abs (p->report().targetLufs + 8.0f) < 0.01f, "a quiet reference never sets the project's loudness (still the club target)");
 
         juce::MemoryBlock state;
         p->getStateInformation (state);
@@ -419,7 +418,7 @@ int main (int argc, char** argv)
         const auto lo = p->lastMatchLow.load(), hi = p->lastMatchHigh.load();
         check (seq != 0 && lo < -0.5f && lo > -1.5f && hi > 1.5f && hi < 2.5f,
                "moves half-way: less low, more top (" + juce::String (lo, 2) + " / +" + juce::String (hi, 2) + " dB)");
-        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::matchReferenceIndex, "and aims the loudness at the reference");
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == 0, "and leaves the loudness target alone");
         float l = 0, h = 0;
         suite::FixBus::Message m;
         check (suite::FixBus::read (seq, m) && m.fix == suite::Fix::ReferenceTone && (suite::unpackTone (m.target, l, h), std::abs (l - lo) < 0.01f && std::abs (h - hi) < 0.01f),
@@ -803,7 +802,8 @@ int main (int argc, char** argv)
             for (int i = 0; i < b.getNumSamples(); ++i) { const auto v = 0.05f * (rng2.nextFloat() * 2.0f - 1.0f); b.setSample (0, i, v); b.setSample (1, i, v); }
         };
         render (*r, 4.0, mix);
-        const auto mixLufs = r->report().shortTerm;
+        const auto mixLufs = r->report().targetLufs;   // the project's target (club: -8 LUFS)
+        r->refreshProjectTarget();
         set (*r, Params::compareAB, 1.0f);
         juce::AudioBuffer<float> heard;
         render (*r, 4.0, mix, &heard);
@@ -822,7 +822,7 @@ int main (int argc, char** argv)
             return 2.0 * std::sqrt (c * c + sn * sn) / (i1 - i0);
         };
         check (toneLevel (1000.0) > 0.01 && toneLevel (1000.0) > 20.0 * toneLevel (440.0) && std::abs (lm.integrated() - mixLufs) < 1.0f,
-               "A/B plays the reference's loud part at the mix's loudness (" + juce::String (lm.integrated(), 1) + " vs " + juce::String (mixLufs, 1) + " LUFS)");
+               "A/B plays the reference's loud part at the project's target loudness (" + juce::String (lm.integrated(), 1) + " vs " + juce::String (mixLufs, 1) + " LUFS)");
         set (*r, Params::compareAB, 0.0f);
         juce::AudioBuffer<float> back;
         render (*r, 0.5, mix, &back);

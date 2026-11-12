@@ -110,6 +110,7 @@ MentalismProcessor::MentalismProcessor()
 
 void MentalismProcessor::timerCallback()
 {
+    refreshProjectTarget();
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();
     suite::TargetBus::publish (r.targetLufs, r.ceiling);
@@ -1363,10 +1364,9 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         if (const juce::SpinLock::ScopedTryLockType tl (abLock); tl.isLocked()) abExcerpt = abShared;
         if (abExcerpt != nullptr && abExcerpt->audio.getNumSamples() > 0)
         {
-            if (! abPlaying.load())   // just switched: match the mix's loudness now
+            if (! abPlaying.load())   // just switched: the reference plays at the project's loudness target
             {
-                const auto mixNow = loudness.shortTerm.load() > -70.0f ? loudness.shortTerm.load() : abExcerpt->lufs;
-                abGainDb.store (juce::jlimit (-40.0f, 20.0f, mixNow - abExcerpt->lufs));
+                abGainDb.store (juce::jlimit (-40.0f, 20.0f, projectTargetLufs.load() - abExcerpt->lufs));
                 abPlaying.store (true);
             }
             const auto g = juce::Decibels::decibelsToGain (abGainDb.load());
@@ -1494,7 +1494,6 @@ uint32_t MentalismProcessor::matchReference()
     const auto cl = correction (low), ch = correction (high);
     lastMatchLow.store (cl);
     lastMatchHigh.store (ch);
-    setParameterPlain (apvts, Params::loudnessTarget, (float) advisor::matchReferenceIndex);
     if (std::abs (cl) < 0.25f && std::abs (ch) < 0.25f)
         return 0;
     return sendFix (suite::Fix::ReferenceTone, suite::packTone (cl, ch));
@@ -1518,16 +1517,10 @@ MentalismProcessor::Report MentalismProcessor::report() const
                                           + (mine.learnedFromSongs() ? " finished songs)" : " tracks)")
                                     : juce::String ("the club target (learn your sound from your tracks first, or finish two songs)");
     }
-    else if (loudIndex == advisor::matchReferenceIndex && ref.valid)
-    {
-        rep.targetLufs = ref.lufs;
-        rep.targetName = "the reference (" + juce::String (ref.lufs, 1) + " LUFS)";
-    }
     else
     {
-        rep.targetLufs = loudIndex == advisor::matchReferenceIndex ? advisor::loudnessTargets()[0].lufs : lt.lufs;
-        rep.targetName = loudIndex == advisor::matchReferenceIndex ? juce::String ("the club target (load a reference to match it)")
-                                                                   : juce::String (lt.name);
+        rep.targetLufs = lt.lufs;
+        rep.targetName = juce::String (lt.name);
     }
 
     advisor::Bands target {};
@@ -1633,6 +1626,18 @@ void MentalismProcessor::setPluginState (const void* data, int sizeInBytes)
         return;
 
     auto state = juce::ValueTree::fromXml (*xml);
+    // Projects saved before references stopped setting the loudness: the old target's index (0-2
+    // the same, 3 "Match reference track" -> the club target, 4 "My sound" -> 3)
+    bool migrated = false;
+    for (int i = 0; i < state.getNumChildren(); ++i)
+        if (auto c = state.getChild (i); c.hasType ("PARAM") && c["id"].toString() == "loudtarget")
+        {
+            const auto old = (int) std::lround ((double) c["value"]);
+            c.setProperty ("id", Params::loudnessTarget, nullptr);
+            c.setProperty ("value", old == 4 ? 3 : old == 3 ? 0 : old, nullptr);
+            migrated = true;
+        }
+    juce::ignoreUnused (migrated);
     const auto r = state.getChildWithName ("Reference");
     if (r.isValid())
     {

@@ -1,6 +1,7 @@
 // Offline tests for Correspondence. Usage: CorrespondenceTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include "TempoBus.h"
 #include "SpireTools.h"
 #include "Harmony.h"
@@ -1427,6 +1428,14 @@ int main (int argc, char** argv)
         p->applyPreset (8); // Epic 8
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("correspondence.png"));
+        if (auto* ce = dynamic_cast<CorrespondenceEditor*> (editor.get()))
+        {
+            ce->showPage (1);
+            snapshot (*editor, outDir.getChildFile ("correspondence_song.png"));
+            ce->setSize (1500, 980);
+            snapshot (*editor, outDir.getChildFile ("correspondence_song_large.png"));
+            ce->showPage (0);
+        }
         editor.reset();
     }
 
