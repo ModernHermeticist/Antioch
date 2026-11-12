@@ -5,28 +5,28 @@
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
 # Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
 # A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
-Full sustain | 0 | * | * | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- | c--- ---- ---- ---- | c--- ---- ---- C---
-Half-bar swells | 0 | MRH | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- C--- ---- | c--- ---- c--- C---
-Pulsing pad | 0 | PE | UCO | 0.95 | - | c--- ---- ---- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- c-c- | c-c- c-c- C-C- C-C-
-Breathing pad | 0 | KR | PYT | 0.95 | - | c--- ---- ---- ---- | c--- --.. c--- --.. | c--. c--. c--. c-.. | c--. c--. C--. C-..
-Offbeat stabs | 1 | EDP | UCT | 0.7 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..c. ..C. ..c. ..CC | ..c. ..C. ..C. .CCC
-3-3-2 plucks | 1 | EH | UPV | 0.7 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..c. c..c ..cC | c..c ..c. C..C ..CC
-Progressive chops | 1 | MRK | PV | 0.7 | - | c... ...c ..c. .... | c..c ..c. .c.. c.c. | c.cc ..c. .cc. c.c. | c.cc ..c. .CC. C.C.
-Tech hits | 1 | KD | TY | 0.5 | - | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c .c.c | c..c ..c. c.cc cccc
-Euphoric 16th pluck | 1 | EP | UC | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccC | cccc cccc CCCC CCCC
-Orchestral stabs | 1 | PH | OU | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c.cc ..c. c.cc ..C. | c.cc ..C. C.CC .CCC
-Classic gate | 2 | EHP | UCV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc .cc. c.cc .cc. | cc.c cc.c c.cc c.cc | cccc cccc cccc cccc
-Rolling gate | 2 | DK | TC | 0.6 | - | c.c. c.c. c.c. c.c. | ccc. ccc. ccc. ccc. | cccc ccc. cccc ccc. | cccc cccc cccc cccc
-Stutter gate | 2 | DE | UTY | 0.55 | - | c..c ..c. c..c ..c. | c.cc ..cc c.cc ..cc | cc.c c.cc cc.c c.cc | cccc .ccc cccc .ccc
-Dreamy gate | 2 | RM | PV | 0.9 | - | c-.. c-.. c-.. c-.. | c-.c -.c- .c-. c-.c | c-cc -cc- c-cc -cc- | c-cc c-cc C-CC C-CC
-Dark gate | 2 | K | TYC | 0.55 | - | c... c... c... c... | c.c. .c.c c.c. .c.c | c.cc .c.c c.cc .ccc | cccc .c.c cccc cccc
-Anthem gate | 2 | PE | OUV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC
+Full sustain | 0 | * | * | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- | c--- ---- ---- ---- | c--- ---- ---- C--- | c--- ---- C--- ---- | c--- ---- ---- ----
+Half-bar swells | 0 | MRH | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- C--- ---- | c--- ---- c--- C--- | C--- ---- c--- c--- | C--- ---- c--- ----
+Pulsing pad | 0 | PE | UCO | 0.95 | - | c--- ---- ---- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- c-c- | c-c- c-c- C-C- C-C- | C-C- c-c- C-C- c-c- | c-c- c-c- c-c- C-C-
+Breathing pad | 0 | KR | PYT | 0.95 | - | c--- ---- ---- ---- | c--- --.. c--- --.. | c--. c--. c--. c-.. | c--. c--. C--. C-.. | C--. c--. C--. c-.. | c--. C--. c--. C-..
+Offbeat stabs | 1 | EDP | UCT | 0.7 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..c. ..C. ..c. ..CC | ..c. ..C. ..C. .CCC | ..C. ..c. ..C. .CCC | ..C. ..c. ..C. ..cc
+3-3-2 plucks | 1 | EH | UPV | 0.7 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..c. c..c ..cC | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c..C ..c. c..C ..cc
+Progressive chops | 1 | MRK | PV | 0.7 | - | c... ...c ..c. .... | c..c ..c. .c.. c.c. | c.cc ..c. .cc. c.c. | c.cc ..c. .CC. C.C. | c..c .cc. .c.c c.c. | c.c. ..cc .c.. c.cc
+Tech hits | 1 | KD | TY | 0.5 | - | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c .c.c | c..c ..c. c.cc cccc | c..c .c.. .c.c cccc | c..c ..c. .c.. c.cc
+Euphoric 16th pluck | 1 | EP | UC | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccC | cccc cccc CCCC CCCC | CCCC cccc CCCC cccc | cccc cccC cccc CCCC
+Orchestral stabs | 1 | PH | OU | 0.75 | - | c... .... c... .... | c... ..c. c... ..c. | c.cc ..c. c.cc ..C. | c.cc ..C. C.CC .CCC | C..C ..c. c..C .CCC | c.cc ..C. c.cc ..CC
+Classic gate | 2 | EHP | UCV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc .cc. c.cc .cc. | cc.c cc.c c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | c.cc c.cc cc.c cc.c
+Rolling gate | 2 | DK | TC | 0.6 | - | c.c. c.c. c.c. c.c. | ccc. ccc. ccc. ccc. | cccc ccc. cccc ccc. | cccc cccc cccc cccc | cc.c cc.c cccc cccc | ccc. cccc ccc. cccc
+Stutter gate | 2 | DE | UTY | 0.55 | - | c..c ..c. c..c ..c. | c.cc ..cc c.cc ..cc | cc.c c.cc cc.c c.cc | cccc .ccc cccc .ccc | .ccc cccc .ccc cccc | c.cc cc.c c.cc cc.c
+Dreamy gate | 2 | RM | PV | 0.9 | - | c-.. c-.. c-.. c-.. | c-.c -.c- .c-. c-.c | c-cc -cc- c-cc -cc- | c-cc c-cc C-CC C-CC | C-cc -cc- c-CC -CC- | c-.c -.c- .c-. c-.c
+Dark gate | 2 | K | TYC | 0.55 | - | c... c... c... c... | c.c. .c.c c.c. .c.c | c.cc .c.c c.cc .ccc | cccc .c.c cccc cccc | .c.c cccc .c.c cccc | cc.c .c.c cc.c .ccc
+Anthem gate | 2 | PE | OUV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccC
 
 # --- batch 1: pads
 Two-bar swell | 0 | RMH | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... ..r- ---- | c--- ---- c--- ---- + >.... .... ..r- ---- | C--- ---- C--- ---- + >r--- ---- t--- ----
-Driving pad | 0 | DE | TCU | 0.9 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- C-C-
+Driving pad | 0 | DE | TCU | 0.9 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- C-C- | C-C- c-c- C-C- c-c- | c-c- c--- c-c- c---
 Dark drone pad | 0 | K | YTC | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- ---- + <r--- ---- ---- ---- | o--- ---- o--- ---- + <r--- ---- ---- ---- | c--- ---- o--- ---- + <r--- ---- N--- ----
-Euphoric wash | 0 | E | UC | 1.0 | - | c--- ---- ---- ---- | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- C--- C--- C---
+Euphoric wash | 0 | E | UC | 1.0 | - | c--- ---- ---- ---- | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- C--- C--- C--- | C--- ---- C--- CCCC | C--- C--- ---- C---
 Hopeful pad | 0 | H | UV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- c--- | c--- ---- c--- c--- | c--- c--- C--- C---
 Melancholic pad | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---. ..c- | c--- ---. ..c- ---- | c--- ---. ..c- C---
 Dreamy pad | 0 | R | PV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >9--- ---- ---- ---- | c--- ---- c--- ---- + >9--- ---- 4--- ---- | c--- ---- C--- ---- + >9--- 4--- 9--- r---

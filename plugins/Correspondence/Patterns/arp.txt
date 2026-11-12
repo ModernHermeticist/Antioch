@@ -5,28 +5,28 @@
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
 # Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
 # A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
-Dreamy 8ths | 0 | RM | PV | 1.0 | w | a-a- a-a- a-a- a-a- | a-a- a-a- a-aa a-a- | a-aa a-aa a-aa a-aa | a-a- a-a- A-A- A-A-
-Sus shimmer | 0 | RH | PVO | 0.9 | - | r.9. f.9. r.9. f.9. | r9f9 R9f9 r9f9 R9f9 | r9fR 9fR9 r9fR 9fRF | r9fR 9f4f r9fR 4f9r
-Anthem 8ths | 0 | PE | UVO | 0.9 | u | a.a. a.a. a.a. a.a. | a.a. a.a. a.a. a.aa | a.aa a.aa a.aa a.aa | a.aa a.aa A.AA A.AA
-Octave ping | 0 | RKD | PT | 0.6 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rR.R rR.R rR.R rR.R | rRrR rRrR fFfF tTtT
-Classic 16th up | 1 | EPH | UCV | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA
-Pedal arp | 1 | EPD | UC | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rTrF rtrf rTrF | rtrf rTrF RtRf RTRF | rTrF RTRF rTrF RTRS
-Down cascade | 1 | MRH | UPV | 0.65 | d | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb
-Up-down wave | 1 | RHE | UPVCO | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa
-Broken chord | 1 | MHP | CVO | 0.65 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa AAAA
-Psy 16ths | 1 | KD | YT | 0.5 | - | r.r. r.r. r.r. r.r. | rrRr rrRr rrRr rrRr | rRrt rRrf rRrt rRud | uuuu dddd uuuu dddd
-Converging | 1 | PH | OU | 0.65 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA
-Dark minor pulse | 1 | K | TYC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu
-Random walk | 1 | KR | YP | 0.6 | - | r... u... d... u... | r.u. d.u. u.d. d.u. | rudu udud rudu uddu | uuuu uuuu dddd dddd
-3-3-2 pluck | 2 | EHP | UCP | 0.7 | u | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..A ..a. a..A ..aA | a..A ..A. A..A ..AA
-Gated 16ths | 2 | DKE | TCU | 0.55 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aa.a | aa.a aa.a aaaa aa.a | aaaa aaaa aaaa aaaa
-Syncopated pluck | 2 | MDR | PTV | 0.65 | u | ..a. ..a. ..a. ..a. | a..a ..a. .a.. a.a. | a.aa ..a. aa.a .aa. | a.aa .aa. aa.a AAAA
-Trance gate pluck | 2 | ED | UC | 0.6 | u | a.a. a.a. a.a. a.a. | a.aa .aa. a.aa .aa. | a.aa .aa. aa.a .aaa | aaaa aaaa aaaa aaaa
-Offbeat arp | 2 | MHP | VPO | 0.65 | w | ..a. ..a. ..a. ..a. | ..aa ..aa ..aa ..aa | .aaa .aaa .aaa .aaa | .aaa .aaa .AAA .AAA
+Dreamy 8ths | 0 | RM | PV | 1.0 | w | a-a- a-a- a-a- a-a- | a-a- a-a- a-aa a-a- | a-aa a-aa a-aa a-aa | a-a- a-a- A-A- A-A- | A-A- a-a- A-A- a-a- | a-aa a-a- a-aa a-a-
+Sus shimmer | 0 | RH | PVO | 0.9 | - | r.9. f.9. r.9. f.9. | r9f9 R9f9 r9f9 R9f9 | r9fR 9fR9 r9fR 9fRF | r9fR 9f4f r9fR 4f9r | 9fR9 r9fR 4f9r r9fR | r9fR r9fR 9fR9 r9fR
+Anthem 8ths | 0 | PE | UVO | 0.9 | u | a.a. a.a. a.a. a.a. | a.a. a.a. a.a. a.aa | a.aa a.aa a.aa a.aa | a.aa a.aa A.AA A.AA | A.AA a.aa A.AA a.aa | a.aa a.aa a.aa a.AA
+Octave ping | 0 | RKD | PT | 0.6 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rR.R rR.R rR.R rR.R | rRrR rRrR fFfF tTtT | fFfF rRrR tTtT rRrR | rR.R fF.F rR.R tT.T
+Classic 16th up | 1 | EPH | UCV | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaAa aaAa aaAa aaAa
+Pedal arp | 1 | EPD | UC | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rTrF rtrf rTrF | rtrf rTrF RtRf RTRF | rTrF RTRF rTrF RTRS | RTRF rtrf RTRF rtrS | rfrt rFrT rfrt RFRT
+Down cascade | 1 | MRH | UPV | 0.65 | d | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb | bbbb aaaa aaaa aaaa | aaaa aaaa bbbb aaaa
+Up-down wave | 1 | RHE | UPVCO | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa | AAAA aaaa aaaa AAAA | aAaa aAaa aAaa aAaa
+Broken chord | 1 | MHP | CVO | 0.65 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa AAAA | AAAA aaaa aaaa AAAA | aaaa aaAA aaaa aaAA
+Psy 16ths | 1 | KD | YT | 0.5 | - | r.r. r.r. r.r. r.r. | rrRr rrRr rrRr rrRr | rRrt rRrf rRrt rRud | uuuu dddd uuuu dddd | dddd uuuu dddd uuuu | rRrR rRrt rRrR rRrf
+Converging | 1 | PH | OU | 0.65 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaaa aaAA aaaa aaAA
+Dark minor pulse | 1 | K | TYC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu | uuuu dddd rtfR tfrt | rtfR rtfR rtfR rtfR
+Random walk | 1 | KR | YP | 0.6 | - | r... u... d... u... | r.u. d.u. u.d. d.u. | rudu udud rudu uddu | uuuu uuuu dddd dddd | dddd dddd uuuu uuuu | udud rudu uddu rudu
+3-3-2 pluck | 2 | EHP | UCP | 0.7 | u | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..A ..a. a..A ..aA | a..A ..A. A..A ..AA | A..a ..A. a..A ..aa | a.aA ..a. a.aA ..aA
+Gated 16ths | 2 | DKE | TCU | 0.55 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aa.a | aa.a aa.a aaaa aa.a | aaaa aaaa aaaa aaaa | aaaa AAAA aaaa AAAA | aaaa aa.a aa.a aaaa
+Syncopated pluck | 2 | MDR | PTV | 0.65 | u | ..a. ..a. ..a. ..a. | a..a ..a. .a.. a.a. | a.aa ..a. aa.a .aa. | a.aa .aa. aa.a AAAA | AA.a .aa. aa.A .AA. | aa.a ..aa .a.a .aa.
+Trance gate pluck | 2 | ED | UC | 0.6 | u | a.a. a.a. a.a. a.a. | a.aa .aa. a.aa .aa. | a.aa .aa. aa.a .aaa | aaaa aaaa aaaa aaaa | aaaa AAAA aaaa AAAA | aa.a .aa. aa.a .aaa
+Offbeat arp | 2 | MHP | VPO | 0.65 | w | ..a. ..a. ..a. ..a. | ..aa ..aa ..aa ..aa | .aaa .aaa .aaa .aaa | .aaa .aaa .AAA .AAA | .AAA .aaa .AAA .aaa | .aaa .aAa .aaa .aAa
 
 # --- batch 1: melodic arps (intros, outros, breakdowns)
-Quarter-note bells | 0 | HRE | UPVO | 0.9 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a--- | a-a- a-a- A-A- A---
-Harp glissando | 0 | PHR | OV | 0.95 | u | a... .... .... .... | aaaa ---- ---- ---- | aaaa aaaa ---- ---- | aaaa aaaa AAAA ----
+Quarter-note bells | 0 | HRE | UPVO | 0.9 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a--- | a-a- a-a- A-A- A--- | A-A- a-a- A-a- a--- | a-a- a-a- a--- a---
+Harp glissando | 0 | PHR | OV | 0.95 | u | a... .... .... .... | aaaa ---- ---- ---- | aaaa aaaa ---- ---- | aaaa aaaa AAAA ---- | AAAA aaaa aaaa ---- | aaaa ---- aaaa ----
 Slow cascade | 0 | M | VPC | 1.0 | d | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a--- a--- | a-a- a-a- a-a- b---
 Lullaby arp | 0 | RH | PV | 1.0 | w | a--- a--- ---- ---- | a--- a--- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a---
 Dark bells | 0 | K | TYC | 0.9 | - | r--- ---- ---- ---- | r--- ---- t--- ---- | r--- t--- r--- t--- | r--- t--- f--- N---

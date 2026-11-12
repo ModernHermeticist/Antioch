@@ -5,26 +5,26 @@
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
 # Patterns: a character per 16th (see PatternLibrary.h), bars split by '/', voices by '+'.
 # A voice starting with '<' or '>' sits an octave lower or higher. Spaces are ignored.
-Sub sustain | 0 | RMPH | * | 1.0 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- ---- r--- --r- | r--- ---- r--- n---
-Half-note pulse | 0 | MRH | POV | 1.0 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- ---- u--- n---
-Orchestral roots | 0 | PMH | OU | 1.0 | - | r--- ---- ---- ---- | r--- ---- ---- l--- | r--- ---r ---- l--- | r--- ---- n--- N---
-Pedal breath | 0 | KRD | PYT | 0.9 | - | r--- ---- ---- ---- | r-.. r-.. r-.. r-.. | r-.r r-.r r-.r r-.r | r-.r r-.r u-.u n-.N
-Classic offbeat | 1 | EHP | UCV | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..R. | ..r. ..R. ..r. ..R. | ..r. ..R. ..f. ..n.
-Octave bounce | 1 | EHP | UC | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..R. ..r. ..R. | ..rR ..rR ..rR ..rR | ..rR ..rR ..fF ..Rn
-Long offbeat pump | 1 | MRH | PV | 0.9 | - | .r-- .r-- .r-- .r-- | .r-- .r-- .r-- .r.R | .r-R .r-R .r-R .r-R | .r-- .r-- .f-- .n.N
-Progressive syncopation | 1 | MRK | P | 0.75 | - | ..r. ...r ..r. .... | ..r. .r.r ..r. .r.. | ..rr .r.r ..rr .r.R | ..rr .r.r ..ff .n.n
-Walking offbeat | 1 | HM | CV | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..t. ..f. | ..r. ..R. ..t. ..n. | ..r. ..u. ..u. ..n.
-Dark octave | 1 | KD | TC | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..l. ..r. ..l. | ..rl ..rl ..rl ..rl | ..rl ..rl ..rr ..N.
-Dreamy offbeat | 1 | RH | PVO | 0.95 | - | ..r- ---- ..r- ---- | ..r- ..r- ..r- ..r- | ..r- ..f- ..r- ..t- | ..r- ..u- ..u- ..n-
-Melancholic walk | 1 | M | VPC | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..d. | ..r. ..R. ..r. ..d. | ..r. ..d. ..d. ..n.
-Rolling 16ths | 2 | DEPK | CTU | 0.7 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rrr .rRr .rrr .rRr | .rrr .RRR .fff .nnn
-Psy gallop | 2 | KD | Y | 0.6 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rrr .rrr .rRr | .rrr .rrr .uuu .ddd
-Galloping | 2 | DPE | UCT | 0.7 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | ..rr ..rR ..rr ..rR | ..rr ..rR ..ff ..nN
-Tech bounce | 2 | DK | T | 0.65 | - | ..r. ..r. ..r. ..r. | .r.r ..r. .r.r ..r. | .rr. .r.r .rr. .r.R | .rr. .r.r .ff. .n.N
-Acid line | 2 | KD | YT | 0.55 | - | .r.r .r.r .r.r .r.r | .rRr .rRr .rRr .rRr | .rRr .tRr .rRf .rRr | .rRr .uRu .dRd .nRN
-Euphoric roll | 2 | EHP | UV | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrR .rrr .rRR | .rrr .rrR .fff .fnN
-Epic gallop | 2 | P | OU | 0.7 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | ..rr ..RR ..rr ..RR | ..rr ..RR ..ff ..nn
-Driving 8ths | 2 | D | TC | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrR | .rrr .rrr .uuu .nnn
+Sub sustain | 0 | RMPH | * | 1.0 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- ---- r--- --r- | r--- ---- r--- n--- | r--- ---- n--- N--- | r--- r--- ---- --r-
+Half-note pulse | 0 | MRH | POV | 1.0 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- ---- u--- n--- | r--- d--- d--- n--- | r--- ---- r--- f---
+Orchestral roots | 0 | PMH | OU | 1.0 | - | r--- ---- ---- ---- | r--- ---- ---- l--- | r--- ---r ---- l--- | r--- ---- n--- N--- | l--- ---- r--- n--- | r--- --r- ---- l---
+Pedal breath | 0 | KRD | PYT | 0.9 | - | r--- ---- ---- ---- | r-.. r-.. r-.. r-.. | r-.r r-.r r-.r r-.r | r-.r r-.r u-.u n-.N | r-.r u-.u d-.d n-.N | r-.r r-.r r-.r rr.r
+Classic offbeat | 1 | EHP | UCV | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..R. | ..r. ..R. ..r. ..R. | ..r. ..R. ..f. ..n. | ..R. ..R. ..f. ..N. | ..R. ..r. ..R. ..r.
+Octave bounce | 1 | EHP | UC | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..R. ..r. ..R. | ..rR ..rR ..rR ..rR | ..rR ..rR ..fF ..Rn | ..RR ..rR ..fF ..nN | ..Rr ..Rr ..Rr ..Rr
+Long offbeat pump | 1 | MRH | PV | 0.9 | - | .r-- .r-- .r-- .r-- | .r-- .r-- .r-- .r.R | .r-R .r-R .r-R .r-R | .r-- .r-- .f-- .n.N | .r-- .u-- .u-- .n.N | .r-R .r-- .r-R .r--
+Progressive syncopation | 1 | MRK | P | 0.75 | - | ..r. ...r ..r. .... | ..r. .r.r ..r. .r.. | ..rr .r.r ..rr .r.R | ..rr .r.r ..ff .n.n | ..rr .rrr ..ff .nnN | ..rr .rrr ..rr .r.R
+Walking offbeat | 1 | HM | CV | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..t. ..f. | ..r. ..R. ..t. ..n. | ..r. ..u. ..u. ..n. | ..r. ..d. ..d. ..n. | ..r. ..t. ..f. ..n.
+Dark octave | 1 | KD | TC | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..l. ..r. ..l. | ..rl ..rl ..rl ..rl | ..rl ..rl ..rr ..N. | ..ll ..rr ..ll ..NN | ..lr ..lr ..lr ..lr
+Dreamy offbeat | 1 | RH | PVO | 0.95 | - | ..r- ---- ..r- ---- | ..r- ..r- ..r- ..r- | ..r- ..f- ..r- ..t- | ..r- ..u- ..u- ..n- | ..r- ..9- ..f- ..n- | ..r- ..R- ..f- ..R-
+Melancholic walk | 1 | M | VPC | 0.8 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..d. | ..r. ..R. ..r. ..d. | ..r. ..d. ..d. ..n. | ..r. ..t. ..d. ..N. | ..r. ..d. ..R. ..d.
+Rolling 16ths | 2 | DEPK | CTU | 0.7 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rrr .rRr .rrr .rRr | .rrr .RRR .fff .nnn | .rRr .rRr .uuu .nnN | .rRr .rrr .rRr .rrr
+Psy gallop | 2 | KD | Y | 0.6 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rrr .rrr .rRr | .rrr .rrr .uuu .ddd | .rrr .ddd .uuu .rrr | .rRr .rrr .rRr .rrr
+Galloping | 2 | DPE | UCT | 0.7 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | ..rr ..rR ..rr ..rR | ..rr ..rR ..ff ..nN | ..RR ..rR ..ff ..NN | ..rR ..rr ..rR ..rr
+Tech bounce | 2 | DK | T | 0.65 | - | ..r. ..r. ..r. ..r. | .r.r ..r. .r.r ..r. | .rr. .r.r .rr. .r.R | .rr. .r.r .ff. .n.N | .rrr .r.r .uu. .n.N | .r.r .rr. .r.R .rr.
+Acid line | 2 | KD | YT | 0.55 | - | .r.r .r.r .r.r .r.r | .rRr .rRr .rRr .rRr | .rRr .tRr .rRf .rRr | .rRr .uRu .dRd .nRN | .rRr .dRd .uRu .nRN | .rRr .rRt .rRf .rRr
+Euphoric roll | 2 | EHP | UV | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrR .rrr .rRR | .rrr .rrR .fff .fnN | .rrR .rrR .ffF .nnN | .rRr .rrR .rRr .RRR
+Epic gallop | 2 | P | OU | 0.7 | - | ..r. ..r. ..r. ..r. | ..rr ..rr ..rr ..rr | ..rr ..RR ..rr ..RR | ..rr ..RR ..ff ..nn | ..RR ..rr ..ff ..NN | ..rR ..rR ..rR ..RR
+Driving 8ths | 2 | D | TC | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrR | .rrr .rrr .uuu .nnn | .rrr .ddd .uuu .nnN | .rrR .rrr .rrR .rrr
 
 # --- batch 1: long
 Classic breakdown sub | 0 | EKD | CUT | 1.0 | - | r--- ---- ---- ---- | r--- ---- ---- r--- | r--- ---- r--- r--- | r--- ---- n--- N---
