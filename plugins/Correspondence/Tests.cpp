@@ -1441,7 +1441,7 @@ int main (int argc, char** argv)
         auto onsets = [&] (const std::string& t) { int n = 0; for (const auto& v : voices (t)) for (const auto& b : v.bars) for (auto c : b) n += (c != '.' && c != '-' && c != '~') ? 1 : 0; return n; };
         for (const auto& f : lib)
         {
-            for (const auto& t : { f.level[0], f.level[1], f.level[2], f.fill })
+            for (const auto& t : { f.level[0], f.level[1], f.level[2], f.fill, f.fill2, f.high2 })
             {
                 for (auto v : juce::StringArray::fromTokens (juce::String (t), "+", ""))
                 {
@@ -1454,6 +1454,7 @@ int main (int argc, char** argv)
                 }
             }
             if (! (onsets (f.level[0]) <= onsets (f.level[1]) && onsets (f.level[1]) <= onsets (f.level[2]))) { rising = false; bad = juce::String (f.name); }
+            if (! f.high2.empty() && onsets (f.high2) < onsets (f.level[1])) { rising = false; bad = juce::String (f.name) + " (high2)"; }
         }
         check (wellFormed, "every pattern is whole 16-step bars of known notation" + (wellFormed ? juce::String() : " (" + bad + ")"));
         check (rising, "every family gets busier from low to high energy" + (rising ? juce::String() : " (" + bad + ")"));
@@ -1544,6 +1545,32 @@ int main (int argc, char** argv)
         sp.lead = { 0, 0, 0, 0, 1, 0 };   // the drop
         const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
         check (countIn (lead, 96.0, 160.0) > 0 && countIn (lead, 0.0, 96.0) == 0, "the hook plays in the drop");
+
+        // Variety: families with a second high and a second fill play them in every other phrase of a drop
+        {
+            int withVariants = 0;
+            for (const auto& f : lib) withVariants += ! f.fill2.empty() || ! f.high2.empty() ? 1 : 0;
+            check (withVariants >= 40, juce::String (withVariants) + " families carry a second fill or a second high energy");
+            suite::SectionMap longDrop;
+            longDrop.totalBars = 32; longDrop.count = 1;
+            longDrop.sections[0] = { 1, suite::SectionType::Drop };
+            bool alternates = false;
+            for (uint32_t seed = 1; seed < 40 && ! alternates; ++seed)
+            {
+                auto vp = sp; vp.libSeed = seed;
+                const auto& fam = pick (Part::Bass, 2, Mood::Euphoric, Style::Uplifting, seed);
+                if (fam.high2.empty()) continue;
+                const auto drop = chords::songClip (s, longDrop, vp, chords::SongPart::Bass);
+                std::vector<std::pair<double, int>> first, second;
+                for (const auto& n : drop)
+                {
+                    if (n.start < 16.0) first.push_back ({ n.start, n.pitch });
+                    if (n.start >= 32.0 && n.start < 48.0) second.push_back ({ n.start - 32.0, n.pitch });
+                }
+                alternates = first != second;
+            }
+            check (alternates, "a 32-bar drop: its second phrase plays the second high energy, not a copy of the first");
+        }
 
         // The layers: piano and orchestra in breakdowns and the last drop, timpani rolling into it, acid where the style uses it
         {

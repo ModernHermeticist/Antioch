@@ -1334,12 +1334,12 @@ namespace chords
             const auto* family = useLib ? &patterns::pick (libLead ? patterns::Part::Lead : lib::libraryPart (part), kind, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
-            auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false)
+            auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false, int variant = 0)
             {
                 std::vector<Note> c;
                 if (family != nullptr && ! libLead)
                 {
-                    c = lib::render (*family, level, fill, cs, progressionQ);
+                    c = lib::render (*family, level, fill, cs, progressionQ, 5, variant);
                     if (part == SongPart::Chords && laterDrop && patterns.climbLaterDrops) c = climbVoicing (c);
                     return c;
                 }
@@ -1353,7 +1353,7 @@ namespace chords
                 else if (part == SongPart::Arp)  { cs.arpPattern = (ArpPattern) (choice - 1);     c = arpClip (cs); }
                 else
                 {
-                    c = libLead ? lib::render (*family, laterDrop ? 2 : 1, false, cs, cycleQ, patterns.melody.octave) : melody (cs, patterns.melody);
+                    c = libLead ? lib::render (*family, laterDrop ? 2 : 1, false, cs, cycleQ, patterns.melody.octave, earlierSame % 2) : melody (cs, patterns.melody);
                     if (choice == 2) c = teaser (c);
                     if (choice == 3) c = hookHint (c, progressionQ);
                     // Each later drop varies the hook its own way: embellished, then answered (call and
@@ -1378,12 +1378,15 @@ namespace chords
             const auto cycle = makeCycle (s, sectionLevel);
             const auto useLevels = family != nullptr && ! libLead;
             std::array<std::vector<Note>, 3> levels;
-            std::vector<Note> fillCycle;
+            std::vector<Note> fillCycle, fillCycle2, highCycle2;
             if (useLevels)
             {
                 for (int lv = 0; lv < 3; ++lv) levels[(size_t) lv] = lv == sectionLevel ? cycle : makeCycle (s, lv);
                 fillCycle = makeCycle (s, sectionLevel, true);
+                fillCycle2 = makeCycle (s, sectionLevel, true, 1);    // every other phrase: the second fill
+                highCycle2 = makeCycle (s, 2, false, 1);              // ...and the second high energy
             }
+            auto phraseOf = [&] (double q) { return (int) std::floor ((q - (map.sections[(size_t) i].startBar - 1) * 4.0) / 32.0 + 1.0e-9); };
             // Breakdown lift: the second half of the breakdown moves to the relative major's home (III).
             const auto lifting = isBreakdown && patterns.breakdownStart == 3;
             const auto liftCycle = lifting ? makeCycle (startingOn (base, 3), sectionLevel) : std::vector<Note> {};
@@ -1405,13 +1408,15 @@ namespace chords
                 int bounce = 0;
                 // Builds climb through the energies: low, mid, then high for the last third
                 const auto buildLevel = secType == ST::Build ? juce::jlimit (0, 2, (int) std::floor (3.0 * (offset - startQ) / juce::jmax (1.0, endQ - startQ))) : sectionLevel;
+                const auto alternate = useLevels && buildLevel == 2 && phraseOf (offset) % 2 == 1;   // the drop's second phrase plays the second high
                 const auto& thisCycle = lifting && offset >= liftFrom - 1.0e-9 && liftFrom > startQ ? liftCycle
-                                      : useLevels ? levels[(size_t) buildLevel] : cycle;
+                                      : alternate ? highCycle2 : useLevels ? levels[(size_t) buildLevel] : cycle;
                 if (useLevels)
-                    for (const auto& n : fillCycle)   // the phrase-end bars play the family's fill
+                    for (const auto* fills : { &fillCycle, &fillCycle2 })   // the phrase-end bars play the family's fills, taking turns
+                        for (const auto& n : *fills)
                     {
                         const auto start = offset + n.start;
-                        if (start < endQ - 1.0e-9 && phraseEnd (start))
+                        if (start < endQ - 1.0e-9 && phraseEnd (start) && (phraseOf (start) % 2 == 1) == (fills == &fillCycle2))
                             section.push_back ({ n.pitch + keyChange, start, std::min (n.length, endQ - start - 0.01), n.velocity });
                     }
                 for (const auto& n : thisCycle)

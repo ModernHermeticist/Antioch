@@ -1,5 +1,5 @@
 # Arp patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)
@@ -64,3 +64,17 @@ Euphoric bounce arp | 2 | E | UC | 0.55 | u | a..a ..a. a..a ..a. | a.aa ..a. a.
 Tech stutter arp | 2 | D | T | 0.45 | u | a... a... a... a... | aa.. aa.. aa.. aa.. | aa.a aa.. aa.a aa.. | aa.a aa.a aaaa aaaa
 Hopeful 3-3-2 arp | 2 | H | VUP | 0.65 | w | a..a ..a. .... .... | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..a ..a. A..A ..AA
 Melancholic syncopation | 2 | M | VPC | 0.7 | d | a... ..a. .... .... | a... ..a. .a.. .... | a... ..a. .a.. a.a. | a..a ..a. .a.a a.a.
+
+# --- batch 5 (... | fill | fill 2 | high 2)
+Classic up variations | 1 | EH | UC | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaAa aaAa aaAa aaAa
+Pedal variations | 1 | ED | UC | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rTrF rtrf rTrF | rtrf rTrF RtRf RTRF | rTrF RTRF rTrF RTRS | RTRF rtrf RTRF rtrS | rfrt rFrT rfrt RFRT
+Wave variations | 1 | RH | PV | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa | AAAA aaaa aaaa AAAA | aAaa aAaa aAaa aAaa
+Dark pulse variations | 1 | K | TYC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu | uuuu dddd rtfR tfrt | rtfR rtfR rtfR rtfR
+3-3-2 variations | 2 | EH | UCP | 0.7 | u | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..A ..a. a..A ..aA | a..A ..A. A..A ..AA | A..a ..A. a..A ..aa | a.aA ..a. a.aA ..aA
+Gated variations | 2 | DE | TCU | 0.55 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aa.a | aa.a aa.a aaaa aa.a | aaaa aaaa aaaa aaaa | aaaa AAAA aaaa AAAA | aaaa aa.a aa.a aaaa
+Syncopated variations | 2 | MR | PV | 0.65 | u | ..a. ..a. ..a. ..a. | a..a ..a. .a.. a.a. | a.aa ..a. aa.a .aa. | a.aa .aa. aa.a AAAA | AA.a .aa. aa.A .AA. | aa.a ..aa .a.a .aa.
+Psy variations | 1 | K | Y | 0.45 | - | r.r. r.r. r.r. r.r. | rrRr rrRr rrRr rrRr | rRrt rRrf rRrt rRud | uuuu dddd uuuu dddd | dddd uuuu dddd uuuu | rRrR rRrt rRrR rRrf
+Melodic bells variations | 0 | HE | UVO | 0.9 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a--- | a-a- a-a- A-A- A--- | A-A- a-a- A-a- a--- | a-a- a-a- a--- a---
+Dreamy eighths variations | 0 | R | PV | 1.0 | w | a-a- a-a- a-a- a-a- | a-a- a-a- a-aa a-a- | a-aa a-aa a-aa a-aa | a-a- a-a- A-A- A-A- | A-A- a-a- A-A- a-a- | a-aa a-a- a-aa a-a-
+Orchestral sixteenths variations | 1 | P | O | 0.6 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaaa a.aa aaaa a.aa
+Tech gate variations | 2 | D | T | 0.45 | u | a... a... a... a... | aa.. aa.. aa.. aa.. | aa.a aa.. aa.a aa.. | aa.a aa.a aaaa aaaa | aaaa aa.a aaaa aa.a | aa.. aa.a aa.. aa.a

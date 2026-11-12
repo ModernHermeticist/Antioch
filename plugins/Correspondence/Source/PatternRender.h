@@ -269,10 +269,14 @@ namespace chords::lib
     /** `lengthQ` quarters of the family at `level` (0-2) over the progression, from its first chord.
         `fillAll`: every bar plays the fill (the phrase-end bar). Melodic roles repeat their cell and
         answer it with the fill in the last two bars of every eight. Voices are played together. */
-    inline std::vector<Note> render (const patterns::Family& f, int level, bool fillAll, const Settings& s, double lengthQ, int leadOctave = 5)
+    inline std::vector<Note> render (const patterns::Family& f, int level, bool fillAll, const Settings& s, double lengthQ, int leadOctave = 5, int variant = 0)
     {
-        const auto mainVoices = patterns::voices (f.level[(size_t) juce::jlimit (0, 2, level)]);
-        const auto fillVoices = patterns::voices (f.fill.empty() ? f.level[2] : f.fill);
+        // Variant 1 (every other phrase): the family's second high energy and second fill, where it has them
+        const auto lv = (size_t) juce::jlimit (0, 2, level);
+        const auto& mainText = variant != 0 && lv == 2 && ! f.high2.empty() ? f.high2 : f.level[lv];
+        const auto& fillText = variant != 0 && ! f.fill2.empty() ? f.fill2 : f.fill.empty() ? f.level[2] : f.fill;
+        const auto mainVoices = patterns::voices (mainText);
+        const auto fillVoices = patterns::voices (fillText);
         std::vector<Note> out;
         for (size_t v = 0; v < mainVoices.size(); ++v)
         {

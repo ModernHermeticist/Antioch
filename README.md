@@ -1071,7 +1071,7 @@ section plays. The defaults:
 ### The pattern library
 
 With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
-rhythms and lead hook come from a library of original pattern families (493 so far, in text files under plugins/Correspondence/Patterns: basslines,
+rhythms and lead hook come from a library of original pattern families (574 so far, in text files under plugins/Correspondence/Patterns: basslines,
 arps and plucks, chord rhythms (pads, stabs and gates), two-bar hooks, piano, strings, brass, choir, timpani, acid lines, vocal-chop rhythms, ear candy and counter-lines). They're
 written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
 trance gates, anthem hooks), not copied from records. Each family is tagged with the
@@ -1090,6 +1090,9 @@ What keeps a song cohesive and alive:
   to high across their length.
 - **Fills.** The last bar of every 8-bar phrase plays the family's fill, a turnaround into
   the next phrase. Hooks repeat their two-bar cell and answer it in bars 7-8.
+- **Second fills and second highs.** Families that have them take turns: every other 8-bar phrase
+  of a drop plays the second high-energy pattern and ends on the second fill, so a 32-bar drop
+  doesn't loop one bar for its whole length. Later drops' hooks use the second answer.
 - **Variation by seed.** The fourth bar of some phrases lifts its last beat an octave in the
   bass and arp. Later drops still climb, embellish and double as before.
 - **Chord-relative writing.** Every pattern is written as root, third, fifth, scale steps and

@@ -1,5 +1,5 @@
 # Choir patterns for Correspondence's pattern library. One family per line:
-#   name | kind | moods | styles | gate | arp order | low | mid | high | fill
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2]
 # moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
 # styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
 # arp order: u up, d down, w up-down, c converge, s skip, - (none)

@@ -70,6 +70,7 @@ namespace patterns
         uint32_t moods = 0, styles = 0;
         std::array<std::string, 3> level;   // low, mid, high energy
         std::string fill;                   // the phrase-end bar(s)
+        std::string fill2, high2;           // optional: a second fill and a second high energy, for every other phrase
         float gate = 0.8f;                  // a note's length as a share of the gap to the next one
         int order = up;
         bool tagged (Mood m) const { return ((moods >> (int) m) & 1u) != 0; }
@@ -107,6 +108,8 @@ namespace patterns
                 fam.order = o == 'd' ? down : o == 'w' ? upDown : o == 'c' ? converge : o == 's' ? skip : up;
                 for (int k = 0; k < 3; ++k) fam.level[(size_t) k] = f[6 + k].removeCharacters (" ").toStdString();
                 fam.fill = f[9].removeCharacters (" ").toStdString();
+                if (f.size() > 10) fam.fill2 = f[10].removeCharacters (" ").toStdString();
+                if (f.size() > 11) fam.high2 = f[11].removeCharacters (" ").toStdString();
                 into.push_back (std::move (fam));
             }
         }
