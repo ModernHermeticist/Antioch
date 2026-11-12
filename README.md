@@ -65,7 +65,7 @@ the suite, with the track, the bar, the reason, and whether it was kept or undon
 ### The autopilot: harshness, stability, crowding
 
 The tune should come out of the sounds and effects you pick, so the suite handles the rest
-by itself, moment to moment. Ouroboros' menu has *Autopilot*: one switch per group (saved
+by itself, moment to moment. Ouroboros' menu has *Autopilot*: one switch for each of the four groups (saved
 with the project), and a count of everything done. Every move is also in *What changed?*.
 
 - **Harshness.** Mentalism hears a harsh moment on the master (2-8 kHz jumping well over its
@@ -84,6 +84,22 @@ with the project), and a count of everything done. Every move is also in *What c
   matter least in that section sit it out (a breakdown keeps its piano, strings and choir; a
   build its timpani and strings; a drop its strings, acid and brass), and chops and candy step
   back while the hook is moving so they answer it in its gaps.
+
+- **Mixing.** The Quintessences hear each other: a track dips (up to 3 dB) where a more
+  important part plays in the same band at the same moment (vocal, then lead, then kick and
+  bass, then pads, then hats and FX). Pads and FX dip only at the lead's actual note and its
+  octave (from Vibration), so the lead cuts through without the pad going thin; a lead or vocal
+  still masked lifts its presence 1.5 dB. With a kick or bass playing, everything else gives up
+  its energy under 70 Hz. A pad, lead, hat or FX attack landing on a kick hit is softened. The
+  stereo part under 120 Hz is removed on every track. Bass notes that boom or vanish are evened
+  note by note, and a bare sub gets harmonics around 350 Hz so it's heard on phones. In pads,
+  leads and FX a band that rings out past its usual level is soothed while it rings, and a
+  pitched FX holding a note outside the key is notched there. Drum hits far louder than the
+  ones around them are evened, and tails and hiss under -60 dBFS are pulled down. Grooves,
+  intros and outros get their own EQ correction on top of the drop's (breakdowns already had
+  theirs). A track named reverb, delay, echo, return, send or space, or with Antioch on it, gets
+  a 180 Hz low cut and a 12 kHz high cut. Antioch's space always pumps a little with the kick and
+  steps back while the vocal sings as well as the lead.
 
 ## How the suite glues itself together
 

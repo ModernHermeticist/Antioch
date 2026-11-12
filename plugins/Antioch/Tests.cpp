@@ -1,6 +1,7 @@
 // Offline tests for Antioch. Usage: AntiochTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "AutopilotBus.h"
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
@@ -391,14 +392,21 @@ int main (int argc, char** argv)
         auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
         any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
         suite::KickBus::publish (kp);
+        suite::Autopilot::set (suite::Autopilot::mixing, false);   // (with the autopilot the pump never goes below 35%)
         const auto [off, offMin] = run (0.0f);
+        suite::Autopilot::set (suite::Autopilot::mixing, true);
+        const auto [auto0, autoMin] = run (0.0f);
         const auto [on, onMin] = run (1.0f);
         suite::KickBus::withdraw();
         const auto [noKick, noKickMin] = run (1.0f);
+
         const auto onDuck = juce::Decibels::gainToDecibels (rmsBetween (on, 3.005, 3.04) / rmsBetween (on, 3.4, 3.48));
         const auto offDuck = juce::Decibels::gainToDecibels (rmsBetween (off, 3.005, 3.04) / rmsBetween (off, 3.4, 3.48));
         check (onDuck < offDuck - 8.0f && onMin < 1.0f, "the tail ducks right after each kick (" + juce::String (onDuck - offDuck, 1) + " dB)");
         check (offMin > 0.999f && noKickMin > 0.999f, "no pump when it's off, or when no kick is shared");
+        const auto autoDuck = juce::Decibels::gainToDecibels (rmsBetween (auto0, 3.005, 3.04) / rmsBetween (auto0, 3.4, 3.48));
+        check (autoMin < 1.0f && autoDuck < offDuck - 2.0f, "with the autopilot's mixing on, the tail pumps with the kick even with Pump at 0 ("
+                   + juce::String (autoDuck - offDuck, 1) + " dB)");
     }
 
     section ("Throws at vocal phrase ends");

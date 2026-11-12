@@ -89,7 +89,7 @@ public:
     AutopilotPanel();
     void paint (juce::Graphics&) override;
     void resized() override;
-    std::array<juce::ToggleButton, 3> switches;
+    std::array<juce::ToggleButton, 4> switches;
 
 private:
     void timerCallback() override { repaint(); }

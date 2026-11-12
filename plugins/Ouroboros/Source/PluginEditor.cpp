@@ -357,8 +357,9 @@ AutopilotPanel::AutopilotPanel()
 {
     static const char* names[] { "Harshness: harsh moments, spiky bands, drive on high notes, bright tails, shared resonances",
                                  "Stability: runaway feedback, peaks, DC and rumble, low bass notes, level wobble, stereo collapse, clicks",
-                                 "Arrangement: thins parts when too many play at once; chops and candy take turns with the hook" };
-    const suite::Autopilot::Group groups[] { suite::Autopilot::harshness, suite::Autopilot::stability, suite::Autopilot::arrangement };
+                                 "Arrangement: thins parts when too many play at once; chops and candy take turns with the hook",
+                                 "Mixing: tracks make room for each other (masking, low end, transients, notes, resonances, noise, mono lows)" };
+    const suite::Autopilot::Group groups[] { suite::Autopilot::harshness, suite::Autopilot::stability, suite::Autopilot::arrangement, suite::Autopilot::mixing };
     for (size_t i = 0; i < switches.size(); ++i)
     {
         auto& b = switches[i];
@@ -370,12 +371,12 @@ AutopilotPanel::AutopilotPanel()
         b.onClick = [&b, g]
         {
             suite::Autopilot::set (g, b.getToggleState());
-            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot ") + (g == suite::Autopilot::harshness ? "harshness" : g == suite::Autopilot::stability ? "stability" : "arrangement")
+            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot ") + (g == suite::Autopilot::harshness ? "harshness" : g == suite::Autopilot::stability ? "stability" : g == suite::Autopilot::arrangement ? "arrangement" : "mixing")
                                                       + (b.getToggleState() ? " on" : " off"));
         };
         addAndMakeVisible (b);
     }
-    setSize (600, 120 + 3 * 28 + suite::Autopilot::numCounters * 20);
+    setSize (640, 120 + 4 * 28 + suite::Autopilot::numCounters * 18);
     startTimerHz (2);
 }
 
@@ -396,14 +397,14 @@ void AutopilotPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.setColour (Colours::dimText);
     g.drawText ("What the suite manages by itself while you choose sounds and effects. Each move is in What changed.", r.removeFromTop (18), juce::Justification::centredLeft);
-    r.removeFromTop (8 + 3 * 28 + 10);
+    r.removeFromTop (8 + 4 * 28 + 10);
     g.setColour (Colours::text);
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
     g.drawText ("Done so far (all instances on this computer)", r.removeFromTop (20), juce::Justification::centredLeft);
     g.setFont (juce::FontOptions (12.0f));
     for (int c = 0; c < suite::Autopilot::numCounters; ++c)
     {
-        auto row = r.removeFromTop (20);
+        auto row = r.removeFromTop (18);
         const auto n = suite::Autopilot::countOf ((suite::Autopilot::Counter) c);
         g.setColour (n > 0 ? Colours::text : Colours::dimText);
         g.drawText (suite::Autopilot::counterName (c), row.removeFromLeft (row.getWidth() - 80), juce::Justification::centredLeft);

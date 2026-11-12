@@ -249,7 +249,7 @@ private:
     int widthCooldown = 0, punchCooldown = 0, deessCooldown = 0;
     qn::ResonanceFinder resonances;
     struct Candidate { float hz; int passes; float prominence; float seconds; };
-    std::vector<Candidate> candidates;
+    std::vector<Candidate> candidates, noteCandidates;   // ringing peaks; and held notes (for an FX's key check)
     std::vector<std::pair<float, int>> resonanceCooldown;   // Hz, passes left
     juce::StringArray tipsNow;
     std::vector<float> resonancesNow;

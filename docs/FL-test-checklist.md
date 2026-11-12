@@ -166,6 +166,12 @@ between versions.
 - [ ] **6d.4** Orchestral song with every layer on: *Export all* — the final drop doesn't have every layer at once, the
   breakdown keeps its piano, and *parts thinned* counts up. In a style with chops, they never land on the hook's notes.
 
+- [ ] **6d.5** Lead (with Vibration and Quintessence) and a supersaw pad (with Quintessence) playing together: the pad's
+  Quintessence shows small dips that move with the lead's notes; *masking dips* counts up. Mute the lead: the dips go.
+- [ ] **6d.6** A pad with lots of sub, and a bass playing: the pad's lows under 70 Hz go while the bass plays.
+- [ ] **6d.7** A sine sub bass alone on a laptop speaker: after a few seconds you can hear its notes (harmonics added).
+- [ ] **6d.8** A track named "Reverb" with Quintessence: its low cut goes to 180 Hz and high cut to 12 kHz on the first pass.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

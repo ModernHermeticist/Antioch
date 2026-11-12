@@ -1086,7 +1086,7 @@ int main (int argc, char** argv)
     {
         suite::Autopilot::reset();
         AutopilotPanel panel;
-        check (panel.switches[0].getToggleState() && panel.switches[1].getToggleState() && panel.switches[2].getToggleState(), "every group starts on");
+        check (panel.switches[0].getToggleState() && panel.switches[1].getToggleState() && panel.switches[2].getToggleState() && panel.switches[3].getToggleState(), "every group starts on");
         panel.switches[2].setToggleState (false, juce::sendNotificationSync);
         check (! suite::Autopilot::on (suite::Autopilot::arrangement) && suite::Autopilot::on (suite::Autopilot::harshness), "switching one off affects only that group");
         auto p = std::make_unique<OuroborosProcessor>();

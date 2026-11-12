@@ -760,6 +760,22 @@ bool QuintessenceProcessor::autoPass()
                       { return std::none_of (found.begin(), found.end(), [&] (float hz) { return std::abs (std::log2 (c.hz / hz)) < 0.04f; }); }),
                       candidates.end());
 
+    // Held notes (an FX's key check): any clear peak from 80 Hz, however far it stands out
+    if (role == 7 && resonances.framesHeard() >= 8)
+    {
+        std::vector<float> heard;
+        for (const auto& peak : resonances.peaks (sr, 15.0f, 2, 200.0f, 80.0f))
+        {
+            heard.push_back (peak.hz);
+            auto it = std::find_if (noteCandidates.begin(), noteCandidates.end(), [&] (const Candidate& c) { return std::abs (std::log2 (c.hz / peak.hz)) < 0.04f; });
+            if (it != noteCandidates.end()) { it->hz = 0.5f * (it->hz + peak.hz); ++it->passes; }
+            else noteCandidates.push_back ({ peak.hz, 1, peak.prominenceDb, m.seconds });
+        }
+        noteCandidates.erase (std::remove_if (noteCandidates.begin(), noteCandidates.end(), [&] (const Candidate& c)
+                              { return std::none_of (heard.begin(), heard.end(), [&] (float hz) { return std::abs (std::log2 (c.hz / hz)) < 0.04f; }); }),
+                              noteCandidates.end());
+    }
+
     // Spire tips from this pass
     {
         const auto& t = qn::targets::roles()[(size_t) role];
@@ -901,7 +917,7 @@ void QuintessenceProcessor::keyMove (int role)
         return std::find (steps.begin(), steps.end(), ((pc - key.root) % 12 + 12) % 12) != steps.end();
     };
     if (const auto now = keyNotchHz.load(); now > 0.0f && inKey (now)) keyNotchHz.store (0.0f);
-    for (const auto& c : candidates)
+    for (const auto& c : noteCandidates)
     {
         if (c.passes < 2 || c.hz < 80.0f || c.hz > 4000.0f) continue;
         const auto midi = 69.0f + 12.0f * std::log2 (c.hz / 440.0f);

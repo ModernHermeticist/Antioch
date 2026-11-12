@@ -58,12 +58,12 @@ namespace qn
         }
 
         /** The most prominent peaks between 200 Hz and 8 kHz, strongest first. */
-        std::vector<Peak> peaks (double sampleRate, float minProminenceDb = 10.0f, int maxPeaks = 3) const
+        std::vector<Peak> peaks (double sampleRate, float minProminenceDb = 10.0f, int maxPeaks = 3, float maxProminenceDb = 35.0f, float loHz = 200.0f) const
         {
             std::vector<Peak> out;
             const auto db = spectrumDb();
             if (db.empty()) return out;
-            const auto lo = binFor (200.0f, sampleRate), hi = std::min ((int) db.size() - 2, binFor (8000.0f, sampleRate));
+            const auto lo = binFor (loHz, sampleRate), hi = std::min ((int) db.size() - 2, binFor (8000.0f, sampleRate));
             for (int b = lo; b <= hi; ++b)
             {
                 // A local maximum within a 24th of an octave
@@ -76,7 +76,7 @@ namespace qn
                 // 10-35 dB proud of the sound around it: a resonance. Far more than that is a note
                 // standing on its own (nothing around it), not a resonance on a sound.
                 const auto p = prominence (db, b, sampleRate);
-                if (p >= minProminenceDb && p <= 35.0f)
+                if (p >= minProminenceDb && p <= maxProminenceDb)
                 {
                     // Between bins: the top of a parabola through the peak and its neighbours
                     const auto a = db[(size_t) b - 1], c = db[(size_t) b], e = db[(size_t) b + 1];
