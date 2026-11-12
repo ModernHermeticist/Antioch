@@ -348,6 +348,7 @@ namespace suite
         virtual bool applySession (const SessionStyle&, int /*root*/, int /*scale*/) { return false; }
         /** The mood of the session being applied (valid inside applySession). */
         const SessionMood& sessionMood() const { return suite::sessionMood (currentMood); }
+        int sessionMoodIndex() const { return currentMood; }
 
         /** Handles new session messages (the timer calls it; tests call it directly). */
         void pollSession()

@@ -498,7 +498,56 @@ namespace
             addAndMakeVisible (*breakdownBox);
             hint.setFont (juce::FontOptions (12.0f));
             addAndMakeVisible (hint);
-            setSize (1200, 430);
+
+            // The pattern library: mood x style, and a roll of the dice for another set of families
+            libOn = std::make_unique<juce::ToggleButton> ("Pattern library");
+            libOn->setTooltip ("Bass, arps, chord rhythms and lead hooks from the library: one family per part for the whole song, "
+                               "quiet in intros and breakdowns, climbing through builds, full in the drops, with a fill at each phrase end");
+            libOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::libOn, *libOn);
+            addAndMakeVisible (*libOn);
+            libLead = std::make_unique<juce::ToggleButton> ("Lead hooks too");
+            libLead->setTooltip ("The lead from the library's hooks (a motif or melody style you taught it always wins)");
+            libLeadAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::libLead, *libLead);
+            addAndMakeVisible (*libLead);
+            for (auto [box, att, pid, tip] : { std::tuple { &moodBox, &moodAttachment, Params::libMood, "The mood: which families colour the song" },
+                                              std::tuple { &styleBox, &styleAttachment, Params::libStyle, "The style: the rhythm language of the parts" } })
+            {
+                *box = std::make_unique<juce::ComboBox>();
+                (*box)->addItemList (state.getParameter (pid)->getAllValueStrings(), 1);
+                (*box)->setTooltip (tip);
+                *att = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, pid, **box);
+                (*box)->onChange = [this] { showFamilies(); };
+                addAndMakeVisible (**box);
+            }
+            rollButton.setTooltip ("Another set of families for the same mood and style");
+            rollButton.onClick = [this, &state]
+            {
+                if (auto* seed = state.getParameter (Params::libSeed))
+                    seed->setValueNotifyingHost (seed->convertTo0to1 ((float) juce::Random::getSystemRandom().nextInt ({ 1, 10000 })));
+                showFamilies();
+            };
+            addAndMakeVisible (rollButton);
+            families.setFont (juce::FontOptions (12.0f));
+            families.setColour (juce::Label::textColourId, Colours::dimText);
+            addAndMakeVisible (families);
+            stateRef = &state;
+            showFamilies();
+            setSize (1200, 462);
+        }
+
+        /** The families this song's parts play (drop rhythms), under the library row. */
+        void showFamilies()
+        {
+            if (stateRef == nullptr) return;
+            auto v = [this] (const juce::String& id) { return stateRef->getRawParameterValue (id)->load(); };
+            const auto mood = (patterns::Mood) (int) v (Params::libMood);
+            const auto style = (patterns::Style) (int) v (Params::libStyle);
+            const auto seed = (uint32_t) v (Params::libSeed);
+            juce::StringArray names;
+            for (auto [part, kind, label] : { std::tuple { patterns::Part::Bass, 2, "bass" }, std::tuple { patterns::Part::Arp, 1, "arp" },
+                                              std::tuple { patterns::Part::Chords, 2, "chords" }, std::tuple { patterns::Part::Lead, 0, "hook" } })
+                names.add (juce::String (label) + ": " + patterns::pick (part, kind, mood, style, seed).name);
+            families.setText (names.joinIntoString ("   "), juce::dontSendNotification);
         }
 
         void paint (juce::Graphics& g) override
@@ -515,6 +564,15 @@ namespace
             auto r = getLocalBounds().reduced (6);
             r.removeFromTop (20);
             hint.setBounds (r.removeFromBottom (24));
+            {
+                auto row = r.removeFromBottom (30);
+                libOn->setBounds (row.removeFromLeft (130));
+                moodBox->setBounds (row.removeFromLeft (130).reduced (2));
+                styleBox->setBounds (row.removeFromLeft (140).reduced (2));
+                rollButton.setBounds (row.removeFromLeft (120).reduced (2));
+                libLead->setBounds (row.removeFromLeft (130));
+                families.setBounds (row);
+            }
             {
                 auto extras = r.removeFromBottom (30);
                 grooveBox->setBounds (extras.removeFromLeft (160).reduced (2));
@@ -571,6 +629,13 @@ namespace
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> accentAttachment;
         juce::TextEditor title, artist;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> breakdownAttachment;
+        std::unique_ptr<juce::ToggleButton> libOn, libLead;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> libOnAttachment, libLeadAttachment;
+        std::unique_ptr<juce::ComboBox> moodBox, styleBox;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> moodAttachment, styleAttachment;
+        juce::TextButton rollButton { "New patterns" };
+        juce::Label families;
+        juce::AudioProcessorValueTreeState* stateRef = nullptr;
     };
 }
 

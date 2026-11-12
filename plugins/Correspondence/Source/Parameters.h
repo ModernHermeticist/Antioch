@@ -35,7 +35,12 @@ namespace Params
     inline const juce::String songDouble   { "song_double" };
     inline const juce::String macroPlan    { "macro_plan" };     // how the Spire macros move: uplifting, progressive, big breakdowns
     inline const juce::String songMacros   { "song_macros" };    // Spire macro rides in song clips: off, CC 20-23, CC 102-105    // the final drop: lead doubled an octave up, bass a sub octave
-    inline const juce::String songGhost    { "song_ghost" };     // ghost notes in bass and arp exports
+    inline const juce::String songGhost    { "song_ghost" };
+    inline const juce::String libOn        { "lib_on" };         // the pattern library writes the song's parts
+    inline const juce::String libMood      { "lib_mood" };
+    inline const juce::String libStyle     { "lib_style" };
+    inline const juce::String libSeed      { "lib_seed" };       // which of the fitting families (New patterns rolls it)
+    inline const juce::String libLead      { "lib_lead" };       // the lead hook from the library too     // ghost notes in bass and arp exports
     inline const juce::String songFills    { "song_fills" };     // drum fill clip
     inline const juce::String songVocalRoom { "song_vocalroom" }; // the lead thins out where the vocal sings
     inline const juce::String groove       { "groove" };         // exported MIDI feel: straight / trance shuffle / hard shuffle

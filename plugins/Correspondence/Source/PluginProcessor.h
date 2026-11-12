@@ -63,7 +63,35 @@ public:
         setParameterPlain (apvts, Params::rootNote, (float) juce::jlimit (0, 11, root));
         setParameterPlain (apvts, Params::scale, (float) scale);   // the chosen key wins over the preset's scale
         setParameterPlain (apvts, Params::broadcast, 1.0f);
+        // The pattern library follows the session: its style and mood, and a fresh set of families
+        setParameterPlain (apvts, Params::libStyle, (float) libraryStyleFor (style));
+        setParameterPlain (apvts, Params::libMood, (float) libraryMoodFor (sessionMoodIndex(), style));
+        setParameterPlain (apvts, Params::libSeed, (float) juce::Random::getSystemRandom().nextInt ({ 1, 10000 }));
         return true;
+    }
+    /** The library style for a session style, and the mood for a session mood ("As the style": the style's own). */
+    static int libraryStyleFor (const suite::SessionStyle& style)
+    {
+        const juce::String n (style.name);
+        using S = patterns::Style;
+        return (int) (n.containsIgnoreCase ("tech") ? S::Tech : n.containsIgnoreCase ("progressive") ? S::Progressive
+                    : n.containsIgnoreCase ("vocal") ? S::Vocal : n.containsIgnoreCase ("psy") ? S::Psy
+                    : n.containsIgnoreCase ("orchestral") ? S::Orchestral : n.containsIgnoreCase ("classic") ? S::Classic : S::Uplifting);
+    }
+    static int libraryMoodFor (int sessionMood, const suite::SessionStyle& style)
+    {
+        using M = patterns::Mood;
+        switch (sessionMood)
+        {
+            case 1: return (int) M::Euphoric;
+            case 2: return (int) M::Hopeful;
+            case 3: return (int) M::Melancholic;
+            case 4: return (int) M::Dark;
+            default: break;
+        }
+        const juce::String n (style.name);
+        return (int) (n.containsIgnoreCase ("tech") ? M::Driving : n.containsIgnoreCase ("progressive") ? M::Dreamy
+                    : n.containsIgnoreCase ("vocal") ? M::Melancholic : n.containsIgnoreCase ("anthem") ? M::Epic : M::Euphoric);
     }
 
     /** Learns a melody motif from the first two bars of a MIDI file (message thread). Returns the note count. */

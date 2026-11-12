@@ -1338,6 +1338,7 @@ int main (int argc, char** argv)
         check (inGroove, "a thin groove gets a sustained chord layer (and only the groove)");
 
         auto p = make();
+        set (*p, Params::libLead, 0.0f);   // the lead from Melodia, so a new seed is a new lead
         suite::SectionBus::publish (map);
         suite::FixBus::reset();
         const auto parent = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceRelearn");
@@ -1426,6 +1427,129 @@ int main (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("correspondence.png"));
         editor.reset();
+    }
+
+    section ("The pattern library");
+    {
+        using namespace patterns;
+        const auto& lib = library();
+        // Every family is well formed: whole bars, known characters, density rising with the energy
+        bool wellFormed = true, rising = true;
+        juce::String bad;
+        const std::string known = "rtfsRTFSl94udknNaAbcCo,-.";
+        auto onsets = [&] (const char* t) { int n = 0; for (const auto& b : bars (t)) for (auto c : b) n += (c != '.' && c != '-') ? 1 : 0; return n; };
+        for (const auto& f : lib)
+        {
+            for (auto* t : { f.level[0], f.level[1], f.level[2], f.fill })
+            {
+                if (t == nullptr) continue;
+                int chars = 0;
+                for (const char* q = t; *q != 0; ++q)
+                {
+                    if (*q == ' ' || *q == '|') continue;
+                    ++chars;
+                    if (known.find (*q) == std::string::npos) { wellFormed = false; bad = f.name; }
+                }
+                const auto barsCount = (int) bars (t).size();
+                if (chars != barsCount * 16) { wellFormed = false; bad = f.name; }
+            }
+            if (! (onsets (f.level[0]) <= onsets (f.level[1]) && onsets (f.level[1]) <= onsets (f.level[2]))) { rising = false; bad = f.name; }
+        }
+        check (wellFormed, "every pattern is whole 16-step bars of known notation" + (wellFormed ? juce::String() : " (" + bad + ")"));
+        check (rising, "every family gets busier from low to high energy" + (rising ? juce::String() : " (" + bad + ")"));
+        check (lib.size() >= 60, juce::String ((int) lib.size()) + " families");
+
+        // Every mood and style finds a family for every part and kind, and fits it where one exists
+        bool covered = true;
+        int exact = 0, pairs = 0;
+        for (int m = 0; m < (int) Mood::count; ++m)
+            for (int st = 0; st < (int) Style::count; ++st)
+                for (auto [part, kinds] : { std::pair { Part::Bass, 3 }, { Part::Arp, 3 }, { Part::Chords, 3 }, { Part::Lead, 1 } })
+                    for (int k = 0; k < kinds; ++k)
+                    {
+                        const auto c = candidates (part, k, (Mood) m, (Style) st);
+                        covered = covered && ! c.empty();
+                        ++pairs;
+                        if (! c.empty() && ((lib[(size_t) c[0]].styles >> st) & 1u) != 0) ++exact;
+                    }
+        check (covered, "every mood x style finds a family for every part");
+        check (exact * 10 >= pairs * 7, "and most (" + juce::String (exact) + " of " + juce::String (pairs) + ") match the style exactly");
+
+        // Rendering: chord-relative, in key, in range, one note at a time for bass and lead
+        chords::Settings s;
+        s.root = 9; s.scale = 0; s.count = 4;   // A minor: i VI III VII
+        s.slots[0] = { 1 }; s.slots[1] = { 6 }; s.slots[2] = { 3 }; s.slots[3] = { 7 };
+        const auto& keySteps = suite::music::scales()[0].steps;
+        auto inKey = [&] (int p) { return std::find (keySteps.begin(), keySteps.end(), ((p - 9) % 12 + 12) % 12) != keySteps.end(); };
+        bool allInKey = true, inRange = true, mono = true;
+        juce::String where;
+        for (const auto& f : lib)
+            for (int lv = 0; lv < 3; ++lv)
+            {
+                const auto notes = chords::lib::render (f, lv, false, s, f.part == Part::Lead ? 32.0 : 16.0);
+                for (size_t i = 0; i < notes.size(); ++i)
+                {
+                    const auto& n = notes[i];
+                    if (! inKey (n.pitch) && std::string (f.level[(size_t) lv]).find ('N') == std::string::npos) { allInKey = false; where = f.name; }
+                    const auto lo = f.part == Part::Bass ? 21 : f.part == Part::Lead ? 55 : 45, hi = f.part == Part::Bass ? 64 : 100;
+                    if (n.pitch < lo || n.pitch > hi || n.length <= 0.0) { inRange = false; where = f.name; }
+                    if ((f.part == Part::Bass || f.part == Part::Lead) && i + 1 < notes.size() && n.start + n.length > notes[i + 1].start + 1.0e-6) { mono = false; where = f.name; }
+                }
+            }
+        check (allInKey, "every family stays in the key over i-VI-III-VII" + (allInKey ? juce::String() : " (" + where + ")"));
+        check (inRange, "bass, arps, chords and leads each stay in their register" + (inRange ? juce::String() : " (" + where + ")"));
+        check (mono, "bass lines and hooks play one note at a time" + (mono ? juce::String() : " (" + where + ")"));
+
+        auto findFamily = [&] (const char* name) -> const Family& { for (const auto& f : lib) if (juce::String (f.name) == name) return f; return lib.front(); };
+        const auto offbeat = chords::lib::render (findFamily ("Classic offbeat"), 2, false, s, 16.0);
+        bool offbeats = offbeat.size() == 16;
+        for (const auto& n : offbeat) offbeats = offbeats && std::abs (std::fmod (n.start, 1.0) - 0.5) < 1.0e-6;
+        check (offbeats && offbeat[0].pitch % 12 == 9 && offbeat[4].pitch % 12 == 5, "the classic offbeat bass: every offbeat, on each chord's root (A, then F)");
+        const auto hook = chords::lib::render (findFamily ("Anthem long notes"), 1, false, s, 32.0);
+        int maxLeap = 0;
+        for (size_t i = 1; i < hook.size(); ++i) maxLeap = juce::jmax (maxLeap, std::abs (hook[i].pitch - hook[i - 1].pitch));
+        check (! hook.empty() && maxLeap <= 9, "a hook voice-leads over the changes (largest leap " + juce::String (maxLeap) + " semitones)");
+        bool answered = false;
+        for (const auto& n : hook) answered = answered || (n.start >= 24.0 && n.start < 32.0);
+        check (answered, "and answers itself in the last two bars of the phrase");
+
+        // In the song: one family per part, busier in the drop than the intro, fills at phrase ends
+        suite::SectionMap map;
+        map.totalBars = 48; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Intro };
+        map.sections[1] = { 17, suite::SectionType::Build };
+        map.sections[2] = { 25, suite::SectionType::Drop };
+        map.sections[3] = { 41, suite::SectionType::Outro };
+        chords::SongPatterns sp;
+        sp.library = true; sp.libMood = (int) Mood::Euphoric; sp.libStyle = (int) Style::Uplifting; sp.libSeed = 42;
+        sp.bass = { 2, 2, 2, 2, 2, 2 };   // rolling
+        sp.ghostNotes = 0.0f;
+        const auto bass = chords::songClip (s, map, sp, chords::SongPart::Bass);
+        auto countIn = [&] (const std::vector<chords::Note>& v, double a, double b) { int n = 0; for (const auto& x : v) n += x.start >= a && x.start < b ? 1 : 0; return n; };
+        check (countIn (bass, 96.0, 112.0) > countIn (bass, 0.0, 16.0), "the drop's bass is busier than the intro's (" + juce::String (countIn (bass, 96.0, 112.0)) + " vs "
+                   + juce::String (countIn (bass, 0.0, 16.0)) + " notes in 4 bars)");
+        check (countIn (bass, 92.0, 96.0) >= countIn (bass, 64.0, 68.0), "the build climbs: its last bars at least as busy as its first");
+        const auto plain = [&] { auto q = sp; q.library = false; return chords::songClip (s, map, q, chords::SongPart::Bass); }();
+        check (bass.size() != plain.size() || bass[0].start != plain[0].start || bass[0].pitch != plain[0].pitch, "(the library writes it, not the old patterns)");
+        auto other = sp;
+        other.libSeed = 43;
+        other.libStyle = (int) Style::Tech; other.libMood = (int) Mood::Dark;
+        const auto techBass = chords::songClip (s, map, other, chords::SongPart::Bass);
+        bool differs = techBass.size() != bass.size();
+        for (size_t i = 0; ! differs && i < bass.size(); ++i) differs = bass[i].start != techBass[i].start || bass[i].pitch != techBass[i].pitch;
+        check (differs, "a dark tech song gets a different bass from a euphoric uplifting one");
+        const auto again = chords::songClip (s, map, sp, chords::SongPart::Bass);
+        check (again.size() == bass.size(), "the same seed always writes the same song");
+        sp.lead = { 0, 0, 0, 0, 1, 0 };   // the drop
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        check (countIn (lead, 96.0, 160.0) > 0 && countIn (lead, 0.0, 96.0) == 0, "the hook plays in the drop");
+
+        // A new song from Ouroboros sets the library's style and mood
+        auto p = make();
+        suite::SessionStyle tech = suite::sessionStyles()[2];
+        check (CorrespondenceProcessor::libraryStyleFor (tech) == (int) Style::Tech && CorrespondenceProcessor::libraryMoodFor (0, tech) == (int) Mood::Driving
+                   && CorrespondenceProcessor::libraryMoodFor (4, tech) == (int) Mood::Dark,
+               "a tech trance session: tech patterns, driving (or dark, if the mood says so)");
     }
 
     return finish();

@@ -1189,6 +1189,10 @@ namespace chords
         return onsets > 0 && chordal * 2 >= onsets;
     }
 
+}
+#include "PatternRender.h"
+namespace chords
+{
     //==============================================================================
     /** Groove: delays the off 16ths by `swing` of a 16th (0 = straight). */
     inline std::vector<Note> applyGroove (std::vector<Note> notes, float swing)
@@ -1223,6 +1227,12 @@ namespace chords
         float ghostNotes = 0.35f;     // in-between soft notes in bass and arp (0 = none), scaled by section energy
         bool leaveRoomForVocal = true;
         std::vector<bool> vocalBars;  // bars (index 0 = bar 1) the vocal sings in, from Solve et Coagula
+        // The pattern library: each part plays one family for the whole song, chosen by mood,
+        // style and seed, at the energy each section asks for, with a fill at each phrase end
+        bool library = false;
+        int libMood = 0, libStyle = 0;
+        uint32_t libSeed = 1;
+        bool libLead = true;          // the lead hook from the library too (a learned motif or style always wins)
     };
 
     inline const juce::StringArray& songChoiceNames (SongPart part)
@@ -1296,9 +1306,24 @@ namespace chords
             const auto isBreakdown = map.sections[(size_t) i].type == suite::SectionType::Breakdown;
             if (isBreakdown && (patterns.breakdownStart == 1 || patterns.breakdownStart == 2))
                 s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
-            auto makeCycle = [&] (Settings cs)
+            // The pattern library: this part's family for the song, at the section's energy
+            const auto secType = map.sections[(size_t) i].type;
+            const auto kind = patterns.library ? lib::kindFor (part, choice, secType) : -1;
+            const auto libLead = kind >= 0 && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter)
+                                 && patterns.libLead && patterns.melody.motif.empty() && ! patterns.melody.dna.valid;
+            const auto useLib = kind >= 0 && (libLead || (part != SongPart::Lead && part != SongPart::Harmony && part != SongPart::Counter));
+            const auto* family = useLib ? &patterns::pick (lib::libraryPart (part), kind, (patterns::Mood) juce::jlimit (0, 6, patterns.libMood),
+                                                           (patterns::Style) juce::jlimit (0, 6, patterns.libStyle), patterns.libSeed) : nullptr;
+            const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
+            auto makeCycle = [&] (Settings cs, int level = 1, bool fill = false)
             {
                 std::vector<Note> c;
+                if (family != nullptr && ! libLead)
+                {
+                    c = lib::render (*family, level, fill, cs, progressionQ);
+                    if (part == SongPart::Chords && laterDrop && patterns.climbLaterDrops) c = climbVoicing (c);
+                    return c;
+                }
                 if (part == SongPart::Chords)
                 {
                     cs.chordPattern = (ChordPattern) (choice - 1);
@@ -1309,7 +1334,7 @@ namespace chords
                 else if (part == SongPart::Arp)  { cs.arpPattern = (ArpPattern) (choice - 1);     c = arpClip (cs); }
                 else
                 {
-                    c = melody (cs, patterns.melody);
+                    c = libLead ? lib::render (*family, laterDrop ? 2 : 1, false, cs, cycleQ, patterns.melody.octave) : melody (cs, patterns.melody);
                     if (choice == 2) c = teaser (c);
                     if (choice == 3) c = hookHint (c, progressionQ);
                     // Each later drop varies the hook its own way: embellished, then answered (call and
@@ -1325,10 +1350,21 @@ namespace chords
                 }
                 return c;
             };
-            const auto cycle = makeCycle (s);
+            // The section's energy: quiet sections low, grooves mid, drops high, builds climbing
+            using ST = suite::SectionType;
+            const auto sectionLevel = secType == ST::Drop ? 2 : secType == ST::Groove ? 1 : 0;
+            const auto cycle = makeCycle (s, sectionLevel);
+            const auto useLevels = family != nullptr && ! libLead;
+            std::array<std::vector<Note>, 3> levels;
+            std::vector<Note> fillCycle;
+            if (useLevels)
+            {
+                for (int lv = 0; lv < 3; ++lv) levels[(size_t) lv] = lv == sectionLevel ? cycle : makeCycle (s, lv);
+                fillCycle = makeCycle (s, sectionLevel, true);
+            }
             // Breakdown lift: the second half of the breakdown moves to the relative major's home (III).
             const auto lifting = isBreakdown && patterns.breakdownStart == 3;
-            const auto liftCycle = lifting ? makeCycle (startingOn (base, 3)) : std::vector<Note> {};
+            const auto liftCycle = lifting ? makeCycle (startingOn (base, 3), sectionLevel) : std::vector<Note> {};
 
             const auto lift = (part == SongPart::Lead || part == SongPart::Harmony) && patterns.liftLaterDrops && laterDrop ? 12 : 0;
             const auto keyChange = map.keyShiftOf (i);   // final-drop key change: everything from the last drop on moves up
@@ -1336,15 +1372,42 @@ namespace chords
             const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0;
             const auto endQ = (map.endBar (i) - 1) * 4.0;
             std::vector<Note> section;
-            const auto liftFrom = startQ + std::floor ((endQ - startQ) / 2.0 / progressionQ + 1.0e-9) * progressionQ;   // a whole progression in
-            for (auto offset = startQ; offset < endQ - 1.0e-9; offset += progressionQ)
+            const auto liftFrom = startQ + std::floor ((endQ - startQ) / 2.0 / cycleQ + 1.0e-9) * cycleQ;   // a whole progression in
+            auto phraseEnd = [&] (double start)
+            {
+                const auto bar = (int) std::floor ((start - startQ) / 4.0 + 1.0e-9);
+                return patterns.phraseVariation && bar % 8 == 7 && start < endQ - 4.0 - 1.0e-9;
+            };
+            for (auto offset = startQ; offset < endQ - 1.0e-9; offset += cycleQ)
             {
                 int bounce = 0;
-                const auto& thisCycle = lifting && offset >= liftFrom - 1.0e-9 && liftFrom > startQ ? liftCycle : cycle;
+                // Builds climb through the energies: low, mid, then high for the last third
+                const auto buildLevel = secType == ST::Build ? juce::jlimit (0, 2, (int) std::floor (3.0 * (offset - startQ) / juce::jmax (1.0, endQ - startQ))) : sectionLevel;
+                const auto& thisCycle = lifting && offset >= liftFrom - 1.0e-9 && liftFrom > startQ ? liftCycle
+                                      : useLevels ? levels[(size_t) buildLevel] : cycle;
+                if (useLevels)
+                    for (const auto& n : fillCycle)   // the phrase-end bars play the family's fill
+                    {
+                        const auto start = offset + n.start;
+                        if (start < endQ - 1.0e-9 && phraseEnd (start))
+                            section.push_back ({ n.pitch + keyChange, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                    }
                 for (const auto& n : thisCycle)
                 {
                     const auto start = offset + n.start;
                     if (start >= endQ - 1.0e-9) continue;
+                    if (useLevels)
+                    {
+                        if (phraseEnd (start)) continue;
+                        // A little life: the fourth bar of some phrases lifts its last beat an octave (bass and arp), by the seed
+                        auto p = n.pitch;
+                        const auto bar = (int) std::floor ((start - startQ) / 4.0 + 1.0e-9);
+                        if ((part == SongPart::Bass || part == SongPart::Arp) && bar % 8 == 3 && start - (startQ + bar * 4.0) >= 3.0 - 1.0e-9
+                            && (patterns::hash (patterns.libSeed + (uint32_t) (i * 131 + bar)) & 1u) != 0 && p + 12 <= (part == SongPart::Bass ? 60 : 96))
+                            p += 12;
+                        section.push_back ({ p + lift + keyChange, start, std::min (n.length, endQ - start - 0.01), n.velocity });
+                        continue;
+                    }
                     // Phrase variation: the last bar of every 8-bar phrase that the section carries on
                     // past is a turnaround (the section's own last bar is left to the transition).
                     int turn = 0;

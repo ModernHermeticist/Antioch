@@ -1068,6 +1068,38 @@ section plays. The defaults:
 | Drop | 3-3-2 pluck stabs | rolling | up |
 | Outro | none | offbeat | none |
 
+### The pattern library
+
+With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
+rhythms and lead hook come from a library of 66 original pattern families: 20 basslines,
+18 arps and plucks, 16 chord rhythms (pads, stabs and gates) and 12 two-bar hooks. They're
+written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
+trance gates, anthem hooks), not copied from records. Each family is tagged with the
+**moods** (Euphoric, Hopeful, Melancholic, Dark, Driving, Dreamy, Epic) and **styles**
+(Uplifting, Classic 138, Progressive, Tech trance, Psy-leaning, Vocal, Orchestral) it fits.
+Ouroboros' *New song* sets both from the session's style and mood, and **New patterns**
+picks another set of fitting families.
+
+What keeps a song cohesive and alive:
+
+- **One family per part for the whole song.** The section choices above still say *what kind*
+  of part plays (a long, offbeat or rolling bass; a pad, stabs or a gate), and the library
+  picks the family for that kind.
+- **Three energies per family.** Intros, outros and breakdowns play it low (arps switch to the
+  melodic families there). Grooves play it mid, and drops play it high. Builds climb from low
+  to high across their length.
+- **Fills.** The last bar of every 8-bar phrase plays the family's fill, a turnaround into
+  the next phrase. Hooks repeat their two-bar cell and answer it in bars 7-8.
+- **Variation by seed.** The fourth bar of some phrases lifts its last beat an octave in the
+  bass and arp. Later drops still climb, embellish and double as before.
+- **Chord-relative writing.** Every pattern is written as root, third, fifth, scale steps and
+  approach notes, so it fits any key and progression. Hooks move to the nearest chord tone
+  and stay in a singable range.
+
+The library leaves alone what's yours: the **Mine** bass, and a motif or melody style you
+taught Melodia, always win. Turn **Lead hooks too** off to keep Melodia's lead with library
+backing.
+
 **Breakdown progression** (Song patterns) makes breakdowns start the progression on VI
 (the default) or IV, for every part, so the drop's return to i lands harder: Am F C G
 becomes F C G Am in the breakdown. The **Walking** bass pattern rolls on each root and

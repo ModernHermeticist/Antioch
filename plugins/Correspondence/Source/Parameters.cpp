@@ -81,6 +81,11 @@ namespace Params
         layout.add (std::make_unique<AudioParameterChoice> (id (songMacros), "Spire Macro Rides", StringArray { "Off", "CC 20-23", "CC 102-105" }, 1));
         layout.add (std::make_unique<AudioParameterChoice> (id (macroPlan), "Spire Macro Plan", spire::macroPlanNames(), 0));
         layout.add (std::make_unique<AudioParameterBool> (id (songGhost), "Ghost Notes", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (libOn), "Pattern Library", true));
+        layout.add (std::make_unique<AudioParameterChoice> (id (libMood), "Library Mood", patterns::moodNames(), 0));
+        layout.add (std::make_unique<AudioParameterChoice> (id (libStyle), "Library Style", patterns::styleNames(), 0));
+        layout.add (std::make_unique<AudioParameterInt> (id (libSeed), "Library Seed", 1, 9999, 1));
+        layout.add (std::make_unique<AudioParameterBool> (id (libLead), "Library Lead Hooks", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (leadExpression), "Lead Expression",
@@ -143,6 +148,11 @@ namespace Params
         p.ghostNotes = state.getRawParameterValue (songGhost)->load() > 0.5f ? 0.35f : 0.0f;
         p.leaveRoomForVocal = state.getRawParameterValue (songVocalRoom)->load() > 0.5f;
         p.answerVocal = p.leaveRoomForVocal;   // lead and vocal take turns
+        p.library = state.getRawParameterValue (libOn)->load() > 0.5f;
+        p.libMood = (int) state.getRawParameterValue (libMood)->load();
+        p.libStyle = (int) state.getRawParameterValue (libStyle)->load();
+        p.libSeed = (uint32_t) state.getRawParameterValue (libSeed)->load();
+        p.libLead = state.getRawParameterValue (libLead)->load() > 0.5f;
         return p;
     }
 

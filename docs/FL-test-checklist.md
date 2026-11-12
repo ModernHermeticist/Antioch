@@ -139,6 +139,16 @@ between versions.
 - [ ] **6b.25** Turn Cause & Effect's build down to nothing: after the next drop, it builds deeper by itself; after
   two drops that still don't land, Prima Materia adds half a beat of silence before the drop.
 
+## 6c. Pattern library (new)
+
+- [ ] **6c.1** Ouroboros *New song* with Tech trance: Correspondence's Song patterns shows Tech trance and Driving, and
+  the families line names a tech bass, arp, gate and hook. *Draft the whole song*: the intro's bass is sparse, the build's
+  gets busier bar by bar, the drop's is the busiest, and bar 8 of each phrase turns around.
+- [ ] **6c.2** Switch the mood to Melancholic and the style to Vocal, then *New patterns* a few times: each set sounds like
+  one song, and the lead hook sits around the vocal's range without big leaps.
+- [ ] **6c.3** Drop a MIDI motif on Correspondence: the lead is your motif again while the bass, arp and chords stay
+  from the library.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is
