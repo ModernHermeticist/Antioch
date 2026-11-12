@@ -146,6 +146,10 @@ between versions.
   gets busier bar by bar, the drop's is the busiest, and bar 8 of each phrase turns around.
 - [ ] **6c.2** Switch the mood to Melancholic and the style to Vocal, then *New patterns* a few times: each set sounds like
   one song, and the lead hook sits around the vocal's range without big leaps.
+- [ ] **6c.4** Uplifting song, drag SONG PIANO, SONG STRINGS, SONG BRASS, SONG CHOIR and SONG TIMPANI onto instruments: the breakdown
+  has piano, strings and choir; the build has timpani rolling and strings climbing; the last drop gets brass and choir.
+- [ ] **6c.5** Switch the style to Tech trance: SONG ACID has a line in the grooves and drops (a 303 with slide on), and the
+  last drop's choir chants instead of holding. Switch to Vocal: the acid tile is empty.
 - [ ] **6c.3** Drop a MIDI motif on Correspondence: the lead is your motif again while the bass, arp and chords stay
   from the library.
 

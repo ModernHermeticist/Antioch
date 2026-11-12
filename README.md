@@ -1071,7 +1071,7 @@ section plays. The defaults:
 ### The pattern library
 
 With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
-rhythms and lead hook come from a library of original pattern families (441 so far, in text files under plugins/Correspondence/Patterns: basslines,
+rhythms and lead hook come from a library of original pattern families (493 so far, in text files under plugins/Correspondence/Patterns: basslines,
 arps and plucks, chord rhythms (pads, stabs and gates), two-bar hooks, piano, strings, brass, choir, timpani, acid lines, vocal-chop rhythms, ear candy and counter-lines). They're
 written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
 trance gates, anthem hooks), not copied from records. Each family is tagged with the
@@ -1095,6 +1095,23 @@ What keeps a song cohesive and alive:
 - **Chord-relative writing.** Every pattern is written as root, third, fifth, scale steps and
   approach notes, so it fits any key and progression. Hooks move to the nearest chord tone
   and stay in a singable range.
+
+**Layers.** The library also writes nine parts of its own, each a song-length track with its own drag
+tile and file in Export all, switchable in Song patterns:
+
+| Layer | Where it plays |
+|---|---|
+| Piano | ballad in breakdowns, broken chords in the intro and outro, comping under the last drop |
+| Strings | legato in breakdowns and the outro, an ostinato climbing through builds and later drops |
+| Brass | stabs and fanfares in the last drop (swells in breakdowns too, in the Orchestral style) |
+| Choir | pads in breakdowns; the last drop gets a pad, or a chant in tech, psy and classic songs |
+| Timpani | rolls through builds, hits on the drops' phrase starts |
+| Acid | a 303-style line (accents, glides) in grooves, builds and drops, only in styles that use it |
+| Vocal chops | syllable rhythms for a chopped vocal in grooves and drops; they step out where the vocal sings |
+| Ear candy | blips, sparkles and little sequences high above everything |
+| Counter-lines | a second melody under the library's hook, wherever the full lead plays |
+
+The Orchestral style brings piano, strings, brass and choir into every drop.
 
 The library leaves alone what's yours: the **Mine** bass, and a motif or melody style you
 taught Melodia, always win. Turn **Lead hooks too** off to keep Melodia's lead with library

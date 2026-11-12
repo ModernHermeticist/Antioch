@@ -78,9 +78,12 @@ namespace chords::lib
                 if (drop && (lastDrop || orchestral)) return 1;           // stabs
                 return -1;
             case SongPart::Choir:
+            {
                 if (type == T::Breakdown) return 0;
-                if (drop && (lastDrop || orchestral)) return 0;
+                const auto chanting = style == patterns::Style::Tech || style == patterns::Style::Psy || style == patterns::Style::Classic;
+                if (drop && (lastDrop || orchestral)) return chanting ? 1 : 0;   // a chant in the driving styles, a pad in the rest
                 return -1;
+            }
             case SongPart::Timpani:
                 if (type == T::Build) return 1;                           // rolls into the drop
                 if (drop) return 0;                                       // hits on the phrase starts

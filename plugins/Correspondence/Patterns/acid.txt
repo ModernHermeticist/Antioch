@@ -32,3 +32,11 @@ Acid call | 0 | KD | TY | 0.55 | - | r... .... R... .... | r..r .... R..R .... |
 Bubble acid | 0 | DK | YT | 0.45 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrR ..r~ rrrR ..r~ | rrrR ..rR rrrR NNNN
 Snaking acid | 0 | K | Y | 0.6 | - | r... d... r... u... | r.d. u.d. r.d. u.d. | rdud r~du rdud r~du | rdud uudd uudd nnnn
 Peak-time acid | 0 | DE | TC | 0.5 | - | r.R. r.R. r.R. r.R. | rrRr .rRr rrRr .rRr | rrRr r~Rr rrRr R~Rr | rrRr RRRR rrRr NNNN
+
+# --- batch 2: moods the acid line was missing
+Hopeful acid | 0 | H | TCU | 0.6 | - | r... t... f... t... | r.t. f.t. r.t. f.u. | rtft rtfu rtft rtfR | rtft uuuu rtfR nnnN
+Melancholic acid | 0 | M | TC | 0.6 | - | r... .... d... .... | r..r ..d. r..r ..d. | r.rr .~d. r.rr .~u. | r.rr d~dd r.rr d~nN
+Dreamy acid | 0 | R | YP | 0.75 | - | r--- ---- ---- ---- | r~f. ---- r~9. ---- | r~f. ..r. r~9. ..r. | r~f~ 9~r. r~f~ 9~n.
+Epic acid | 0 | P | TCU | 0.55 | - | r.R. r.R. r.R. r.R. | rRfR rRfR rRtR rRfR | rRfR rRfR rRtR RRRR | rRfR tTfF RRRR NNNN
+Euphoric acid climb | 0 | E | TCU | 0.55 | - | r.r. u.u. r.r. u.u. | r.u. r.u. u.u. d.d. | ruru uuuu dddd ruru | ruru uuuu dddd nnnn
+Driving acid sixteenths | 0 | D | TC | 0.5 | - | rrrr .... rrrr .... | rrrr .rrr rrrr .rrr | rrRr .rrR rrRr .rRR | rrRr .rrR uuuu nnnN

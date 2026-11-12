@@ -36,3 +36,19 @@ Syncopated horns | 1 | DM | PT | 0.5 | - | c... ...c .... .... | c... ...c ..c. 
 Big finish | 1 | EP | UOV | 0.7 | - | C--- ---- ---- ---- | C--- ---- C--- ---- | C--- ---- C... C... | C... C... C... CCCC
 Staccato quarters | 1 | DP | OC | 0.4 | - | c... .... c... .... | c... c... c... c... | c... c... c... c.c. | c.c. c.c. c.cc cccc
 Victory rhythm | 1 | E | UO | 0.55 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..cc | c..c ..cc c..c cccc
+
+# --- batch 2: swells
+Prog horn haze | 0 | RM | P | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---. | c--- ---. ..c- ---- | c--- ---. ..c- C---
+Driving brass pads | 0 | D | TCU | 0.95 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- c-c- C-C-
+Dreamy flugelhorn | 0 | R | PV | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- f--- ---- | >t--- --f- ---- 9--- | >t--- f--- 9--- r---
+Melancholic horn line | 0 | M | VPC | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- d--- ---- | >t--- d--- d--- ---- + c--- ---- ---- ---- | >t--- d--- d--- n--- + c--- ---- ---- ----
+Psy brass drone | 0 | K | Y | 1.0 | - | <o--- ---- ---- ---- | <o--- ---- ---- ---- + >.... .... 4--- ---- | <o--- ---- o--- ---- + >.... .... 4--- ---- | <o--- ---- o--- ---- + >4--- ---- t--- ----
+Hopeful sunrise brass | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- ---- ---- | c--- ---- c--- ---- + >r--- ---- u--- ---- | C--- ---- C--- ---- + >r--- u--- u--- R---
+
+# --- batch 2: stabs
+Psy brass stabs | 1 | K | Y | 0.4 | - | o... .... .... .... | o... .... o... .... | o..o .... o..o .... | o..o ..o. o.oo oooo
+Hopeful brass push | 1 | H | UVO | 0.6 | - | c... .... .... ..c. | c... ..c. .... ..c. | c... ..c. c... ..c. | c..c ..c. C..C ..CC
+Melancholic brass sighs | 1 | M | VPC | 0.7 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C-
+Dark brass offbeats | 1 | K | TC | 0.45 | - | ..o. .... ..o. .... | ..o. ..o. ..o. ..o. | ..o. ..o. ..oo ..o. | ..oo ..oo ..oo oooo
+Dreamy brass swells | 1 | R | PV | 0.85 | - | c--- ---- .... .... | c--- ---- c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C-
+Tech brass hits | 1 | DK | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc

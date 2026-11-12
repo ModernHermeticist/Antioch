@@ -28,3 +28,10 @@ Breathy pairs | 0 | MR | PV | 0.7 | - | r-.. .... .... .... | r-.. .... t-.. ...
 Groove chops | 0 | D | TCV | 0.5 | - | ..r. .... .r.. .... | ..r. ..r. .r.. .... | ..r. ..r. .r.. r.r. | ..r. ..r. .r.r rrrr
 Gospel chops | 0 | HE | VU | 0.7 | - | r--- .... .... .... | r--- .... t--- .... | r--- f--- t--- .... | r--- f--- t--- R---
 Chopped answer | 0 | M | VP | 0.7 | - | .... r--- .... .... | .... r--- .... d--- | .... r--- t--- d--- | .... r--- t--- dddd
+
+# --- batch 2
+Orchestral choir chops | 0 | P | OU | 0.7 | - | r--- .... .... .... | r--- .... f--- .... | r--- ..t- f--- .... | r--- ..t- f--- ..R-
+Epic chant chops | 0 | P | OUC | 0.6 | - | r... .... r... .... | r... r... r... .... | r..r ..r. r..r ..f. | r..r ..f. R..R ..RR
+Dark choir chops | 0 | K | OYT | 0.55 | - | r... .... .... .... | r... .... d... .... | r... ..d. r... ..d. | r..d ..d. r..d dddd
+Melancholic vowels | 0 | M | VP | 0.85 | - | t--- ---- .... .... | t--- ---- d--- .... | t--- --d- d--- .... | t--- --d- d--- n---
+Psy chant | 0 | K | Y | 0.45 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..d. r.rr dddd

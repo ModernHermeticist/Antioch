@@ -27,3 +27,13 @@ Choir stabs | 1 | ED | UC | 0.6 | - | c... .... .... .... | c... ..c. .... .... 
 Chanting eighths | 1 | KD | YTO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
 Offbeat voices | 1 | EH | UV | 0.6 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | ..cc ..cc ..cc ..cc | .ccc .ccc .ccc cccc
 Choral fanfare | 1 | P | OU | 0.7 | - | c... .... .... .... | c..c ..c. .... .... | c..c ..c. c..c ..c. | c..c ..c. C..C ..CC
+
+# --- batch 4: rhythmic choir (driving and dark drops)
+Tech chant | 1 | KD | TC | 0.45 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc
+Psy chant pulse | 1 | K | Y | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo
+Euphoric choir pulse | 1 | E | UC | 0.6 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..cc ..c. ..cc ..c. | ..cc ..cc ..CC ..CC
+Epic choir hits | 1 | P | OU | 0.7 | - | C... .... .... .... | C... .... C... .... | C... ..C. C... ..C. | C..C ..C. C..C CCCC
+Hopeful choir syllables | 1 | H | UV | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. c..c ..CC
+Melancholic choir sighs | 1 | M | VP | 0.8 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c-
+Dreamy choir echoes | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c-
+Driving choir eighths | 1 | D | TCU | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC

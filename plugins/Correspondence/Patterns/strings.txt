@@ -50,3 +50,8 @@ Sixteenth chords | 1 | EDP | UO | 0.4 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc
 Fanfare figure | 1 | P | OU | 0.5 | - | r... .... f... .... | r..r ..f. f... .... | r..r ..f. f..f ..R. | r..r ..f. f..f ..RR
 Syncopated spiccato | 1 | DM | PT | 0.4 | - | r... ..r. .r.. .... | r..r ..r. .r.. r... | r..r ..r. .r.r r.r. | r..r ..r. .rrr rrrr
 Hopeful pulse | 1 | H | VUO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.c. c.c. c.c. c.cc | c.cc c.cc C.CC CCCC
+
+# --- batch 2
+Dreamy ostinato | 1 | R | PV | 0.7 | - | r--- f--- r--- f--- | r-f- R-f- r-f- R-f- | rfRf rfRf rfRf rfRf | rfRf 9fRf rfRf 4f9r
+Dreamy tremolo | 1 | R | PV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc cccc CCCC CCCC
+Driving legato | 0 | D | TCU | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C-

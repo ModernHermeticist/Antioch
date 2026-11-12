@@ -1566,6 +1566,10 @@ int main (int argc, char** argv)
             auto vocal = lp; vocal.libStyle = (int) Style::Vocal;
             check (countIn (chords::songClip (s, song, tech, chords::SongPart::Acid), 128.0, 192.0) > 0 && chords::songClip (s, song, vocal, chords::SongPart::Acid).empty(),
                    "an acid line in a tech song's drop, none in a vocal song");
+            const auto chant = chords::songClip (s, song, tech, chords::SongPart::Choir);
+            const auto pad = chords::songClip (s, song, lp, chords::SongPart::Choir);
+            auto longest = [] (const std::vector<chords::Note>& v, double a) { double m = 0.0; for (const auto& n : v) if (n.start >= a) m = std::max (m, n.length); return m; };
+            check (! chant.empty() && longest (chant, 128.0) < longest (pad, 128.0), "the last drop's choir chants in a tech song, holds a pad in an uplifting one");
             auto off = lp; off.libLayers &= ~1u;   // piano off
             check (chords::songClip (s, song, off, chords::SongPart::Piano).empty(), "each layer can be switched off");
             off.library = false;

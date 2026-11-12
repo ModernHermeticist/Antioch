@@ -28,3 +28,9 @@ Tick tock | 0 | DK | TC | 0.25 | - | r... .... R... .... | r... R... r... R... |
 Comet | 0 | ED | UT | 0.3 | - | .... .... .... ...R | .... .... ..R. ..RR | .... ..RR .RR. RRRR | ..RR .RRR RRRR RRRR
 Bell sprinkle | 0 | HP | OVU | 0.5 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
 Glitch | 0 | K | TY | 0.2 | - | r... .... .... .... | rr.. .... .... r... | rr.. ..r. .rr. r... | rr.r ..rr .rr. rrrr
+
+# --- batch 2
+Melancholic droplets | 0 | M | VP | 0.6 | - | .... T... .... .... | .... T... .... d... | .... T..d .... d... | ..T. ..d. ..d. ..n.
+Orchestral celesta | 0 | PH | O | 0.6 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
+Psy sparks | 0 | K | Y | 0.2 | - | ...r .... .... .... | ...r .... ...r .... | ...r ..r. ...r ..r. | .r.r ..rr .r.r rrrr
+Hopeful sparkle | 0 | H | UV | 0.4 | - | .... ..R. .... .... | .... ..R. .... ..F. | ..T. ..R. ..F. ..R. | ..T. ..R. .FR. TFRR
