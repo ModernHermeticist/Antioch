@@ -92,3 +92,27 @@ Ninth wave | 1 | RH | PV | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa 
 Triplet cascade | 1 | M | VPC | 0.6 | d | a..a..a..a.. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaabbbbbb | bbbbbbaaaaaa | aaaaaaaaaaaa | - | - |
 Accented 3-3-2 | 2 | EH | UCP | 0.7 | u | a..a ..a. a..a ..a. | !a..a ..!a. !a..a ..!aa | !a..A ..!a. !a..A ..!aA | !a..A ..!A. !A..A ..!AA | !A..a ..!A. !a..A ..!aa | !a.aA ..!a. !a.aA ..!aA | - | - |
 Shuffled dark pulse | 1 | K | TC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu | uuuu dddd rtfR tfrt | rtfR rtfR rtfR rtfR | s | - |
+
+# --- batch 13 (... | fill 2 | high 2 | feel | colour | where)
+Euphoric broken climb | 1 | E | UC | 0.6 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaAa aaaa aaAa aaaa | - | - |
+Hopeful pedal sixteenths | 1 | H | UVO | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rtrf rtrf rtrf | rtrf RtRf rtrf RTRF | rTrF RTRF rTrF RTRS | RTRF rtrf RTRF rtrS | rfrt rFrT rfrt RFRT | - | - |
+Melancholic triplet arp | 1 | M | VPC | 0.6 | d | a..a..a..a.. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaabbbbbb | bbbbbbaaaaaa | aaaaaaaaaaaa | - | - |
+Dark sixteenths low | 1 | K | TYC | 0.5 | - | r.r. r.r. r.r. r.r. | rrtr rrtr rrtr rrtr | rrtr rrfr rrtr rrfR | rrtr rrfr NNNN NNNN | NNNN rrtr rrfr rrfR | rrtr rrtr rrfr rrfr | - | - |
+Driving up-down | 1 | D | TCU | 0.5 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa aaaa AAAA | aAaa aAaa aAaa aAaa | - | - |
+Dreamy converging | 1 | R | PV | 0.7 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA aaaa | AAAA aaaa aaaa AAAA | aaaa a.aa aaaa a.aa | - | 9 |
+Epic sixteenths | 1 | P | OU | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA AAAA aaaa aaaa | aaAa aaAa aaAa aaAa | - | - |
+Psy swirl | 1 | K | Y | 0.45 | - | r.r. r.r. r.r. r.r. | rRrd rRru rRrd rRru | rRrd rRru rRdd rRuu | uuuu dddd uuuu dddd | dddd uuuu dddd uuuu | rRrR rRrd rRrR rRru | - | - |
+Tech arp shuffle | 1 | DK | T | 0.45 | u | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | aaaa AAAA aaaa AAAA | aa.a aaaa aa.a aaaa | s | - |
+Vocal soft arp | 0 | HM | V | 0.9 | u | a--- ---- ---- ---- | a--- ---- a--- ---- | a--- a--- a--- ---- | a--- a--- a--- a--- | a--- ---- a--- a--- | a--- a--- ---- a--- | - | - |
+Driving melodic eighths | 0 | D | TCU | 0.8 | u | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-aa a-aa a-aa a-aa | a-aa a-aa A-AA A-AA | A-AA a-aa A-AA a-aa | a-a- a-aa a-a- a-aa | - | - |
+Psy melodic drift | 0 | K | Y | 0.8 | - | r--- ---- ---- ---- | r--- ---- d--- ---- | r--- d--- r--- u--- | r-d- r-u- r-d- r-u- | r-u- r-d- r-u- r-d- | r--- d--- u--- r--- | - | - |
+Classic melodic arp | 0 | ED | C | 0.85 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a--- | a-a- a-a- A-A- A--- | A-A- a-a- A-a- a--- | a-a- a-a- a--- a--- | - | - |
+Uplifting harp | 0 | EH | U | 0.95 | u | a... .... .... .... | aaaa ---- ---- ---- | aaaa aaaa ---- ---- | aaaa aaaa AAAA ---- | AAAA aaaa aaaa ---- | aaaa ---- aaaa ---- | - | - |
+Tech melodic blips | 0 | DK | T | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r..r ..r. r..r ..r. | r..r .r.. r..r .r.. | r... r... r... r... | - | - |
+Melancholic pluck answers | 2 | M | VPC | 0.65 | d | a... ..a. .... .... | a... ..a. .a.. .... | a... ..a. .a.. a.a. | a..a ..a. .a.a a.a. | a.a. ..aa .a.. a.aa | a... ..aa .a.. a.a. | - | - |
+Psy gate arp | 2 | K | Y | 0.4 | - | r.r. .... r.r. .... | r.r. ..r. r.r. ..r. | rr.r ..r. rr.r ..r. | rr.r ..rr rr.r rrrr | rrrr ..rr rrrr rrrr | rr.r .rr. rr.r .rr. | - | - |
+Orchestral syncopated arp | 2 | P | O | 0.6 | u | a... ..a. a... .... | a..a ..a. a..a .... | a..a ..a. a..a ..a. | a..a ..A. A..A ..AA | A..A ..a. a..A ..AA | a.aa ..a. a.aa ..a. | - | - |
+Driving pushed arp | 2 | D | TCU | 0.5 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.a aap. | aa.a aa.a aaaa aap. | aaaa aaaa aaaa aaP. | aaaa AAAA aaaa aaP. | aaaa aa.a aa.a aap. | - | - |
+Hopeful gated triplets | 2 | H | UV | 0.55 | u | a.a.a.a.a.a. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaaAAAAAA | AAAAAAaaaaaa | aa.aa.aa.aaa | - | - |
+Build pluck riser | 2 | * | * | 0.5 | u | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA AAAA AAAA AAAA | aaaa AAAA aaaa AAAA | - | - | B
+DJ intro pluck | 2 | * | * | 0.6 | u | a... .... .... .... | a... .... a... .... | a... ..a. a... .... | a... ..a. a... ..a. | a... ..a. a... ..a. | a... ..a. a... ..a. | - | - | IO

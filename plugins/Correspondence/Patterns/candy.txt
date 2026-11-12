@@ -50,3 +50,12 @@ Epic shimmer | 0 | P | OU | 0.5 | - | R... .... .... .... | R... .... F... .... 
 Build sparkle riser | 0 | * | * | 0.3 | u | a... .... a... .... | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa AAAA AAAA | AAAA AAAA AAAA AAAA | aaaa aaaa aaaa aaaa | - | - | B
 Triplet twinkles | 0 | EHR | UPV | 0.35 | - | R........... | R.....F..... | R..F..T..F.. | R.FR.FT.FR.F | T.FR.FT.FR.F | R.FR.FR.FR.F | - | - |
 Swung blips | 0 | DK | TP | 0.3 | - | r... .... .... .... | r... ..u. .... d... | r..u ..d. u..d .u.. | rudu dudu udud nnnn | udud rudu dudu nnnn | ru.d ud.u ru.d ud.u | s | - |
+
+# --- batch 13 (... | fill 2 | high 2 | feel | colour | where)
+Euphoric glitter | 0 | E | UC | 0.35 | - | ..R. .... .... .... | ..R. .... ..T. .... | ..R. ..T. ..F. ..T. | .RR. .TT. .FF. .RR. | .FF. .TT. .RR. .FF. | ..R. .TT. ..F. .TT. | - | - |
+Tech sonar | 0 | DK | T | 0.25 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r..r ..r. r..r rrrr | rrrr ..r. r..r rrrr | r..r .... r..r ..r. | - | - |
+Orchestral harp sparkle | 0 | PH | O | 0.5 | u | a... .... .... .... | aaaa .... .... .... | aaaa .... aaaa .... | aaaa aaaa AAAA .... | AAAA aaaa aaaa .... | aaaa .... aaaa .... | - | - |
+Psy ripples | 0 | K | Y | 0.25 | - | ..r. .... .... .... | ..r. .... ..r. .... | ..ru ..rd ..ru ..rd | ..ru ..rd ..uu ..dd | ..dd ..uu ..ru ..rd | ..rr ..rd ..rr ..ru | s | - |
+Vocal glints | 0 | HM | V | 0.45 | - | .... T... .... .... | .... T... .... F... | .... T..F .... R... | ..T. ..F. ..R. ..T. | ..R. ..F. ..T. ..F. | .... T.FF .... R... | - | - |
+Driving zaps | 0 | D | TCU | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR | ..RR ..R. ..RR RRRR | .R.. ...R .R.. ...R | - | - |
+Melancholic chimes | 0 | M | VPC | 0.6 | d | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa | a.aa ..a. a..a ..a. | a... a... a... a... | - | - |
