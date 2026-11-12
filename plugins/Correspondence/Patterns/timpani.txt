@@ -35,3 +35,8 @@ Dreamy distant hits | 0 | R | PV | 0.9 | - | .... .... r--- ---- | r--- ---- ---
 Prog roll | 1 | RM | P | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | .... z--- z--- ---- | z--- ---- z--- ----
 Dreamy roll | 1 | R | PV | 1.0 | - | .... .... z--- ---- | z--- ---- ---- ---- + .... .... f--- ---- | z--- ---- z--- ---- + .... .... f--- ---- | z--- ---- z--- ---- + .... f--- f--- ffff
 Melancholic roll | 1 | M | VPC | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- r---
+
+# --- batch 7
+Epic hit variations | 0 | PE | OU | 0.85 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- ---- f--- r--- | r--- f--- r--- f--- | r--- f--- rrrr ffff | r--- r--- f--- f---
+Driving hit variations | 0 | D | TCU | 0.7 | - | r... .... r... .... | r... r... r... r... | r... r..r r... r..r | r..r r..r rrrr rrrr | rrrr r..r rrrr r..r | r..r r... r..r r...
+Build roll variations | 1 | PEH | OU | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z-

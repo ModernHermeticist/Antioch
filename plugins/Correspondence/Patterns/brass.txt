@@ -52,3 +52,11 @@ Melancholic brass sighs | 1 | M | VPC | 0.7 | - | c--- .... .... .... | c--- ...
 Dark brass offbeats | 1 | K | TC | 0.45 | - | ..o. .... ..o. .... | ..o. ..o. ..o. ..o. | ..o. ..o. ..oo ..o. | ..oo ..oo ..oo oooo
 Dreamy brass swells | 1 | R | PV | 0.85 | - | c--- ---- .... .... | c--- ---- c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C-
 Tech brass hits | 1 | DK | T | 0.35 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc
+
+# --- batch 7
+Fanfare variations | 1 | PE | OU | 0.6 | - | r... .... .... .... | r..r ..f. .... .... | r..r ..f. f..f ..R. | r..r ..f. f..f RRRR | R..R ..f. R..R RRRR | r.rr ..f. f.ff ..R.
+Euphoric brass hits | 1 | E | UC | 0.55 | - | C... .... .... .... | C... ..C. .... .... | C... ..C. C... ..C. | C..C ..C. C..C CCCC | CCCC ..C. C..C CCCC | C..C ..C. C... ..CC
+Hopeful horn swells | 0 | H | UVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c---
+Dark horn swells | 0 | K | TYO | 1.0 | - | o--- ---- ---- ---- | o--- ---- o--- ---- | o--- o--- o--- o--- | o--- o--- c--- c--- | c--- o--- c--- o--- | o-o- o--- o-o- o---
+Driving brass stabs | 1 | D | TCU | 0.45 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c.
+Melancholic brass chorale | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + <r--- ---- d--- ---- | c--- ---- C--- ---- + <r--- d--- d--- n--- | c--- ---- c--- ---- + <r--- u--- d--- N--- | c--- c--- c--- ---- + <r--- d--- r--- ----

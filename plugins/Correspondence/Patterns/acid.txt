@@ -40,3 +40,10 @@ Dreamy acid | 0 | R | YP | 0.75 | - | r--- ---- ---- ---- | r~f. ---- r~9. ---- 
 Epic acid | 0 | P | TCU | 0.55 | - | r.R. r.R. r.R. r.R. | rRfR rRfR rRtR rRfR | rRfR rRfR rRtR RRRR | rRfR tTfF RRRR NNNN
 Euphoric acid climb | 0 | E | TCU | 0.55 | - | r.r. u.u. r.r. u.u. | r.u. r.u. u.u. d.d. | ruru uuuu dddd ruru | ruru uuuu dddd nnnn
 Driving acid sixteenths | 0 | D | TC | 0.5 | - | rrrr .... rrrr .... | rrrr .rrr rrrr .rrr | rrRr .rrR rrRr .rRR | rrRr .rrR uuuu nnnN
+
+# --- batch 7
+Acid variations | 0 | DK | TYC | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r~ Rr.r r.R. | rrRr r~Rr rRr~ uRr. | rrRr u~Rd rRu~ dRnN | rRu~ dRnN rrRr u~Rd | rRrr r~rR rRrr d~rR
+Slide machine | 0 | K | TY | 0.7 | - | r--- ---- r--- ---- | r~u. r~d. r~u. r~d. | r~u. r~d. R~u. r~d. | r~u~ u~u~ d~d~ n~N. | d~d~ u~u~ r~u. r~d. | r~R. r~d. r~R. r~u.
+Acid stabs | 0 | DK | TC | 0.5 | - | r... .... r... .... | r..R .... r..R .... | r.rR ..r. r.rR ..r. | r.rR .rR. r.rR NNNN | rRrR ..r. rRrR NNNN | r.RR ..r. r.RR ..R.
+Psy acid rain | 0 | K | Y | 0.45 | - | .rrr .rrr .rrr .rrr | .rRr .rrR .rRr .rrR | .rRr .uRd .rRr .dRu | .rRr .uRu .dRd uuuu | .dRd .uRu .rRr dddd | .rRR .rrR .rRR .rrR
+Euphoric acid arps | 0 | E | UCT | 0.55 | - | r... t... f... t... | r.t. f.R. r.t. f.R. | rtfR rtfR rtfR rtf~ | rtfR tfRT fRTF nnnn | RTFR fRTF rtfR nnnN | rtfR tfR. rtfR tfR.

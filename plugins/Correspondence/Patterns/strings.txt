@@ -55,3 +55,13 @@ Hopeful pulse | 1 | H | VUO | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c
 Dreamy ostinato | 1 | R | PV | 0.7 | - | r--- f--- r--- f--- | r-f- R-f- r-f- R-f- | rfRf rfRf rfRf rfRf | rfRf 9fRf rfRf 4f9r
 Dreamy tremolo | 1 | R | PV | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc cccc CCCC CCCC
 Driving legato | 0 | D | TCU | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C-
+
+# --- batch 7
+Dawn strings | 0 | HR | PVU | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >.... .... r--- ---- | c--- ---- ---- ---- + >r--- ---- u--- ---- | c--- ---- ---- ---- + >r--- u--- u--- R--- | c--- ---- ---- ---- + >u--- u--- d--- r--- | c--- ---- c--- ---- + >r--- u--- r--- u---
+Driving cello ostinato | 1 | D | TCU | 0.45 | - | <r... r... r... r... | <r.r. r.r. r.r. r.r. | <rrrr rrrr rrrr rrrr | <rrrr rrrr ffff nnnn | <rrrr ffff rrrr NNNN | <rrrr rrr. rrrr rrr.
+Melancholic ostinato | 1 | M | VPC | 0.5 | - | r..t ..r. r..t ..r. | r.t. d.t. r.t. d.t. | rtdt rtdt rtdt rtdt | rtdt rtdt dddd nnnn | dddd rtdt uuuu nnnn | rtdt rt.t rtdt rt.t
+Psy string pulse | 1 | K | Y | 0.45 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rRr .rRr .rRr .rRr | .rRr .uRu .dRd .nRN | .uRu .dRd .rRr .rRr | .rrR .rrR .rrR .rrR
+Hopeful string arp | 1 | H | UVO | 0.5 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaAa aaAa aaAa aaAa
+Epic string legato | 0 | P | OU | 1.0 | - | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- + >r--- ---- f--- ---- | C--- ---- ---- ---- + <r--- ---- ---- ---- + >r--- ---- f--- t--- | C--- ---- ---- ---- + <r--- ---- n--- ---- + >R--- f--- t--- r--- | C--- ---- ---- ---- + <r--- ---- N--- ---- + >t--- f--- R--- ---- | C--- ---- C--- ---- + <r--- ---- r--- ---- + >r--- f--- R--- t---
+Tech staccato strings | 1 | DK | T | 0.35 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c.
+Dreamy string halo | 0 | R | PV | 1.0 | - | >c--- ---- ---- ---- | >c--- ---- ---- ---- + >>.... .... 9--- ---- | >c--- ---- c--- ---- + >>r--- ---- 9--- ---- | >c--- ---- C--- ---- + >>9--- 4--- 9--- r--- | >C--- ---- c--- ---- + >>4--- 9--- r--- ---- | >c--- c--- c--- ---- + >>r--- 9--- r--- 9---

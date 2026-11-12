@@ -37,3 +37,9 @@ Hopeful choir syllables | 1 | H | UV | 0.6 | - | c... .... .... .... | c... ..c.
 Melancholic choir sighs | 1 | M | VP | 0.8 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c-
 Dreamy choir echoes | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c-
 Driving choir eighths | 1 | D | TCU | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc CCCC CCCC
+
+# --- batch 7
+Choir rises | 0 | HP | OUV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + >r--- ---- u--- ---- | c--- ---- c--- ---- + >r--- u--- u--- ---- | C--- ---- C--- ---- + >u--- u--- u--- R--- | C--- ---- c--- ---- + >R--- d--- d--- r--- | c--- c--- c--- ---- + >r--- u--- r--- u---
+Driving choir pad | 0 | D | TCU | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- c-c- C-C- c-c- | c-c- c--- c-c- c---
+Dark choir pulse | 1 | K | TYC | 0.5 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
+Euphoric choir stabs | 1 | E | UC | 0.6 | - | c... .... .... .... | c... ..c. c... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c.

@@ -34,3 +34,10 @@ Melancholic droplets | 0 | M | VP | 0.6 | - | .... T... .... .... | .... T... ..
 Orchestral celesta | 0 | PH | O | 0.6 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
 Psy sparks | 0 | K | Y | 0.2 | - | ...r .... .... .... | ...r .... ...r .... | ...r ..r. ...r ..r. | .r.r ..rr .r.r rrrr
 Hopeful sparkle | 0 | H | UV | 0.4 | - | .... ..R. .... .... | .... ..R. .... ..F. | ..T. ..R. ..F. ..R. | ..T. ..R. .FR. TFRR
+
+# --- batch 7
+Glittering run | 0 | EH | UCV | 0.35 | u | .... .... .... .... | .... .... ..aa aa.. | .... ..aa aa.. aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | .... aaaa aa.. aaaa
+Deep space pings | 0 | KR | YP | 0.4 | - | R... .... .... .... | R... .... .... R... | R... ..R. .... R... | R..R ..R. R..R ..RR | RR.. ..R. RR.. ..RR | R... .RR. .... R...
+Clockwork | 0 | DK | TC | 0.25 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rRrR rRrR rRrR rRrR | rRrR RRRR rRrR RRRR | RRRR rRrR RRRR rRrR | rr.R rr.R rr.R rr.R
+Snowfall | 0 | RM | PV | 0.6 | - | .... F... .... .... | .... F... .... T... | .... F..T .... R... | ..F. ..T. ..R. ..9. | ..9. ..R. ..T. ..F. | ..F. F..T ..R. R...
+Bubblegum blips | 0 | EH | U | 0.3 | - | ..R. .... .... .... | ..R. .... ..T. .... | ..R. ..T. ..F. ..T. | .RR. .TT. .FF. .RR. | .FF. .TT. .RR. .FF. | ..R. .TT. ..F. .TT.

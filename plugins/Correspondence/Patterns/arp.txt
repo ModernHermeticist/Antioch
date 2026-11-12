@@ -78,3 +78,21 @@ Melodic bells variations | 0 | HE | UVO | 0.9 | u | a--- ---- a--- ---- | a--- a
 Dreamy eighths variations | 0 | R | PV | 1.0 | w | a-a- a-a- a-a- a-a- | a-a- a-a- a-aa a-a- | a-aa a-aa a-aa a-aa | a-a- a-a- A-A- A-A- | A-A- a-a- A-A- a-a- | a-aa a-a- a-aa a-a-
 Orchestral sixteenths variations | 1 | P | O | 0.6 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaaa a.aa aaaa a.aa
 Tech gate variations | 2 | D | T | 0.45 | u | a... a... a... a... | aa.. aa.. aa.. aa.. | aa.a aa.. aa.a aa.. | aa.a aa.a aaaa aaaa | aaaa aa.a aaaa aa.a | aa.. aa.a aa.. aa.a
+
+# --- batch 6
+Uplifting double arp | 1 | E | U | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA AAAA | AAAA AAAA aaaa aaaa | aAaA aaaa aAaA aaaa
+Classic broken sixteenths | 1 | ED | C | 0.6 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA aaaa | AAAA aaaa aaaa AAAA | aaaa a.aa aaaa a.aa
+Psy rolling arp | 1 | K | Y | 0.45 | - | r.r. r.r. r.r. r.r. | rrRr rrdr rrRr rrur | rRrd rRru rRrd rRru | uuuu dddd rRrR dddd | dddd uuuu rRrR uuuu | rRrd rRrd rRru rRru
+Tech arp cycle | 1 | DK | T | 0.45 | u | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | aaaa AAAA aaaa AAAA | aa.a aaaa aa.a aaaa
+Melancholic down arp | 1 | M | VPC | 0.65 | d | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa aaaa | aaaa aaaa aaaa bbbb | bbbb aaaa aaaa aaaa | aaaa aaaa bbbb aaaa
+Hopeful up-down sixteenths | 1 | H | UVO | 0.6 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa | AAAA aaaa AAAA aaaa | aaAa aaaa aaAa aaaa
+Epic converging arp | 1 | P | OU | 0.6 | c | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | aaaa aaAA aaaa aaAA
+Dreamy skip arp | 1 | R | PV | 0.7 | s | a.a. a.a. a.a. a.a. | a.aa a.aa a.aa a.aa | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA aaaa | aaaa AAAA aaaa aaaa | aaaa a.aa aaaa a.aa
+Vocal pluck syncopation | 2 | HM | V | 0.6 | u | ..a. .... ..a. .... | ..a. ..a. ..a. ..a. | ..aa ..a. ..aa ..a. | ..aa ..aa ..AA ..AA | ..AA ..aa ..AA ..aa | .aa. ..aa .aa. ..aa
+Psy gated arp | 2 | K | Y | 0.4 | - | r.r. .... r.r. .... | r.r. ..r. r.r. ..r. | rr.r ..r. rr.r ..r. | rr.r ..rr rr.r rrrr | rrrr ..rr rrrr rrrr | rr.r .rr. rr.r .rr.
+Classic 3-3-2 pluck | 2 | EH | C | 0.7 | u | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..A ..a. a..A ..aA | a..A ..A. A..A ..AA | A..A ..a. A..a ..AA | a.aA ..a. a.aA ..aA
+Uplifting gate pluck | 2 | E | U | 0.6 | u | a.a. a.a. a.a. a.a. | a.aa .aa. a.aa .aa. | a.aa .aa. aa.a .aaa | aaaa aaaa aaaa aaaa | aaaa AAAA aaaa AAAA | aa.a .aa. aa.a .aaa
+Orchestral pizz arp | 2 | PH | O | 0.4 | u | a... ..a. a... ..a. | a..a ..a. a..a ..a. | a.aa ..a. a.aa ..aa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | a.aa .aa. a.aa .aa.
+Melodic dawn arp | 0 | HR | PVU | 0.95 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- A-A- A-A- | A-A- a-a- A-A- a-a- | a-aa a-a- a-aa a-a-
+Melodic dusk arp | 0 | MK | VPC | 1.0 | d | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- a-a- b--- | b--- a-a- a-a- a--- | a-aa a-a- a-aa a-a-
+Melodic epic arp | 0 | PE | OU | 0.95 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-aa | a-aa a-aa A-AA A-AA | A-AA a-aa A-AA a-aa | a-a- a-aa a-a- a-aa

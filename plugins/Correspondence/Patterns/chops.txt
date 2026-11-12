@@ -35,3 +35,10 @@ Epic chant chops | 0 | P | OUC | 0.6 | - | r... .... r... .... | r... r... r... 
 Dark choir chops | 0 | K | OYT | 0.55 | - | r... .... .... .... | r... .... d... .... | r... ..d. r... ..d. | r..d ..d. r..d dddd
 Melancholic vowels | 0 | M | VP | 0.85 | - | t--- ---- .... .... | t--- ---- d--- .... | t--- --d- d--- .... | t--- --d- d--- n---
 Psy chant | 0 | K | Y | 0.45 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..d. r.rr dddd
+
+# --- batch 7
+Euphoric chop hook | 0 | E | UC | 0.6 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R. | R..f ..R. T..f ..R. | r.ff ..R. t.ff ..r.
+Tech chop stutter | 0 | DK | T | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr | rrrr rrrr .... rrrr | r.rr ..r. r.rr ..r.
+Vocal chop answer | 0 | HM | V | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR | .... ..f. t..r RRRR | .... .rr. r..t .ff.
+Prog chop drift | 0 | RM | P | 0.8 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r--- | t--- --d- r--- f--- | f--- -uu- t--- ....
+Psy chop riff | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..d. | r.rr ..rr r.rr rrrr | rrrr ..rr rrrr ..dd | r.rr .rr. r.rr .dd.
