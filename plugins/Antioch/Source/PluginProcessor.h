@@ -11,6 +11,7 @@
 #include "MoveLog.h"
 #include "AutomationBus.h"
 #include "ActivityBus.h"
+#include "AutopilotBus.h"
 #include "FixBus.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
@@ -47,6 +48,9 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;   // the problem watcher: mud from the reverb returns
     suite::SceneEngine scenes;
+    double runWet = 0.0, runIn = 0.0, lastWetRms = 0.0;
+    float runPeak = 0.0f, risingSeconds = 0.0f, darkening = 0.0f;
+    bool darkened = false;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
     void pollTick() override
     {
@@ -54,7 +58,13 @@ public:
         onLeadTrack.store (roleForTrack() == suite::roleLead);
         glueRoomTick();
         spacePass();
+        runawayTick();
     }
+    /** Autopilot (stability): a runaway flagged by the audio thread takes every tap's feedback,
+        the throw's and the shimmer down by a quarter (message thread; tests call it). */
+    bool runawayTick();
+    std::atomic<bool> runawayNow { false };
+    std::atomic<int> runawaysCaught { 0 };
 
     /** Glue room: a new Antioch on the music bus (a track named "bus", "group" or "music")
         becomes one short, shared room for everything on it: a 0.9 s small room, no echo or

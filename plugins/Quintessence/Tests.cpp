@@ -13,6 +13,7 @@
 #include "AutomationBus.h"
 #include "ChordBus.h"
 #include "FixBus.h"
+#include "AutopilotBus.h"
 
 using namespace suite::test;
 
@@ -706,6 +707,28 @@ int main (int argc, char** argv)
         q->fixes->poll();
         check (suite::FixBus::acknowledgements (none) == 0, "nothing compressing: nothing to ease off");
         suite::FixBus::reset();
+    }
+
+
+    section ("Autopilot (harshness): a track the master names dips in the harsh band while it lasts");
+    {
+        auto run = [] (bool harsh, bool culprit)
+        {
+            suite::Autopilot::reset();
+            auto p = make (4);
+            set (*p, qn::autoEqId, 0.0f);
+            set (*p, qn::autoMbId, 0.0f);
+            const uint32_t id = culprit ? p->getInstanceId() : p->getInstanceId() + 1;
+            juce::AudioBuffer<float> a;
+            Player player { sine (4000.0f, 0.3f) };
+            if (harsh) suite::Autopilot::publishHarsh (1.0f, 7, &id, 1);
+            player.play (*p, 0.4, &a);
+            suite::Autopilot::reset();
+            return juce::Decibels::gainToDecibels (rmsBetween (a, 0.3, 0.4) / (0.3f / std::sqrt (2.0f)));
+        };
+        const auto dipped = run (true, true), other = run (true, false), calm = run (false, true);
+        check (dipped < -2.0f, "the named track dips at 4 kHz (" + juce::String (dipped, 1) + " dB)");
+        check (std::abs (other) < 0.3f && std::abs (calm) < 0.3f, "other tracks, and calm moments, are untouched (" + juce::String (other, 2) + ", " + juce::String (calm, 2) + " dB)");
     }
 
     return finish();

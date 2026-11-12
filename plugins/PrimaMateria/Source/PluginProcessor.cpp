@@ -200,6 +200,15 @@ void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
     for (auto& f : highCut) f.reset();
     monoSide.reset();
     monoHzNow = 0.0f;
+    for (auto& f : subsonic) { f.set (18.0f, 0.707f, (float) newSampleRate); f.reset(); }
+    {
+        const auto fs = (float) newSampleRate;
+        guardRelease = 1.0f - std::exp (-1.0f / (0.05f * fs));
+        wobbleShortCoeff = 1.0 - std::exp (-1.0 / (0.25 * fs));
+        wobbleLongCoeff = 1.0 - std::exp (-1.0 / (4.0 * fs));
+        wobbleSmooth = 1.0f - std::exp (-1.0f / (0.2f * fs));
+    }
+    guardGain = 1.0f; normalPeak = 0.0f; peakWarm = 0.0f; peakBlock = 0.0f; wobbleShort = wobbleLong = 0.0; wobbleDb = 0.0f; wobbleWarm = 0.0f; lastTargetDb = 0.0f;
     levelDb = 0.0f;
     lowLog = std::log2 (pm::lowCutOff);
     highLog = std::log2 (pm::highCutOff);
@@ -238,7 +247,12 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     // Glide speed: a one-pole whose time constant is a third of the Morph time.
     const auto tauSamples = morphQ > 0.0 ? (float) (morphQ / qPerSample / 3.0) : 0.0f;
-    const auto glide = tauSamples > 1.0f ? 1.0f - std::exp (-1.0f / tauSamples) : 1.0f;
+    // Autopilot (stability): an instant switch is a click - the level glides over 5 ms at least
+    const auto stable = suite::Autopilot::on (suite::Autopilot::stability);
+    const auto glideMin = 1.0f - std::exp (-1.0f / (0.005f * sr));
+    const auto glide = juce::jmin (tauSamples > 1.0f ? 1.0f - std::exp (-1.0f / tauSamples) : 1.0f, stable ? glideMin : 1.0f);
+    // ...and the level wobble rider, the peak guard and the DC / subsonic filter (below)
+    const auto wobbleRole = stable && (getRole() == 4 || getRole() == 5) && apvts.getRawParameterValue (pm::pumpId)->load() <= 0.0f;
     const auto gapStep = 1.0f / (0.003f * sr);   // 3 ms fade in/out of the gap
 
     // Carve (the masking fix): a peaking dip in one octave band.
@@ -322,6 +336,59 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
         left[n] *= inputGain;
         if (right != nullptr) right[n] *= inputGain;
+
+        // Autopilot (stability), on the source as it comes in (so none of this touches the section
+        // levels, swells and rides below): DC and subsonics out (18 Hz high-pass); a one-off peak far over the
+        // source's normal peak (9 dB or more, and over -12 dBFS) held to 6 dB over it; slow level
+        // wobble on pads and leads ridden (2 dB at most)
+        if (stable)
+        {
+            left[n] = subsonic[0].highpass (left[n]);
+            if (right != nullptr) right[n] = subsonic[1].highpass (right[n]);
+            const auto peak = juce::jmax (std::abs (left[n]), right != nullptr ? std::abs (right[n]) : 0.0f);
+            peakBlock = juce::jmax (peakBlock, peak);
+            float guardTarget = 1.0f;
+            if (peakWarm > 2.0f && peak > 0.25f && peak > normalPeak * 2.8f)
+            {
+                // A spike is short: over for 20 ms, it's the part getting louder - learn it instead
+                if (++overSamples > (int) (0.02f * sr)) { normalPeak = peak; overSamples = 0; }
+                else guardTarget = juce::jmin (1.0f, normalPeak * 2.0f / peak);
+            }
+            else overSamples = 0;
+            guardGain = guardTarget < guardGain ? guardTarget : guardGain + guardRelease * (1.0f - guardGain);
+            if (guardGain < 0.999f)
+            {
+                left[n] *= guardGain;
+                if (right != nullptr) right[n] *= guardGain;
+            }
+            if (! guarding && guardGain < 0.7f) { guarding = true; ++peaksCaught; suite::Autopilot::count (suite::Autopilot::peaksCaught); }
+            if (guardGain > 0.95f) guarding = false;
+            if (wobbleRole)
+            {
+                const auto x2 = 0.5 * ((double) left[n] * left[n] + (right != nullptr ? (double) right[n] * right[n] : (double) left[n] * left[n]));
+                wobbleShort += wobbleShortCoeff * (x2 - wobbleShort);
+                // The long average learns only while the part plays (fast for its first second), so an
+                // entry after silence isn't "wobble". Under 1 dB off is fine; over 6 dB is the part
+                // changing on purpose (an entry, a filter move) - the long average relearns it.
+                float want = 0.0f;
+                if (wobbleShort > 1.0e-6)
+                {
+                    wobbleWarm += 1.0f / (float) sr;
+                    wobbleLong += (wobbleWarm < 1.0f ? wobbleShortCoeff : wobbleLongCoeff) * (x2 - wobbleLong);
+                    const auto dev = (float) (10.0 * std::log10 (juce::jmax (wobbleLong, 1.0e-12) / wobbleShort));   // + = quieter than usual
+                    if (std::abs (dev) > 6.0f) wobbleLong += wobbleShortCoeff * (wobbleShort - wobbleLong);
+                    else if (wobbleWarm >= 1.0f && std::abs (dev) > 1.0f)
+                        want = juce::jlimit (-2.0f, 2.0f, 0.5f * (dev - std::copysign (1.0f, dev)));
+                }
+                wobbleDb += wobbleSmooth * (want - wobbleDb);
+                const auto g = juce::Decibels::decibelsToGain (wobbleDb);
+                left[n] *= g;
+                if (right != nullptr) right[n] *= g;
+                if (! wobbling && std::abs (wobbleDb) > 1.0f) { wobbling = true; suite::Autopilot::count (suite::Autopilot::wobbleRidden); }
+                if (std::abs (wobbleDb) < 0.3f) wobbling = false;
+            }
+        }
+
 
         if (follow)
         {
@@ -424,7 +491,10 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (ownersHere && target.lowCut < managerCut) { target.lowCut = managerCut; cutNow = managerCut; }
         }
 
-        // Glide towards the target (instant when Morph is off).
+        // Glide towards the target (instant when Morph is off; 5 ms with the autopilot, so it can't click).
+        if (stable && std::abs (target.levelDb - lastTargetDb) > 6.0f && glide < 0.999f && glideMin >= glide - 1.0e-6f && lastTargetDb > pm::offDb - 1.0f)
+            suite::Autopilot::count (suite::Autopilot::clicksSmoothed);
+        lastTargetDb = target.levelDb;
         levelDb += glide * (target.levelDb - levelDb);
         lowLog  += glide * (std::log2 (target.lowCut) - lowLog);
         highLog += glide * (std::log2 (target.highCut) - highLog);
@@ -499,6 +569,17 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             }
         }
     }
+
+    // The peak guard's sense of "normal": the block peaks, followed slowly (1.5 s up, 10 s down)
+    if (stable && host.playing && peakBlock > 1.0e-4f)
+    {
+        const auto blockSec = buffer.getNumSamples() / sr;
+        const auto coeff = 1.0f - std::exp (-blockSec / (peakBlock > normalPeak ? 1.5f : 10.0f));
+        const auto learn = peakWarm < 2.0f ? peakBlock : juce::jmin (peakBlock, normalPeak * 2.8f);   // after the first 2 s a spike barely moves it
+        normalPeak += (peakWarm < 2.0f ? juce::jmax (coeff, 0.3f) : coeff) * (learn - normalPeak);
+        peakWarm += blockSec;
+    }
+    peakBlock = 0.0f;
 
     currentType.store (follow ? (laterNow ? pm::laterDrop : typeNow) : -1);
     ramping.store (rampNow);

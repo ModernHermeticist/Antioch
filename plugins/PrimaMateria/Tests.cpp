@@ -8,6 +8,7 @@
 #include "Registry.h"
 #include "KickBus.h"
 #include "FixBus.h"
+#include "AutopilotBus.h"
 
 using namespace suite::test;
 using T = suite::SectionType;
@@ -916,6 +917,41 @@ int main (int argc, char** argv)
         pads->fixes->poll();
         check ((int) pv (*pads, pm::gapId) == 1, "a drop that doesn't land: half a beat of silence before it");
         suite::FixBus::reset();
+    }
+
+
+    section ("Autopilot (stability): DC out, a one-off peak held, level changes left alone");
+    {
+        // A steady 200 Hz part with a DC offset and a 2 ms spike at 3 s, in the groove (Kick role plays there)
+        const InputFn spiky = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                auto v = 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 200.0 * t) + 0.1f;
+                if (t >= 3.0 && t < 3.002) v = 0.95f;
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        auto measure = [&spiky] (bool on, float& dc, float& spike, int& caught)
+        {
+            suite::Autopilot::reset();
+            suite::Autopilot::set (suite::Autopilot::stability, on);
+            auto p = make (roleIndex ("Kick"));
+            const auto a = play (*p, spiky, 3.5);
+            double sum = 0.0; int n = 0; spike = 0.0f;
+            for (int i = (int) (2.0 * sampleRate); i < (int) (2.9 * sampleRate); ++i) { sum += a.getSample (0, i); ++n; }
+            for (int i = (int) (2.99 * sampleRate); i < (int) (3.01 * sampleRate); ++i) spike = juce::jmax (spike, std::abs (a.getSample (0, i)));
+            dc = (float) (sum / n);
+            caught = p->peaksCaught.load();
+        };
+        float dcOn, spikeOn, dcOff, spikeOff; int caughtOn, caughtOff;
+        measure (true, dcOn, spikeOn, caughtOn);
+        measure (false, dcOff, spikeOff, caughtOff);
+        check (std::abs (dcOn) < 0.01f && std::abs (dcOff) > 0.05f, "the DC offset is filtered out (" + juce::String (dcOn, 3) + " vs " + juce::String (dcOff, 3) + " off)");
+        check (caughtOn >= 1 && spikeOn < 0.7f * spikeOff, "the spike is held (" + juce::String (spikeOn, 2) + " vs " + juce::String (spikeOff, 2) + " off)");
+        check (caughtOff == 0, "switched off: nothing caught");
+        suite::Autopilot::reset();
     }
 
     return finish();

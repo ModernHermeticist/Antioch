@@ -11,6 +11,7 @@
 #include "Fingerprint.h"
 #include "MoveLog.h"
 #include "AutomationBus.h"
+#include "AutopilotBus.h"
 #include "FixBus.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
@@ -86,6 +87,9 @@ public:
         phone): 3 dB more drive; harsh: 3 dB less. The next pass keeps it if it got closer, undoes
         it otherwise. Message thread (tests call it). */
     bool drivePass();
+    /** Autopilot: how far the drive eases off on high notes (dB). */
+    float driveEaseDb() const;
+    mutable bool easing = false;
     static float richnessTarget (int role) { return role == suite::rolePads ? -16.0f : role == suite::roleVocal ? 0.0f : -12.0f; }
     float richnessTargetNow (int role) const { const auto t = richnessTarget (role); return t == 0.0f ? 0.0f : t + richOffset(); }   // above 2 kHz against below 1 kHz
     analysis::BandAnalyzer driveBands;   // after the processing, reset each pass (its seconds count the music heard)

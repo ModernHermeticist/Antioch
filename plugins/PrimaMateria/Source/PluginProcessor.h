@@ -3,6 +3,8 @@
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "AutopilotBus.h"
+#include "SuiteDSP.h"
 #include "FixBus.h"
 #include "Params.h"
 #include "SuiteDSP.h"
@@ -146,6 +148,16 @@ public:
     std::atomic<int> currentType { -1 };
     std::atomic<bool> ramping { false }, gapping { false }, mapAvailable { false };
     std::atomic<float> nowLevelDb { 0.0f }, nowLowCut { pm::lowCutOff }, nowHighCut { pm::highCutOff };
+
+public:
+    std::atomic<int> peaksCaught { 0 };   // (tests)
+private:
+    // Autopilot (stability): DC / subsonic filter, peak guard, wobble rider, click-free switches
+    std::array<suite::Svf, 2> subsonic;
+    float guardGain = 1.0f, guardRelease = 0.001f, normalPeak = 0.0f, peakWarm = 0.0f, peakBlock = 0.0f, wobbleDb = 0.0f, wobbleWarm = 0.0f, wobbleSmooth = 0.001f, lastTargetDb = 0.0f;
+    double wobbleShort = 0.0, wobbleLong = 0.0, wobbleShortCoeff = 0.001, wobbleLongCoeff = 0.0001;
+    bool guarding = false, wobbling = false;
+    int overSamples = 0;
 
 private:
     pm::Setting settingFor (int type) const;

@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "FixBus.h"
+#include "AutopilotBus.h"
+#include "MoveLog.h"
 #include "BuildClock.h"
 #include "Parameters.h"
 #include "SuiteDSP.h"
@@ -51,6 +53,13 @@ public:
     std::atomic<int> busScale { 0 };
     std::atomic<bool> sectionBuild { false };   // the current build comes from an Ouroboros Build section
     std::atomic<bool> ouroborosFound { false };
+
+    /** Autopilot (stability): a ringing build filter takes its resonance down (message thread). */
+    void pollTick() override { ringingTick(); }
+    bool ringingTick();
+    std::atomic<bool> ringingNow { false };
+    std::atomic<int> ringingCaught { 0 };
+    float inPeakBlock = 0.0f, outPeakBlock = 0.0f, ringingSeconds = 0.0f;
 
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }

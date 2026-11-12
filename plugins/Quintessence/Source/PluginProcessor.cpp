@@ -112,6 +112,10 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     for (int b = 0; b < analysis::numBands; ++b) { analysers[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs); analysers[(size_t) b].reset(); }
     winLength = juce::jmax (1, (int) std::round (sr * 0.1));
     for (int k = 0; k < 4; ++k) { sibAnalysers[(size_t) k].set (qn::sibilanceCentres[(size_t) k], 1.5f, fs); sibAnalysers[(size_t) k].reset(); }
+    auto coeff = [fs] (float seconds) { return 1.0f - std::exp (-1.0f / (seconds * fs)); };
+    dipAttack = coeff (0.03f); dipRelease = coeff (0.3f); rideAttack = coeff (0.02f); rideRelease = coeff (0.5f);
+    corrCoeff = (double) coeff (0.05f);
+    harshDipDb = 0.0f; widthRide = 1.0f; corrLR = corrLL = corrRR = 0.0; harshBandNow = -1; dipping = riding = false;
     deessFreqNow = -1.0f;
     deessEnv.set (1.0f, 60.0f, fs);  deessEnv.reset();
     fastEnv.set (0.5f, 40.0f, fs);   fastEnv.reset();
@@ -215,6 +219,18 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         deessFreqNow = deessFreq;
     }
     const auto punch = value (qn::punchId);
+    // Autopilot: Mentalism hears a harsh moment on the master and names this track as a cause:
+    // its harsh band dips (up to 4 dB) only while the moment lasts
+    int harshBandIdx = -1;
+    const auto harsh = suite::Autopilot::on (suite::Autopilot::harshness) && suite::Autopilot::harshCulprit (getInstanceId())
+                           ? suite::Autopilot::harshNow (&harshBandIdx) : 0.0f;
+    if (harsh > 0.0f && harshBandIdx >= 0 && harshBandIdx != harshBandNow)
+    {
+        for (auto& f : harshFilter) { f.set (analysis::bandCentres()[(size_t) juce::jlimit (0, analysis::numBands - 1, harshBandIdx)], 1.0f, fs); f.reset(); }
+        harshBandNow = harshBandIdx;
+    }
+    const auto harshTargetDb = -4.0f * juce::jlimit (0.0f, 1.0f, harsh);
+    const auto rideOn = suite::Autopilot::on (suite::Autopilot::stability) && roleNow != 1 && roleNow != 2;   // (kick and bass are mono already)
     // The energy curve (Ouroboros) sets how hard the glue holds: up to 2 dB tighter where the energy's drawn up
     const auto glueThr = value (qn::glueThrId) - (transitions ? 3.0f * buildProgress : 0.0f) - juce::jlimit (-2.0f, 2.0f, 2.0f * (energyRatio - 1.0f));
     // Kick-keyed glue: on the music bus, the shared kick (Kybalion) adds up to 1.5 dB just after each hit
@@ -373,9 +389,29 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             const auto g = juce::Decibels::decibelsToGain (glueMakeup - gr);
             out[0] *= g; out[1] *= g;
         }
+        // Autopilot: the harsh-moment dip
+        harshDipDb += (harshTargetDb < harshDipDb ? dipAttack : dipRelease) * (harshTargetDb - harshDipDb);
+        if (harshDipDb < -0.05f && harshBandNow >= 0)
+        {
+            const auto g = juce::Decibels::decibelsToGain (harshDipDb);
+            for (int c = 0; c < 2; ++c) out[c] -= harshFilter[(size_t) c].bandpass (out[c]) * (1.0f - g);
+            if (! dipping && harshDipDb < -1.0f) { dipping = true; suite::Autopilot::count (suite::Autopilot::harshDips); }
+        }
+        if (harshDipDb > -0.5f) dipping = false;
+        // Autopilot: stereo stability - where the image would cancel in mono (correlation under -0.25,
+        // over the last 50 ms), the width rides down to 60% until it's safe again
+        corrLR += corrCoeff * ((double) out[0] * out[1] - corrLR);
+        corrLL += corrCoeff * ((double) out[0] * out[0] - corrLL);
+        corrRR += corrCoeff * ((double) out[1] * out[1] - corrRR);
+        const auto corr = corrLL * corrRR > 1.0e-12 ? corrLR / std::sqrt (corrLL * corrRR) : 1.0;
+        const auto rideTarget = rideOn && ch[1] != nullptr && corr < -0.25 ? 0.6f : 1.0f;
+        widthRide += (rideTarget < widthRide ? rideAttack : rideRelease) * (rideTarget - widthRide);
+        if (! riding && widthRide < 0.8f) { riding = true; suite::Autopilot::count (suite::Autopilot::widthRidden); }
+        if (widthRide > 0.95f) riding = false;
+        widthRideNow.store (widthRide);
         // Width: the side scaled (mid unchanged)
         const auto mid = 0.5f * (out[0] + out[1]);
-        const auto side = 0.5f * (out[0] - out[1]) * width;
+        const auto side = 0.5f * (out[0] - out[1]) * width * widthRide;
         if (ch[1] != nullptr) { out[0] = mid + side; out[1] = mid - side; }
         ch[0][i] = out[0];
         if (ch[1] != nullptr) ch[1][i] = out[1];
@@ -1009,27 +1045,39 @@ bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
 
 bool QuintessenceProcessor::deessMove (const Measurement& m, int role)
 {
-    if (role != 6 || value (qn::autoMbId) < 0.5f || m.group == 1 || deessCooldown > 0) return false;
+    // The vocal's de-esser; with the autopilot's harshness group on, the same spike tamer for hats,
+    // leads, plucks and FX (stricter: their spikes must stand further out, and it holds less)
+    const auto tamer = role != 6;
+    if ((tamer && ! (suite::Autopilot::on (suite::Autopilot::harshness) && (role == 3 || role == 5 || role == 7)))
+        || value (qn::autoMbId) < 0.5f || m.group == 1 || deessCooldown > 0) return false;
+    const auto extra = tamer ? 2.0f : 0.0f;
     const auto depth = value (qn::deessDepthId);
     if (depth < 0.05f)
     {
         // Where the sibilance is: of the bands that spike, the one whose spikes are loudest
         int best = -1;
         for (int k = 0; k < 4; ++k)
-            if (m.sibSwing[(size_t) k] >= qn::targets::sibilanceSwingDb && m.sibPeak[(size_t) k] > m.p95Pre[1] - 30.0f
-                && m.sibSwing[(size_t) k] > (m.p95Pre[1] - m.p50Pre[1]) + 4.0f   // spikier than the vocal itself: 's' sounds, not its phrasing
+            if (m.sibSwing[(size_t) k] >= qn::targets::sibilanceSwingDb + extra && m.sibPeak[(size_t) k] > m.p95Pre[1] - 30.0f
+                && m.sibSwing[(size_t) k] > (m.p95Pre[1] - m.p50Pre[1]) + 4.0f + extra   // spikier than the part itself: 's' sounds and harsh transients, not its phrasing
                 && (best < 0 || m.sibPeak[(size_t) k] > m.sibPeak[(size_t) best])) best = k;
         if (best < 0) return false;
         const auto hz = qn::sibilanceCentres[(size_t) best];
         pending = { Pending::deess, -1, -1, { { qn::deessFreqId, value (qn::deessFreqId) }, { qn::deessDepthId, depth } }, m.sibSwing[(size_t) best],
                     "de-esser at " + juce::String (hz / 1000.0f, 1) + " kHz" };
         write (qn::deessFreqId, hz);
-        write (qn::deessDepthId, 6.0f);
+        write (qn::deessDepthId, tamer ? 4.0f : 6.0f);
+        if (tamer)
+        {
+            suite::Autopilot::count (suite::Autopilot::spikesTamed);
+            addLog ("Spike tamer on at " + juce::String (hz / 1000.0f, 1) + " kHz, up to 4 dB (its harsh moments spike " + juce::String (m.sibSwing[(size_t) best], 1)
+                    + " dB over its usual level there; only the spikes are held)");
+            return true;
+        }
         addLog ("De-esser on at " + juce::String (hz / 1000.0f, 1) + " kHz, up to 6 dB (the 's' sounds spike " + juce::String (m.sibSwing[(size_t) best], 1)
                 + " dB over the vocal's usual level there; it acts only on the spikes)");
         return true;
     }
-    if (m.sibPostSwing > qn::targets::sibilanceSwingDb + 2.0f && depth < 10.0f)
+    if (m.sibPostSwing > qn::targets::sibilanceSwingDb + 2.0f + extra && depth < (tamer ? 6.0f : 10.0f))
     {
         pending = { Pending::deess, -1, -1, { { qn::deessDepthId, depth } }, m.sibPostSwing, "de-esser up to " + juce::String (depth + 2.0f, 0) + " dB" };
         write (qn::deessDepthId, depth + 2.0f);
@@ -1072,9 +1120,19 @@ bool QuintessenceProcessor::widthMove (const Measurement& m, int role)
 bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
 {
     if (value (qn::autoEqId) < 0.5f || m.group == 1) return false;
+    // Autopilot: tell the suite the resonance this track hears most, so tracks ringing at the same
+    // frequency share the cut (they join in sooner, and each cuts less)
+    const auto sharing = suite::Autopilot::on (suite::Autopilot::harshness);
+    {
+        float strongest = 0.0f, prom = 0.0f;
+        for (const auto& c : candidates) if (c.passes >= 2 && c.prominence > prom) { prom = c.prominence; strongest = c.hz; }
+        if (sharing) suite::Autopilot::postResonance (getInstanceId(), strongest);
+    }
     for (const auto& c : candidates)
     {
-        if (c.passes < 3 || c.seconds < 12.0f) continue;   // there pass after pass, for 12 s of music: not a passing note
+        const auto others = sharing ? suite::Autopilot::othersRingingAt (getInstanceId(), c.hz) : 0;
+        if (others == 0 && (c.passes < 3 || c.seconds < 12.0f)) continue;   // there pass after pass, for 12 s of music: not a passing note
+        if (others > 0 && (c.passes < 2 || c.seconds < 6.0f)) continue;     // shared: sooner
         if (std::any_of (resonanceCooldown.begin(), resonanceCooldown.end(), [&] (const std::pair<float, int>& cd) { return std::abs (std::log2 (cd.first / c.hz)) < 0.05f; }))
             continue;
         // A resonance band already there: deeper; otherwise a free band
@@ -1086,7 +1144,9 @@ bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
                 if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == qn::free) { slot = s; break; }
         if (slot < 0) return false;
         const auto again = (int) value (qn::reasonId (slot)) == qn::resonance;
-        const auto gain = again ? juce::jmax (-6.0f, value (qn::gainId (slot)) - 1.5f) : -3.0f;
+        const auto share = others > 0 ? 2.0f / (float) (others + 2) : 1.0f;   // two tracks: 1.5 dB each instead of 3
+        const auto gain = again ? juce::jmax (-6.0f * share, value (qn::gainId (slot)) - 1.5f * share) : std::round (-3.0f * share * 2.0f) * 0.5f;
+        if (others > 0 && ! again) suite::Autopilot::count (suite::Autopilot::sharedResonances);
         if (again && std::abs (gain - value (qn::gainId (slot))) < 0.05f) continue;   // as deep as it goes
         pending = { Pending::resonance, slot, -1,
                     { { qn::freqId (slot), value (qn::freqId (slot)) }, { qn::gainId (slot), value (qn::gainId (slot)) },
@@ -1099,7 +1159,8 @@ bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
         write (qn::bdId (slot), 0.0f);
         write (qn::gainId (slot), gain);
         addLog ("Band " + juce::String (slot + 1) + ": " + juce::String (juce::roundToInt (c.hz)) + " Hz " + dbText (gain) + ", narrow (a ringing peak "
-                + juce::String (c.prominence, 1) + " dB above the sound around it, there for " + juce::String (juce::roundToInt (c.seconds)) + " s)");
+                + juce::String (c.prominence, 1) + " dB above the sound around it, there for " + juce::String (juce::roundToInt (c.seconds)) + " s"
+                + (others > 0 ? juce::String (", shared with ") + juce::String (others) + (others == 1 ? " other track ringing there" : " other tracks ringing there") : juce::String()) + ")");
         return true;
     }
     return false;

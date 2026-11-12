@@ -400,6 +400,7 @@ void MentalismProcessor::runAutomation()
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
     conductTick (rep);
     measureTick (rep);
+    harshPass (rep);
     if (rep.measuredSeconds >= lastToneAt + 8.0f) { lastToneAt = rep.measuredSeconds; masterTonePass (rep); }
     else if (rep.measuredSeconds < lastToneAt) lastToneAt = rep.measuredSeconds;
     // Each kind of section's low end against the target (for the watcher's section-by-section check)
@@ -854,6 +855,49 @@ MentalismProcessor::Step MentalismProcessor::climb (const juce::String& key, con
         suite::MoveLog::add (name, track, "Problem watcher: " + problem + ". Tried everything it can by itself: over to you");
     }
     return Step::exhausted;
+}
+
+bool MentalismProcessor::harshPass (const Report& rep)
+{
+    if (! suite::Autopilot::on (suite::Autopilot::harshness) || rep.momentary < -40.0f || ! rep.tonalAvailable) { inHarsh = false; return false; }
+    static const char* hz[] = { "31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz" };
+    int worst = -1;
+    float spike = 0.0f;
+    for (int b = 6; b <= 8; ++b)
+    {
+        const auto x = rep.shortDiff[(size_t) b] - rep.longDiff[(size_t) b];   // now against its own average
+        if (rep.shortDiff[(size_t) b] > 1.5f && x > spike) { spike = x; worst = b; }
+    }
+    if (worst < 0 || spike < 3.0f) { inHarsh = false; return false; }
+    // The causes: the tracks putting the most energy into that band (20% of it or more)
+    std::vector<std::pair<double, suite::SuiteEntry>> shares;
+    double total = 0.0;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands))
+        {
+            const auto p = std::pow (10.0, e.bands[(size_t) worst] / 10.0);
+            total += p;
+            shares.push_back ({ p, e });
+        }
+    std::sort (shares.begin(), shares.end(), [] (const auto& a, const auto& b) { return a.first > b.first; });
+    uint32_t ids[suite::Autopilot::maxHarshIds] {};
+    int n = 0;
+    juce::StringArray who;
+    for (const auto& [p, e] : shares)
+        if (n < 2 && total > 0.0 && p / total >= 0.2)
+        {
+            ids[n++] = e.id;
+            who.add (e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track"));
+        }
+    const auto amount = juce::jlimit (0.25f, 1.0f, (spike - 3.0f) / 6.0f + 0.25f);
+    suite::Autopilot::publishHarsh (amount, worst, ids, n);
+    if (! inHarsh)
+    {
+        inHarsh = true;
+        suite::MoveLog::add (getName(), getTrackName(), juce::String ("Harsh moment at ") + hz[worst] + " (" + juce::String (spike, 1) + " dB over its average)"
+                             + (who.isEmpty() ? juce::String (": no Quintessence to dip it") : ": " + who.joinIntoString (" and ") + " dip there while it lasts"), suite::MoveLog::fix);
+    }
+    return true;
 }
 
 void MentalismProcessor::measureTick (const Report& rep)

@@ -281,6 +281,17 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         {
             left[n] = 0.5f * (outL + outR) * o;
         }
+        inPeakBlock = juce::jmax (inPeakBlock, std::abs (inL));
+        outPeakBlock = juce::jmax (outPeakBlock, std::abs (outL), std::abs (outR));
+    }
+
+    // Autopilot (stability): the build filter ringing on its own - its output far over its input
+    // and over full scale for 50 ms or more - is flagged; the message thread takes the resonance down
+    {
+        const auto ringing = outPeakBlock > 1.0f && outPeakBlock > 4.0f * inPeakBlock;
+        ringingSeconds = ringing ? ringingSeconds + numSamples / sr : 0.0f;
+        if (ringingSeconds > 0.05f) { ringingNow.store (true); ringingSeconds = 0.0f; }
+        inPeakBlock = outPeakBlock = 0.0f;
     }
 
     buildLevel.store (build);
@@ -310,4 +321,17 @@ void CauseEffectProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new CauseEffectProcessor();
+}
+
+bool CauseEffectProcessor::ringingTick()
+{
+    if (! ringingNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::stability)) return false;
+    const auto res = apvts.getRawParameterValue (Params::filterRes)->load();
+    if (res <= 0.05f) return false;
+    setParameterPlain (apvts, Params::filterRes, juce::jmax (0.0f, res - 0.15f));
+    ++ringingCaught;
+    suite::Autopilot::count (suite::Autopilot::runawaysCaught);
+    suite::MoveLog::add (getName(), getTrackName(), "Runaway caught: the build filter rang on its own; resonance " + juce::String (juce::roundToInt (res * 100.0f)) + "% -> "
+                         + juce::String (juce::roundToInt (juce::jmax (0.0f, res - 0.15f) * 100.0f)) + "%", suite::MoveLog::fix);
+    return true;
 }

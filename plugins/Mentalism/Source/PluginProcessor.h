@@ -5,6 +5,7 @@
 #include "SuiteProcessor.h"
 #include "Advisor.h"
 #include "Parameters.h"
+#include "AutopilotBus.h"
 #include "Spectrum.h"
 #include "Coach.h"
 #include "MySound.h"
@@ -274,6 +275,11 @@ public:
     /** The ladders for mono loss, phase, over-wide parts, squashed drops, Lapis per section and
         the build-to-drop jump (watchPass runs it). */
     void ladderPass (const Report& rep, std::vector<watcher::Problem>& offer, std::set<juce::String>& present);
+    /** Autopilot (harshness): a harsh moment on the master - a top band (2, 4 or 8 kHz) at least
+        3 dB over its own average and over the target - is published with the tracks causing it
+        (the Quintessences with the most energy there), whose bands dip only while it lasts. */
+    bool harshPass (const Report& rep);
+    bool inHarsh = false;
     /** Every timer tick: the slower readings the ladders judge by. */
     void measureTick (const Report& rep);
     std::atomic<float> windowPeak { 0.0f };   // the sample peak since the last tick (audio thread)

@@ -14,6 +14,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "SuiteDSP.h"
+#include "AutopilotBus.h"
 #include "FixBus.h"
 #include "SectionBus.h"
 #include "HostInfo.h"
@@ -22,6 +23,7 @@
 #include "Resonance.h"
 #include "SpireTips.h"
 #include "ConductorBus.h"
+#include "AutopilotBus.h"
 #include "ReferenceBus.h"
 #include "AutomationBus.h"
 #include "KickBus.h"
@@ -178,6 +180,15 @@ private:
     // De-esser, transient shaper and glue (audio thread)
     std::array<suite::Svf, 2> deessBand;
     std::array<suite::Svf, 4> sibAnalysers;
+    // Autopilot: the harsh-moment dip and the stereo-collapse ride
+    std::array<suite::Svf, 2> harshFilter;
+    int harshBandNow = -1;
+    float harshDipDb = 0.0f, dipAttack = 0.01f, dipRelease = 0.001f, widthRide = 1.0f, rideAttack = 0.01f, rideRelease = 0.0002f;
+    double corrLR = 0.0, corrLL = 0.0, corrRR = 0.0, corrCoeff = 0.001;
+    bool dipping = false, riding = false;
+public:
+    std::atomic<float> widthRideNow { 1.0f };   // (tests, UI)
+private:
     suite::Svf sibPostAnalyser;
     suite::EnvelopeFollower deessEnv, fastEnv, slowEnv, glueEnv, outFast, outSlow;
     float attackMax = 0.0f;

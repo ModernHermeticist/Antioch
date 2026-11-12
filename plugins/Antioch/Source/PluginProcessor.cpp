@@ -170,7 +170,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         HarmonicEcho::Settings s;
         s.resonance = value (resonance);
         s.blend     = scenes.plain (sHarmonics);
-        s.dampHz    = scenes.plain (sEchoDamp);
+        s.dampHz    = scenes.plain (sEchoDamp) * (1.0f - 0.5f * darkening);
         s.lowCutHz  = value (lowCut);
 
         for (int t = 0; t < numTaps; ++t)
@@ -196,7 +196,12 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         s.decay = scenes.plain (sDecay);
         s.size = value (Verb::size);
         s.predelayMs = value (Verb::predelay);
-        s.dampHz = value (Verb::damping);
+        // Autopilot (harshness): while the master is harsh, the tails darken (damping down an octave at most)
+        const auto harsh = suite::Autopilot::on (suite::Autopilot::harshness) ? suite::Autopilot::harshNow() : 0.0f;
+        darkening += 0.2f * (harsh - darkening);
+        if (! darkened && darkening > 0.3f) { darkened = true; suite::Autopilot::count (suite::Autopilot::tailsDamped); }
+        if (darkening < 0.05f) darkened = false;
+        s.dampHz = value (Verb::damping) * (1.0f - 0.5f * darkening);
         s.lowCutHz = value (Verb::lowCut);
         s.highCutHz = value (Verb::highCut);
         s.shimmer = scenes.plain (sShimmer);
@@ -421,6 +426,21 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         {
             left[n] = 0.5f * (oL + oR);
         }
+        // Autopilot (stability): the tails' level and the input's, for the runaway guard
+        runWet += 0.5 * ((double) (spaceL + tL) * (spaceL + tL) + (double) (spaceR + tR) * (spaceR + tR));
+        runIn += 0.5 * ((double) inL * inL + (double) inR * inR);
+        runPeak = juce::jmax (runPeak, std::abs (spaceL + tL), std::abs (spaceR + tR));
+    }
+
+    // Runaway guard: tails that grow while the input is quiet (feedback or shimmer feeding itself),
+    // or that run far over full scale, are flagged; the message thread takes the feedback down
+    {
+        const auto wetRms = std::sqrt (runWet / juce::jmax (1, numSamples)), inRms = std::sqrt (runIn / juce::jmax (1, numSamples));
+        const auto growing = inRms < 1.0e-3 && wetRms > 1.0e-3 && wetRms > lastWetRms * 1.002;
+        risingSeconds = growing ? risingSeconds + numSamples / (float) sampleRate : 0.0f;
+        if (risingSeconds > 0.75f || runPeak > 2.0f) { runawayNow.store (true); risingSeconds = 0.0f; }
+        lastWetRms = wetRms;
+        runWet = runIn = 0.0; runPeak = 0.0f;
     }
 
     spaceHeard.store ((float) ((double) spaceSamples / sampleRate));
@@ -533,4 +553,20 @@ void AntiochProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new AntiochProcessor();
+}
+
+bool AntiochProcessor::runawayTick()
+{
+    if (! runawayNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::stability)) return false;
+    using namespace Params;
+    juce::StringArray moved;
+    for (int t = 0; t < numTaps; ++t)
+        if (const auto fb = apvts.getRawParameterValue (tapId (t, Tap::feedback))->load(); fb > 0.05f)
+            setParameterPlain (apvts, tapId (t, Tap::feedback), fb * 0.75f);
+    if (const auto fb = apvts.getRawParameterValue (Throw::feedback)->load(); fb > 0.05f) setParameterPlain (apvts, Throw::feedback, fb * 0.75f);
+    if (const auto sh = apvts.getRawParameterValue (Verb::shimmer)->load(); sh > 0.05f) setParameterPlain (apvts, Verb::shimmer, sh * 0.75f);
+    ++runawaysCaught;
+    suite::Autopilot::count (suite::Autopilot::runawaysCaught);
+    suite::MoveLog::add (getName(), getTrackName(), "Runaway caught: the tails were growing on their own; feedback and shimmer down a quarter", suite::MoveLog::fix);
+    return true;
 }
