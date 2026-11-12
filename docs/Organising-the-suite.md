@@ -25,22 +25,31 @@ A name only needs to contain one of these words:
 ## The layout
 
 ```
-Mixer track          Plugins, in order                                    Routed to
--------------------  ---------------------------------------------------  -----------
- 1 Kick              Prima Materia, Quintessence                          Master
- 2 Bass              Prima Materia, Quintessence, Kybalion (Suite kick)   Master
- 3 Hats              Prima Materia, Quintessence                          Music bus
- 4 Pads (Spire)      Prima Materia, Quintessence, Kybalion (gate)         Music bus
- 5 Lead (Spire)      Prima Materia, Quintessence, Vibration, Antioch      Music bus
- 6 Arp / Pluck       Prima Materia, Quintessence, Antioch                 Music bus
- 7 Vocal             Prima Materia, Quintessence, Antioch                 Master + sidechain to 10
- 8 FX                Azoth, Prima Materia                                 Music bus
- 9 Chords (MIDI)     Correspondence                                       (silent)
-10 Music bus         Solve et Coagula (vocal on its sidechain), Cause & Effect   Master
+Mixer track          Plugins, in order                                              Routed to
+-------------------  -------------------------------------------------------------  -----------
+ 1 Kick              Prima Materia, Quintessence, Kybalion (Share kick on)           Master
+ 2 Bass              Prima Materia, Quintessence, Kybalion (Suite kick)              Master
+ 3 Hats              Prima Materia, Quintessence                                     Music bus
+ 4 Pads (Spire)      Prima Materia, Quintessence, Kybalion (gate)                    Music bus
+ 5 Lead (Spire)      Prima Materia, Quintessence, Vibration, Antioch                 Music bus
+ 6 Arp / Pluck       Prima Materia, Quintessence, Antioch                            Music bus
+ 7 Vocal             Prima Materia, Quintessence, Antioch                            Master + sidechain to 10
+ 8 FX                Azoth, Prima Materia                                            Music bus
+ 9 Chords (MIDI)     Correspondence                                                  (silent)
+10 Music bus         Solve et Coagula (vocal on its sidechain), Cause & Effect,
+                     Quintessence (glue), Antioch (glue room)                        Master
    Master            Ouroboros, Emerald Tablet, Mentalism, Lapis (last)
 ```
 
 Why this order:
+
+- **Names matter:** call the arp track "Arp" (or "Pluck") so it thins out more than the pads
+  while the vocal sings; call the bus "Music bus" so its Quintessence becomes the glue and its
+  Antioch the shared room.
+- **Kybalion on the kick track with Share kick on** is what lets every other plugin follow
+  the kick: the bass ducks to it, the bus glue breathes with it, and Antioch's reverb pumps to it.
+- **Mentalism before Lapis** on the master: it hears the mix before the limiter, so it can tell
+  when the master runs into Lapis too hot, and gain-stage every track down together.
 
 - **Prima Materia first** on each track: it mixes the track per section, measures it for
   the rough mix and the balance loop, and tells the suite its role and tone.
