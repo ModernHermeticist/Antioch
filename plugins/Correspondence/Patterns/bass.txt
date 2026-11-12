@@ -129,3 +129,11 @@ Accented gallop | 2 | ED | UC | 0.65 | - | ..r. ..r. ..r. ..r. | ..!rr ..!rr ..!
 Melancholic push walk | 1 | M | VPC | 0.85 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..d. .p-- | ..r. ..t. ..d. .p-- | ..r. ..d. ..d. .p-- | ..r. ..u. ..d. .P-- | ..r. ..d. ..r. .p-- | - | - |
 Dreamy shuffled sub | 0 | R | PV | 1.0 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- -f-- r--- -9-- | r--- 9--- f--- n--- | r--- f--- 9--- r--- | r--- -9-- f--- -r-- | s | - |
 Psy push gallop | 2 | K | Y | 0.55 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .p.. | .rrr .rRr .rrr .p.. | .rrr .uuu .ddd .P.. | .rRr .rrr .rRr .P.. | .rRr .rrr .rRr .p.. | - | - |
+
+# --- batch 12: mood x style gaps (... | fill 2 | high 2 | feel | colour | where)
+Tech offbeat drive | 1 | DKE | T | 0.6 | - | ..r. ..r. ..r. ..r. | ..r. .rr. ..r. .rr. | ..rr .rr. ..rr .rr. | ..rr .rr. ..rr .NN. | .rrr .rr. .rrr .NN. | ..rr .rR. ..rr .rR. | - | - |
+Psy offbeat gallop | 1 | KD | Y | 0.6 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rrr .uuu .ddd | .rrr .ddd .uuu .rrr | .rRr .rrr .rRr .rrr | - | - |
+Orchestral offbeat strings bass | 1 | PHM | O | 0.75 | - | ..r. ..r. ..r. ..r. | ..r. ..f. ..r. ..f. | ..r. ..f. ..R. ..f. | ..r. ..f. ..R. ..n. | ..R. ..f. ..t. ..n. | ..f. ..r. ..f. ..r. | - | - |
+Vocal rolling | 2 | HMR | V | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rr. .rrr .rr. | .rrr .rrr .ddd .nnn | .rr. .ttt .fff .nnN | .rrr .rrr .rr. .rrr | - | - |
+Progressive rolling | 2 | RMK | P | 0.7 | - | ..r. ..r. ..r. ..r. | .r.r .r.f .r.r .r.f | .rrr .rff .rrr .rff | .rrr .fff .uuu .nnn | .rrf .rrf .rrf .nnn | .rrf .rff .rrf .rff | 0.15 | - |
+Orchestral rolling | 2 | PEH | O | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .fff .rrr .fff | .rrr .fff .ttt .nnn | .rrr .uuu .uuu .nnn | .rrr .rrr .fff .fff | - | - |

@@ -101,3 +101,10 @@ Hopeful pushed plucks | 1 | H | UVO | 0.65 | - | c... ..c. .... .... | c..c ..c.
 Tech triplet stabs | 1 | DK | T | 0.4 | - | c........... | c.....c..... | c..c..c..c.. | c..c..c.cccc | cccc..c..c.. | c.c.c.c.c.c. | - | - |
 Second-inversion pad | 0 | EHP | UO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c--- | - | i2 |
 Psy shuffled gate | 2 | K | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc cccc cccc | .c.c cccc .c.c cccc | cccc .ccc cccc .ccc | s | - |
+
+# --- batch 12: mood x style gaps (... | fill 2 | high 2 | feel | colour | where)
+Psy chord stabs | 1 | KD | Y | 0.35 | - | c... .... .... .... | c... .... c... .... | c..c .... c..c .... | c..c ..c. c..c cccc | c.c. ..c. c.cc cccc | c..c ..c. c... .... | - | - |
+Orchestral plucked chords | 1 | PHM | O | 0.4 | - | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c..c ..C. C..C .CCC | C..C ..c. c..C .CCC | c.cc ..c. c..c ..cc | - | - |
+Progressive gate | 2 | RMK | P | 0.65 | - | c... ..c. .... ..c. | c..c ..c. .c.. ..c. | c..c ..c. .c.c ..c. | c.cc ..c. .ccc ..cc | .cc. c.cc .cc. c.cc | c..c .cc. c..c .cc. | 0.15 | 7 |
+Orchestral gate strings | 2 | PE | O | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | c.cc cccc c.cc cccc | - | - |
+Vocal gate | 2 | HMR | V | 0.6 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc ..c. c.cc ..c. | c.cc .cc. c.cc .ccc | .cc. c.cc .ccc c.cc | c..c .cc. c..c .cc. | - | 9 |

@@ -1071,7 +1071,7 @@ section plays. The defaults:
 ### The pattern library
 
 With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
-rhythms and lead hook come from a library of original pattern families (748 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
+rhythms and lead hook come from a library of original pattern families (774 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
 arps and plucks, chord rhythms (pads, stabs and gates), two-bar hooks, piano, strings, brass, choir, timpani, acid lines, vocal-chop rhythms, ear candy and counter-lines). They're
 written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
 trance gates, anthem hooks), not copied from records. Each family is tagged with the

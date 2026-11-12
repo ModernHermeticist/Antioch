@@ -10,23 +10,23 @@
 # Ear candy: high blips, sample-and-hold sparkles and little sequences an octave over everything.
 # All kind 0: grooves, builds, breakdowns (quietly) and drops where the style uses them.
 
-Sparkle blips | 0 | EHR | UPV | 0.3 | - | .... .... ..R. .... | ..R. .... .... ..F. | ..R. .T.. ..R. ..F. | ..R. .T.. F.T. R.R.
-Sample-and-hold | 0 | KD | TYP | 0.3 | - | r... .... .... .... | r... ..u. .... d... | r..u ..d. u..d .u.. | rudu dudu udud nnnn
-Bubble sequence | 0 | DK | TY | 0.35 | - | r.r. .... .... .... | r.r. .... r.u. .... | r.r. u.d. r.u. d.r. | rrrr uuuu dddd nnnn
-Glass droplets | 0 | RH | PVO | 0.5 | - | R... .... .... .... | R... .... F... .... | R... ..F. T... ..F. | R... ..F. T..F ..R.
+Sparkle blips | 0 | EHR | UPV | 0.3 | - | .... .... ..R. .... | ..R. .... .... ..F. | ..R. .T.. ..R. ..F. | ..R. .T.. F.T. R.R. | R.R. F.T. .T.. ..R. | ..R. .T.. ..R. ..F.
+Sample-and-hold | 0 | KD | TYP | 0.3 | - | r... .... .... .... | r... ..u. .... d... | r..u ..d. u..d .u.. | rudu dudu udud nnnn | udud rudu dudu nnnn | r..u ..d. u..d .u..
+Bubble sequence | 0 | DK | TY | 0.35 | - | r.r. .... .... .... | r.r. .... r.u. .... | r.r. u.d. r.u. d.r. | rrrr uuuu dddd nnnn | nnnn dddd uuuu rrrr | r.r. u.d. r.u. d.r.
+Glass droplets | 0 | RH | PVO | 0.5 | - | R... .... .... .... | R... .... F... .... | R... ..F. T... ..F. | R... ..F. T..F ..R. | T..F ..R. R... ..F. | R... ..F. T... ..F.
 Laser zaps | 0 | EKD | CTY | 0.25 | - | .... ...R .... .... | .... ...R .... ...R | ..R. ...R ..R. ...R | ..R. ..RR ..R. RRRR | ..RR ..R. ..RR RRRR | .R.. ...R .R.. ...R
-Twinkle | 0 | HER | UVO | 0.4 | - | f... .... .... .... | f... .... t... .... | f... t... R... t... | f.t. R.t. f.t. R.R.
-Morse code | 0 | K | TY | 0.25 | - | r... .... r.r. .... | r... r.r. .... r... | r.r. r... r.r. r.rr | r.r. r.rr r.rr rrrr
-Dew | 0 | R | PV | 0.6 | - | 9... .... .... .... | 9... .... f... .... | 9... ..f. R... .... | 9... ..f. R... ..9.
+Twinkle | 0 | HER | UVO | 0.4 | - | f... .... .... .... | f... .... t... .... | f... t... R... t... | f.t. R.t. f.t. R.R. | R.R. f.t. R.t. f.t. | f... t... R... t...
+Morse code | 0 | K | TY | 0.25 | - | r... .... r.r. .... | r... r.r. .... r... | r.r. r... r.r. r.rr | r.r. r.rr r.rr rrrr | rrrr r.rr r.rr r.r. | r.r. r... r.r. r.rr
+Dew | 0 | R | PV | 0.6 | - | 9... .... .... .... | 9... .... f... .... | 9... ..f. R... .... | 9... ..f. R... ..9. | R... ..f. 9... ..9. | 9... ..f. R... ....
 Stardust run | 0 | EHP | UCVO | 0.35 | u | .... .... .... .... | .... .... ..aa aa.. | .... ..aa aa.. aaaa | aaaa aaaa AAAA AAAA | AAAA aaaa AAAA aaaa | .... aaaa aa.. aaaa
-Pinball | 0 | DE | TCU | 0.3 | - | r... .... R... .... | r..R .... r..R .... | r.Rr .R.. r.Rr .R.. | rRrR rRrR RRRR RRRR
-Raindrops | 0 | MR | PV | 0.4 | - | .... R... .... .... | .... R... .... t... | .... R..t .... f... | ..R. ..t. ..f. ..r.
-Signal | 0 | KD | TY | 0.3 | - | r... .... .... .... | r... .... .r.. .... | r... .r.. r... .r.. | r..r .r.r r..r .rrr
-Wind chimes | 0 | HR | VPO | 0.6 | w | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa
+Pinball | 0 | DE | TCU | 0.3 | - | r... .... R... .... | r..R .... r..R .... | r.Rr .R.. r.Rr .R.. | rRrR rRrR RRRR RRRR | RRRR rRrR RRRR rRrR | r.Rr .R.. r.Rr .R..
+Raindrops | 0 | MR | PV | 0.4 | - | .... R... .... .... | .... R... .... t... | .... R..t .... f... | ..R. ..t. ..f. ..r. | ..r. ..f. ..t. ..R. | .... R..t .... f...
+Signal | 0 | KD | TY | 0.3 | - | r... .... .... .... | r... .... .r.. .... | r... .r.. r... .r.. | r..r .r.r r..r .rrr | r.rr .r.r r..r .r.r | r... .r.. r... .r..
+Wind chimes | 0 | HR | VPO | 0.6 | w | a... .... .... .... | a... .... a... .... | a... ..a. a... ..a. | a..a ..a. a..a ..aa | a.aa ..a. a..a ..a. | a... ..a. a... ..a.
 Telemetry | 0 | MKR | PY | 0.25 | - | ..r. .... .... .... | ..r. .... ..u. .... | ..r. ..u. ..d. ..u. | ..ru ..du ..ud ..nn | ..du ..ud ..ru ..nn | .rr. ..u. .dd. ..u.
-Fireflies | 0 | EH | UVC | 0.35 | - | .... ..R. .... .... | .... ..R. .... ..T. | ..F. ..R. ..T. ..R. | ..F. ..R. .TR. FTRR
-Cosmic arpeggio | 0 | RE | PU | 0.4 | u | a... .... .... .... | a... a... a... .... | a.a. a.a. a.a. .... | aaaa aaaa aaaa AAAA
-Tick tock | 0 | DK | TC | 0.25 | - | r... .... R... .... | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR RRRR
+Fireflies | 0 | EH | UVC | 0.35 | - | .... ..R. .... .... | .... ..R. .... ..T. | ..F. ..R. ..T. ..R. | ..F. ..R. .TR. FTRR | FTRR .TR. ..R. ..F. | ..F. ..R. ..T. ..R.
+Cosmic arpeggio | 0 | RE | PU | 0.4 | u | a... .... .... .... | a... a... a... .... | a.a. a.a. a.a. .... | aaaa aaaa aaaa AAAA | AAAA aaaa aaaa aaaa | a.a. a.a. a.a. ....
+Tick tock | 0 | DK | TC | 0.25 | - | r... .... R... .... | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR RRRR | RRRR rRrR rRrR rRrR | r.R. r.R. r.R. r.R.
 Comet | 0 | ED | UT | 0.3 | - | .... .... .... ...R | .... .... ..R. ..RR | .... ..RR .RR. RRRR | ..RR .RRR RRRR RRRR
 Bell sprinkle | 0 | HP | UVO | 0.5 | - | R... .... .... .... | R... .... T... .... | R... T... F... T... | R.T. F.T. R.F. T.R.
 Glitch | 0 | K | TY | 0.2 | - | r... .... .... .... | rr.. .... .... r... | rr.. ..r. .rr. r... | rr.r ..rr .rr. rrrr

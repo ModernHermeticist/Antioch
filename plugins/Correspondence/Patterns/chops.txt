@@ -10,24 +10,24 @@
 # Vocal-chop rhythms: trigger a chopped vocal sample (one note per syllable) on chord tones in the vocal's range.
 # All kind 0: grooves and drops where the style uses them; they step out wherever the real vocal sings.
 
-Hey chops | 0 | EHD | UVC | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..f. r..r ..t. | r..r ..f. r.rr .ttt
-Offbeat syllables | 0 | ED | UVT | 0.5 | - | ..r. .... ..r. .... | ..r. ..r. ..r. ..r. | ..r. ..t. ..r. ..f. | ..rr ..tt ..ff ..RR
+Hey chops | 0 | EHD | UVC | 0.6 | - | r... .... .... .... | r..r .... r... .... | r..r ..f. r..r ..t. | r..r ..f. r.rr .ttt | r..r ..t. r.rr .fff | r..r ..f. r..r ..t.
+Offbeat syllables | 0 | ED | UVT | 0.5 | - | ..r. .... ..r. .... | ..r. ..r. ..r. ..r. | ..r. ..t. ..r. ..f. | ..rr ..tt ..ff ..RR | ..RR ..ff ..tt ..rr | ..r. ..t. ..r. ..f.
 Stutter chop | 0 | KD | TYV | 0.4 | - | r... .... .... .... | r.r. .... r... .... | r.rr .... r.rr .... | rrrr .... rrrr rrrr | rrrr rrrr .... rrrr | r.rr ..r. r.rr ..r.
-Melodic chop line | 0 | HM | VPU | 0.8 | - | r... .... f... ....  | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. u..u ..n.
-3-3-2 chops | 0 | EH | UVP | 0.6 | - | r..r .... .... .... | r..r ..r. .... .... | r..r ..f. t..t ..r. | r..r ..f. T..T ..RR
-Call chops | 0 | EH | VU | 0.7 | - | r--- .... .... .... | r--- ..t. .... .... | r--- ..t. f--- .... | r--- ..t. f--- ..R.
+Melodic chop line | 0 | HM | VPU | 0.8 | - | r... .... f... ....  | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. u..u ..n. | r..f ..t. d..d ..n. | r..f ..t. r..u ..d.
+3-3-2 chops | 0 | EH | UVP | 0.6 | - | r..r .... .... .... | r..r ..r. .... .... | r..r ..f. t..t ..r. | r..r ..f. T..T ..RR | R..R ..f. t..t ..RR | r..r ..f. t..t ..r.
+Call chops | 0 | EH | VU | 0.7 | - | r--- .... .... .... | r--- ..t. .... .... | r--- ..t. f--- .... | r--- ..t. f--- ..R. | r--- ..t. R--- ..f. | r--- ..t. f--- ....
 Dreamy chops | 0 | MR | PV | 0.9 | - | f--- ---- .... .... | f--- ---- t--- .... | f--- --u- t--- .... | f--- --u- t--- r--- | t--- --d- r--- f--- | f--- -uu- t--- ....
-Dark whisper chops | 0 | K | TYC | 0.5 | - | r... .... .... .... | r... .... .r.. .... | r... ..r. .r.. ..r. | r... ..r. .r.r rrrr
-Sixteenth chops | 0 | DE | TCU | 0.4 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrr ..r. rrrr ..t. | rrrr ttrr ffrr RRRR
+Dark whisper chops | 0 | K | TYC | 0.5 | - | r... .... .... .... | r... .... .r.. .... | r... ..r. .r.. ..r. | r... ..r. .r.r rrrr | r..r ..r. .r.r rrrr | r... ..r. .r.. ..r.
+Sixteenth chops | 0 | DE | TCU | 0.4 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrr ..r. rrrr ..t. | rrrr ttrr ffrr RRRR | RRRR ffrr ttrr rrrr | rrrr ..r. rrrr ..t.
 Answer chops | 0 | EHM | UPV | 0.7 | - | .... .... r... .... | .... .... r..t .... | .... ..r. r..t ..f. | .... ..r. r..t RRRR | .... ..f. t..r RRRR | .... .rr. r..t .ff.
-Syncopated syllables | 0 | DM | PTV | 0.6 | - | r... ...r .... .... | r... ...r ..r. .... | r... ...t ..r. ..f. | r..r ...t ..r. fRfR
-Rising chops | 0 | EH | UV | 0.6 | - | r... .... u... .... | r... u... u... .... | r..u ..u. u..u .... | r..u ..u. u..u uuuu
-Echo chops | 0 | RH | PV | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r... ..r. ..r. r.r.
-Psy chops | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..r. | r.rr ..rr r.rr rrrr
-Pitched riser chops | 0 | ED | UCT | 0.5 | - | r... r... r... r... | r.r. r.r. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu
+Syncopated syllables | 0 | DM | PTV | 0.6 | - | r... ...r .... .... | r... ...r ..r. .... | r... ...t ..r. ..f. | r..r ...t ..r. fRfR | r..r ...f ..t. RfRf | r... ...t ..r. ..f.
+Rising chops | 0 | EH | UV | 0.6 | - | r... .... u... .... | r... u... u... .... | r..u ..u. u..u .... | r..u ..u. u..u uuuu | u..u ..u. d..d dddd | r..u ..u. u..u ....
+Echo chops | 0 | RH | PV | 0.6 | - | r... .... .... .... | r... .... r... .... | r... ..r. r... ..r. | r... ..r. ..r. r.r. | r.r. ..r. ..r. r... | r... ..r. r... ..r.
+Psy chops | 0 | K | Y | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..r. | r.rr ..rr r.rr rrrr | rrrr ..rr r.rr rrrr | r.rr .... r.rr ..r.
+Pitched riser chops | 0 | ED | UCT | 0.5 | - | r... r... r... r... | r.r. r.r. u.u. u.u. | rrrr uuuu uuuu uuuu | uuuu uuuu uuuu uuuu | rrrr uuuu uuuu uuuu | rrrr uuuu uuuu uuuu
 Hook chops | 0 | EH | UCV | 0.65 | - | r... f... .... .... | r..f ..R. .... .... | r..f ..R. t..f ..r. | r..f ..R. t..f ..R. | R..f ..R. T..f ..R. | r.ff ..R. t.ff ..r.
-Breathy pairs | 0 | MR | PV | 0.7 | - | r-.. .... .... .... | r-.. .... t-.. .... | r-.. f-.. t-.. .... | r-.. f-.. t-.. R-..
-Groove chops | 0 | D | TCV | 0.5 | - | ..r. .... .r.. .... | ..r. ..r. .r.. .... | ..r. ..r. .r.. r.r. | ..r. ..r. .r.r rrrr
+Breathy pairs | 0 | MR | PV | 0.7 | - | r-.. .... .... .... | r-.. .... t-.. .... | r-.. f-.. t-.. .... | r-.. f-.. t-.. R-.. | R-.. t-.. f-.. r-.. | r-.. f-.. t-.. ....
+Groove chops | 0 | D | TCV | 0.5 | - | ..r. .... .r.. .... | ..r. ..r. .r.. .... | ..r. ..r. .r.. r.r. | ..r. ..r. .r.r rrrr | .r.. ..r. ..r. rrrr | ..r. ..r. .r.. r.r.
 Gospel chops | 0 | HE | VU | 0.7 | - | r--- .... .... .... | r--- .... t--- .... | r--- f--- t--- .... | r--- f--- t--- R---
 Chopped answer | 0 | M | VP | 0.7 | - | .... r--- .... .... | .... r--- .... d--- | .... r--- t--- d--- | .... r--- t--- dddd
 
@@ -46,3 +46,8 @@ Classic chop rhythm | 0 | ED | C | 0.5 | - | r... .... r... .... | r..r .... r..
 Uplifting chop melody | 0 | E | U | 0.6 | - | r... .... f... .... | r..f ..t. .... .... | r..f ..t. r..u ..d. | r..f ..t. R..R ..R. | R..f ..t. r..u ..R. | r.ff ..t. r.uu ..d.
 Hopeful chop bounce | 0 | H | UV | 0.55 | - | ..r. .... ..r. .... | ..r. ..r. ..t. .... | ..r. ..r. ..t. ..f. | ..r. ..t. ..f. ..R. | ..R. ..f. ..t. ..r. | .rr. ..r. .tt. ..f.
 Dreamy chop haze | 0 | R | PV | 0.85 | - | 9--- ---- .... .... | 9--- ---- f--- .... | 9--- --f- r--- .... | 9--- --f- r--- 9--- | f--- --9- r--- 9--- | 9--- -ff- r--- ....
+
+# --- batch 12 (... | fill 2 | high 2 | feel | colour | where)
+Build chop riser | 0 | * | * | 0.4 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr uuuu uuuu | uuuu uuuu uuuu uuuu | rrrr RRRR rrrr RRRR | rrrr uuuu dddd uuuu | - | - | B
+Epic chop chant | 0 | P | OUC | 0.6 | - | r... .... r... .... | r... r... r... .... | r..r ..r. r..r ..f. | r..r ..f. R..R ..RR | R..R ..f. r..r ..RR | r.rr ..r. r.rr ..f. | - | - |
+Orchestral chop line | 0 | PH | O | 0.75 | - | r--- .... .... .... | r--- .... f--- .... | r--- ..t- f--- .... | r--- ..t- f--- ..R- | R--- ..t- f--- ..r- | r--- ..t- f--- ..t- | - | - |

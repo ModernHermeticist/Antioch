@@ -11,26 +11,26 @@
 # All kind 0: they play in grooves, builds and drops where the style uses them (tech, psy, classic).
 
 Classic squelch | 0 | KD | CTY | 0.6 | - | r.r. r.r. r.r. r.r. | r.rR r.r~ Rr.r r.R. | rrRr r~Rr rRr~ uRr. | rrRr u~Rd rRu~ dRnN | rRu~ dRnN rrRr u~Rd | rRrr r~rR rRrr d~rR
-Rolling acid | 0 | DK | TY | 0.55 | - | .r.r .r.r .r.r .r.r | .rrr .rRr .rrr .rRr | .rRr .rRr r.Rr .rRr | .rRr .uRu .dRd .nRN
-Minor acid riff | 0 | K | TYC | 0.55 | - | r... t... r... t... | r.t. R.t. r.t. R.t. | rtRt r~tR rtRt d~tR | rtRt dtRd utRu nNRr
+Rolling acid | 0 | DK | TY | 0.55 | - | .r.r .r.r .r.r .r.r | .rrr .rRr .rrr .rRr | .rRr .rRr r.Rr .rRr | .rRr .uRu .dRd .nRN | .rRr .dRd .uRu .nRN | .rRr .rRr .rRr .rRr
+Minor acid riff | 0 | K | TYC | 0.55 | - | r... t... r... t... | r.t. R.t. r.t. R.t. | rtRt r~tR rtRt d~tR | rtRt dtRd utRu nNRr | utRu dtRd rtRt nNRr | rtRt rtRt r~tR d~tR
 Glide line | 0 | KD | CTY | 0.7 | - | r--- ---- r--- ---- | r~u. r~d. r~u. r~d. | r~u. r~d. R~u. r~d. | r~u~ u~u~ d~d~ n~N. | d~d~ u~u~ r~u. r~d. | r~R. r~d. r~R. r~u.
 Octave hopper | 0 | ED | UCT | 0.5 | - | r.R. r.R. r.R. r.R. | rRrR rR.R rRrR rR.R | rRrR rR~R rRrR rRrR | rRrR fFfF tTtT rRnN | fFfF rRrR tTtT rRnN | rRRr rRRr rRRr rRRr
 Psy acid | 0 | K | Y | 0.5 | - | .rrr .rrr .rrr .rrr | .rRr .rrR .rRr .rrR | .rRr .uRd .rRr .dRu | .rRr .uRu .dRd uuuu | .dRd .uRu .rRr dddd | .rRR .rrR .rRR .rrR
 Fifth acid | 0 | KD | CTY | 0.55 | - | r... f... r... f... | r.f. R.f. r.f. R.f. | rfRf r~fR rfRf u~fR | rfRf rfRf uuuu nnnn | rfRf uuuu rfRf nnnN | rfRf rfR. rfRf rfR.
 Talking acid | 0 | KD | CTY | 0.6 | - | r..r ..r. r..r ..r. | r..R ..r~ r..R ..r. | r.rR .~r. rR.r ~.rR | r.rR ~.rR ~.rR NNNN | rR.r ~.rR rR.r NNNN | r.rR .rr. r.rR .rR.
-Euphoric acid | 0 | ED | UC | 0.55 | - | r... R... r... R... | r.R. t.R. f.R. t.R. | rRtR fRtR rRtR fRtR | rRtR fRtR RTRF RTRS
-Stepper | 0 | DK | TC | 0.5 | - | r... u... r... d... | r.u. r.d. r.u. r.d. | rur~ dr.u r~dr u.r~ | ruuu dddd uuuu nnnn
-Pressure acid | 0 | K | TY | 0.45 | - | r.r. r.r. r.r. r.r. | rr.r rr.r rr.r rr.R | rrRr rr.R rrRr rR~R | rrRr rRRR RRRR NNNN
-Hypnotic acid | 0 | KD | TYP | 0.6 | - | r... .... r... .... | r..r .... r..r .... | r..r .~r. r..r .~R. | r..r .~r. r..r uuuu
-Squelch offbeats | 0 | DK | TCY | 0.5 | - | ..r. ..r. ..r. ..r. | ..rR ..rR ..rR ..rR | .rRr .rR~ .rRr .rR~ | .rRr .rRr .uRu .nRN
-Acid bounce | 0 | D | TC | 0.5 | - | r..r ..r. r..r ..r. | r..R ..r. r..R ..r. | r.rR .rr. r.rR .rR. | r.rR .rR. u.uR .nN.
-Dark slide | 0 | K | YT | 0.7 | - | r--- ---- ---- ---- | r~d. r~u. r--- ---- | r~d. r~u. r~d~ u... | r~d~ d~d~ u~u~ N...
-Trance acid | 0 | ED | CUT | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r. r.rR r.r. | r.rR r.tR r.rR r.fR | r.rR t.tT f.fF R.RR
+Euphoric acid | 0 | ED | UC | 0.55 | - | r... R... r... R... | r.R. t.R. f.R. t.R. | rRtR fRtR rRtR fRtR | rRtR fRtR RTRF RTRS | RTRF rRtR fRtR RTRS | rRtR fRtR rRtR fRtR
+Stepper | 0 | DK | TC | 0.5 | - | r... u... r... d... | r.u. r.d. r.u. r.d. | rur~ dr.u r~dr u.r~ | ruuu dddd uuuu nnnn | dddd uuuu dddd nnnn | ruru drdr ruru drdr
+Pressure acid | 0 | K | TY | 0.45 | - | r.r. r.r. r.r. r.r. | rr.r rr.r rr.r rr.R | rrRr rr.R rrRr rR~R | rrRr rRRR RRRR NNNN | RRRR rrRr rRRR NNNN | rrRr rrRr rrRr rR~R
+Hypnotic acid | 0 | KD | TYP | 0.6 | - | r... .... r... .... | r..r .... r..r .... | r..r .~r. r..r .~R. | r..r .~r. r..r uuuu | r..r .~R. r..r dddd | r..r .~r. r..r .~R.
+Squelch offbeats | 0 | DK | TCY | 0.5 | - | ..r. ..r. ..r. ..r. | ..rR ..rR ..rR ..rR | .rRr .rR~ .rRr .rR~ | .rRr .rRr .uRu .nRN | .uRu .dRd .rRr .nRN | .rRr .rRr .rR~ .rRr
+Acid bounce | 0 | D | TC | 0.5 | - | r..r ..r. r..r ..r. | r..R ..r. r..R ..r. | r.rR .rr. r.rR .rR. | r.rR .rR. u.uR .nN. | u.uR .nN. r.rR .rR. | r.rR .rr. r.rR .rR.
+Dark slide | 0 | K | YT | 0.7 | - | r--- ---- ---- ---- | r~d. r~u. r--- ---- | r~d. r~u. r~d~ u... | r~d~ d~d~ u~u~ N... | u~u~ d~d~ r~d~ N... | r~d. r~u. r~d~ u~..
+Trance acid | 0 | ED | CUT | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r. r.rR r.r. | r.rR r.tR r.rR r.fR | r.rR t.tT f.fF R.RR | R.RR f.fF t.tT r.rR | r.rR r.tR r.rR r.fR
 Acid arpeggio | 0 | EKD | UCT | 0.5 | - | r... t... f... t... | r.t. f.R. r.t. f.R. | rtfR rtfR rtfR rtf~ | rtfR tfRT fRTF nnnn | RTFR fRTF rtfR nnnN | rtfR tfR. rtfR tfR.
-Chug acid | 0 | DK | TY | 0.5 | - | .r.. .r.. .r.. .r.. | .rr. .rr. .rr. .rR. | .rrR .rr~ .rrR .rR~ | .rrR .rrR .uuR .nnN
-Warehouse acid | 0 | K | TC | 0.6 | - | r... ..r. .... r... | r... ..r. .R.. r... | r..r ..r. .R.~ r..R | r..r ..r. .R.~ uuuu
-Rising acid | 0 | DE | TCU | 0.55 | - | r.r. r.r. u.u. u.u. | r.r. u.u. u.u. d.d. | rrrr uuuu dddd uuuu | uuuu dddd uuuu nnnn
-Acid call | 0 | KD | TY | 0.55 | - | r... .... R... .... | r..r .... R..R .... | r..r ..~R R..R ..~r | r..r ..~R uuuu dddd
+Chug acid | 0 | DK | TY | 0.5 | - | .r.. .r.. .r.. .r.. | .rr. .rr. .rr. .rR. | .rrR .rr~ .rrR .rR~ | .rrR .rrR .uuR .nnN | .nnN .uuR .rrR .rrR | .rrR .rr~ .rrR .rR~
+Warehouse acid | 0 | K | TC | 0.6 | - | r... ..r. .... r... | r... ..r. .R.. r... | r..r ..r. .R.~ r..R | r..r ..r. .R.~ uuuu | r..r ..r. .R.~ dddd | r..r ..r. .R.~ r..R
+Rising acid | 0 | DE | TCU | 0.55 | - | r.r. r.r. u.u. u.u. | r.r. u.u. u.u. d.d. | rrrr uuuu dddd uuuu | uuuu dddd uuuu nnnn | dddd uuuu dddd nnnn | rrrr uuuu dddd uuuu
+Acid call | 0 | KD | TY | 0.55 | - | r... .... R... .... | r..r .... R..R .... | r..r ..~R R..R ..~r | r..r ..~R uuuu dddd | r..r ..~R dddd uuuu | r..r ..~R R..R ..~r
 Bubble acid | 0 | DK | YT | 0.45 | - | r.r. .... r.r. .... | rrr. ..r. rrr. ..r. | rrrR ..r~ rrrR ..r~ | rrrR ..rR rrrR NNNN
 Snaking acid | 0 | K | Y | 0.6 | - | r... d... r... u... | r.d. u.d. r.d. u.d. | rdud r~du rdud r~du | rdud uudd uudd nnnn
 Peak-time acid | 0 | DE | TC | 0.5 | - | r.R. r.R. r.R. r.R. | rrRr .rRr rrRr .rRr | rrRr r~Rr rrRr R~Rr | rrRr RRRR rrRr NNNN
