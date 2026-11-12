@@ -193,6 +193,16 @@ private:
 public:
     std::atomic<float> deessNow { 0.0f };   // the de-esser's reduction now (dB, UI)
     std::atomic<float> buildNow { 0.0f };   // how far through a build (0 outside one)
+    std::function<void()> narrower (uint32_t data);
+    std::function<void()> lessSquash();
+    inline static const juce::Identifier sideOffsetKey { "side_offset" }, swingOffsetKey { "swing_offset" };
+    void setOffset (const juce::Identifier& id, float v);
+public:
+    /** The problem watcher's lasting changes to the targets: the side this many dB lower (narrower),
+        the multiband letting this many dB more swing through (the drops breathe). */
+    float sideOffset() const { return (float) apvts.state.getProperty (sideOffsetKey, 0.0f); }
+    float swingOffset() const { return (float) apvts.state.getProperty (swingOffsetKey, 0.0f); }
+    float glueTarget() const { return juce::jmax (0.5f, qn::targets::glueTargetDb - 0.25f * swingOffset()); }
     mutable std::atomic<float> needShown { 0.0f };   // what it asked the conductor with (dB)
     std::atomic<bool> bypassedNow { false }, kickKeyed { false };   // (tests, UI)
     std::atomic<float> chordHzNow { 0.0f }, riserDipNow { 0.0f }, sideNow { -100.0f };

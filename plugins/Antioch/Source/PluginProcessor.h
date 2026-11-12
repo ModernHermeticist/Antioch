@@ -11,6 +11,7 @@
 #include "MoveLog.h"
 #include "AutomationBus.h"
 #include "ActivityBus.h"
+#include "FixBus.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
 {
@@ -44,6 +45,7 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<suite::FixReceiver> fixes;   // the problem watcher: mud from the reverb returns
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
     void pollTick() override

@@ -724,5 +724,20 @@ int main (int argc, char** argv)
         std::cout << "Wrote renders and UI snapshots to " << outDir.getFullPathName() << std::endl;
     }
 
+    section ("The problem watcher: mud from the reverb returns");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<AntiochProcessor>();
+        const auto before = p->apvts.getRawParameterValue (Params::Verb::lowCut)->load();
+        const auto seq = suite::FixBus::send (suite::Fix::ReverbLowCut);
+        p->fixes->poll();
+        const auto after = p->apvts.getRawParameterValue (Params::Verb::lowCut)->load();
+        check (after > before * 1.3f && after < before * 1.5f, "the reverb's low cut half an octave up (" + juce::String (before, 0) + " -> " + juce::String (after, 0) + " Hz)");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::Verb::lowCut)->load() - before) < 1.0f, "undone: back where it was");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

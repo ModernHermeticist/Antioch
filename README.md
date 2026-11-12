@@ -539,10 +539,25 @@ suite plugin reports and what Mentalism measures on the master:
   music), and **lasting masking** gets a carve that opens only while the vocal or lead plays.
   Each problem is fixed at most once every 30 s. If it's still there after two fixes, it's
   offered to you instead.
-- **Offered as one click** (the **Problems** button, with a count): **mono loss** (mono lows
-  on every Prima Materia), a **phase problem** in the low end (Kybalion flips the polarity
-  where it cancels against the kick), and **missing samples** (Ouroboros' session fix). A
-  peaking master with **no limiter** is pointed out, since that one needs Lapis placing.
+- **Offered as one click** (the **Problems** button, with a count): **missing samples**
+  (Ouroboros' session fix). A peaking master with **no limiter** is pointed out, since that
+  one needs Lapis placing.
+
+**Fix ladders.** The bigger problems are fixed by themselves too, one kind of fix at a time.
+Each step is judged once it has been heard (20 s, or the next time that section plays): kept
+if the problem got smaller, otherwise undone and the next kind of fix tried. A step nothing
+can take (a locked band, no Antioch in the session) is passed over. When every step has been
+tried, the problem goes to **Problems**, with what was tried.
+
+| Problem | Judged by | Steps, in order |
+|---|---|---|
+| The mix loses more than 3 dB in mono | the mono loss, over ~5 s | mono lows on every Prima Materia; the widest part narrower; the next widest |
+| The low end out of phase | low-end correlation, over ~5 s | Kybalion's polarity flip; mono lows |
+| A part whose side is louder than its middle | that part's side against its middle | its Quintessence 25% narrower (its width target follows, so it stays); again |
+| The master's tone more than 1.5 dB off in a band | that band, 8 s later | shared out across the tracks by contribution (a track with no Quintessence takes its share of a cut in Prima Materia's carve band); too much 125-500 Hz: every Antioch's reverb low cut half an octave up; too much 2-8 kHz: every Vibration's drive 3 dB softer |
+| Squashed drops (peaks under 8 dB over their loudness) | the drops, heard again | every Quintessence eases its multiband and glue off (its targets follow); again |
+| Lapis holding back over 3 dB in one kind of section, 2 dB more than elsewhere | that section, heard again | every track 1 dB down there; again |
+| The drop under 2 LU louder than the end of the build | the next build into a drop | Cause & Effect builds deeper (higher sweep, tails cut); again; half a beat of silence before the drop |
 
 Every problem and every fix shows in *What changed?*, and every fix can be undone like any
 other.

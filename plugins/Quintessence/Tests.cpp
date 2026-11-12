@@ -678,5 +678,35 @@ int main (int argc, char** argv)
         snapshot (*editor, outDir.getChildFile ("Quintessence.png"));
     }
 
+    section ("The problem watcher: narrower, and drops that breathe");
+    {
+        suite::FixBus::reset();
+        auto p = make (4);
+        set (*p, qn::widthId, 1.2f);
+        const auto seq = suite::FixBus::send (suite::Fix::Narrower, p->getInstanceId() & 0xfffu);
+        p->fixes->poll();
+        check (std::abs (v (*p, qn::widthId) - 0.9f) < 0.01f && std::abs (p->sideOffset() + 3.0f) < 0.01f,
+               "a part too wide for mono: 25% narrower, and its width target 3 dB narrower so it stays");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (v (*p, qn::widthId) - 1.2f) < 0.01f && std::abs (p->sideOffset()) < 0.01f, "undone: back");
+
+        set (*p, qn::autoMbId, 1.0f);
+        set (*p, qn::thrId (1), -20.0f);
+        set (*p, qn::ratioId (1), 3.0f);
+        const auto squash = suite::FixBus::send (suite::Fix::LessSquash);
+        p->fixes->poll();
+        check (std::abs (v (*p, qn::thrId (1)) + 18.0f) < 0.01f && std::abs (p->swingOffset() - 2.0f) < 0.01f && p->glueTarget() < qn::targets::glueTargetDb,
+               "squashed drops: the compressing band eases off 2 dB, and the targets let 2 dB more through");
+        suite::FixBus::sendUndo (squash);
+        p->fixes->poll();
+        check (std::abs (v (*p, qn::thrId (1)) + 20.0f) < 0.01f && std::abs (p->swingOffset()) < 0.01f, "undone: back");
+        auto q = make (4);
+        const auto none = suite::FixBus::send (suite::Fix::LessSquash);
+        q->fixes->poll();
+        check (suite::FixBus::acknowledgements (none) == 0, "nothing compressing: nothing to ease off");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

@@ -307,5 +307,12 @@ int main (int argc, char** argv)
         editor.reset();
     }
 
+    section ("Reports how hard it works, for Mentalism's section-by-section check");
+    {
+        auto p = std::make_unique<LapisProcessor>();
+        p->grSinceStatus.store (4.5f);
+        check (std::abs (p->suiteStatus().metrics[1] - 4.5f) < 0.01f && p->suiteStatus().metrics[1] == 0.0f, "the most it held back since the last report, then afresh");
+    }
+
     return finish();
 }

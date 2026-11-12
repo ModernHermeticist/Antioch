@@ -24,7 +24,14 @@ namespace suite
                                     SectionLowsDown,                                // the bass down 2 dB in one kind of section (data: the type)
                                     Relearn,                                        // new parts written: these roles measure afresh (data: a bit per role)
                                     MixItAll, ExportAll,                            // one-click finish (Ouroboros): Mentalism mixes, Correspondence exports
-                                    MasterTone };                                   // Mentalism shares the master's tone out: one Quintessence, one band, its share
+                                    MasterTone,                                     // Mentalism shares the master's tone out: one Quintessence, one band, its share
+                                    // The problem watcher's fix ladders:
+                                    Narrower,                                       // one Quintessence narrower (data: its id's low 12 bits)
+                                    LessSquash,                                     // every Quintessence lets the drops breathe: dynamics and glue eased off
+                                    ReverbLowCut,                                   // every Antioch's reverb low cut up (mud from the reverb returns)
+                                    DriveSofter,                                    // every Vibration's drive down (harshness)
+                                    SectionDown,                                    // every track 1 dB down in one kind of section (data: the type)
+                                    BuildImpact };                                  // a bigger build-to-drop jump (data 0: Cause & Effect builds deeper; 1: a gap before the drop)
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)
@@ -34,7 +41,8 @@ namespace suite
                                        "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
                                        "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
                                        "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
-                                       "Re-learn changed parts", "Mix it", "Export all", "Master tone share" };
+                                       "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
+                                       "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }

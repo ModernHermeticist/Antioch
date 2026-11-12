@@ -113,6 +113,35 @@ PrimaMateriaProcessor::PrimaMateriaProcessor()
                 if (getRole() != 2 || type < 0 || type >= pm::numTypes || muted (level (type))) return {};
                 return { { pm::levelId (type), juce::jmax (pm::offDb + 1.0f, level (type) - 2.0f) } };
             }
+            case suite::Fix::SectionDown:
+            {
+                // The problem watcher: Lapis works hardest in one kind of section: every track 1 dB down there
+                const auto type = (int) data;
+                if (type < 0 || type >= pm::numTypes || muted (level (type))) return {};
+                return { { pm::levelId (type), juce::jmax (pm::offDb + 1.0f, level (type) - 1.0f) } };
+            }
+            case suite::Fix::BuildImpact:
+                // The problem watcher's last step for a drop that doesn't land: half a beat of silence before it
+                if (data == 1 && (int) apvts.getRawParameterValue (pm::gapId)->load() == 0) return { { pm::gapId, 1.0f } };
+                return {};
+            case suite::Fix::MasterTone:
+            {
+                // Mentalism's share of the master's tone, for a track with no Quintessence: a cut in
+                // this track's carve band (only a cut; only if the carve isn't busy with masking)
+                uint32_t who = 0; int band = 0; float db = 0.0f;
+                suite::unpackMasterTone (data, who, band, db);
+                if (who != (getInstanceId() & 0xfffu) || db >= 0.0f) return {};
+                if (const auto track = getTrackName(); track.isNotEmpty())
+                    for (const auto& e : suite::Registry::list())
+                        if (e.plugin == "Quintessence" && e.track == track) return {};   // its Quintessence takes it
+                const auto current = (int) apvts.getRawParameterValue (pm::carveBandId)->load() - 1;
+                const auto depth = apvts.getRawParameterValue (pm::carveDepthId)->load();
+                const auto free = current < 0 || std::abs (depth) < 0.05f;
+                if (! free && current != band) return {};
+                return { { pm::carveBandId, (float) (band + 1) },
+                         { pm::carveDepthId, juce::jmax (-6.0f, (free ? 0.0f : depth) + db) },
+                         { pm::carveWhenId, 0.0f }, { pm::carveWhereId, 0.0f } };
+            }
             case suite::Fix::MonoLows:
                 if ((int) apvts.getRawParameterValue (pm::monoLowsId)->load() == 0) return { { pm::monoLowsId, 2.0f } };   // below 120 Hz
                 return {};

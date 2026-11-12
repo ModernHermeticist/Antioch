@@ -399,6 +399,7 @@ void MentalismProcessor::runAutomation()
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
     conductTick (rep);
+    measureTick (rep);
     if (rep.measuredSeconds >= lastToneAt + 8.0f) { lastToneAt = rep.measuredSeconds; masterTonePass (rep); }
     else if (rep.measuredSeconds < lastToneAt) lastToneAt = rep.measuredSeconds;
     // Each kind of section's low end against the target (for the watcher's section-by-section check)
@@ -554,6 +555,7 @@ bool MentalismProcessor::watchPass (const Report& rep)
     const auto now = rep.measuredSeconds;
     for (auto p : found)
     {
+        if (p.key == "mono" || p.key == "phase") continue;   // the fix ladders handle these (judged by slower readings)
         present.insert (p.key);
         auto& [when, tries] = watchActed.try_emplace (p.key, std::make_pair (-1000.0f, 0)).first->second;
         if (p.automatic && p.fix != suite::Fix::None && tries < 2)
@@ -660,6 +662,8 @@ bool MentalismProcessor::watchPass (const Report& rep)
             }
     }
 
+    ladderPass (rep, offer, present);
+
     // Problems that went away can come back as new ones
     for (auto it = watchAnnounced.begin(); it != watchAnnounced.end();)
         it = present.count (*it) ? std::next (it) : watchAnnounced.erase (it);
@@ -672,14 +676,24 @@ bool MentalismProcessor::watchPass (const Report& rep)
 
 std::vector<MentalismProcessor::ToneShare> MentalismProcessor::shareOut (const std::vector<suite::SuiteEntry>& entries, int band, float masterChangeDb)
 {
-    // Each Quintessence's share of the energy in the band; the ones with 10% or more take part
+    // Each track's share of the energy in the band (its Quintessence; for a cut, its Prima Materia
+    // when it has no Quintessence); the ones with 10% or more take part
     std::vector<ToneShare> out;
+    std::set<juce::String> withQuintessence;
+    for (const auto& e : entries)
+        if (e.plugin == "Quintessence" && e.track.isNotEmpty()) withQuintessence.insert (e.track);
+    auto takesPart = [&] (const suite::SuiteEntry& e)
+    {
+        if (! e.has (suite::Status::hasBands)) return false;
+        if (e.plugin == "Quintessence") return true;
+        return e.plugin == "Prima Materia" && masterChangeDb < 0.0f && e.track.isNotEmpty() && withQuintessence.count (e.track) == 0;
+    };
     double total = 0.0;
     for (const auto& e : entries)
-        if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands)) total += std::pow (10.0, e.bands[(size_t) band] / 10.0);
+        if (takesPart (e)) total += std::pow (10.0, e.bands[(size_t) band] / 10.0);
     if (total <= 1.0e-12) return out;
     for (const auto& e : entries)
-        if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands))
+        if (takesPart (e))
         {
             const auto share = (float) (std::pow (10.0, e.bands[(size_t) band] / 10.0) / total);
             if (share >= 0.1f) out.push_back ({ e.id, e.track, share, 0.0f });
@@ -706,58 +720,270 @@ std::vector<MentalismProcessor::ToneShare> MentalismProcessor::shareOut (const s
 bool MentalismProcessor::masterTonePass (const Report& rep)
 {
     if (apvts.getRawParameterValue (Params::shareTone)->load() < 0.5f || ! rep.tonalAvailable) return false;
+    static const char* hz[] = { "31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz" };
+    const auto now = rep.measuredSeconds;
+    auto key = [] (int b) { return "tone:" + juce::String (b); };
+    auto problem = [&] (int b)
+    {
+        const auto d = rep.shortDiff[(size_t) b];
+        return juce::String ("The master's ") + hz[b] + " is " + juce::String (std::abs (d), 1) + " dB " + (d > 0.0f ? "over" : "under") + " its target";
+    };
+    // The ladder for a band: shared out by contribution; then, for too much low mids or top, the
+    // effects that add them (the reverb returns, the drive)
+    auto rungs = [&] (int b) -> std::vector<Rung>
+    {
+        const auto d = rep.shortDiff[(size_t) b];
+        std::vector<Rung> r;
+        r.push_back ({ "shared out across the tracks putting energy there, by contribution", [this, b, d]
+        {
+            std::vector<uint32_t> seqs;
+            juce::StringArray who;
+            for (const auto& t : shareOut (suite::Registry::list(), b, juce::jlimit (-1.5f, 1.5f, -d)))
+            {
+                seqs.push_back (suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (t.id, b, t.db)));
+                who.add ((t.track.isNotEmpty() ? "'" + t.track + "'" : juce::String ("a track")) + " " + (t.db > 0.0f ? "+" : "") + juce::String (t.db, 1) + " dB ("
+                         + juce::String (juce::roundToInt (t.share * 100.0f)) + "% of it)");
+            }
+            if (! who.isEmpty()) suite::MoveLog::add (getName(), getTrackName(), "Master balance at " + juce::String (hz[b]) + ": " + who.joinIntoString (", "), suite::MoveLog::fix);
+            return seqs;
+        } });
+        if (d > 0.0f && b >= 2 && b <= 4)
+            r.push_back ({ "the reverb's low cut up on every Antioch (the returns carry low mids)", [this] { return std::vector<uint32_t> { sendFix (suite::Fix::ReverbLowCut) }; } });
+        if (d > 0.0f && b >= 6 && b <= 8)
+            r.push_back ({ "every Vibration's drive softer (the harmonics it adds)", [this] { return std::vector<uint32_t> { sendFix (suite::Fix::DriveSofter) }; } });
+        return r;
+    };
+    auto judged = [this] (Step s)
+    {
+        if (s == Step::kept) ++toneRoundsKept;
+        if (s == Step::undone) ++toneRoundsUndone;
+        if (s == Step::kept || s == Step::undone || s == Step::skipped) suite::Conductor::release (getInstanceId());
+    };
+
+    // A round in progress: judged after 8 s
+    for (int b = 1; b <= 8; ++b)
+        if (const auto it = ladders.find (key (b)); it != ladders.end() && it->second.waiting)
+        {
+            const auto d = std::abs (rep.shortDiff[(size_t) b]);
+            const auto step = climb (key (b), problem (b), d > 1.5f, true, d, 0.3f, 8.0f, now, rungs (b));
+            judged (step);
+            return step != Step::waiting;
+        }
+
     // The master's worst band now (the Quintessences use it to say how much they're needed)
     int worst = -1;
     for (int b = 1; b <= 8; ++b)
+    {
+        if (const auto it = ladders.find (key (b)); it != ladders.end() && it->second.exhausted && std::abs (rep.shortDiff[(size_t) b]) > 1.5f) continue;   // tried everything there
         if (worst < 0 || std::abs (rep.shortDiff[(size_t) b]) > std::abs (rep.shortDiff[(size_t) worst])) worst = b;
+    }
+    if (worst < 0) return false;
     suite::Conductor::publishMasterProblem (worst, rep.shortDiff[(size_t) worst]);
-    for (auto& c : toneCooldown) c = juce::jmax (0, c - 1);
-    static const char* hz[] = { "31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz" };
+    for (int b = 1; b <= 8; ++b)   // bands that came right forget what was tried there
+        if (std::abs (rep.shortDiff[(size_t) b]) <= 1.5f) ladders.erase (key (b));
+    if (std::abs (rep.shortDiff[(size_t) worst]) <= 1.5f) return false;
+    if (! suite::Conductor::request (getInstanceId(), std::abs (rep.shortDiff[(size_t) worst]) + 2.0f)) return false;   // the whole mix's problem: high need
+    const auto d = std::abs (rep.shortDiff[(size_t) worst]);
+    const auto step = climb (key (worst), problem (worst), true, true, d, 0.3f, 8.0f, now, rungs (worst));
+    if (step != Step::applied) suite::Conductor::release (getInstanceId());
+    return step == Step::applied;
+}
 
-    // Check the last round
-    if (! toneSeqs.empty())
+MentalismProcessor::Step MentalismProcessor::climb (const juce::String& key, const juce::String& problem, bool present, bool ready, float badness, float minGain,
+                                                    float waitSeconds, float now, const std::vector<Rung>& rungs)
+{
+    auto it = ladders.find (key);
+    if (it == ladders.end())
     {
-        const auto after = std::abs (rep.shortDiff[(size_t) toneBand]);
-        const auto distance = tonalDistance (rep);
-        const auto helped = after < toneBefore - 0.3f && (distance < 0.0f || distance < toneDistanceBefore + 0.3f);
-        if (helped)
+        if (! present) return Step::idle;
+        it = ladders.emplace (key, Ladder {}).first;
+    }
+    auto& L = it->second;
+    L.problem = problem;
+    const auto name = getName(), track = getTrackName();
+    if (L.waiting)
+    {
+        if (now - L.at < waitSeconds || ! ready) return Step::waiting;
+        L.waiting = false;
+        L.at = now;
+        int acks = 0;
+        for (const auto s : L.seqs) acks += suite::FixBus::acknowledgements (s);
+        const auto text = juce::isPositiveAndBelow (L.rung, (int) rungs.size()) ? rungs[(size_t) L.rung].text : juce::String ("the last step");
+        if (acks == 0)   // nothing could take it (locked, already there, not in the session)
         {
-            ++toneRoundsKept;
-            suite::MoveLog::add (getName(), getTrackName(), juce::String ("Kept: master balance at ") + hz[toneBand] + " (" + juce::String (toneBefore, 1) + " -> "
-                                 + juce::String (after, 1) + " dB off the target)", suite::MoveLog::kept);
+            ++L.rung; L.keptHere = 0;
+            return Step::skipped;
         }
-        else
+        if (badness < L.before - minGain)
         {
-            for (auto it = toneSeqs.rbegin(); it != toneSeqs.rend(); ++it) suite::FixBus::sendUndo (*it);
-            ++toneRoundsUndone;
-            toneCooldown[(size_t) toneBand] = 6;
-            suite::MoveLog::add (getName(), getTrackName(), juce::String ("Undid: master balance at ") + hz[toneBand] + ": the master didn't get closer ("
-                                 + juce::String (toneBefore, 1) + " -> " + juce::String (after, 1) + " dB)", suite::MoveLog::undone);
+            ++L.keptHere;
+            suite::MoveLog::add (name, track, "Kept: " + text + " (" + juce::String (L.before, 1) + " -> " + juce::String (badness, 1) + ")", suite::MoveLog::kept);
+            if (! present) ladders.erase (it);
+            return Step::kept;
         }
-        toneSeqs.clear();
-        suite::Conductor::release (getInstanceId());
-        if (! helped) return true;
+        for (auto s = L.seqs.rbegin(); s != L.seqs.rend(); ++s) suite::FixBus::sendUndo (*s);
+        L.tried.addIfNotAlreadyThere (text);
+        ++L.rung; L.keptHere = 0;
+        suite::MoveLog::add (name, track, "Undid: " + text + ": it didn't help (" + juce::String (L.before, 1) + " -> " + juce::String (badness, 1) + ")"
+                             + (L.rung < (int) rungs.size() ? juce::String (". Next: ") + rungs[(size_t) L.rung].text : juce::String()), suite::MoveLog::undone);
+        return Step::undone;
+    }
+    if (! present) { ladders.erase (it); return Step::idle; }
+    if (now - L.at < waitSeconds * 0.5f) return Step::waiting;   // hear the last change first
+    if (L.keptHere >= 2) { ++L.rung; L.keptHere = 0; }           // helped twice, still there: the next kind of fix
+    while (L.rung < (int) rungs.size())
+    {
+        auto seqs = rungs[(size_t) L.rung].apply();
+        if (! seqs.empty())
+        {
+            L.seqs = std::move (seqs);
+            L.waiting = true;
+            L.before = badness;
+            L.at = now;
+            L.exhausted = false;
+            suite::MoveLog::add (name, track, "Problem watcher: " + problem + ". Trying (step " + juce::String (L.rung + 1) + " of " + juce::String ((int) rungs.size()) + "): "
+                                 + rungs[(size_t) L.rung].text, suite::MoveLog::fix);
+            return Step::applied;
+        }
+        L.tried.addIfNotAlreadyThere (rungs[(size_t) L.rung].text + " (nothing to apply it to)");
+        ++L.rung;
+    }
+    if (! L.exhausted)
+    {
+        L.exhausted = true;
+        suite::MoveLog::add (name, track, "Problem watcher: " + problem + ". Tried everything it can by itself: over to you");
+    }
+    return Step::exhausted;
+}
+
+void MentalismProcessor::measureTick (const Report& rep)
+{
+    // Slow readings the ladders judge by (the meters are 300-400 ms): only while music plays
+    const auto peak = windowPeak.exchange (0.0f);
+    if (rep.momentary < -50.0f) return;
+    monoSlow += 0.05f * (rep.measurement.monoLossDb - monoSlow);
+    lowCorrSlow += 0.05f * (rep.measurement.lowCorrelation - lowCorrSlow);
+    const auto type = sectionTypeNow.load();
+    using T = suite::SectionType;
+    if (type >= 0 && type < (int) plrSum.size())
+    {
+        if (peak > 1.0e-6f) { plrSum[(size_t) type] += juce::Decibels::gainToDecibels (peak) - rep.momentary; ++plrCount[(size_t) type]; }
+        for (const auto& e : suite::Registry::list())
+            if (e.plugin == "Lapis") { grSum[(size_t) type] += e.metrics[1]; ++grCount[(size_t) type]; break; }
+    }
+    // The drop's first 4 s against the build's last moments
+    if (type == (int) T::Build) buildTail = prevType == (int) T::Build ? buildTail + 0.25f * (rep.momentary - buildTail) : rep.momentary;
+    if (type == (int) T::Drop && prevType == (int) T::Build) { buildTailAtSwitch = buildTail; dropStartSum = 0.0f; dropStartTicks = 0; }
+    if (type == (int) T::Drop && dropStartTicks >= 0)
+    {
+        dropStartSum += rep.momentary;
+        if (++dropStartTicks >= 16)
+        {
+            lastJump = dropStartSum / 16.0f - buildTailAtSwitch;
+            ++jumpsHeard; ++jumpsSinceStep;
+            dropStartTicks = -1;
+        }
+    }
+    if (type != (int) T::Drop) dropStartTicks = -1;
+    prevType = type;
+}
+
+void MentalismProcessor::ladderPass (const Report& rep, std::vector<watcher::Problem>& offer, std::set<juce::String>& present)
+{
+    using T = suite::SectionType;
+    const auto now = rep.measuredSeconds;
+    const auto entries = suite::Registry::list();
+    bool havePrima = false, haveKybalion = false, haveLapis = false;
+    std::vector<suite::SuiteEntry> quints;
+    for (const auto& e : entries)
+    {
+        havePrima = havePrima || e.plugin == "Prima Materia";
+        haveKybalion = haveKybalion || e.plugin == "Kybalion";
+        haveLapis = haveLapis || e.plugin == "Lapis";
+        if (e.plugin == "Quintessence") quints.push_back (e);
+    }
+    std::sort (quints.begin(), quints.end(), [] (const suite::SuiteEntry& a, const suite::SuiteEntry& b) { return a.metrics[3] > b.metrics[3]; });
+    auto send = [this] (suite::Fix f, uint32_t d) { return std::vector<uint32_t> { sendFix (f, d) }; };
+    auto name = [] (const suite::SuiteEntry& e) { return e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track"); };
+    auto narrow = [&] (const suite::SuiteEntry& e, const juce::String& why) -> Rung
+    {
+        return { "bring in " + name (e) + why, [send, id = e.id] { return send (suite::Fix::Narrower, id & 0xfffu); } };
+    };
+    auto nothing = [] (const juce::String& text) -> Rung { return { text, [] { return std::vector<uint32_t> {}; } }; };
+
+    // F1 + F8: mono loss: the lows mono first, then the widest parts narrower
+    {
+        std::vector<Rung> r { { "mono the lows (below 120 Hz) on every Prima Materia", [send] { return send (suite::Fix::MonoLows, 0); } } };
+        for (size_t i = 0; i < 2; ++i)
+            r.push_back (i < quints.size() && quints[i].metrics[3] > -20.0f ? narrow (quints[i], " (one of the widest parts)") : nothing ("a wide part narrower"));
+        climb ("mono", "The mix loses " + juce::String (monoSlow, 1) + " dB in mono", monoSlow > 3.0f && havePrima, true, monoSlow, 1.0f, 20.0f, now, r);
+    }
+    // F1: the low end out of phase
+    climb ("phase", "The low end is out of phase (correlation " + juce::String (lowCorrSlow, 2) + ")", lowCorrSlow < -0.2f && haveKybalion, true, -lowCorrSlow, 0.2f, 20.0f, now,
+           { { "flip the polarity where Kybalion hears the low end cancel against the kick", [send] { return send (suite::Fix::PhaseFlip, 0); } },
+             { "mono the lows (below 120 Hz) on every Prima Materia", [send] { return send (suite::Fix::MonoLows, 0); } } });
+
+    // F8: a part whose side is louder than its middle (it falls apart in mono)
+    std::set<juce::String> wideSeen;
+    for (const auto& q : quints)
+    {
+        const auto key = "wide:" + juce::String (q.id);
+        wideSeen.insert (key);
+        climb (key, name (q) + " is wider than it is solid (its side " + juce::String (q.metrics[3], 1) + " dB over its middle)", q.metrics[3] > 0.0f, true,
+               q.metrics[3], 1.0f, 20.0f, now, { narrow (q, ""), narrow (q, " again") });
+    }
+    for (auto it = ladders.begin(); it != ladders.end();)
+        it = it->first.startsWith ("wide:") && wideSeen.count (it->first) == 0 ? ladders.erase (it) : std::next (it);   // the plugin went away
+
+    // F5: squashed drops (their peaks barely stand over their loudness)
+    {
+        const auto d = (size_t) T::Drop;
+        const auto heard = plrCount[d] >= 40;
+        const auto plr = heard ? plrSum[d] / (float) plrCount[d] : 99.0f;
+        const auto step = climb ("squash", "The drops are squashed: their peaks stand only " + juce::String (plr, 1) + " dB over their loudness", heard && plr < 8.0f, heard,
+                                 heard ? 10.0f - plr : 0.0f, 0.5f, 0.0f, now,
+                                 { { "ease off the dynamics and glue on every Quintessence", [send] { return send (suite::Fix::LessSquash, 0); } },
+                                   { "ease them off again", [send] { return send (suite::Fix::LessSquash, 0); } } });
+        if (step == Step::applied || step == Step::undone) { plrSum[d] = 0.0f; plrCount[d] = 0; }   // hear the drops afresh
     }
 
-    // A new round: the worst band more than 1.5 dB off, not just tried
-    const auto diff = rep.shortDiff[(size_t) worst];
-    if (std::abs (diff) <= 1.5f || toneCooldown[(size_t) worst] > 0) return false;
-    const auto shares = shareOut (suite::Registry::list(), worst, juce::jlimit (-1.5f, 1.5f, -diff));
-    if (shares.empty()) return false;
-    if (! suite::Conductor::request (getInstanceId(), std::abs (diff) + 2.0f)) return false;   // the whole mix's problem: high need
-    toneBand = worst;
-    toneBefore = std::abs (diff);
-    toneDistanceBefore = tonalDistance (rep);
-    juce::StringArray who;
-    for (const auto& t : shares)
+    // F6: Lapis working hardest in one kind of section: every track down a little there
+    if (haveLapis)
+        for (auto type : { T::Intro, T::Groove, T::Build, T::Drop, T::Breakdown, T::Outro })
+        {
+            const auto t = (size_t) type;
+            const auto heard = grCount[t] >= 40;
+            const auto mean = heard ? grSum[t] / (float) grCount[t] : 0.0f;
+            float others = 100.0f;
+            for (auto o : { T::Intro, T::Groove, T::Build, T::Drop, T::Breakdown, T::Outro })
+                if (o != type && grCount[(size_t) o] >= 40) others = juce::jmin (others, grSum[(size_t) o] / (float) grCount[(size_t) o]);
+            const auto key = "lapis:" + juce::String ((int) t);
+            const juce::String sec = suite::sectionName (type);
+            const auto step = climb (key, "Lapis holds back " + juce::String (mean, 1) + " dB in the " + sec + ", more than anywhere else", heard && mean > 3.0f && mean > others + 2.0f,
+                                     heard, mean, 0.5f, 0.0f, now,
+                                     { { "every track 1 dB down in the " + sec, [send, t] { return send (suite::Fix::SectionDown, (uint32_t) t); } },
+                                       { "every track another 1 dB down there", [send, t] { return send (suite::Fix::SectionDown, (uint32_t) t); } } });
+            if (step == Step::applied || step == Step::undone) { grSum[t] = 0.0f; grCount[t] = 0; }
+        }
+
+    // F7: the drop doesn't jump out of the build
     {
-        toneSeqs.push_back (suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (t.id, worst, t.db)));
-        who.add ((t.track.isNotEmpty() ? "'" + t.track + "'" : juce::String ("a track")) + " " + (t.db > 0.0f ? "+" : "") + juce::String (t.db, 1) + " dB ("
-                 + juce::String (juce::roundToInt (t.share * 100.0f)) + "% of it)");
+        const auto step = climb ("impact", "The drop is only " + juce::String (lastJump, 1) + " LU louder than the end of the build", jumpsHeard > 0 && lastJump < 2.0f,
+                                 jumpsSinceStep > 0, 3.0f - lastJump, 0.5f, 0.0f, now,
+                                 { { "Cause & Effect builds deeper (higher filter sweep, tails cut at the drop)", [send] { return send (suite::Fix::BuildImpact, 0); } },
+                                   { "Cause & Effect builds deeper again", [send] { return send (suite::Fix::BuildImpact, 0); } },
+                                   { "half a beat of silence before the drop (Prima Materia)", [this] { return std::vector<uint32_t> { suite::FixBus::send (suite::Fix::BuildImpact, 1u) }; } } });
+        if (step == Step::applied || step == Step::undone) jumpsSinceStep = 0;
     }
-    suite::MoveLog::add (getName(), getTrackName(), juce::String ("Master balance: ") + hz[worst] + " is " + juce::String (std::abs (diff), 1) + " dB "
-                         + (diff > 0.0f ? "over" : "under") + " the target, shared out by contribution: " + who.joinIntoString (", "), suite::MoveLog::fix);
-    return true;
+
+    // Tried everything: over to you
+    for (const auto& [key, L] : ladders)
+        if (L.exhausted && ! key.startsWith ("tone:"))
+        {
+            present.insert (key);
+            offer.push_back ({ key, L.problem + (L.tried.isEmpty() ? juce::String() : " (tried: " + L.tried.joinIntoString ("; ") + ")"),
+                               "nothing left to try by itself: over to you", suite::Fix::None, 0, false });
+        }
 }
 
 float MentalismProcessor::tonalDistance (const Report& rep)
@@ -1044,6 +1270,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto* r = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : l;
     if ((int) mono.size() < n) mono.resize ((size_t) n);
 
+    float blockPeak = 0.0f;
     for (int i = 0; i < n; ++i)
     {
         loudness.process (l[i], r[i]);
@@ -1078,9 +1305,11 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         truePeak.process (l[i], r[i]);
         if (std::abs (l[i]) >= 0.9999f || std::abs (r[i]) >= 0.9999f) clippedSamples.fetch_add (1, std::memory_order_relaxed);
         stereo.process (l[i], r[i]);
+        blockPeak = juce::jmax (blockPeak, std::abs (l[i]), std::abs (r[i]));
         bands.process (l[i], r[i]);
         mono[(size_t) i] = 0.5f * (l[i] + r[i]);
     }
+    if (blockPeak > windowPeak.load()) windowPeak.store (blockPeak);
     spectrumTap.push (mono.data(), n);
 
     // A/B: the reference's loudest part, looped, at the loudness the mix had when you switched.
@@ -1289,7 +1518,7 @@ MentalismProcessor::Report MentalismProcessor::report() const
     m.truePeakDb = truePeak.peakDb();
     m.correlation = stereo.correlation.load();
     m.lowCorrelation = stereo.lowCorrelation.load();
-    m.monoLossDb = stereo.monoLossDb.load();
+    m.monoLossDb = juce::jmax (0.0f, -stereo.monoLossDb.load());   // how much the mono sum loses (dB, positive)
     m.haveTonal = rep.tonalAvailable && rep.measuredSeconds >= 10.0f; // need some music before judging balance
     m.bandDiff = rep.longDiff;
 

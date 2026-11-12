@@ -403,6 +403,7 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     gainReductionDb.store (maxGr);
     if (playing) passMaxGr = std::max (passMaxGr, maxGr);
     if (maxGr > maxReductionDb.load()) maxReductionDb.store (maxGr);
+    if (playing && maxGr > grSinceStatus.load()) grSinceStatus.store (maxGr);
     outShortTerm.store (loudness.shortTerm.load());
 }
 

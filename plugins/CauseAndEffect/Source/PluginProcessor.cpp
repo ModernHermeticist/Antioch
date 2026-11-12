@@ -10,10 +10,16 @@ CauseEffectProcessor::CauseEffectProcessor()
       apvts (*this, nullptr, "CauseEffectState", Params::createLayout())
 {
     // Mentalism's fix-it buttons: a build that doesn't rise gets more riser, noise and wash.
-    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix) -> std::vector<suite::FixReceiver::Change>
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
     {
-        if (fix != suite::Fix::BuildRise) return {};
         using R = suite::FixReceiver;
+        if (fix == suite::Fix::BuildImpact && data == 0)
+        {
+            // The problem watcher: the drop doesn't jump out of the build: a deeper build (the
+            // filter sweeps higher, the image narrows more, the tails cut at the drop)
+            return { R::nudge (apvts, Params::filterMax, 0.12f), R::nudge (apvts, Params::widen, 0.15f), { Params::dropCut, 1.0f } };
+        }
+        if (fix != suite::Fix::BuildRise) return {};
         return { R::nudge (apvts, Params::riser, 0.1f), R::nudge (apvts, Params::noise, 0.1f), R::nudge (apvts, Params::wash, 0.1f) };
     });
 

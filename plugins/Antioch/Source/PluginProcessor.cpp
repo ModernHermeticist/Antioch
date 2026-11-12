@@ -18,6 +18,15 @@ AntiochProcessor::AntiochProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "AntiochState", Params::createLayout())
 {
+    // The problem watcher's mud ladder: the master is heavy in the low mids and the reverb carries
+    // them: its low cut half an octave up (at most 900 Hz)
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t) -> std::vector<suite::FixReceiver::Change>
+    {
+        if (fix != suite::Fix::ReverbLowCut) return {};
+        const auto now = apvts.getRawParameterValue (Params::Verb::lowCut)->load();
+        if (now >= 899.0f) return {};
+        return { { Params::Verb::lowCut, juce::jmin (900.0f, now * 1.41f) } };
+    });
     using namespace Params;
     for (int t = 0; t < numTaps; ++t)
     {

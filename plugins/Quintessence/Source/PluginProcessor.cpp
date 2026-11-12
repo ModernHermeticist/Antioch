@@ -54,6 +54,8 @@ QuintessenceProcessor::QuintessenceProcessor()
         if (fix == suite::Fix::Carve) return carve (data);
         if (fix == suite::Fix::LearnStart) { relearn(); return [] {}; }
         if (fix == suite::Fix::MasterTone) return masterTone (data);
+        if (fix == suite::Fix::Narrower) return narrower (data);
+        if (fix == suite::Fix::LessSquash) return lessSquash();
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
             relearn();
@@ -728,7 +730,7 @@ bool QuintessenceProcessor::autoPass()
         }
         else if (pending.kind == Pending::width)
         {
-            const auto after = std::abs (m.sideMinusMid() - qn::targets::roles()[(size_t) role].sideDb);
+            const auto after = std::abs (m.sideMinusMid() - (qn::targets::roles()[(size_t) role].sideDb + sideOffset()));
             helped = m.sideMinusMid() > -90.0f && after < pending.errBefore - 0.5f;
             measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s";
             if (! helped) widthCooldown = 8;
@@ -749,9 +751,9 @@ bool QuintessenceProcessor::autoPass()
         }
         else if (pending.kind == Pending::glue)
         {
-            const auto after = std::abs (m.glueGrDb - qn::targets::glueTargetDb);
+            const auto after = std::abs (m.glueGrDb - glueTarget());
             helped = after < pending.errBefore - 0.2f;
-            measure = "glue " + juce::String (m.glueGrDb, 1) + " dB average reduction (aiming for " + juce::String (qn::targets::glueTargetDb, 1) + ")";
+            measure = "glue " + juce::String (m.glueGrDb, 1) + " dB average reduction (aiming for " + juce::String (glueTarget(), 1) + ")";
         }
         else if (pending.kind == Pending::deess)
         {
@@ -772,7 +774,7 @@ bool QuintessenceProcessor::autoPass()
         else
         {
             const auto& t = qn::targets::roles()[(size_t) role];
-            const auto after = std::abs (m.swingPost (pending.index) - t.swing[(size_t) pending.index]);
+            const auto after = std::abs (m.swingPost (pending.index) - (t.swing[(size_t) pending.index] + swingOffset()));
             helped = after < pending.errBefore - 0.5f;
             measure = "loud moments " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from the target";
             if (! helped) mbCooldown[(size_t) pending.index] = 8;
@@ -865,6 +867,68 @@ std::function<void()> QuintessenceProcessor::masterTone (uint32_t data)
     };
 }
 
+void QuintessenceProcessor::setOffset (const juce::Identifier& id, float v)
+{
+    apvts.state.setProperty (id, v, nullptr);   // saved with the project
+}
+
+std::function<void()> QuintessenceProcessor::narrower (uint32_t data)
+{
+    // The problem watcher: this track is wider than the mix can take in mono (or than the side
+    // should ever be against the middle): narrower, and the width target follows, so the
+    // automation doesn't widen it back
+    if ((data & 0xfffu) != (getInstanceId() & 0xfffu) || value (qn::widthLockId) > 0.5f) return {};
+    const auto before = value (qn::widthId), after = juce::jmax (0.0f, before * 0.75f);
+    if (before - after < 0.01f) return {};
+    const auto offBefore = sideOffset();
+    setOffset (sideOffsetKey, juce::jmax (-12.0f, offBefore - 3.0f));
+    if (pending.kind == Pending::width) pending.kind = Pending::none;
+    write (qn::widthId, after);
+    addLog ("Width " + juce::String (juce::roundToInt (before * 100.0f)) + "% -> " + juce::String (juce::roundToInt (after * 100.0f))
+            + "% (Mentalism: the mix loses too much in mono, and this is one of its widest parts)");
+    return [this, before, after, offBefore]
+    {
+        setOffset (sideOffsetKey, offBefore);
+        if (std::abs (value (qn::widthId) - after) < 0.01f) write (qn::widthId, before);
+        addLog ("Narrowing undone");
+    };
+}
+
+std::function<void()> QuintessenceProcessor::lessSquash()
+{
+    // The problem watcher: the drops are squashed (their peaks barely stand over their loudness).
+    // Every Quintessence eases off what its automation set: the multiband bands 2 dB higher, the
+    // glue 1.5 dB lighter, and the targets follow so they stay there
+    if (value (qn::autoMbId) < 0.5f) return {};
+    std::vector<std::pair<juce::String, float>> before;
+    for (int b = 0; b < qn::numMbBands; ++b) { before.push_back ({ qn::thrId (b), value (qn::thrId (b)) }); before.push_back ({ qn::ratioId (b), value (qn::ratioId (b)) }); }
+    before.push_back ({ qn::glueThrId, value (qn::glueThrId) });
+    juce::StringArray moved;
+    for (int b = 0; b < qn::numMbBands; ++b)
+    {
+        if (value (qn::mbLockId (b)) > 0.5f || value (qn::ratioId (b)) <= 1.01f) continue;
+        const auto thr = value (qn::thrId (b)) + 2.0f;
+        if (thr >= -0.5f) { write (qn::thrId (b), 0.0f); write (qn::ratioId (b), 1.0f); moved.add (qn::mbBandNames()[b].toLowerCase() + " band released"); }
+        else { write (qn::thrId (b), thr); moved.add (qn::mbBandNames()[b].toLowerCase() + " band at " + juce::String (thr, 1) + " dB"); }
+    }
+    if (const auto g = value (qn::glueThrId); g < -0.05f)
+    {
+        write (qn::glueThrId, juce::jmin (-0.1f, g + 1.5f));
+        moved.add ("glue at " + juce::String (juce::jmin (-0.1f, g + 1.5f), 1) + " dB");
+    }
+    if (moved.isEmpty()) return {};
+    const auto offBefore = swingOffset();
+    setOffset (swingOffsetKey, juce::jmin (6.0f, offBefore + 2.0f));
+    if (pending.kind == Pending::mb || pending.kind == Pending::glue) pending.kind = Pending::none;
+    addLog ("Dynamics eased off: " + moved.joinIntoString (", ") + " (Mentalism: the drops are squashed)");
+    return [this, before, offBefore]
+    {
+        setOffset (swingOffsetKey, offBefore);
+        for (const auto& [id, v] : before) write (id, v);
+        addLog ("Easing off undone");
+    };
+}
+
 bool QuintessenceProcessor::budgetMove (const Measurement& m, int role)
 {
     // Tone budget: the vocal owns 2 kHz (where its words are), the lead 4 kHz over the pads.
@@ -930,7 +994,7 @@ bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
     if (role != qn::targets::musicBus || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
     const auto thr = value (qn::glueThrId);
     const auto on = thr < -0.05f;
-    const auto err = (on ? m.glueGrDb : 0.0f) - qn::targets::glueTargetDb;
+    const auto err = (on ? m.glueGrDb : 0.0f) - glueTarget();
     if (on && std::abs (err) < 0.5f) return false;
     // First: 3 dB under the bus's average level (about 1.5 dB of reduction at 2:1); then 1.5 dB steps towards the target
     const auto next = juce::jlimit (-40.0f, -0.1f, on ? thr + (err < 0.0f ? -1.5f : 1.5f) : std::round (m.glueLevelDb - 3.0f));
@@ -939,7 +1003,7 @@ bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
     write (qn::glueThrId, next);
     addLog ("Glue " + (on ? "threshold " + juce::String (thr, 1) + " -> " : juce::String ("on at ")) + juce::String (next, 1) + " dB (2:1, release an 8th note; "
             + (on ? "it was holding " + juce::String (m.glueGrDb, 1) + " dB on average" : juce::String ("the bus averages ") + juce::String (m.glueLevelDb, 1) + " dB")
-            + ", aiming for " + juce::String (qn::targets::glueTargetDb, 1) + ")");
+            + ", aiming for " + juce::String (glueTarget(), 1) + ")");
     return true;
 }
 
@@ -992,7 +1056,7 @@ bool QuintessenceProcessor::widthMove (const Measurement& m, int role)
     if (value (qn::autoEqId) < 0.5f || t.sideDb == 0.0f || m.group == 1 || widthCooldown > 0 || value (qn::widthLockId) > 0.5f) return false;
     const auto now = m.sideMinusMid();
     if (now < -90.0f) return false;
-    const auto diff = now - t.sideDb;
+    const auto diff = now - (t.sideDb + sideOffset());
     if (std::abs (diff) <= 2.0f) return false;
     if (diff < 0.0f && now < -40.0f) return false;   // (nearly) mono: there's no side to widen
     const auto width = value (qn::widthId);
@@ -1166,7 +1230,7 @@ bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
                { return std::abs (m.swingPost (a) - t.swing[(size_t) a]) > std::abs (m.swingPost (b) - t.swing[(size_t) b]); });
     for (const auto b : order)
     {
-        const auto target = t.swing[(size_t) b];
+        const auto target = t.swing[(size_t) b] + swingOffset();   // the drops let breathe: more swing allowed
         if (value (qn::mbLockId (b)) > 0.5f || mbCooldown[(size_t) b] > 0 || m.windowsPost[(size_t) b] < 20) continue;
         const auto swing = m.swingPost (b);
         const auto thr = value (qn::thrId (b)), ratio = value (qn::ratioId (b));

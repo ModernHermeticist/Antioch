@@ -885,5 +885,38 @@ int main (int argc, char** argv)
     }
 
     suite::SectionBus::withdraw();
+    section ("The problem watcher's ladders");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        auto lvl = [] (PrimaMateriaProcessor& p, int column) { return p.apvts.getRawParameterValue (pm::levelId (column))->load(); };
+        auto pv = [] (PrimaMateriaProcessor& p, const juce::String& id) { return p.apvts.getRawParameterValue (id)->load(); };
+        auto pads = make (roleIndex ("Pads"));
+        juce::AudioProcessor::TrackProperties props;
+        props.name = "Pads";
+        pads->updateTrackProperties (props);
+        const auto drop = lvl (*pads, (int) T::Drop);
+        suite::FixBus::send (suite::Fix::SectionDown, (uint32_t) T::Drop);
+        pads->fixes->poll();
+        check (std::abs (lvl (*pads, (int) T::Drop) - (drop - 1.0f)) < 0.05f, "Lapis works hardest in the drops: 1 dB down there");
+        suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (pads->getInstanceId(), 3, -1.5f));
+        pads->fixes->poll();
+        check ((int) pv (*pads, pm::carveBandId) - 1 == 3 && std::abs (pv (*pads, pm::carveDepthId) + 1.5f) < 0.05f,
+               "no Quintessence on the track: its share of the master's tone lands in the carve band (250 Hz -1.5 dB)");
+        suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (pads->getInstanceId(), 3, 1.0f));
+        pads->fixes->poll();
+        check (std::abs (pv (*pads, pm::carveDepthId) + 1.5f) < 0.05f, "(only cuts)");
+        suite::Registry::announce (0x7e1u, "Quintessence", "Pads", suite::Status::roleSet, { 4.0f, 0, 0, 0 });
+        suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (pads->getInstanceId(), 3, -1.0f));
+        pads->fixes->poll();
+        check (std::abs (pv (*pads, pm::carveDepthId) + 1.5f) < 0.05f, "with a Quintessence on the track, the Quintessence takes it");
+        suite::Registry::reset();
+        pads->apvts.getParameter (pm::gapId)->setValueNotifyingHost (0.0f);
+        suite::FixBus::send (suite::Fix::BuildImpact, 1u);
+        pads->fixes->poll();
+        check ((int) pv (*pads, pm::gapId) == 1, "a drop that doesn't land: half a beat of silence before it");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

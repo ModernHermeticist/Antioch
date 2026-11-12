@@ -253,6 +253,35 @@ public:
         didn't get worse), undone otherwise. Message thread (tests call it). */
     bool masterTonePass (const Report& rep);
     struct ToneShare { uint32_t id; juce::String track; float share, db; };
+
+    /** Fix ladders: a problem the watcher fixes by itself, one kind of fix at a time. Each step is
+        judged after `waitSeconds` (and once `ready`): kept if the problem got smaller by
+        `minGain`, otherwise undone and the next kind of fix tried. Nothing left: offered to you. */
+    struct Rung { juce::String text; std::function<std::vector<uint32_t>()> apply; };
+    enum class Step { idle, waiting, applied, kept, undone, skipped, exhausted };
+    Step climb (const juce::String& key, const juce::String& problem, bool present, bool ready, float badness, float minGain, float waitSeconds, float now,
+                const std::vector<Rung>& rungs);
+    struct Ladder
+    {
+        int rung = 0, keptHere = 0;
+        bool waiting = false, exhausted = false;
+        float before = 0.0f, at = -1000.0f;
+        std::vector<uint32_t> seqs;
+        juce::String problem;
+        juce::StringArray tried;
+    };
+    std::map<juce::String, Ladder> ladders;
+    /** The ladders for mono loss, phase, over-wide parts, squashed drops, Lapis per section and
+        the build-to-drop jump (watchPass runs it). */
+    void ladderPass (const Report& rep, std::vector<watcher::Problem>& offer, std::set<juce::String>& present);
+    /** Every timer tick: the slower readings the ladders judge by. */
+    void measureTick (const Report& rep);
+    std::atomic<float> windowPeak { 0.0f };   // the sample peak since the last tick (audio thread)
+    float monoSlow = 0.0f, lowCorrSlow = 1.0f;
+    std::array<float, (size_t) suite::SectionType::count> plrSum {}, grSum {};   // peak over loudness; Lapis' reduction (by kind of section)
+    std::array<int, (size_t) suite::SectionType::count> plrCount {}, grCount {};
+    float buildTail = -100.0f, buildTailAtSwitch = -100.0f, dropStartSum = 0.0f, lastJump = 100.0f;
+    int dropStartTicks = -1, jumpsHeard = 0, jumpsSinceStep = 0, prevType = -1;
     static std::vector<ToneShare> shareOut (const std::vector<suite::SuiteEntry>& entries, int band, float masterChangeDb);
     std::atomic<int> toneRoundsKept { 0 }, toneRoundsUndone { 0 };
     static float tonalDistance (const Report& rep);
@@ -320,10 +349,7 @@ private:
     std::atomic<FinishStage> finishState { FinishStage::Idle };
     float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f, lastBalanceAt = 0.0f, balanceBefore = -1.0f;
     int balanceRest = 0;
-    float lastWatchAt = 0.0f, lastToneAt = 0.0f, toneBefore = 0.0f, toneDistanceBefore = 0.0f;
-    int toneBand = -1;
-    std::vector<uint32_t> toneSeqs;
-    std::array<int, 10> toneCooldown {};
+    float lastWatchAt = 0.0f, lastToneAt = 0.0f;
     uint32_t watchingTurn = 0;
 public:
     std::atomic<int> sectionTypeNow { -1 };   // the section playing (from the map), for the section-by-section check

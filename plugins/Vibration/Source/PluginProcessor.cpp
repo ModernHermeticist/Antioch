@@ -10,6 +10,25 @@ VibrationProcessor::VibrationProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "VibrationState", Params::createLayout())
 {
+    // The problem watcher's harshness ladder: the master is harsh at 2-8 kHz: the drive 3 dB
+    // softer, and the richness target 3 dB lower so the automation doesn't drive it back
+    fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix, uint32_t) { return std::vector<suite::FixReceiver::Change> {}; });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    {
+        if (fix != suite::Fix::DriveSofter || value (Params::drive) + value (Params::driveTrim) <= 0.5f) return {};
+        const auto trim = value (Params::driveTrim), offset = richOffset();
+        const auto next = juce::jmax (-12.0f, trim - 3.0f);
+        if (trim - next < 0.05f) return {};
+        apvts.state.setProperty ("rich_offset", juce::jmax (-9.0f, offset - 3.0f), nullptr);
+        if (drivePending.pending) { drivePending.pending = false; suite::Conductor::release (getInstanceId()); }
+        setParameterPlain (apvts, Params::driveTrim, next);
+        suite::MoveLog::add (getName(), getTrackName(), "Drive " + juce::String (trim, 1) + " -> " + juce::String (next, 1) + " dB (Mentalism: the master is harsh)", suite::MoveLog::fix);
+        return [this, trim, next, offset]
+        {
+            apvts.state.setProperty ("rich_offset", offset, nullptr);
+            if (std::abs (value (Params::driveTrim) - next) < 0.05f) setParameterPlain (apvts, Params::driveTrim, trim);
+        };
+    });
     using T = suite::SectionType;
     scenes.setup (apvts,
                   { { Params::euphoria, "Euphoria" }, { Params::air, "Air" }, { Params::drive, "Drive" },
@@ -118,7 +137,7 @@ bool VibrationProcessor::drivePass()
     if (driveReset.load()) return false;   // the audio thread hasn't started the new pass yet
     if (apvts.getRawParameterValue (Params::autoDrive)->load() < 0.5f || driveBands.longSeconds.load() < 4.0f) return false;
     const auto role = roleForTrack();
-    const auto target = richnessTarget (role);
+    const auto target = richnessTargetNow (role);
     const auto rich = richnessNow (role);
     driveReset.store (true);
     if (target == 0.0f || rich < -99.0f) return false;

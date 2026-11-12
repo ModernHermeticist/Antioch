@@ -115,7 +115,15 @@ public:
     static juce::File notesFolder() { return notesFolderOverride() != juce::File() ? notesFolderOverride() : suite::Alias::file ("Export notes"); }
     juce::File writeExportNotes();   // message thread; the newest finished pass, if any
     /** [0]: the most gain reduction in the last stretch (dB): the problem watcher's headroom keeper. */
-    SuiteStatus suiteStatus() override { writeExportNotes(); SuiteStatus s; s.metrics[0] = maxReductionDb.load(); return s; }
+    SuiteStatus suiteStatus() override
+    {
+        writeExportNotes();
+        SuiteStatus s;
+        s.metrics[0] = maxReductionDb.load();
+        s.metrics[1] = grSinceStatus.exchange (0.0f);   // the most it held back since the last report (Mentalism: by section)
+        return s;
+    }
+    std::atomic<float> grSinceStatus { 0.0f };
 
     /** Master tone loop: every 8 s of music, the master's tilt (dB per octave, 63 Hz-8 kHz)
         against your finished masters (the style log, 2 or more) or the uplifting trance guide.

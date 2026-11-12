@@ -580,9 +580,9 @@ void MentalismEditor::paintStereo (juce::Graphics& g, juce::Rectangle<int> area)
     area.removeFromTop (6);
     meter (area.removeFromTop (46), "Correlation below 120 Hz", m.lowCorrelation, 0.8f);
     area.removeFromTop (6);
-    g.setColour (m.monoLossDb < -3.0f ? Colours::ember : Colours::dimText);
+    g.setColour (m.monoLossDb > 3.0f ? Colours::ember : Colours::dimText);
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("Mono sum: " + juce::String (m.monoLossDb, 1) + " dB vs stereo", area.removeFromTop (18), juce::Justification::left);
+    g.drawText ("Mono sum: " + juce::String (-m.monoLossDb, 1) + " dB vs stereo", area.removeFromTop (18), juce::Justification::left);
 }
 
 void MentalismEditor::paintBalance (juce::Graphics& g, juce::Rectangle<int> area)

@@ -981,12 +981,12 @@ int main (int argc, char** argv)
         }
         check (gain == 1 && ride == 1, "gain staging and the vocal rider sent once each");
         const auto offered = p->problems();
-        check (offered.size() == 2, "missing samples and mono loss offered (" + juce::String ((int) offered.size()) + ")");
+        check (offered.size() == 1, "missing samples offered; mono loss goes to its fix ladder, judged by a slower reading (" + juce::String ((int) offered.size()) + ")");
         const auto sent = suite::FixBus::latest();
         r.measuredSeconds = 14.0f;
         p->watchPass (r);
         check (suite::FixBus::latest() == sent, "the same problem isn't fixed again within 30 s");
-        check (p->applyProblemFix ("mono") && suite::FixBus::latest() == sent + 1 && p->problems().size() == 1, "one click fixes an offered problem");
+        check (p->applyProblemFix ("missing:FX") && suite::FixBus::latest() == sent + 1 && p->problems().empty(), "one click fixes an offered problem");
         r.measuredSeconds = 50.0f; p->watchPass (r);
         r.measuredSeconds = 90.0f; p->watchPass (r);
         const auto still = p->problems();
@@ -1129,12 +1129,26 @@ int main (int argc, char** argv)
         const auto shares = MentalismProcessor::shareOut (suite::Registry::list(), 3, -1.5f);
         check (shares.size() == 2 && shares[0].share > 0.7f && shares[0].db < shares[1].db && shares[1].db < 0.0f,
                "the cut is split by contribution: the track with 75% of the band takes the larger share");
+        std::array<float, 10> noQ {};
+        noQ.fill (-40.0f); noQ[3] = -12.0f;
+        suite::Registry::announce (0x303u, "Prima Materia", "Bass", suite::Status::roleSet | suite::Status::hasBands, { 2.0f, 0, 0, 0 }, big);   // has a Quintessence: not counted twice
+        suite::Registry::announce (0x304u, "Prima Materia", "Arp", suite::Status::roleSet | suite::Status::hasBands, { 5.0f, 0, 0, 0 }, noQ);
+        const auto withArp = MentalismProcessor::shareOut (suite::Registry::list(), 3, -1.5f);
+        const auto boost = MentalismProcessor::shareOut (suite::Registry::list(), 3, 1.5f);
+        check (withArp.size() == 3 && std::any_of (withArp.begin(), withArp.end(), [] (const auto& t) { return t.id == 0x304u; })
+                   && std::none_of (withArp.begin(), withArp.end(), [] (const auto& t) { return t.id == 0x303u; }) && boost.size() == 2,
+               "a track with no Quintessence takes its share of a cut through its Prima Materia (not of a boost)");
+        suite::Registry::remove (0x303u);
+        suite::Registry::remove (0x304u);
         auto p = make();
         MentalismProcessor::Report r = p->report();
         r.tonalAvailable = true;
+        r.measuredSeconds = 10.0f;
         r.shortDiff.fill (0.0f);
         r.shortDiff[3] = 3.0f;
         check (p->masterTonePass (r) && suite::FixBus::latest() == 2, "250 Hz 3 dB over on the master: both Quintessences are sent a share");
+        suite::FixBus::acknowledge (1);
+        suite::FixBus::acknowledge (2);
         suite::FixBus::Message m;
         int bandSent = -1; float db = 0.0f; uint32_t who = 0;
         check (suite::FixBus::read (1, m) && m.fix == suite::Fix::MasterTone && (suite::unpackMasterTone (m.target, who, bandSent, db), bandSent == 3) && db < 0.0f,
@@ -1143,14 +1157,147 @@ int main (int argc, char** argv)
         check (suite::Conductor::masterProblem (band, diff) && band == 3 && std::abs (diff - 3.0f) < 0.01f,
                "the master's problem band is published, so each Quintessence knows how much it's needed");
         check (suite::Conductor::holder() == p->getInstanceId(), "the round holds the conductor's turn while it's checked");
+        r.measuredSeconds = 18.0f;
         p->masterTonePass (r);   // the master didn't get closer
         check (p->toneRoundsUndone.load() == 1 && suite::FixBus::read (3, m) && m.undo && suite::FixBus::latest() == 4 && suite::Conductor::holder() == 0,
                "no better 8 s later: every share is undone and the turn given back");
+        r.measuredSeconds = 22.0f;
+        check (p->masterTonePass (r) && suite::FixBus::read (5, m) && m.fix == suite::Fix::ReverbLowCut,
+               "the next step for too much 250 Hz: the reverb's low cut up on every Antioch");
+        suite::FixBus::acknowledge (5);
+        r.shortDiff[3] = 2.0f;
+        r.measuredSeconds = 30.0f;
+        check (p->masterTonePass (r) && p->toneRoundsKept.load() == 1, "it helped: kept");
         set (*p, Params::shareTone, 0.0f);
         check (! p->masterTonePass (r), "off: nothing is shared");
         suite::Registry::reset();
         suite::Conductor::reset();
         suite::FixBus::reset();
+    }
+
+    section ("Fix ladders: one kind of fix at a time, judged, the next if it didn't help");
+    {
+        suite::FixBus::reset();
+        suite::MoveLog::clear();
+        auto p = make();
+        using Step = MentalismProcessor::Step;
+        std::vector<MentalismProcessor::Rung> rungs {
+            { "first", [] { return std::vector<uint32_t> { suite::FixBus::send (suite::Fix::MonoLows) }; } },
+            { "nothing here", [] { return std::vector<uint32_t> {}; } },
+            { "second", [] { return std::vector<uint32_t> { suite::FixBus::send (suite::Fix::PhaseFlip) }; } } };
+        check (p->climb ("t", "A test problem", false, true, 5.0f, 1.0f, 20.0f, 0.0f, rungs) == Step::idle, "no problem: nothing");
+        check (p->climb ("t", "A test problem", true, true, 5.0f, 1.0f, 20.0f, 0.0f, rungs) == Step::applied && suite::FixBus::latest() == 1, "a problem: the first fix");
+        check (p->climb ("t", "A test problem", true, true, 5.0f, 1.0f, 20.0f, 10.0f, rungs) == Step::waiting, "judged only once it's been heard");
+        check (p->climb ("t", "A test problem", true, true, 5.0f, 1.0f, 20.0f, 20.0f, rungs) == Step::skipped, "nobody took it: on to the next, no undo");
+        check (p->climb ("t", "A test problem", true, true, 5.0f, 1.0f, 20.0f, 30.0f, rungs) == Step::applied && suite::FixBus::latest() == 2,
+               "a step with nothing to apply it to is passed over");
+        suite::FixBus::acknowledge (2);
+        check (p->climb ("t", "A test problem", true, true, 4.5f, 1.0f, 20.0f, 50.0f, rungs) == Step::undone && suite::FixBus::latest() == 3,
+               "it didn't help enough: undone");
+        check (p->climb ("t", "A test problem", true, true, 4.5f, 1.0f, 20.0f, 70.0f, rungs) == Step::exhausted, "nothing left: over to you");
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 70.0f;
+        p->watchPass (r);
+        const auto offered = p->problems();
+        check (std::any_of (offered.begin(), offered.end(), [] (const watcher::Problem& q) { return q.key == "t" && q.text.contains ("tried:") && q.text.contains ("second"); }),
+               "it's listed in Problems with what was tried");
+        check (p->climb ("t", "A test problem", false, true, 0.0f, 1.0f, 20.0f, 80.0f, rungs) == Step::idle && p->ladders.count ("t") == 0, "gone: forgotten");
+        p->ladders.clear();
+        suite::FixBus::reset();
+    }
+
+    section ("Mono, phase, over-wide parts: by themselves, checked");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        suite::Registry::announce (0x401u, "Prima Materia", "Bass", suite::Status::roleSet, { 2.0f, 0, 0, 0 });
+        suite::Registry::announce (0x402u, "Quintessence", "Pads", suite::Status::roleSet, { 4.0f, 0, 0, -3.0f });
+        suite::Registry::announce (0x403u, "Quintessence", "FX", suite::Status::roleSet, { 7.0f, 0, 0, 2.0f });   // its side over its middle
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 10.0f;
+        p->monoSlow = 4.5f;
+        p->watchPass (r);
+        auto sentFix = [] (suite::Fix f, uint32_t data)
+        {
+            for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+            {
+                suite::FixBus::Message m;
+                if (suite::FixBus::read (s, m) && ! m.undo && m.fix == f && m.target == data) return s;
+            }
+            return 0u;
+        };
+        const auto mono = sentFix (suite::Fix::MonoLows, 0);
+        const auto wide = sentFix (suite::Fix::Narrower, 0x403u);
+        check (mono != 0 && wide != 0, "the mix loses 4.5 dB in mono: the lows mono; the FX track, wider than it's solid, narrower");
+        suite::FixBus::acknowledge (mono);
+        suite::FixBus::acknowledge (wide);
+        r.measuredSeconds = 31.0f;
+        p->watchPass (r);   // no better
+        check (sentFix (suite::Fix::Narrower, 0x403u & 0xfffu) != 0 && p->ladders["mono"].rung >= 1, "no better 20 s later: undone, and the widest part is brought in next");
+        p->monoSlow = 0.0f;
+        p->lowCorrSlow = -0.5f;
+        suite::Registry::announce (0x404u, "Kybalion", "Bass", 0, { 0, 0, 0, 0 });
+        p->watchPass (r);
+        check (sentFix (suite::Fix::PhaseFlip, 0) != 0, "the low end out of phase: the polarity flip, by itself");
+        p->ladders.clear();
+        suite::Registry::reset();
+        suite::FixBus::reset();
+    }
+
+    section ("Squashed drops, Lapis per section, a drop that doesn't land");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        using T = suite::SectionType;
+        suite::Registry::announce (0x501u, "Lapis", "Master", 0, { 0, 0, 0, 0 });
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.measuredSeconds = 10.0f;
+        p->plrCount[(size_t) T::Drop] = 40; p->plrSum[(size_t) T::Drop] = 40.0f * 6.0f;          // peaks 6 dB over the loudness
+        p->grCount[(size_t) T::Drop] = 40; p->grSum[(size_t) T::Drop] = 40.0f * 5.0f;            // Lapis 5 dB in the drops...
+        p->grCount[(size_t) T::Breakdown] = 40; p->grSum[(size_t) T::Breakdown] = 40.0f * 1.0f;  // ...1 dB in the breakdowns
+        p->jumpsHeard = 1; p->jumpsSinceStep = 1; p->lastJump = 0.5f;
+        p->watchPass (r);
+        bool squash = false, down = false, impact = false;
+        for (uint32_t s = 1; s <= suite::FixBus::latest(); ++s)
+        {
+            suite::FixBus::Message m;
+            if (! suite::FixBus::read (s, m)) continue;
+            squash = squash || m.fix == suite::Fix::LessSquash;
+            down = down || (m.fix == suite::Fix::SectionDown && m.target == (uint32_t) T::Drop);
+            impact = impact || (m.fix == suite::Fix::BuildImpact && m.target == 0);
+        }
+        check (squash && p->plrCount[(size_t) T::Drop] == 0, "drops with peaks only 6 dB over their loudness: dynamics eased off, and the drops heard afresh");
+        check (down, "Lapis holding 5 dB in the drops, 1 dB elsewhere: every track 1 dB down in the drops");
+        check (impact && p->jumpsSinceStep == 0, "the drop only 0.5 LU over the build: Cause & Effect builds deeper, judged at the next drop");
+
+        // The jump is measured from the music: the build's end against the drop's first 4 s
+        auto q = make();
+        MentalismProcessor::Report m = q->report();
+        auto tick = [&] (T type, float lufs) { q->sectionTypeNow.store ((int) type); m.momentary = lufs; q->windowPeak.store (0.5f); q->measureTick (m); };
+        for (int i = 0; i < 20; ++i) tick (T::Build, -12.0f);
+        for (int i = 0; i < 16; ++i) tick (T::Drop, -8.0f);
+        check (q->jumpsHeard == 1 && std::abs (q->lastJump - 4.0f) < 0.3f, "build at -12, drop at -8: a 4 LU jump (" + juce::String (q->lastJump, 1) + ")");
+        check (q->plrCount[(size_t) T::Drop] == 16 && std::abs (q->plrSum[(size_t) T::Drop] / 16.0f - (juce::Decibels::gainToDecibels (0.5f) + 8.0f)) < 0.01f,
+               "and the drops' peak over loudness");
+        p->ladders.clear();
+        suite::Registry::reset();
+        suite::FixBus::reset();
+    }
+
+    section ("Mono loss reads as a loss");
+    {
+        auto p = make();
+        juce::AudioBuffer<float> buf (2, 48000);
+        for (int i = 0; i < buf.getNumSamples(); ++i)
+        {
+            const auto x = 0.3f * std::sin (2.0f * juce::MathConstants<float>::pi * 220.0f * (float) i / 48000.0f);
+            buf.setSample (0, i, x); buf.setSample (1, i, -0.5f * x);
+        }
+        juce::MidiBuffer midi;
+        p->processBlock (buf, midi);
+        check (p->report().measurement.monoLossDb > 3.0f, "half-inverted channels lose " + juce::String (p->report().measurement.monoLossDb, 1) + " dB in mono (a positive loss)");
     }
 
     section ("Pass-through");

@@ -132,6 +132,12 @@ between versions.
   plan is shown. Export again after changing the lead: only the lead's Quintessence re-learns.
 - [ ] **6b.22** Turn up the bass's 250 Hz by 4 dB with Quintessence on bass and pads: within a minute Mentalism
   shares a cut out, most on the bass (a *Master balance* band), and *What changed* says kept or undone.
+- [ ] **6b.23** Put a stereo widener at 200% on the FX track: within a minute its Quintessence narrows it (*What
+  changed*: "wider than it is solid"). Flip one channel of the bass: the polarity flip comes by itself, judged 20 s later.
+- [ ] **6b.24** Squash the drops (Quintessence multiband hard on the bus): the dynamics ease off by themselves and
+  are kept only if the drops' peaks stand further out. Mentalism's mono reading shows a loss as "-x dB vs stereo".
+- [ ] **6b.25** Turn Cause & Effect's build down to nothing: after the next drop, it builds deeper by itself; after
+  two drops that still don't land, Prima Materia adds half a beat of silence before the drop.
 
 ## 7. A song end to end
 

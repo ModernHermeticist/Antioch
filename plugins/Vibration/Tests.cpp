@@ -481,5 +481,26 @@ int main (int argc, char** argv)
         editor.reset();
     }
 
+    section ("The problem watcher: a harsh master gets a softer drive");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<VibrationProcessor>();
+        auto setp = [] (juce::AudioProcessorValueTreeState& st, const juce::String& id, float v) { auto* q = st.getParameter (id); q->setValueNotifyingHost (q->convertTo0to1 (v)); };
+        setp (p->apvts, Params::drive, 6.0f);
+        const auto seq = suite::FixBus::send (suite::Fix::DriveSofter);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::driveTrim)->load() + 3.0f) < 0.01f && std::abs (p->richOffset() + 3.0f) < 0.01f
+                   && suite::FixBus::acknowledgements (seq) == 1,
+               "3 dB softer, and the richness target 3 dB lower so the automation doesn't drive it back");
+        suite::FixBus::sendUndo (seq);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::driveTrim)->load()) < 0.01f && std::abs (p->richOffset()) < 0.01f, "undone: both back");
+        setp (p->apvts, Params::drive, 0.0f);
+        const auto none = suite::FixBus::send (suite::Fix::DriveSofter);
+        p->fixes->poll();
+        check (suite::FixBus::acknowledgements (none) == 0, "no drive: nothing to soften (the watcher tries the next fix)");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

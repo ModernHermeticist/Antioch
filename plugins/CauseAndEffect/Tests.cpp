@@ -325,5 +325,22 @@ int main (int argc, char** argv)
         editor.reset();
     }
 
+    section ("The problem watcher: a drop that doesn't jump out of the build");
+    {
+        suite::FixBus::reset();
+        auto p = std::make_unique<CauseEffectProcessor>();
+        auto v = [&] (const juce::String& id) { return p->apvts.getRawParameterValue (id)->load(); };
+        p->apvts.getParameter (Params::dropCut)->setValueNotifyingHost (0.0f);
+        const auto filter = v (Params::filterMax), widen = v (Params::widen);
+        const auto seq = suite::FixBus::send (suite::Fix::BuildImpact, 0u);
+        p->fixes->poll();
+        check (v (Params::filterMax) > filter && v (Params::widen) > widen && v (Params::dropCut) > 0.5f && suite::FixBus::acknowledgements (seq) == 1,
+               "a deeper build: the filter sweeps higher, the image moves more, the tails cut at the drop");
+        const auto gap = suite::FixBus::send (suite::Fix::BuildImpact, 1u);
+        p->fixes->poll();
+        check (suite::FixBus::acknowledgements (gap) == 0, "(the gap before the drop is Prima Materia's)");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }
