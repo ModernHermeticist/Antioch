@@ -120,3 +120,12 @@ Build octave climb | 2 | EP | UCO | 0.6 | - | r... .... r... .... | r... r... R.
 Dark build pulse | 2 | KD | TY | 0.55 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | rrrr rrrr rrrr rrrr | rrrr rrrr NNNN NNNN | NNNN NNNN rrrr rrrr | rrrr rrrr rrrr rrrr | - | - | B
 DJ intro bass | 1 | * | * | 0.7 | - | ..r. .... ..r. .... | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..r. | ..r. ..r. ..r. ..n. | ..r. ..r. ..r. ..N. | ..r. ..r. ..r. ..r. | - | - | IO
 DJ outro roll | 2 | * | * | 0.65 | - | ..r. ..r. ..r. ..r. | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rrr .rrr .rrr .rrr | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | - | - | IO
+
+# --- batch 10
+Pushed rolling | 2 | EPD | UC | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .p-- | .rrr .rRr .rrr .p-- | .rrr .rRr .fff .P-- | .rRr .rrr .uuu .P-- | .rRr .rRr .rRr .p-- | - | - |
+Shuffled offbeat | 1 | HRD | PVT | 0.75 | - | ..r. ..r. ..r. ..r. | ..r. .rr. ..r. .rr. | ..rr .rr. ..rr .rr. | ..rr .rr. ..ff .nn. | ..rr .rr. ..uu .nN. | .rr. ..rr .rr. ..rr | s | - |
+Triplet offbeat | 1 | EHP | UO | 0.7 | - | ..r...r...r. | ..r..r..r..r | .rr.rr.rr.rR | .rr.rr.ff.nN | .RR.rr.ff.nn | .rR.rR.rR.rR | - | - |
+Accented gallop | 2 | ED | UC | 0.65 | - | ..r. ..r. ..r. ..r. | ..!rr ..!rr ..!rr ..!rr | ..!rR ..!rR ..!rR ..!rR | ..!rR ..!fF ..!tT ..!nN | ..!RR ..!rr ..!ff ..!nN | ..!Rr ..!Rr ..!Rr ..!Rr | - | - |
+Melancholic push walk | 1 | M | VPC | 0.85 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..d. .p-- | ..r. ..t. ..d. .p-- | ..r. ..d. ..d. .p-- | ..r. ..u. ..d. .P-- | ..r. ..d. ..r. .p-- | - | - |
+Dreamy shuffled sub | 0 | R | PV | 1.0 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- -f-- r--- -9-- | r--- 9--- f--- n--- | r--- f--- 9--- r--- | r--- -9-- f--- -r-- | s | - |
+Psy push gallop | 2 | K | Y | 0.55 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .p.. | .rrr .rRr .rrr .p.. | .rrr .uuu .ddd .P.. | .rRr .rrr .rRr .P.. | .rRr .rrr .rRr .p.. | - | - |

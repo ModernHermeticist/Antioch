@@ -85,3 +85,10 @@ Build arp riser | 1 | * | * | 0.55 | u | a... a... a... a... | a.a. a.a. a.a. a.
 Build triplet riser | 1 | EPD | UCO | 0.5 | u | a..a..a..a.. | a.a.a.a.a.a. | aaaaaaaaaaaa | aaaaaaAAAAAA | AAAAAAAAAAAA | aaaaaaAAAAAA | - | - | B
 Build octave sweep | 1 | KD | TY | 0.5 | - | r... R... r... R... | r.R. r.R. r.R. r.R. | rRrR rRrR rRrR rRrR | rRrR RRRR RRRR RRRR | RRRR RRRR RRRR RRRR | rRrR rRrR RRRR RRRR | - | - | B
 DJ intro arp | 0 | * | * | 0.7 | u | a... .... .... .... | a... .... a... .... | a... a... a... a... | a... a... a... a... | a... ..a. a... ..a. | a... a... a... a... | - | - | IO
+
+# --- batch 10
+Pushed pedal arp | 1 | ED | UC | 0.6 | - | r.t. r.f. r.t. r.f. | rtrf rTrF rtrf rTp. | rtrf rTrF RtRf RTP. | rTrF RTRF rTrF RTP. | RTRF rtrf RTRF rtP. | rfrt rFrT rfrt RFP. | - | - |
+Ninth wave | 1 | RH | PV | 0.65 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaAa aaaa aaAa | aaaa aaaa AAAA aaaa | AAAA aaaa aaaa AAAA | aAaa aAaa aAaa aAaa | - | 9 |
+Triplet cascade | 1 | M | VPC | 0.6 | d | a..a..a..a.. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaabbbbbb | bbbbbbaaaaaa | aaaaaaaaaaaa | - | - |
+Accented 3-3-2 | 2 | EH | UCP | 0.7 | u | a..a ..a. a..a ..a. | !a..a ..!a. !a..a ..!aa | !a..A ..!a. !a..A ..!aA | !a..A ..!A. !A..A ..!AA | !A..a ..!A. !a..A ..!aa | !a.aA ..!a. !a.aA ..!aA | - | - |
+Shuffled dark pulse | 1 | K | TC | 0.55 | - | r..r ..r. r..r ..r. | r.tr .tr. r.tr .tr. | rtfr tfrt rtfr tfRt | rtfR tfrt dddd uuuu | uuuu dddd rtfR tfrt | rtfR rtfR rtfR rtfR | s | - |

@@ -92,3 +92,12 @@ Accented anthem gate | 2 | EP | UO | 0.55 | - | c.c. c.c. c.c. c.c. | !c.cc !c.c
 Build gate rise | 2 | * | * | 0.5 | - | c... c... c... c... | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc CCCC CCCC | CCCC CCCC CCCC CCCC | cccc CCCC cccc CCCC | - | - | B
 Build swell chords | 0 | HMRP | PVO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- C-C- C-C- CCCC | c-c- c-c- c-c- c-c- | - | - | B
 DJ intro chords | 1 | * | * | 0.6 | - | .... .... .... .... | c... .... .... .... | c... .... c... .... | c... .... c... .... | c... ..c. c... .... | c... .... c... .... | - | - | IO
+
+# --- batch 10
+Pushed anthem gate | 2 | EP | UO | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.p- | cccc c.cc cccc c.p- | cccc CCCC cccc CP-- | CCCC cccc CCCC cP-- | cc.c cccc cc.c c.p- | - | - |
+Dreamy ninth gate | 2 | R | PV | 0.85 | - | c-.. .... c-.. .... | c-.. c-.. c-.. c-.. | c-.c -.c- c-.c -.c- | c-cc -cc- C-CC -CC- | C-cc -cc- c-CC -CC- | c-.c -.c- .c-. c-.c | - | 9 |
+Melancholic seventh stabs | 1 | M | VPC | 0.65 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. .c.. .... | c... ..c. .c.. c.c. | c... .cc. ..c. ..cc | c... ..cc ..c. .... | - | 7 |
+Hopeful pushed plucks | 1 | H | UVO | 0.65 | - | c... ..c. .... .... | c..c ..c. .... ..p. | c..c ..c. c..c ..p. | c..c ..c. C..C ..P. | C..c ..C. c..C ..P. | c.cc ..c. c.cc ..p. | - | - |
+Tech triplet stabs | 1 | DK | T | 0.4 | - | c........... | c.....c..... | c..c..c..c.. | c..c..c.cccc | cccc..c..c.. | c.c.c.c.c.c. | - | - |
+Second-inversion pad | 0 | EHP | UO | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c--- | - | i2 |
+Psy shuffled gate | 2 | K | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc cccc cccc | .c.c cccc .c.c cccc | cccc .ccc cccc .ccc | s | - |

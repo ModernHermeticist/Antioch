@@ -101,3 +101,7 @@ Swing piano | 1 | HR | PV | 0.6 | - | c... ...c .... .... | c... ...c ..c. .... 
 Triplet ballad arpeggio | 0 | MHP | VOP | 1.0 | u | <r--- ---- ---- ---- + a..a..a..a.. | <r--- ---- ---- ---- + a.aa.aa.aa.a | <r--- ---- f--- ---- + aaaaaaaaaaaa | <r--- ---- n--- ---- + aaaaaaAAAAAA | - | - | - | - |
 Build piano octaves | 1 | * | * | 0.6 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | cccc cccc CCCC CCCC | CCCC CCCC CCCC CCCC | c.cc c.cc c.cc c.cc | - | - | B
 DJ intro piano | 2 | * | * | 0.8 | u | a... .... .... .... | a... .... a... .... | a... a... a... a... | a... a... a... a... | a... ..a. a... ..a. | a... a... a... a... | - | - | IO
+
+# --- batch 10
+Pushed ballad | 0 | MH | VPO | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- --p- | <r--- ---- f--- ---- + c--- ---- c--- --p- | <r--- ---- n--- ---- + c--- ---- C--- --P- | <r--- ---- d--- ---- + C--- ---- c--- --P- | <r--- ---- f--- ---- + c--- c--- ---- --p- | - | 7 |
+Triplet comp | 1 | HE | UVO | 0.6 | - | c.....c..... | c..c..c..c.. | c.cc.cc.cc.c | cccccccccccc | CCCCCCcccccc | c.cc.cc.cc.c | - | - |

@@ -81,3 +81,7 @@ Build string riser | 1 | * | * | 0.45 | - | r... r... r... r... | r.r. r.r. r.r.
 Build tremolo swell | 1 | PEK | OUY | 0.5 | - | c.c. c.c. c.c. c.c. | cccc cccc cccc cccc | cccc cccc cccc cccc + <r--- ---- ---- ---- | cccc cccc CCCC CCCC + <r--- ---- n--- ---- | CCCC CCCC CCCC CCCC + <r--- ---- N--- ---- | cccc CCCC cccc CCCC + <r--- ---- r--- ---- | - | - | B
 Triplet spiccato | 1 | PD | OU | 0.4 | - | r..r..r..r.. | r.rr.rr.rr.r | rrrrrrffffff | rrrfffttRRRR | RRRtttfffrrr | rrrrrrffffff | - | - |
 Seventh strings | 0 | MR | PVC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- c--- ---- + <r--- ---- ---- ---- | c--- ---- C--- ---- + <r--- ---- n--- ---- | - | - | - | 7 |
+
+# --- batch 10
+Pushed legato | 0 | HMP | VOU | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- --p- | c--- ---- c--- --p- + <r--- ---- ---- ---- | c--- ---- C--- --P- + <r--- ---- n--- ---- | C--- ---- c--- --P- + <r--- ---- d--- ---- | c--- c--- ---- --p- + <r--- r--- ---- ---- | - | - |
+Accented spiccato | 1 | DEP | UOC | 0.4 | - | r... r... r... r... | !r.r. !r.r. !r.r. !r.r. | !rrrr !rrrr !ffff !ffff | !rrrr !ffff !tttt !RRRR | !RRRR !tttt !ffff !rrrr | !rrrr !rrrr !rrrr !rrrr | - | - |

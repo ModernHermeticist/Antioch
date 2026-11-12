@@ -68,3 +68,7 @@ Vocal horn answers | 0 | HM | V | 1.0 | - | c--- ---- .... .... | c--- ---- ..c-
 Uplifting trumpet line | 1 | E | U | 0.65 | - | >r... .... .... .... | >r..r ..f. .... .... | >r..r ..f. t..t ..R. | >r..r ..f. R..R RRRR | >R..R ..f. t..t RRRR | >r.rr ..f. t.tt ..R.
 Prog brass fog | 0 | RM | P | 1.0 | - | o--- ---- ---- ---- | o--- ---- c--- ---- | o--- c--- o--- c--- | o--- c--- C--- ---- | c--- o--- C--- ---- | o--- ---- c--- c---
 Psy brass pulse | 1 | K | Y | 0.4 | - | o... .... o... .... | o... o... o... o... | o.o. o.o. o.o. o.o. | o.oo o.oo oooo oooo | oooo o.oo oooo o.oo | oo.o o.o. oo.o o.o.
+
+# --- batch 10
+Pushed brass stabs | 1 | EP | UOC | 0.5 | - | c... .... .... .... | c... .... c... ..p. | c... ..c. c... ..p. | c..c ..c. C... .P.. | C..c ..c. c... .P.. | c... ..c. c..c ..p. | - | - |
+Triplet fanfare | 1 | P | OU | 0.55 | - | r........... | r..r..f..... | r..r..f..R.. | r.rr.rf.fR.R | R.RR.Rf.fr.r | r..r..f..R.R | - | - |
