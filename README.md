@@ -271,6 +271,11 @@ section scenes, which open the space on purpose.
 
 ![Cause & Effect](docs/cause_effect.png)
 
+**Level-matched builds:** everything the build adds (the resonant sweep, the wash, the noise and
+tonal risers, the widening) changes the sound, never the level: Cause & Effect holds its output
+at the loudness of what comes in (a 300 ms RMS; on an empty track the risers still come through
+at up to -24 dBFS). The drop then lands by contrast, not by the build having crept up.
+
 Put it on the bus you want to build: a group, the music bus, or the master. Then drive it
 either way:
 

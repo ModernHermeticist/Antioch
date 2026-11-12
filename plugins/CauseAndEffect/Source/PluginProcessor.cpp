@@ -59,6 +59,10 @@ void CauseEffectProcessor::prepareToPlay (double newSampleRate, int)
     tailStep = 1.0f / (0.015f * sr);                              // 15 ms tail cut
     build = 0.0f;
     stutterGain = tailGain = 1.0f;
+    levelIn = levelOut = 0.0; levelGain = 1.0f; minLevelGain = 1.0f;
+    levelCoeff = 1.0 - std::exp (-1.0 / (0.3 * sampleRate));
+    levelAttack = 1.0f - std::exp (-1.0f / (0.02f * (float) sampleRate));
+    levelRelease = 1.0f - std::exp (-1.0f / (0.2f * (float) sampleRate));
     tailFading = false;
     manualArmed = false;
     inSectionBuild = false;
@@ -271,6 +275,21 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             outR = mid * midGain - side * sideGain;
         }
 
+        // Level-matched builds: everything the build adds (the resonant sweep, wash, risers, widening)
+        // changes the sound, never the level - the output is held at the input's loudness (300 ms
+        // RMS; a silent input still lets the risers through at up to -24 dBFS). Only ever turns down.
+        {
+            const auto inP = 0.5 * ((double) inL * inL + (double) inR * inR), outP = 0.5 * ((double) outL * outL + (double) outR * outR);
+            levelIn += levelCoeff * (inP - levelIn);
+            levelOut += levelCoeff * (outP - levelOut);
+            const auto allowed = juce::jmax (levelIn, 0.004);
+            const auto target = levelOut > allowed * 1.0233 ? (float) std::sqrt (allowed / levelOut) : 1.0f;   // (0.1 dB of slack)
+            levelGain += (target < levelGain ? levelAttack : levelRelease) * (target - levelGain);
+            if (levelGain > 0.9999f && target >= 1.0f) levelGain = 1.0f;
+            outL *= levelGain; outR *= levelGain;
+            minLevelGain = juce::jmin (minLevelGain, levelGain);
+        }
+
         const auto o = outGain.getNextValue();
         if (right != nullptr)
         {
@@ -294,6 +313,8 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         inPeakBlock = outPeakBlock = 0.0f;
     }
 
+    levelHoldDb.store (juce::Decibels::gainToDecibels (minLevelGain));
+    minLevelGain = 1.0f;
     buildLevel.store (build);
     sectionBuild.store (sectionProgress >= 0.0);
     progress.store (sectionProgress >= 0.0 ? sectionProgress : clock.getProgress());

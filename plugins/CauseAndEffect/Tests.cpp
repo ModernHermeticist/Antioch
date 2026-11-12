@@ -342,5 +342,27 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+
+    section ("Level-matched builds: the build changes the sound, not the level");
+    {
+        auto p = make();
+        set (*p, Params::build, 1.0f);   // a full build, held
+        juce::Random rng (11);
+        juce::AudioBuffer<float> out;
+        const InputFn music = [&rng] (juce::AudioBuffer<float>& b, int64_t)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto v = 0.2f * (rng.nextFloat() * 2.0f - 1.0f);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        render (*p, 6.0, music, &out);
+        const auto outRms = rmsBetween (out, 3.0, 6.0), inRms = 0.2f / std::sqrt (3.0f);
+        const auto rise = juce::Decibels::gainToDecibels (outRms / inRms);
+        check (rise < 0.5f, "a full build with wash, risers and widening comes out no louder than it went in (" + juce::String (rise, 2) + " dB)");
+        check (p->levelHoldDb.load() < -0.5f, "(its additions were turned down to fit: " + juce::String (p->levelHoldDb.load(), 1) + " dB)");
+    }
+
     return finish();
 }
