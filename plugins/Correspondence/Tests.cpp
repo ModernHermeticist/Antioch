@@ -1545,6 +1545,12 @@ int main (int argc, char** argv)
         check (again.size() == bass.size(), "the same seed always writes the same song");
         sp.lead = { 0, 0, 0, 0, 1, 0 };   // the drop
         const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        {
+            const auto counterLine = chords::songClip (s, map, sp, chords::SongPart::Counter);
+            int together = 0;
+            for (const auto& c : counterLine) for (const auto& l : lead) together += std::abs (c.start - l.start) < 1.0e-6 ? 1 : 0;
+            check (! counterLine.empty() && together == 0, "the counter-line answers the hook: it never starts a note with it (" + juce::String ((int) counterLine.size()) + " notes, " + juce::String (together) + " together)");
+        }
         check (countIn (lead, 96.0, 160.0) > 0 && countIn (lead, 0.0, 96.0) == 0, "the hook plays in the drop");
 
         // Variety: families with a second high and a second fill play them in every other phrase of a drop
@@ -1612,7 +1618,17 @@ int main (int argc, char** argv)
             for (const auto& n : inv) lowInv = std::min (lowInv, n.pitch);
             check (lowInv > lowPlain, "an inversion lifts the lowest note an octave");
 
-            // The fit check: an offbeat bass and an offbeat arp land together; a 16th arp around them doesn't
+            // Long hooks: an 8-bar melody plays through (no answer in bars 7-8)
+        {
+            Family longHook;
+            longHook.name = "long"; longHook.part = Part::Lead; longHook.gate = 0.9f;
+            const std::string eight = "r--- ---- ---- ----/t--- ---- ---- ----/f--- ---- ---- ----/R--- ---- ---- ----/f--- ---- ---- ----/t--- ---- ---- ----/u--- ---- ---- ----/r--- ---- ---- ----";
+            longHook.level = { eight, eight, eight };
+            longHook.fill = "r... r... r... r...";
+            const auto notes = chords::lib::render (longHook, 1, false, s, 32.0);
+            check (notes.size() == 8, "an 8-bar hook plays its 8 bars through (" + juce::String ((int) notes.size()) + " notes, none from the answer)");
+        }
+        // The fit check: an offbeat bass and an offbeat arp land together; a 16th arp around them doesn't
             const auto bassF = make (Part::Bass, "..r. ..r. ..r. ..r.");
             check (overlap (make (Part::Arp, "..a. ..a. ..a. ..a."), bassF) > 0.99f && overlap (make (Part::Arp, "a... a... a... a..."), bassF) < 0.01f,
                    "interlocking rhythms score 0, unison 1");

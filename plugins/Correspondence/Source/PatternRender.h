@@ -140,7 +140,7 @@ namespace chords::lib
 
         for (int bar = 0; bar < totalBars; ++bar)
         {
-          const auto answer = mel && bar % 8 >= 6;   // hooks and lines answer themselves in bars 7-8
+          const auto answer = mel && bar % 8 >= 6 && main.bars.size() < 8;   // hooks answer themselves in bars 7-8 (an 8-bar melody is written through)
           const auto& src = fillAll || answer ? fill : main;
           const auto barIndex = (size_t) (mel ? (answer ? bar % 8 - 6 : bar % 8) : bar) % src.bars.size();
           const auto& barText = src.bars[barIndex];

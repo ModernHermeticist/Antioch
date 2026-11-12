@@ -1386,8 +1386,29 @@ namespace chords
                     }
                     if (part == SongPart::Harmony) c = harmony (c, cs);
                     if (part == SongPart::Counter)
-                        c = counterFamily != nullptr && ! counterFamily->name.empty() ? lib::render (*counterFamily, laterDrop ? 2 : 1, false, cs, cycleQ)
-                                                                                      : counterMelody (c, cs);
+                    {
+                        if (counterFamily != nullptr && ! counterFamily->name.empty())
+                        {
+                            // The library's counter-line answers the hook: a note that would start with one of the
+                            // hook's slides off its attack (an 8th or a beat later, keeping the rest of its length)
+                            const auto hook = c;
+                            auto hookStarts = [&hook] (double t) { return std::any_of (hook.begin(), hook.end(), [t] (const Note& h) { return std::abs (h.start - t) < 1.0e-6; }); };
+                            std::vector<Note> line;
+                            for (auto n : lib::render (*counterFamily, laterDrop ? 2 : 1, false, cs, cycleQ))
+                            {
+                                if (hookStarts (n.start))
+                                {
+                                    bool moved = false;
+                                    for (const auto d : { 0.5, 0.25, 0.75, 1.0 })
+                                        if (n.length - d > 0.2 && ! hookStarts (n.start + d)) { n.start += d; n.length -= d; moved = true; break; }
+                                    if (! moved) continue;
+                                }
+                                line.push_back (n);
+                            }
+                            c = line;
+                        }
+                        else c = counterMelody (c, cs);
+                    }
                 }
                 return c;
             };

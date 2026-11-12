@@ -1071,7 +1071,7 @@ section plays. The defaults:
 ### The pattern library
 
 With **Pattern library** on (Song patterns; on by default), the song's bass, arps, chord
-rhythms and lead hook come from a library of original pattern families (734 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
+rhythms and lead hook come from a library of original pattern families (748 distinct so far, in text files under plugins/Correspondence/Patterns: basslines,
 arps and plucks, chord rhythms (pads, stabs and gates), two-bar hooks, piano, strings, brass, choir, timpani, acid lines, vocal-chop rhythms, ear candy and counter-lines). They're
 written from the genre's conventions (offbeat and rolling basses, pedal and 3-3-2 arps,
 trance gates, anthem hooks), not copied from records. Each family is tagged with the
@@ -1099,6 +1099,9 @@ What keeps a song cohesive and alive:
   inversions.
 - **Parts that fit together.** The arp is chosen to fill the gaps the bass leaves, and the chords,
   acid and piano to leave room for both, among the families that fit the mood and style.
+- **Long hooks.** Hooks can be two, four or eight bars; an eight-bar melody is written through,
+  shorter ones repeat and answer themselves in bars 7-8. The counter-line answers the hook: a
+  note that would start with one of the hook's slides off its attack.
 - **Section figures.** Builds get build-only figures (risers that speed up into the drop) and
   intros and outros DJ-friendly versions, where the library has them for the part.
 - **Variation by seed.** The fourth bar of some phrases lifts its last beat an octave in the
