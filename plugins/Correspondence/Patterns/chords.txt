@@ -108,3 +108,11 @@ Orchestral plucked chords | 1 | PHM | O | 0.4 | - | c... .... c... .... | c... .
 Progressive gate | 2 | RMK | P | 0.65 | - | c... ..c. .... ..c. | c..c ..c. .c.. ..c. | c..c ..c. .c.c ..c. | c.cc ..c. .ccc ..cc | .cc. c.cc .cc. c.cc | c..c .cc. c..c .cc. | 0.15 | 7 |
 Orchestral gate strings | 2 | PE | O | 0.55 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc cccc cccc cccc | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | c.cc cccc c.cc cccc | - | - |
 Vocal gate | 2 | HMR | V | 0.6 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc ..c. c.cc ..c. | c.cc .cc. c.cc .ccc | .cc. c.cc .ccc c.cc | c..c .cc. c..c .cc. | - | 9 |
+
+# --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
+Bright psy plucks | 1 | EHMP | Y | 0.4 | - | ..c. .... .... .... | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | .cc. .cc. .cc. cccc | .cc. ..cc .cc. cccc | ..c. ..cc ..c. ..cc | - | - |
+Soft tech chords | 1 | MRHE | T | 0.5 | - | c... .... .... .... | c... .... .c.. .... | c... ..c. .c.. ..c. | c..c ..c. .c.c cccc | .c.c ..c. c..c cccc | c..c ..c. .c.. c.c. | 0.15 | 7 |
+Dark orchestral stabs | 1 | KDP | OVP | 0.5 | - | o... .... .... .... | o... .... o... .... | o..o ..o. o..o ..o. | o..o ..o. c..c cccc | c..c ..o. o..c cccc | o..o ..o. o... ..o. | - | - |
+Bright psy gate | 2 | EHP | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc CCCC CCCC | .c.c CCCC .c.c CCCC | cccc .ccc cccc .ccc | - | - |
+Melancholic tech gate | 2 | MRH | TC | 0.55 | - | c... c... c... c... | c.c. c... c.c. c... | c.c. c.c. c.c. c.c. | c.cc c.c. c.cc c.cc | c.c. c.cc c.c. c.cc | c.cc c... c.cc c.c. | 0.15 | 7 |
+Dark orchestral gate | 2 | KDP | OVP | 0.55 | - | o.o. o.o. o.o. o.o. | oooo oooo oooo oooo | cccc oooo cccc oooo | cccc cccc CCCC CCCC | CCCC oooo cccc oooo | oooo cccc oooo cccc | - | - |

@@ -105,3 +105,8 @@ DJ intro piano | 2 | * | * | 0.8 | u | a... .... .... .... | a... .... a... ....
 # --- batch 10
 Pushed ballad | 0 | MH | VPO | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- --p- | <r--- ---- f--- ---- + c--- ---- c--- --p- | <r--- ---- n--- ---- + c--- ---- C--- --P- | <r--- ---- d--- ---- + C--- ---- c--- --P- | <r--- ---- f--- ---- + c--- c--- ---- --p- | - | 7 |
 Triplet comp | 1 | HE | UVO | 0.6 | - | c.....c..... | c..c..c..c.. | c.cc.cc.cc.c | cccccccccccc | CCCCCCcccccc | c.cc.cc.cc.c | - | - |
+
+# --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
+Bright psy piano | 1 | EHP | Y | 0.4 | - | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | .cc. ..c. .cc. ..c. | .cc. .cc. .CC. CCCC | .CC. .cc. .CC. cccc | ..c. .cc. ..c. .cc. | - | - |
+Melancholic tech piano | 1 | MRK | TCU | 0.5 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. .c.. .... | c... ..c. .c.. c.c. | c... .cc. ..c. ..cc | c... ..cc ..c. .... | 0.15 | 7 |
+Dark orchestral piano stabs | 1 | KDP | OVP | 0.5 | - | <l... .... .... .... + o... .... .... .... | <l... .... l... .... + o... .... o... .... | <l... l... l... l... + o..o ..o. o..o ..o. | <l... l... N... N... + c..c ..c. c..c cccc | <N... l... N... l... + cccc ..c. c..c cccc | <l... l... l... l... + o..o ..o. o... ..o. | - | - |

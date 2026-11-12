@@ -61,3 +61,7 @@ DJ intro choir | 0 | * | * | 1.0 | - | .... .... .... .... | c--- ---- ---- ----
 Hopeful rhythmic choir | 1 | H | UV | 0.6 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. c..c ..CC | C..c ..c. c..C ..cc | c.cc ..c. c.cc ..c. | - | - |
 Dreamy choir pulses | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ..c- .... .... | c--- ..c- ..c- .... | c--- ..c- ..c- ..c- | ..c- c--- ..c- C--- | c--- ..c- c--- ..c- | - | 9 |
 Melancholic choir pulses | 1 | M | VPC | 0.75 | - | c--- .... .... .... | c--- .... c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..c- | ..c- c--- ..c- c--- | c--- ..c- ..c- .... | - | 7 |
+
+# --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
+Bright choir syllables | 1 | EHP | *  | 0.55 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c. | - | - |
+Shadow choir chant | 1 | MRK | * | 0.6 | - | o... .... .... .... | o... .... o... .... | o..o ..o. o..o .... | o..o ..o. c..c cccc | c..c ..o. o..o oooo | o..o .... o..o ..o. | - | 7 |

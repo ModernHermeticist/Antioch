@@ -137,3 +137,13 @@ Orchestral offbeat strings bass | 1 | PHM | O | 0.75 | - | ..r. ..r. ..r. ..r. |
 Vocal rolling | 2 | HMR | V | 0.7 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rr. | .rrr .rr. .rrr .rr. | .rrr .rrr .ddd .nnn | .rr. .ttt .fff .nnN | .rrr .rrr .rr. .rrr | - | - |
 Progressive rolling | 2 | RMK | P | 0.7 | - | ..r. ..r. ..r. ..r. | .r.r .r.f .r.r .r.f | .rrr .rff .rrr .rff | .rrr .fff .uuu .nnn | .rrf .rrf .rrf .nnn | .rrf .rff .rrf .rff | 0.15 | - |
 Orchestral rolling | 2 | PEH | O | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .fff .rrr .fff | .rrr .fff .ttt .nnn | .rrr .uuu .uuu .nnn | .rrr .rrr .fff .fff | - | - |
+
+# --- batch 14: the uncommon pairings (... | fill 2 | high 2 | feel | colour | where)
+Bright psy offbeat | 1 | EHP | Y | 0.6 | - | ..r. ..r. ..r. ..r. | .rr. .rr. .rr. .rR. | .rrr .rrR .rrr .rrR | .rrr .rrR .uuu .nnN | .rrR .rrR .ffF .nnN | .rRr .rrR .rRr .rrR | - | - |
+Soft tech offbeat | 1 | MRH | T | 0.75 | - | ..r. ..r. ..r. ..r. | ..r. ..r. ..rr ..r. | ..rr ..r. ..rr ..r. | ..rr ..rr ..dd ..nn | ..rr ..tt ..ff ..nn | ..r. ..rr ..r. ..rr | 0.15 | - |
+Heavy orchestral offbeat | 1 | KDP | OV | 0.7 | - | ..r. ..r. ..r. ..r. | ..r. ..l. ..r. ..l. | ..rl ..rl ..rl ..rl | ..rl ..rl ..rr ..N. | ..ll ..rr ..ll ..NN | ..lr ..lr ..lr ..lr | - | - |
+Dreamy classic offbeat | 1 | RMU | CU | 0.85 | - | ..r- ---- ..r- ---- | ..r- ..r- ..r- ..r- | ..r- ..R- ..r- ..R- | ..r- ..R- ..9- ..n- | ..R- ..f- ..9- ..n- | ..R- ..r- ..R- ..f- | - | - |
+Bright psy roll | 2 | EHP | Y | 0.55 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr .rrr | .rrr .rRr .rrr .rRr | .rrr .uuu .rRr .nnN | .rRr .uuu .rRr .nnN | .rRr .rrr .rRr .rRr | - | - |
+Melancholic tech roll | 2 | MRH | TC | 0.6 | - | .r.r .r.r .r.r .r.r | .rr. .rrr .rr. .rrr | .rrr .rrr .rrr .rrd | .rrr .ddd .rrr .nnn | .rrr .rrr .ddd .nnN | .rrr .rrd .rrr .rrd | - | - |
+Dark orchestral roll | 2 | KDP | OVP | 0.65 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrl .rrr .rrl | .rrl .rrl .ddd .NNN | .lll .rrr .lll .NNN | .rrl .rrr .rrl .rrr | - | - |
+Dreamy rolling sub | 2 | REM | UPYO | 0.7 | - | ..r. ..r. ..r. ..r. | .r.r .r.r .r.r .r.r | .rr. .rrr .rr. .rrr | .rrr .rrr .fff .nnn | .rr. .fff .rrr .nnN | .rrr .rr. .rrr .rr. | - | - |

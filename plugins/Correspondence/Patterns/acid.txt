@@ -55,3 +55,7 @@ Shuffled acid | 0 | DK | TC | 0.55 | - | r.r. r.r. r.r. r.r. | r.rR r.r~ Rr.r r.
 Accent acid | 0 | DK | TYC | 0.55 | - | r.r. r.r. r.r. r.r. | !r.rR r.!r~ R!r.r r.!R. | !rrRr r~!Rr !rRr~ u!Rr. | !rrRr u~!Rd !rRu~ d!RnN | !rRu~ d!RnN !rrRr u~!Rd | !rRrr r~!rR !rRrr d~!rR | - | - |
 Triplet acid | 0 | K | Y | 0.5 | - | r..r..r..r.. | rrRrr.rrRrr. | rR~rRurRdrR~ | rRurRdrRurRN | rRdrRurRdrRN | rrRrrRrrRrrR | - | - |
 Build acid climb | 0 | DK | TYC | 0.5 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrrr uuuu uuuu uuuu | rrrr RRRR rrrr RRRR | rRrR rRrR rRrR rRrR | - | - | B
+
+# --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
+Melodic acid | 0 | HMRP | TYC | 0.6 | - | r... t... f... t... | r.t. f.t. r.t. f.u. | rtft r~fu rtft r~fR | rtft uuuu rtfR nnnN | rtfR dddd rtft nnnN | rtfR tfR. rtfR tfR. | - | - |
+Euphoric squelch | 0 | EP | TYC | 0.55 | - | r.R. r.R. r.R. r.R. | rRtR fR.R rRtR fR.R | rRtR f~tR rRtR R~RR | rRtR fFtT RRRR NNNN | RRRR fFtT rRtR NNNN | rRRr fRRr rRRr fRRr | - | - |

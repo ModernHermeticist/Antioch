@@ -79,3 +79,9 @@ Build brass stabs | 1 | * | * | 0.45 | - | c... .... c... .... | c... c... c... 
 Hopeful pushed horns | 1 | H | UVO | 0.55 | - | c... .... .... .... | c... ..c. .... ..p. | c... ..c. c... ..p. | c..c ..c. C... .P.. | C..c ..c. c... .P.. | c... ..c. c..c ..p. | - | - |
 Melancholic seventh brass | 0 | M | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- ---- | C--- c--- c--- ---- | c-c- c--- c-c- c--- | - | 7 |
 Dreamy ninth horns | 1 | R | PV | 0.8 | - | c--- ---- .... .... | c--- ---- c--- .... | c--- ..c- c--- .... | c--- ..c- c--- ..C- | ..c- c--- ..c- C--- | c--- ..c- ..c- .... | - | 9 |
+
+# --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
+Bright brass pads | 0 | EHP | TYVCP | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- C--- C--- | C--- c--- C--- c--- | c-c- c--- c-c- c--- | - | - |
+Soft brass shadows | 0 | MRK | UCTYP | 1.0 | - | o--- ---- ---- ---- | o--- ---- c--- ---- | o--- c--- o--- c--- | o--- c--- C--- ---- | c--- o--- C--- ---- | o--- ---- c--- c--- | - | 7 |
+Bright brass stabs | 1 | EHP | TYC | 0.45 | - | c... .... .... .... | c... ..c. .... .... | c... ..c. c... ..c. | c..c ..c. C..C ..CC | C..C ..c. c..C ..CC | c.cc ..c. c.cc ..c. | - | - |
+Shadow brass hits | 1 | MRK | UCYTP | 0.5 | - | o... .... .... .... | o... .... o... .... | o..o ..o. o..o .... | o..o ..o. o.oo oooo | oooo ..o. o..o oooo | o..o .... o..o ..o. | - | - |
