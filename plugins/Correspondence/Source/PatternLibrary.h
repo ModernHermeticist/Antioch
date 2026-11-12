@@ -77,6 +77,7 @@ namespace patterns
         bool add7 = false, add9 = false;    // chord colours: the chord's 7th / 9th added to every chord hit
         int inversion = 0;                  // chord hits with their lowest 1 or 2 notes an octave up
         uint32_t where = 0;                 // only for these kinds of section (bit per SectionType); 0 = the song's family everywhere
+        uint32_t character = 0;             // what it feels like (bit per characterNames(), from Patterns/characters.txt)
         bool tagged (Mood m) const { return ((moods >> (int) m) & 1u) != 0; }
         bool tagged (Style s) const { return ((styles >> (int) s) & 1u) != 0; }
     };
@@ -134,19 +135,45 @@ namespace patterns
     }
 
     /** Every family, from the embedded role files. */
+    /** Characters: what a family feels like beyond its mood. A song's parts share its hook's. */
+    inline const juce::StringArray& characterNames()
+    {
+        static const juce::StringArray n { "heroic", "intimate", "hypnotic", "playful", "soaring" };
+        return n;
+    }
+
     inline const std::vector<Family>& library()
     {
         static const std::vector<Family> lib = []
         {
             std::vector<Family> all;
+            juce::String characters;
             for (int i = 0; i < PatternData::namedResourceListSize; ++i)
             {
                 const juce::String file (PatternData::originalFilenames[i]);
                 const auto role = partFiles().indexOf (file.upToLastOccurrenceOf (".", false, false));
-                if (role < 0) continue;
                 int size = 0;
-                if (const auto* data = PatternData::getNamedResource (PatternData::namedResourceList[i], size))
-                    detail::parse (juce::String::fromUTF8 (data, size), (Part) role, all);
+                const auto* data = PatternData::getNamedResource (PatternData::namedResourceList[i], size);
+                if (data == nullptr) continue;
+                if (file == "characters.txt") { characters = juce::String::fromUTF8 (data, size); continue; }
+                if (role < 0) continue;
+                detail::parse (juce::String::fromUTF8 (data, size), (Part) role, all);
+            }
+            // character | role: family, family | role: ...
+            for (auto line : juce::StringArray::fromLines (characters))
+            {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWithChar ('#')) continue;
+                auto f = juce::StringArray::fromTokens (line, "|", "");
+                const auto bit = characterNames().indexOf (f[0].trim());
+                if (bit < 0) continue;
+                for (int j = 1; j < f.size(); ++j)
+                {
+                    const auto role = partFiles().indexOf (f[j].upToFirstOccurrenceOf (":", false, false).trim());
+                    for (auto n : juce::StringArray::fromTokens (f[j].fromFirstOccurrenceOf (":", false, false), ",", ""))
+                        for (auto& fam : all)
+                            if ((int) fam.part == role && fam.name == n.trim().toStdString()) fam.character |= 1u << bit;
+                }
             }
             return all;
         }();
@@ -341,7 +368,7 @@ namespace patterns
         chosen (`others`): an arp that fills the gaps of the bass, chords that leave both room. A
         section figure (a build riser, an intro version) is chosen where one fits that section. */
     inline const Family& pickFitted (Part part, int kind, Mood mood, Style style, uint32_t seed,
-                                     const std::vector<const Family*>& others, int section = -1)
+                                     const std::vector<const Family*>& others, int section = -1, uint32_t character = 0)
     {
         auto c = section >= 0 ? candidates (part, kind, mood, style, section) : std::vector<int> {};
         const auto sectionFigure = ! c.empty();
@@ -359,6 +386,13 @@ namespace patterns
             keepIf ([&] (const Family& f) { return feelOf (f) == feelOf (ref); });
             if (part == Part::Chords || part == Part::Piano || part == Part::Strings || part == Part::Brass || part == Part::Choir)
                 keepIf ([&] (const Family& f) { return pushes (f) == pushes (ref); });
+        }
+        // The song's character (its hook's): parts that feel the same, where the library has them
+        if (character != 0 && ! sectionFigure && c.size() > 1)
+        {
+            std::vector<int> k;
+            for (auto i : c) if ((lib[(size_t) i].character & character) != 0) k.push_back (i);
+            if (! k.empty()) c = k;
         }
         if (! others.empty() && ! sectionFigure && c.size() > 1)
         {

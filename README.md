@@ -1103,6 +1103,9 @@ What keeps a song cohesive and alive:
   *Shuffled tech*, *Forest night*, *Heartbreak vocal*, *Heroic score*, ... A song plays the kit that
   fits its mood and style; **New patterns** picks another. Song patterns shows the kit's name;
   turn **Kits** off to have each part picked on its own.
+- **Character.** Every family also has a character, one or two of *heroic*, *intimate*,
+  *hypnotic*, *playful* and *soaring* (Patterns/characters.txt). The hook sets the song's, and
+  the other parts lean the same way.
 - **Coherence without a kit.** The parts follow the bass's feel (straight, shuffled or triplets),
   chord parts push into the next chord only when the bass does, and an arp that would sit on
   top of the hook moves an octave away from it.

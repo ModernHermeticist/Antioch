@@ -1654,8 +1654,13 @@ int main (int argc, char** argv)
                 fitted += overlap (chords::songFamily (chords::SongPart::Arp, 1, fp, -1), b);
                 // a blind pick among the arps in the bass's feel (the feel lock comes first): their average
                 float sum = 0.0f; int n = 0;
-                for (auto i : candidates (Part::Arp, 1, Mood::Euphoric, Style::Uplifting))
-                    if (feelOf (lib[(size_t) i]) == feelOf (b)) { sum += overlap (lib[(size_t) i], b); ++n; }
+                const auto hookChar = chords::songFamily (chords::SongPart::Lead, 0, fp, -1).character;
+                std::vector<int> pool;
+                for (auto i : candidates (Part::Arp, 1, Mood::Euphoric, Style::Uplifting)) if (feelOf (lib[(size_t) i]) == feelOf (b)) pool.push_back (i);
+                std::vector<int> sameChar;
+                for (auto i : pool) if ((lib[(size_t) i].character & hookChar) != 0) sameChar.push_back (i);
+                if (! sameChar.empty()) pool = sameChar;
+                for (auto i : pool) { sum += overlap (lib[(size_t) i], b); ++n; }
                 random += n > 0 ? sum / (float) n : 0.0f;
             }
             check (fitted <= random, "the song's arp interlocks with its bass at least as well as a blind pick (" + juce::String (fitted / 30.0f, 2) + " vs "
@@ -1708,6 +1713,27 @@ int main (int argc, char** argv)
                 }
             check (feelChecks > 0 && feelKept == feelChecks, "the arp keeps the bass's feel (straight, shuffled, triplets) wherever it can (" + juce::String (feelKept) + "/" + juce::String (feelChecks) + ")");
             check (pushChecks > 0 && pushKept == pushChecks, "chords push into the next chord when the bass does, and not when it doesn't (" + juce::String (pushKept) + "/" + juce::String (pushChecks) + ")");
+
+            // Character: every family has one or two, and without a kit the parts share the hook's
+            int tagged = 0;
+            for (const auto& f : lib) tagged += f.character != 0 ? 1 : 0;
+            check (tagged * 100 >= (int) lib.size() * 99, juce::String (tagged) + " of " + juce::String ((int) lib.size()) + " families have a character");
+            int charChecks = 0, charKept = 0;
+            for (int st = 0; st < (int) Style::count; ++st)
+                for (uint32_t seed = 1; seed <= 20; ++seed)
+                {
+                    rp.libStyle = st; rp.libSeed = seed;
+                    const auto hookChar = chords::songFamily (chords::SongPart::Lead, 0, rp, -1).character;
+                    const auto& c = chords::songFamily (chords::SongPart::Chords, 1, rp, -1);
+                    // only where a chord family fits the bass's feel and pushing habit and the hook's character (they come first)
+                    const auto& bassRef = chords::songFamily (chords::SongPart::Bass, chords::lib::kindFor (chords::SongPart::Bass, rp.bass[(size_t) suite::SectionType::Drop], suite::SectionType::Drop), rp, -1);
+                    const auto options = candidates (Part::Chords, 1, (Mood) rp.libMood, (Style) st);
+                    auto fits = [&] (const Family& f) { return feelOf (f) == feelOf (bassRef) && pushes (f) == pushes (bassRef); };
+                    if (! std::any_of (options.begin(), options.end(), [&] (int i) { return fits (lib[(size_t) i]); })) continue;
+                    if (hookChar != 0 && std::any_of (options.begin(), options.end(), [&] (int i) { return fits (lib[(size_t) i]) && (lib[(size_t) i].character & hookChar) != 0; }))
+                    { ++charChecks; charKept += (c.character & hookChar) != 0 ? 1 : 0; }
+                }
+            check (charChecks > 0 && charKept * 10 >= charChecks * 9, "the chords share the hook's character (" + juce::String (charKept) + "/" + juce::String (charChecks) + ")");
 
             // Register: the arp stays clear of the hook
             int clear = 0, songs = 0;

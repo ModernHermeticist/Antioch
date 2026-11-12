@@ -1284,7 +1284,9 @@ namespace chords
             if (const auto* kit = patterns::pickKit (mood, style, sp.libSeed))
                 if (const auto* f = patterns::kitFamily (*kit, lib::libraryPart (part), kind, figures && ! melodicPart ? section : -1))
                     return *f;
-        return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1);
+        // The song's character comes from its hook; the other parts lean the same way
+        const auto character = part == SongPart::Lead ? 0u : songFamily (SongPart::Lead, 0, sp, -1).character;
+        return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1, character);
     }
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
