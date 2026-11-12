@@ -70,9 +70,18 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     vocalRoom->slider.setTooltip ("Pads, leads and FX step back this much while the vocal sings (heard by Solve et Coagula), and come back in its gaps");
     sweep->slider.setTooltip ("Breakdown sweep: a low-pass that opens slowly across each breakdown, fully open just before the build");
     pump->slider.setTooltip ("Ducks this track to the kick pattern a Kybalion shares (Share kick), no routing needed");
-    gainStageButton.setTooltip ("Sets every Prima Materia's Input gain so each track arrives at -18 dBFS RMS (play the song first); undo in Mentalism's History");
+    gainStageButton.setTooltip ("Works out every track's channel gain so it arrives at -18 dBFS RMS (play the song first); each Prima Materia lists it in its suggestions");
     gainStageButton.onClick = [] { suite::FixBus::send (suite::Fix::GainStage); };
     addAndMakeVisible (gainStageButton);
+    suggestionsButton.setTooltip ("Prima Materia never moves this track's level or filters it: here are the moves it suggests, section by section, "
+                                  "to make in FL's mixer, and an export of the fader moves as automation");
+    suggestionsButton.onClick = [this] { showSuggestions(); };
+    addAndMakeVisible (suggestionsButton);
+    previewButton.setTooltip ("Hear the suggested moves while this is on (not saved: the track always loads untouched)");
+    previewButton.setClickingTogglesState (true);
+    previewButton.setToggleState (processor.previewPlan.load(), juce::dontSendNotification);
+    previewButton.onClick = [this] { processor.previewPlan.store (previewButton.getToggleState()); };
+    addAndMakeVisible (previewButton);
     autoStage = std::make_unique<suite::ui::Toggle> (p.apvts, pm::autoStageId, "Keep at -18", Colours::moss);
     autoStage->setTooltip ("Continuous gain staging: every 10 s, if this track's input has drifted more than 1.5 dB from -18 dBFS RMS, Input gain follows");
     addAndMakeVisible (*autoStage);
@@ -94,6 +103,28 @@ PrimaMateriaEditor::~PrimaMateriaEditor()
 {
     stopTimer();
     setLookAndFeel (nullptr);
+}
+
+void PrimaMateriaEditor::showSuggestions()
+{
+    const auto lines = processor.planLines();
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::NoIcon, "Suggested mixer moves",
+        lines.joinIntoString ("\n") + "\n\nPrima Materia changes nothing itself. Export writes the fader moves as a MIDI clip (CC 7) and this list as text.",
+        "Export...", "Close", this,
+        juce::ModalCallbackFunction::create ([this] (int result)
+        {
+            if (result != 1) return;
+            chooser = std::make_unique<juce::FileChooser> ("Folder for the mixer moves", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+            {
+                const auto dir = fc.getResult();
+                if (dir == juce::File()) return;
+                const auto file = processor.exportPlan (dir);
+                if (file == juce::File())
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Mixer moves", "The export follows the Ouroboros map: load Ouroboros with a map (and set this track's role) first.");
+                else file.revealToUser();
+            });
+        }));
 }
 
 void PrimaMateriaEditor::timerCallback()
@@ -179,6 +210,8 @@ void PrimaMateriaEditor::resized()
     auto bounds = getLocalBounds().reduced (16);
     auto header = bounds.removeFromTop (48);
     follow.setBounds (header.removeFromRight (180).reduced (4, 8));
+    previewButton.setBounds (header.removeFromRight (100).reduced (4, 8));
+    suggestionsButton.setBounds (header.removeFromRight (220).reduced (4, 8));
     header.removeFromRight (12);
     trim->setBounds (header.removeFromRight (150).withTrimmedTop (-10).withTrimmedBottom (-6));
     trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);

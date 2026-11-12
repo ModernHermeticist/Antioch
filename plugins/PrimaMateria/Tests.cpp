@@ -54,6 +54,7 @@ namespace
     std::unique_ptr<PrimaMateriaProcessor> make (int role)
     {
         auto p = std::make_unique<PrimaMateriaProcessor>();
+        p->previewPlan.store (true);   // these tests hear the suggested moves (the track itself goes out untouched)
         p->applyRole (role);
         prepare (*p);
         return p;
@@ -952,6 +953,41 @@ int main (int argc, char** argv)
         check (caughtOn >= 1 && spikeOn < 0.7f * spikeOff, "the spike is held (" + juce::String (spikeOn, 2) + " vs " + juce::String (spikeOff, 2) + " off)");
         check (caughtOff == 0, "switched off: nothing caught");
         suite::Autopilot::reset();
+    }
+
+
+    section ("Suggestions only: the track goes out untouched");
+    {
+        auto p = std::make_unique<PrimaMateriaProcessor>();
+        p->applyRole (roleIndex ("Kick"));
+        prepare (*p);
+        const auto a = play (*p, tone (60.0f));   // the kick role mutes in the breakdown and build ... as a suggestion
+        check (rmsBetween (a, 4.3, 11.7) > 0.3f && rmsBetween (a, 12.3, 15.5) > 0.3f, "the kick keeps playing through the breakdown: nothing is muted");
+        const auto lines = p->planLines().joinIntoString ("\n");
+        check (lines.contains ("Breakdown: mute") && lines.contains ("Drop: fader"), "the suggestions say what to do in FL's mixer (" + lines.replace ("\n", " | ") + ")");
+        auto bass = std::make_unique<PrimaMateriaProcessor>();
+        bass->applyRole (roleIndex ("Bass"));
+        prepare (*bass);
+        const auto bassLines = bass->planLines().joinIntoString ("\n");
+        check (bassLines.contains ("Build: fader -6.0 dB, high-pass at 400 Hz") && bassLines.contains ("Before each drop: mute"), "the bass: the build's fader and high-pass, the gap before the drop");
+        suite::SectionBus::publish (testMap());
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("pm-plan-test");
+        dir.deleteRecursively();
+        const auto mid = bass->exportPlan (dir);
+        juce::MidiFile f;
+        juce::FileInputStream in (mid);
+        const auto readOk = in.openedOk() && f.readFrom (in);
+        int ccs = 0, zeros = 0;
+        if (readOk)
+            for (int t = 0; t < f.getNumTracks(); ++t)
+                for (const auto* e : *f.getTrack (t))
+                    if (e->message.isController() && e->message.getControllerNumber() == 7) { ++ccs; zeros += e->message.getControllerValue() == 0 ? 1 : 0; }
+        check (readOk && ccs >= 6 && zeros >= 2 && dir.getChildFile ("Bass - mixer moves.txt").existsAsFile(),
+               "the fader moves export as CC 7 automation (" + juce::String (ccs) + " moves, " + juce::String (zeros) + " mutes) with the list as text");
+        dir.deleteRecursively();
+        suite::SectionBus::withdraw();
+        check (PrimaMateriaProcessor::faderCc (0.0f) == 100 && PrimaMateriaProcessor::faderCc (pm::offDb) == 0 && PrimaMateriaProcessor::faderCc (-6.0f) < 100,
+               "CC 7: 100 = unchanged, 0 = muted");
     }
 
     return finish();

@@ -1186,7 +1186,7 @@ juce::StringArray MentalismProcessor::liveChecks() const
     {
         const auto where = e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track");
         if (e.has (suite::Status::clipping))
-            out.add ("Live: " + where + " is going over 0 dBFS: turn its Prima Materia Input gain down (or Gain-stage all tracks).");
+            out.add ("Live: " + where + " is going over 0 dBFS: turn its channel gain down (Prima Materia's suggestions say how far).");
         if (e.has (suite::Status::vocalBuried))
             out.add ("Live: the vocal on " + where + " has been buried under the music for 4 bars: deepen Solve et Coagula's dips, or bring the vocal up.");
     }
@@ -1236,6 +1236,26 @@ juce::StringArray MentalismProcessor::mixChecks() const
                 out.add ("Mix: going into " + juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " (bar " + juce::String (map.sections[(size_t) i].startBar)
                          + ") the level " + (jump > 0.0f ? "jumps up " : "drops ") + juce::String (std::abs (jump), 1)
                          + " LU though the energy curve keeps it level: check that track faders and section moves there are meant (Prima Materia's suggestions show them).");
+        }
+        // Breakdowns 4-6 LU under the drops (the autopilot's section loudness, as a suggestion)
+        {
+            double drop = 0.0, bd = 0.0;
+            int nd = 0, nb = 0;
+            for (int i = 0; i < map.count; ++i)
+            {
+                if (! heard (i)) continue;
+                if (map.sections[(size_t) i].type == suite::SectionType::Drop) { drop += stats[(size_t) i].lufs(); ++nd; }
+                if (map.sections[(size_t) i].type == suite::SectionType::Breakdown) { bd += stats[(size_t) i].lufs(); ++nb; }
+            }
+            if (nd > 0 && nb > 0)
+            {
+                const auto gap = (float) (drop / nd - bd / nb);
+                if (gap < 4.0f || gap > 6.0f)
+                    out.add ("Mix: the breakdowns sit " + juce::String (gap, 1) + " LU under the drops (4-6 is the sweet spot): "
+                             + (gap < 4.0f ? "bring the breakdown's parts down " + juce::String (4.0f - gap + 1.0f, 0) + " dB on their faders, or the drops up"
+                                           : "bring the breakdown's parts up " + juce::String (gap - 5.0f, 0) + " dB, so the breakdown doesn't fall away")
+                             + " (each track's Prima Materia lists its moves).");
+            }
         }
         double dropLm = 0.0, restLm = 0.0;
         int dropN = 0, restN = 0;

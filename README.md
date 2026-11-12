@@ -1033,6 +1033,17 @@ aligned.
 
 ![Prima Materia](docs/prima_materia.png)
 
+**Prima Materia suggests; it never changes the track.** Its track goes out exactly as it came
+in (apart from the autopilot's DC and rumble filter). Everything below is worked out as before,
+but as **Suggested mixer moves…**: per section, the fader (or mute), the high- and low-pass,
+the build's rise, the gap before drops, the low end left to the kick and bass, carves, the room
+for the vocal and mono lows, plus a step back for backing parts in busy drops. **Export…**
+writes the fader moves as a MIDI clip (CC 7 on channel 1: 100 = unchanged, 0 = muted) and the
+list as text: link the FL mixer track's fader to CC 7 and record or convert it to an automation
+clip. **Preview** (not saved) lets you hear the suggestions while it's on. Gain staging and the
+rough mix now land here too, as the suggested channel gain and fader. Mentalism adds whether
+the breakdowns sit 4-6 LU under the drops.
+
 Put Prima Materia on individual tracks. For each section type you set a **level** (or Off),
 a **low cut** and a **high cut**. The column for the section that's playing lights up, and a
 readout shows the values in use.

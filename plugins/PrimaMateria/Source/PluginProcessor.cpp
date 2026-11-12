@@ -193,9 +193,11 @@ bool PrimaMateriaProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
         && layouts.getMainInputChannelSet() == out;
 }
 
-void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
+void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 {
     sampleRate = newSampleRate;
+    dry.setSize (2, juce::jmax (512, samplesPerBlock));
+    for (auto& f : passSubsonic) { f.set (18.0f, 0.707f, (float) newSampleRate); f.reset(); }
     for (auto& f : lowCut) f.reset();
     for (auto& f : highCut) f.reset();
     monoSide.reset();
@@ -222,6 +224,117 @@ void PrimaMateriaProcessor::prepareToPlay (double newSampleRate, int)
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (lastTrim));
 }
 
+juce::StringArray PrimaMateriaProcessor::planLines() const
+{
+    juce::StringArray out;
+    using T = suite::SectionType;
+    auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
+    auto db = [] (float d) { return (d > 0.05f ? "+" : "") + juce::String (d, 1) + " dB"; };
+    auto hz = [] (float f) { return f >= 1000.0f ? juce::String (f / 1000.0f, 1) + " kHz" : juce::String (juce::roundToInt (f)) + " Hz"; };
+    const auto role = getRole();
+    if (role <= 0)
+    {
+        out.add ("Pick a role (or name the track: Kick, Bass, Pads, Lead...) and Prima Materia suggests this track's mixer moves, section by section.");
+        return out;
+    }
+    if (const auto g = v (pm::inputGainId); std::abs (g) > 0.5f) out.add ("Channel gain: " + db (g) + " (the input near -18 dBFS)");
+    if (const auto t = v (pm::trimId); std::abs (t) > 0.5f) out.add ("Fader overall: " + db (t) + " (the rough mix)");
+
+    // Section by section (the map's sections, in order, or every kind)
+    suite::SectionMap map;
+    std::vector<int> types;
+    if (suite::SectionBus::read (map) && map.count > 0)
+    {
+        for (int i = 0; i < map.count; ++i)
+            if (std::find (types.begin(), types.end(), (int) map.sections[(size_t) i].type) == types.end()) types.push_back ((int) map.sections[(size_t) i].type);
+    }
+    else for (int t = 0; t < pm::numTypes; ++t) types.push_back (t);
+
+    // Busy drops (the autopilot's item: quieter as more parts play): count the Prima Materias sounding there
+    int busy = 0;
+    for (const auto& e : suite::Registry::list())
+        if (e.plugin == "Prima Materia" && (((uint32_t) e.metrics[3]) >> (int) T::Drop & 1u) != 0) ++busy;
+    const auto backing = role == 3 || role == 4 || role == 7;
+    const auto busyDb = backing && busy > 6 ? -juce::jmin (3.0f, 0.5f * (float) (busy - 6)) : 0.0f;
+
+    const auto lowCutHere = v (pm::lowManagerId) > 0.5f ? pm::lowEndCut (role) : 0.0f;
+    for (const auto t : types)
+    {
+        const auto st = settingFor (t);
+        juce::String line = juce::String (suite::sectionName ((T) t)) + ": ";
+        if (st.levelDb <= pm::offDb + 0.5f) { out.add (line + "mute"); continue; }
+        auto level = st.levelDb + (t == (int) T::Drop ? busyDb : 0.0f);
+        line += "fader " + db (level);
+        if (t == (int) T::Drop && busyDb < 0.0f) line += " (" + juce::String (busy) + " parts play in the drops: this one steps back)";
+        if (st.lowCut > pm::lowCutOff + 1.0f) line += ", high-pass at " + hz (st.lowCut);
+        if (st.highCut < pm::highCutOff - 1.0f) line += ", low-pass at " + hz (st.highCut);
+        if (t == (int) T::Build && v (pm::rampId) > 0.5f && pm::roles()[(size_t) role].ramp) line += ", rising to the drop's level through the build";
+        if (lowCutHere > 0.0f && (lowOwners.load() >> t & 1u) != 0) line += ", high-pass at " + hz (lowCutHere) + " (the kick and bass own the low end here)";
+        out.add (line);
+    }
+    if (v (pm::laterOnId) > 0.5f)
+        if (const auto later = settingFor (pm::laterDrop); std::abs (later.levelDb) > 0.05f) out.add ("Drop 2 and later: fader " + db (later.levelDb) + " on top");
+    if (const auto gq = pm::gapQuarters ((int) v (pm::gapId)); gq > 0.0)
+        out.add ("Before each drop: mute for the last " + juce::String (gq == 0.5 ? "half beat" : gq == 1.0 ? "beat" : "bar"));
+    if (const auto band = (int) v (pm::carveBandId) - 1; band >= 0 && v (pm::carveDepthId) < -0.05f)
+    {
+        const auto when = (int) v (pm::carveWhenId);
+        out.add ("EQ: " + db (v (pm::carveDepthId)) + " at " + hz (analysis::bandCentres()[(size_t) band]) + " (room for "
+                 + (when == 1 ? "the vocal, while it sings" : when == 2 ? "the lead, while it plays" : "the parts it masks") + ")");
+    }
+    if (const auto room = v (pm::vocalRoomId); room > 0.05f && (role == 4 || role == 5 || role == 7))
+        out.add ("While the vocal sings: " + db (-room));
+    if (const auto mono = (int) v (pm::monoLowsId); mono > 0)
+        out.add ("Mono below " + juce::String (mono == 1 ? 80 : mono == 2 ? 120 : 160) + " Hz (Quintessence does this with the autopilot's mixing on)");
+    return out;
+}
+
+juce::File PrimaMateriaProcessor::exportPlan (const juce::File& folder) const
+{
+    suite::SectionMap map;
+    if (! suite::SectionBus::read (map) || map.count == 0) return {};
+    using T = suite::SectionType;
+    const auto role = getRole();
+    if (role <= 0) return {};
+    const double ppq = 960.0;
+    juce::MidiMessageSequence seq;
+    const auto bpm = juce::jlimit (60.0, 200.0, lastBpm.load());
+    seq.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::lround (60000000.0 / bpm)), 0.0);
+    const auto barQ = 4.0;
+    auto cc = [&] (double q, int value) { seq.addEvent (juce::MidiMessage::controllerEvent (1, 7, juce::jlimit (0, 127, value)), q * ppq); };
+    const auto gapQ = pm::gapQuarters ((int) apvts.getRawParameterValue (pm::gapId)->load());
+    const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f && pm::roles()[(size_t) role].ramp;
+    const auto dropDb = settingFor ((int) T::Drop).levelDb;
+    int drops = 0;
+    for (int i = 0; i < map.count; ++i)
+    {
+        const auto type = map.sections[(size_t) i].type;
+        const auto startQ = (map.sections[(size_t) i].startBar - 1) * barQ, endQ = (map.endBar (i) - 1) * barQ;
+        auto level = settingFor ((int) type).levelDb;
+        if (type == T::Drop && drops++ > 0 && apvts.getRawParameterValue (pm::laterOnId)->load() > 0.5f && level > pm::offDb) level += settingFor (pm::laterDrop).levelDb;
+        if (type == T::Build && ramp && level > pm::offDb && dropDb > pm::offDb)
+            for (double q = startQ; q < endQ - 1.0e-9; q += 1.0)   // a step a beat, rising to the drop's level
+                cc (q, faderCc (level + (dropDb - level) * (float) ((q - startQ) / juce::jmax (1.0, endQ - startQ))));
+        else
+            cc (startQ, faderCc (level));
+        if (gapQ > 0.0 && i + 1 < map.count && map.sections[(size_t) i + 1].type == T::Drop)
+            cc (endQ - gapQ, 0);
+    }
+    seq.updateMatchedPairs();
+    juce::MidiFile file;
+    file.setTicksPerQuarterNote ((int) ppq);
+    file.addTrack (seq);
+    folder.createDirectory();
+    const auto name = juce::File::createLegalFileName ((getTrackName().isNotEmpty() ? getTrackName() : juce::String (pm::roles()[(size_t) role].name)) + " - mixer moves");
+    auto mid = folder.getChildFile (name + ".mid");
+    mid.deleteFile();
+    if (auto stream = mid.createOutputStream()) file.writeTo (*stream);
+    folder.getChildFile (name + ".txt").replaceWithText ("Prima Materia's suggested mixer moves\n\n" + planLines().joinIntoString ("\n")
+        + "\n\nThe .mid holds the fader as CC 7 on channel 1 (100 = unchanged, 0 = muted). In FL: right-click the mixer track's fader, "
+          "Link to controller, move CC 7 (or import the clip to a MIDI Out channel), then record or convert it to an automation clip.\n");
+    return mid;
+}
+
 pm::Setting PrimaMateriaProcessor::settingFor (int type) const
 {
     auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
@@ -232,8 +345,16 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 {
     juce::ScopedNoDenormals noDenormals;
     using T = suite::SectionType;
+    // The track as it comes in: what goes out (unless previewing the suggestions)
+    const auto preview = previewPlan.load();
+    if (! preview)
+    {
+        dry.setSize (juce::jmax (2, buffer.getNumChannels()), buffer.getNumSamples(), false, false, true);
+        for (int c = 0; c < buffer.getNumChannels(); ++c) dry.copyFrom (c, 0, buffer, c, 0, buffer.getNumSamples());
+    }
 
     const auto host = suite::HostInfo::read (getPlayHead());
+    lastBpm.store (host.bpm);
     const auto haveMap = sections.refresh();
     mapAvailable.store (haveMap);
     const auto follow = apvts.getRawParameterValue (pm::followId)->load() > 0.5f && haveMap && host.playing && host.hasPpq;
@@ -593,6 +714,20 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     managerCutNow.store (cutNow);
     nowHighCut.store (std::exp2 (highLog));
+
+    // Everything above worked out (and measured) the suggested moves; the track itself goes out
+    // as it came in, with only the autopilot's DC / rumble filter
+    if (! preview)
+    {
+        const auto cleanup = suite::Autopilot::on (suite::Autopilot::stability);
+        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        {
+            auto* out = buffer.getWritePointer (c);
+            const auto* in = dry.getReadPointer (c);
+            auto& f = passSubsonic[(size_t) juce::jmin (c, 1)];
+            for (int i = 0; i < buffer.getNumSamples(); ++i) out[i] = cleanup ? f.highpass (in[i]) : in[i];
+        }
+    }
 }
 
 PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()

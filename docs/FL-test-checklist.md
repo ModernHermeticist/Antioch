@@ -177,6 +177,10 @@ between versions.
 - [ ] **6d.10** Three tracks with their own Antioch: Mentalism suggests moving them to returns. Leave FL playing 45 minutes:
   the ear reminder appears.
 
+- [ ] **6d.11** Prima Materia on a Kick track with a map: the kick keeps playing through the breakdown (nothing is muted);
+  *Suggested mixer moves…* lists "Breakdown: mute". Export: the .mid has CC 7 moves; link the kick's mixer fader to CC 7,
+  play the clip from a MIDI Out channel and the fader follows. *Preview* on: you hear the moves; reload the project: off.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

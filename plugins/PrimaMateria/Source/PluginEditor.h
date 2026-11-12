@@ -26,6 +26,9 @@ private:
     std::unique_ptr<suite::ui::Knob> trim, breath, pump, sweep, vocalRoom, rideVocal, inputGain;
     std::unique_ptr<suite::ui::Choice> answer;
     juce::TextButton gainStageButton { "Gain-stage all tracks" };
+    juce::TextButton suggestionsButton { "Suggested mixer moves..." }, previewButton { "Preview" };
+    std::unique_ptr<juce::FileChooser> chooser;
+    void showSuggestions();
     std::unique_ptr<suite::ui::Toggle> autoStage;
     juce::Label inputLabel;
     juce::Rectangle<int> gridArea;

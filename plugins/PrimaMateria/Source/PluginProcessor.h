@@ -50,6 +50,25 @@ public:
 
     /** This track's loudness (LUFS, gated), measured in Drop sections (or all playback without a map). */
     float measuredLufs() const { return loudness.integrated(); }
+
+    //==============================================================================
+    // Prima Materia never changes the track's level, mutes it or filters it: it works out the
+    // section-by-section moves and suggests them (the fader, mutes, filters, the gap before drops,
+    // the low end, carves, the vocal's room), for you to make in FL's mixer - or exported as fader
+    // automation. The track passes through untouched, apart from the autopilot's DC and rumble filter.
+    /** Hear the suggestions (momentary; not saved with the project). Tests use it to check the plan. */
+    std::atomic<bool> previewPlan { false };
+    std::atomic<double> lastBpm { 138.0 };
+    /** The suggested mixer moves, in plain words, one per line. */
+    juce::StringArray planLines() const;
+    /** The suggested fader level (dB, before trim and channel gain) in section type t; offDb = muted. */
+    float planLevelDb (int type) const { return settingFor (type).levelDb; }
+    /** Writes "<track> - mixer moves.mid" (CC 7 fader moves on channel 1 following the Ouroboros
+        map; 100 = unchanged, 0 = muted) and a .txt of the suggestions into `folder`. Returns the
+        MIDI file, or an empty File if there's no map. */
+    juce::File exportPlan (const juce::File& folder) const;
+    /** The CC 7 value for a fader change of `db` (100 = unchanged; FL's linked fader at 100%). */
+    static int faderCc (float db) { return db <= pm::offDb + 0.5f ? 0 : juce::jlimit (1, 127, juce::roundToInt (100.0f * std::pow (10.0f, db / 40.0f))); }
     SuiteStatus suiteStatus() override;
 
     /** Your own role settings: "Save as my <role>" keeps this track's section levels, cuts,
@@ -153,7 +172,8 @@ public:
     std::atomic<int> peaksCaught { 0 };   // (tests)
 private:
     // Autopilot (stability): DC / subsonic filter, peak guard, wobble rider, click-free switches
-    std::array<suite::Svf, 2> subsonic;
+    std::array<suite::Svf, 2> subsonic, passSubsonic;   // passSubsonic: on the untouched output
+    juce::AudioBuffer<float> dry;                        // the track as it came in (it goes out like that)
     float guardGain = 1.0f, guardRelease = 0.001f, normalPeak = 0.0f, peakWarm = 0.0f, peakBlock = 0.0f, wobbleDb = 0.0f, wobbleWarm = 0.0f, wobbleSmooth = 0.001f, lastTargetDb = 0.0f;
     double wobbleShort = 0.0, wobbleLong = 0.0, wobbleShortCoeff = 0.001, wobbleLongCoeff = 0.0001;
     bool guarding = false, wobbling = false;
