@@ -1682,6 +1682,11 @@ int main (int argc, char** argv)
             }
             check (kits().size() >= 40 && resolved, juce::String ((int) kits().size()) + " kits, every family they name is in the library" + (resolved ? juce::String() : " (" + missing + ")"));
             check (*std::min_element (perStyle.begin(), perStyle.end()) >= 4, "every style has at least four kits");
+            int pairs = 0;
+            for (int m = 0; m < (int) Mood::count; ++m)
+                for (int st = 0; st < (int) Style::count; ++st)
+                    pairs += std::any_of (kits().begin(), kits().end(), [&] (const Kit& k) { return ((k.moods >> m) & 1u) != 0 && ((k.styles >> st) & 1u) != 0; }) ? 1 : 0;
+            check (pairs == 49, "every mood x style has a kit (" + juce::String (pairs) + "/49)");
             auto kp = sp;
             kp.libStyle = (int) Style::Tech; kp.libMood = (int) Mood::Dark; kp.libKits = true;
             int fromKit = 0;

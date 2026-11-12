@@ -55,3 +55,11 @@ Orchestral chop line | 0 | PH | O | 0.75 | - | r--- .... .... .... | r--- .... f
 # --- batch 14 (... | fill 2 | high 2 | feel | colour | where)
 Dreamy chop echoes | 0 | RMH | UCTYO | 0.7 | - | r--- .... .... .... | r--- .... f--- .... | r--- ..t- f--- .... | r--- ..t- f--- ..9- | 9--- ..t- f--- ..r- | r--- ..t- r--- ..t- | - | - |
 Epic psy chops | 0 | PEK | YPV | 0.45 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.rr .... r.rr ..f. | r.rr ..rr R.RR RRRR | R.RR ..rr r.rr RRRR | r.rr .rr. r.rr .ff. | - | - |
+
+# --- batch 15 (... | fill 2 | high 2 | feel | colour | where)
+Shuffled chops | 0 | DH | TPV | 0.5 | - | r... .... r... .... | r..r .... r..r .... | r..r ..r. r..r ..f. | r..r ..f. r.rr .RRR | r.rr ..f. r..r .RRR | r.rr ..r. r.rr ..f. | s | - |
+Triplet chops | 0 | EH | UV | 0.5 | - | r.....r..... | r..r..r..... | r..r..f..t.. | r.rr.rf.fR.R | R.RR.Rf.fr.r | r..r..f..t.t | - | - |
+Pushed chops | 0 | EH | UCV | 0.6 | - | r... .... .... .... | r..r .... ..p. .... | r..r ..f. ..p. .... | r..r ..f. R..R .P.. | R..r ..f. r..r .P.. | r..r ..f. ..p. ..p. | - | - |
+Accent chops | 0 | ED | UCT | 0.45 | - | r... .... r... .... | !r..r .... !r..r .... | !r..r ..!r. !r..r ..!f. | !r..r ..!f. !R..R ..!RR | !R..R ..!f. !r..r ..!RR | !r.rr ..!r. !r.rr ..!f. | - | - |
+Melancholic chop sighs | 0 | M | VPC | 0.8 | - | t--- .... .... .... | t--- .... d--- .... | t--- ..d- d--- .... | t--- ..d- d--- n--- | d--- ..t- d--- N--- | t--- -dd- d--- .... | - | - |
+Heroic chop hits | 0 | P | OUC | 0.55 | - | R... .... .... .... | R... .... R... .... | R..R ..R. R... .... | R..R ..R. R.RR RRRR | RRRR ..R. R..R RRRR | R.RR ..R. R.RR .... | - | - |

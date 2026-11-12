@@ -50,3 +50,14 @@ Tech roll | 1 | DK | T | 0.9 | - | .... .... .... z--- | .... .... z--- ---- | z
 Triplet war drums | 0 | PK | OY | 0.6 | - | r........... | r..r........ | r..r..r..... | r..r..r.rrrr | rrrr..r..r.. | r..r..r..r.. | - | - |
 Accented hits | 0 | PE | OU | 0.85 | - | r--- ---- ---- ---- | !r--- ---- f--- ---- | !r--- ---- !f--- r--- | !r--- !f--- !r--- !f--- | !r--- !f--- rrrr ffff | !r--- r--- !f--- f--- | - | - |
 Build timpani climb | 1 | * | * | 0.7 | - | r... .... r... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr z--- ---- | z--- ---- rrrr rrrr | rrrr rrrr rrrr rrrr | - | - | B
+
+# --- batch 15 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful timpani pulse | 0 | H | UVO | 0.85 | - | r--- ---- ---- ---- | r--- ---- f--- ---- | r--- f--- r--- f--- | r--- f--- r--- ffff | r--- r--- f--- ffff | r-r- f--- r-r- f--- | - | - |
+Euphoric drop hits | 0 | E | UC | 0.8 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- r--- r--- | r--- r--- rrrr rrrr | rrrr r--- r--- rrrr | r-r- r--- r-r- r--- | - | - |
+Melancholic distant hits | 0 | M | VPC | 0.9 | - | r--- ---- ---- ---- | r--- ---- ---- f--- | r--- ---- r--- f--- | r--- f--- r--- n--- | r--- ---- f--- N--- | r--- r--- ---- f--- | - | - |
+Driving triplet hits | 0 | D | TCO | 0.6 | - | r........... | r.....r..... | r..r..r..r.. | r..r..r.rrrr | rrrr..r..r.. | r.rr.rr.rr.r | - | - |
+Pushed hits | 0 | EP | UO | 0.8 | - | r--- ---- ---- ---- | r--- ---- ---- --p- | r--- ---- r--- --p- | r--- r--- r--- --P- | r--- r--- rrrr --P- | r--- r--- r--- --p- | - | - |
+Hopeful roll | 1 | H | UVO | 1.0 | - | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- z--- --z- | z--- ---- ---- rrrr | z--- --z- ---- rrrr | z--- --z- z--- --z- | - | - |
+Euphoric roll | 1 | E | UC | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | rrrr ---- z--- ---- | z--- --z- z--- ---- | - | - |
+Psy roll | 1 | K | Y | 0.9 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- z--- ---- | z--- ---- rrrr rrrr | z--- z--- rrrr rrrr | z--- --z- z--- ---- | - | - |
+Dreamy swell roll | 1 | R | PV | 1.0 | - | .... .... z--- ---- | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- ---- ---- r--- | z--- ---- z--- r--- | z--- ---- z--- ---- | - | - |
