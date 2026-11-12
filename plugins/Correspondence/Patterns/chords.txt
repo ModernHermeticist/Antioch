@@ -116,3 +116,11 @@ Dark orchestral stabs | 1 | KDP | OVP | 0.5 | - | o... .... .... .... | o... ...
 Bright psy gate | 2 | EHP | Y | 0.45 | - | .c.c .c.c .c.c .c.c | .ccc .ccc .ccc .ccc | .ccc cccc .ccc cccc | cccc cccc CCCC CCCC | .c.c CCCC .c.c CCCC | cccc .ccc cccc .ccc | - | - |
 Melancholic tech gate | 2 | MRH | TC | 0.55 | - | c... c... c... c... | c.c. c... c.c. c... | c.c. c.c. c.c. c.c. | c.cc c.c. c.cc c.cc | c.c. c.cc c.c. c.cc | c.cc c... c.cc c.c. | 0.15 | 7 |
 Dark orchestral gate | 2 | KDP | OVP | 0.55 | - | o.o. o.o. o.o. o.o. | oooo oooo oooo oooo | cccc oooo cccc oooo | cccc cccc CCCC CCCC | CCCC oooo cccc oooo | oooo cccc oooo cccc | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Heroic pushed hits | 1 | PE | OUC | 0.6 | - | C... .... .... .... | C... ..C. .... ..p. | C... ..C. C... ..p. | C..C ..C. C..C .P.. | CCCC ..C. C..C .P.. | C..C ..C. C... ..P. | - | - |
+Intimate seventh swells | 0 | MR | VPC | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---. ..c- | c--- ---. ..c- ---- | c--- ---. ..c- C--- | c--- ---- C--- ---- | c--- ---. ..c- ..c- | - | 7 |
+Hypnotic triplet gate | 2 | KD | TY | 0.45 | - | c.c.c.c.c.c. | cc.cc.cc.cc. | cccccccccccc | cccccccccccc | cc.cccccc.cc | cccccc.ccccc | - | - |
+Playful stab bounce | 1 | HE | UV | 0.55 | - | ..c. .... ..c. .... | ..c. ..c. .c.. .... | ..c. ..cc .c.. ..c. | ..cc ..cc .c.c cccc | .c.c ..cc ..cc cccc | ..cc .c.. ..cc .c.. | - | - |
+Soaring ninth gate | 2 | EH | UC | 0.6 | - | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc c.cc | cccc c.cc cccc c.cC | cccc CCCC cccc CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccc | - | 9 |
+DJ intro pad | 0 | * | * | 1.0 | - | .... .... .... .... | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- C--- ---- | C--- ---- c--- ---- | c--- ---- c--- ---- | - | - | IO

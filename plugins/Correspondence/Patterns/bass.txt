@@ -147,3 +147,12 @@ Bright psy roll | 2 | EHP | Y | 0.55 | - | .rr. .rr. .rr. .rr. | .rrr .rrr .rrr 
 Melancholic tech roll | 2 | MRH | TC | 0.6 | - | .r.r .r.r .r.r .r.r | .rr. .rrr .rr. .rrr | .rrr .rrr .rrr .rrd | .rrr .ddd .rrr .nnn | .rrr .rrr .ddd .nnN | .rrr .rrd .rrr .rrd | - | - |
 Dark orchestral roll | 2 | KDP | OVP | 0.65 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .rrr | .rrr .rrl .rrr .rrl | .rrl .rrl .ddd .NNN | .lll .rrr .lll .NNN | .rrl .rrr .rrl .rrr | - | - |
 Dreamy rolling sub | 2 | REM | UPYO | 0.7 | - | ..r. ..r. ..r. ..r. | .r.r .r.r .r.r .r.r | .rr. .rrr .rr. .rrr | .rrr .rrr .fff .nnn | .rr. .fff .rrr .nnN | .rrr .rr. .rrr .rr. | - | - |
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Heroic gallop march | 2 | PE | OUC | 0.65 | - | r... r... r... r... | r.rr r.rr r.rr r.rr | rrrr rrrr ffff ffff | rrrr ffff tttt nnnn | rrrr uuuu uuuu nnnn | r.rr rrrr r.rr rrrr | - | - |
+Intimate heartbeat sub | 0 | MR | VP | 1.0 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- -r-- r--- -r-- | r--- -r-- n--- -N-- | r--- -d-- n--- -N-- | r--- -r-- ---- r--- | - | - |
+Hypnotic pulse roll | 2 | KD | TY | 0.55 | - | .r.r .r.r .r.r .r.r | .rrr .rrr .rrr .rrr | .rrr .rrr .rrr .rrR | .rrr .rrR .rrr .NNN | .rrR .rrr .rrR .NNN | .rRr .rrr .rRr .rrr | s | - |
+Playful octave hops | 1 | HE | UVC | 0.65 | - | ..r. ..r. ..r. ..r. | ..r. ..R. ..r. ..R. | ..rR ..r. ..rR ..R. | ..rR ..rR ..fF ..nN | ..RR ..rR ..fF ..NN | ..Rr ..rR ..Rr ..rR | - | - |
+Soaring pushed roll | 2 | EH | UC | 0.7 | - | ..r. ..r. ..r. ..r. | .rrr .rrr .rrr .p-- | .rrr .rrR .rrr .p-- | .rrr .rRR .fff .P-- | .rRR .rrr .fFf .P-- | .rRr .rrR .rRr .p-- | - | - |
+Build triplet bass | 2 | * | * | 0.6 | - | r..r..r..r.. | r.rr.rr.rr.r | rrrrrrrrrrrr | rrrrrruuuuuu | RRRRRRrrrrrr | rrrrrrRRRRRR | - | - | B
+DJ intro sub pulse | 0 | * | * | 1.0 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- r--- r--- | r--- r--- r--- n--- | r--- r--- n--- N--- | r--- r--- r--- r--- | - | - | IO

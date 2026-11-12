@@ -116,3 +116,11 @@ Driving pushed arp | 2 | D | TCU | 0.5 | u | a.a. a.a. a.a. a.a. | aa.a aa.a aa.
 Hopeful gated triplets | 2 | H | UV | 0.55 | u | a.a.a.a.a.a. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaaAAAAAA | AAAAAAaaaaaa | aa.aa.aa.aaa | - | - |
 Build pluck riser | 2 | * | * | 0.5 | u | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | AAAA AAAA AAAA AAAA | aaaa AAAA aaaa AAAA | - | - | B
 DJ intro pluck | 2 | * | * | 0.6 | u | a... .... .... .... | a... .... a... .... | a... ..a. a... .... | a... ..a. a... ..a. | a... ..a. a... ..a. | a... ..a. a... ..a. | - | - | IO
+
+# --- batch 17 (... | fill 2 | high 2 | feel | colour | where)
+Heroic converging triplets | 1 | PE | OU | 0.55 | c | a..a..a..a.. | a.aa.aa.aa.a | aaaaaaaaaaaa | aaaaaaAAAAAA | AAAAAAaaaaaa | aaAaaAaaAaaA | - | - |
+Intimate falling eighths | 0 | MR | VP | 1.0 | d | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- a-a- b--- | b--- a-a- a-a- a--- | a-aa a-a- a-aa a-a- | - | 9 |
+Hypnotic sequence | 1 | KD | TYC | 0.45 | - | r.r. r.r. r.r. r.r. | rrfr rrfr rrfr rrfr | rrfr rrtr rrfr rrtR | rrfr rrtr NNNN NNNN | NNNN rrfr rrtr rrfR | rrfR rrfr rrfR rrfr | s | - |
+Playful bouncing arp | 2 | HE | UVC | 0.55 | w | a..a ..a. a..a ..a. | a.aa ..a. a.aa ..a. | a.aa .aa. a.aa .aa. | a.aa .aaa A.AA .AAA | A.AA .aaa a.aa .AAA | aa.a .aa. aa.a .aa. | - | - |
+Soaring pushed arp | 1 | EH | UC | 0.6 | u | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aap. | aaaa aaAa aaaa aaP. | aaaa aaaa AAAA AAP. | AAAA aaaa AAAA aaP. | aaAa aaAa aaAa aap. | - | - |
+DJ intro sixteenths | 1 | * | * | 0.6 | u | a... .... .... .... | a... a... a... a... | a.a. a.a. a.a. a.a. | a.a. a.a. a.a. a.a. | a.aa a.a. a.aa a.a. | a.a. a.a. a.a. a.a. | - | - | IO
