@@ -1116,6 +1116,43 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+    section ("The master's tone, shared out by contribution");
+    {
+        suite::FixBus::reset();
+        suite::Registry::reset();
+        suite::Conductor::reset();
+        std::array<float, 10> big {}, small {};
+        big.fill (-40.0f); small.fill (-40.0f);
+        big[3] = -10.0f; small[3] = -14.77f;   // 'Bass' puts 3x the energy at 250 Hz that 'Pads' does
+        suite::Registry::announce (0x301u, "Quintessence", "Bass", suite::Status::roleSet | suite::Status::hasBands, { 2.0f, 0, 0, 0 }, big);
+        suite::Registry::announce (0x302u, "Quintessence", "Pads", suite::Status::roleSet | suite::Status::hasBands, { 4.0f, 0, 0, 0 }, small);
+        const auto shares = MentalismProcessor::shareOut (suite::Registry::list(), 3, -1.5f);
+        check (shares.size() == 2 && shares[0].share > 0.7f && shares[0].db < shares[1].db && shares[1].db < 0.0f,
+               "the cut is split by contribution: the track with 75% of the band takes the larger share");
+        auto p = make();
+        MentalismProcessor::Report r = p->report();
+        r.tonalAvailable = true;
+        r.shortDiff.fill (0.0f);
+        r.shortDiff[3] = 3.0f;
+        check (p->masterTonePass (r) && suite::FixBus::latest() == 2, "250 Hz 3 dB over on the master: both Quintessences are sent a share");
+        suite::FixBus::Message m;
+        int bandSent = -1; float db = 0.0f; uint32_t who = 0;
+        check (suite::FixBus::read (1, m) && m.fix == suite::Fix::MasterTone && (suite::unpackMasterTone (m.target, who, bandSent, db), bandSent == 3) && db < 0.0f,
+               "(a MasterTone cut at 250 Hz)");
+        int band = -1; float diff = 0.0f;
+        check (suite::Conductor::masterProblem (band, diff) && band == 3 && std::abs (diff - 3.0f) < 0.01f,
+               "the master's problem band is published, so each Quintessence knows how much it's needed");
+        check (suite::Conductor::holder() == p->getInstanceId(), "the round holds the conductor's turn while it's checked");
+        p->masterTonePass (r);   // the master didn't get closer
+        check (p->toneRoundsUndone.load() == 1 && suite::FixBus::read (3, m) && m.undo && suite::FixBus::latest() == 4 && suite::Conductor::holder() == 0,
+               "no better 8 s later: every share is undone and the turn given back");
+        set (*p, Params::shareTone, 0.0f);
+        check (! p->masterTonePass (r), "off: nothing is shared");
+        suite::Registry::reset();
+        suite::Conductor::reset();
+        suite::FixBus::reset();
+    }
+
     section ("Pass-through");
     {
         auto p = make();

@@ -53,6 +53,7 @@ QuintessenceProcessor::QuintessenceProcessor()
     {
         if (fix == suite::Fix::Carve) return carve (data);
         if (fix == suite::Fix::LearnStart) { relearn(); return [] {}; }
+        if (fix == suite::Fix::MasterTone) return masterTone (data);
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
             relearn();
@@ -516,7 +517,7 @@ std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int
     for (int s = 0; s < qn::numSlots; ++s)
     {
         const auto reason = (int) value (qn::reasonId (s));
-        if ((reason == qn::masking || reason == qn::mud || reason == qn::harshness) && value (qn::gainId (s)) < -0.05f)
+        if ((reason == qn::masking || reason == qn::mud || reason == qn::harshness || reason == qn::masterBalance) && std::abs (value (qn::gainId (s))) > 0.05f)
             use[(size_t) nearestBand (value (qn::freqId (s)))] = false;
     }
     double sumM = 0.0, sumT = 0.0;
@@ -796,7 +797,7 @@ bool QuintessenceProcessor::autoPass()
     // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
     // move (EQ, dynamics, width, resonances) take turns going first.
     // One move at a time across the whole mix: wait for the conductor's turn
-    if (! suite::Conductor::request (getInstanceId())) return false;
+    if (! suite::Conductor::request (getInstanceId(), needNow (m, role))) return false;
     constexpr int kinds = 8;
     for (int k = 0; k < kinds; ++k)
     {
@@ -807,6 +808,61 @@ bool QuintessenceProcessor::autoPass()
     }
     suite::Conductor::release (getInstanceId());   // nothing to do: the turn goes on
     return false;
+}
+
+float QuintessenceProcessor::needNow (const Measurement& m, int role) const
+{
+    // How far this track is from its own target, plus its share of the master's worst problem
+    auto need = juce::jmax (0.0f, toneError (m, role));
+    int band = -1;
+    float diff = 0.0f;
+    if (suite::Conductor::masterProblem (band, diff) && std::abs (diff) > 1.5f && band >= 0 && band < 10 && haveBands)
+    {
+        double mine = std::pow (10.0, longBands[(size_t) band] / 10.0), all = 0.0;
+        for (const auto& e : suite::Registry::list())
+            if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands)) all += std::pow (10.0, e.bands[(size_t) band] / 10.0);
+        if (all > 1.0e-12) need += (float) juce::jmin (1.0, mine / all) * std::abs (diff);
+    }
+    needShown.store (need);
+    return need;
+}
+
+std::function<void()> QuintessenceProcessor::masterTone (uint32_t data)
+{
+    // Mentalism's share of the master's tone for this track: a band that moves only on its word
+    uint32_t who = 0;
+    int band = 0;
+    float db = 0.0f;
+    suite::unpackMasterTone (data, who, band, db);
+    if (who != (getInstanceId() & 0xfffu) || band < 0 || band >= analysis::numBands || std::abs (db) < 0.05f) return {};
+    const auto centre = analysis::bandCentres()[(size_t) band];
+    int slot = -1;
+    for (int s = 0; s < qn::numSlots; ++s)
+        if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == qn::masterBalance && std::abs (std::log2 (value (qn::freqId (s)) / centre)) < 0.2f) slot = s;
+    if (slot < 0)   // a free band, else one doing role tone (never a masking carve)
+        for (int pass = 0; pass < 2 && slot < 0; ++pass)
+            for (int s = 0; s < qn::numSlots && slot < 0; ++s)
+                if (value (qn::lockId (s)) < 0.5f && (int) value (qn::reasonId (s)) == (pass == 0 ? qn::free : qn::roleTone)) slot = s;
+    if (slot < 0) { addLog ("Mentalism's master balance for " + hzText (centre) + " arrived, but every band is locked or busy"); return {}; }
+    std::vector<std::pair<juce::String, float>> before;
+    for (const auto& id : { qn::freqId (slot), qn::gainId (slot), qn::qId (slot), qn::reasonId (slot), qn::whenId (slot), qn::bdId (slot) }) before.push_back ({ id, value (id) });
+    const auto already = (int) value (qn::reasonId (slot)) == qn::masterBalance ? value (qn::gainId (slot)) : 0.0f;
+    const auto gain = juce::jlimit (-qn::maxToneDb, qn::maxToneDb, already + db);
+    if (pending.index == slot) pending.kind = Pending::none;
+    write (qn::freqId (slot), centre);
+    write (qn::qId (slot), 1.0f);
+    write (qn::reasonId (slot), (float) qn::masterBalance);
+    write (qn::whenId (slot), 0.0f);
+    write (qn::bdId (slot), 0.0f);
+    write (qn::gainId (slot), gain);
+    addLog ("Band " + juce::String (slot + 1) + ": " + hzText (centre) + " " + dbText (gain) + " (master balance: this track's share of the master's "
+            + dbText (-db).replace ("+", "") + " at " + hzText (centre) + ", from Mentalism)");
+    return [this, before, slot, gain]
+    {
+        if (std::abs (value (qn::gainId (slot)) - gain) > 0.05f) return;
+        for (const auto& [id, v] : before) write (id, v);
+        addLog ("Band " + juce::String (slot + 1) + ": master balance undone");
+    };
 }
 
 bool QuintessenceProcessor::budgetMove (const Measurement& m, int role)

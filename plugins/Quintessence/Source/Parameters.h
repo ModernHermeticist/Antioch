@@ -29,10 +29,10 @@ namespace qn
     inline juce::String mbLockId (int b) { return mbId (b, "lock"); }
 
     /** Why a band is where it is. */
-    enum Reason { free = 0, roleTone, masking, mud, harshness, yours, resonance, numReasons };
+    enum Reason { free = 0, roleTone, masking, mud, harshness, yours, resonance, masterBalance, numReasons };
     inline const juce::StringArray& reasonNames()
     {
-        static const juce::StringArray n { "Free", "Role tone", "Masking", "Mud", "Harshness", "Your setting", "Resonance" };
+        static const juce::StringArray n { "Free", "Role tone", "Masking", "Mud", "Harshness", "Your setting", "Resonance", "Master balance" };
         return n;
     }
 

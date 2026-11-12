@@ -23,7 +23,8 @@ namespace suite
                                     Darker, Brighter, Wider, MorePump,              // moods (Ouroboros): each plugin does its share
                                     SectionLowsDown,                                // the bass down 2 dB in one kind of section (data: the type)
                                     Relearn,                                        // new parts written: these roles measure afresh (data: a bit per role)
-                                    MixItAll, ExportAll };                          // one-click finish (Ouroboros): Mentalism mixes, Correspondence exports
+                                    MixItAll, ExportAll,                            // one-click finish (Ouroboros): Mentalism mixes, Correspondence exports
+                                    MasterTone };                                   // Mentalism shares the master's tone out: one Quintessence, one band, its share
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)
@@ -33,7 +34,7 @@ namespace suite
                                        "DJ phrasing", "Section extended", "Session health", "Arrange from loop", "Song draft",
                                        "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
                                        "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
-                                       "Re-learn changed parts", "Mix it", "Export all" };
+                                       "Re-learn changed parts", "Mix it", "Export all", "Master tone share" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -45,6 +46,18 @@ namespace suite
     /** ...and only outside breakdowns (a clash heard in the drops isn't carved where the music thins out). */
     inline uint32_t packCarve (uint32_t instanceId, int band, int when, bool notInBreakdowns) noexcept { return packCarve (instanceId, band, when) | (notInBreakdowns ? (1u << 18) : 0u); }
     inline bool carveNotInBreakdowns (uint32_t data) noexcept { return (data & (1u << 18)) != 0; }
+
+    /** MasterTone: which Quintessence (low 12 bits of its id), which octave band, and how much (signed half dB). */
+    inline uint32_t packMasterTone (uint32_t instanceId, int band, float db) noexcept
+    {
+        return (instanceId & 0xfffu) | ((uint32_t) (band & 0xf) << 12) | ((uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 2.0f)) << 16);
+    }
+    inline void unpackMasterTone (uint32_t data, uint32_t& instanceLow, int& band, float& db) noexcept
+    {
+        instanceLow = data & 0xfffu;
+        band = (int) ((data >> 12) & 0xf);
+        db = (float) (int8_t) (uint8_t) ((data >> 16) & 0xff) / 2.0f;
+    }
 
     /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */
     inline uint32_t packTone (float lowDb, float highDb) noexcept

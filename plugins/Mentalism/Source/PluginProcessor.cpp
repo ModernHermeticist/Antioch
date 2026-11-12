@@ -399,6 +399,8 @@ void MentalismProcessor::runAutomation()
     else if (rep.measuredSeconds < lastMaskingCheckAt)
         lastMaskingCheckAt = rep.measuredSeconds;   // measurements were reset
     conductTick (rep);
+    if (rep.measuredSeconds >= lastToneAt + 8.0f) { lastToneAt = rep.measuredSeconds; masterTonePass (rep); }
+    else if (rep.measuredSeconds < lastToneAt) lastToneAt = rep.measuredSeconds;
     // Each kind of section's low end against the target (for the watcher's section-by-section check)
     if (const auto type = sectionTypeNow.load(); type >= 0 && type < (int) lowsSum.size() && rep.tonalAvailable && rep.measurement.integratedLufs > -70.0f)
     {
@@ -666,6 +668,96 @@ bool MentalismProcessor::watchPass (const Report& rep)
     const juce::ScopedLock sl (historyLock);
     offered = std::move (offer);
     return acted;
+}
+
+std::vector<MentalismProcessor::ToneShare> MentalismProcessor::shareOut (const std::vector<suite::SuiteEntry>& entries, int band, float masterChangeDb)
+{
+    // Each Quintessence's share of the energy in the band; the ones with 10% or more take part
+    std::vector<ToneShare> out;
+    double total = 0.0;
+    for (const auto& e : entries)
+        if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands)) total += std::pow (10.0, e.bands[(size_t) band] / 10.0);
+    if (total <= 1.0e-12) return out;
+    for (const auto& e : entries)
+        if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands))
+        {
+            const auto share = (float) (std::pow (10.0, e.bands[(size_t) band] / 10.0) / total);
+            if (share >= 0.1f) out.push_back ({ e.id, e.track, share, 0.0f });
+        }
+    if (out.empty()) return out;
+    float sum = 0.0f;
+    for (auto& t : out) sum += t.share;
+    for (auto& t : out) t.share /= sum;
+    // By contribution: each track moves by k x its share, with k chosen so the band on the master
+    // moves by `masterChangeDb` (each track at most 3 dB a round)
+    auto masterChange = [&] (float k)
+    {
+        double p = 0.0;
+        for (const auto& t : out) p += t.share * std::pow (10.0, juce::jlimit (-3.0f, 3.0f, k * t.share) / 10.0);
+        return (float) (10.0 * std::log10 (p));
+    };
+    float lo = -30.0f, hi = 30.0f;
+    for (int i = 0; i < 40; ++i) { const auto mid = 0.5f * (lo + hi); if (masterChange (mid) < masterChangeDb) lo = mid; else hi = mid; }
+    for (auto& t : out) t.db = std::round (juce::jlimit (-3.0f, 3.0f, 0.5f * (lo + hi) * t.share) * 2.0f) * 0.5f;
+    out.erase (std::remove_if (out.begin(), out.end(), [] (const ToneShare& t) { return std::abs (t.db) < 0.5f; }), out.end());
+    return out;
+}
+
+bool MentalismProcessor::masterTonePass (const Report& rep)
+{
+    if (apvts.getRawParameterValue (Params::shareTone)->load() < 0.5f || ! rep.tonalAvailable) return false;
+    // The master's worst band now (the Quintessences use it to say how much they're needed)
+    int worst = -1;
+    for (int b = 1; b <= 8; ++b)
+        if (worst < 0 || std::abs (rep.shortDiff[(size_t) b]) > std::abs (rep.shortDiff[(size_t) worst])) worst = b;
+    suite::Conductor::publishMasterProblem (worst, rep.shortDiff[(size_t) worst]);
+    for (auto& c : toneCooldown) c = juce::jmax (0, c - 1);
+    static const char* hz[] = { "31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz" };
+
+    // Check the last round
+    if (! toneSeqs.empty())
+    {
+        const auto after = std::abs (rep.shortDiff[(size_t) toneBand]);
+        const auto distance = tonalDistance (rep);
+        const auto helped = after < toneBefore - 0.3f && (distance < 0.0f || distance < toneDistanceBefore + 0.3f);
+        if (helped)
+        {
+            ++toneRoundsKept;
+            suite::MoveLog::add (getName(), getTrackName(), juce::String ("Kept: master balance at ") + hz[toneBand] + " (" + juce::String (toneBefore, 1) + " -> "
+                                 + juce::String (after, 1) + " dB off the target)", suite::MoveLog::kept);
+        }
+        else
+        {
+            for (auto it = toneSeqs.rbegin(); it != toneSeqs.rend(); ++it) suite::FixBus::sendUndo (*it);
+            ++toneRoundsUndone;
+            toneCooldown[(size_t) toneBand] = 6;
+            suite::MoveLog::add (getName(), getTrackName(), juce::String ("Undid: master balance at ") + hz[toneBand] + ": the master didn't get closer ("
+                                 + juce::String (toneBefore, 1) + " -> " + juce::String (after, 1) + " dB)", suite::MoveLog::undone);
+        }
+        toneSeqs.clear();
+        suite::Conductor::release (getInstanceId());
+        if (! helped) return true;
+    }
+
+    // A new round: the worst band more than 1.5 dB off, not just tried
+    const auto diff = rep.shortDiff[(size_t) worst];
+    if (std::abs (diff) <= 1.5f || toneCooldown[(size_t) worst] > 0) return false;
+    const auto shares = shareOut (suite::Registry::list(), worst, juce::jlimit (-1.5f, 1.5f, -diff));
+    if (shares.empty()) return false;
+    if (! suite::Conductor::request (getInstanceId(), std::abs (diff) + 2.0f)) return false;   // the whole mix's problem: high need
+    toneBand = worst;
+    toneBefore = std::abs (diff);
+    toneDistanceBefore = tonalDistance (rep);
+    juce::StringArray who;
+    for (const auto& t : shares)
+    {
+        toneSeqs.push_back (suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (t.id, worst, t.db)));
+        who.add ((t.track.isNotEmpty() ? "'" + t.track + "'" : juce::String ("a track")) + " " + (t.db > 0.0f ? "+" : "") + juce::String (t.db, 1) + " dB ("
+                 + juce::String (juce::roundToInt (t.share * 100.0f)) + "% of it)");
+    }
+    suite::MoveLog::add (getName(), getTrackName(), juce::String ("Master balance: ") + hz[worst] + " is " + juce::String (std::abs (diff), 1) + " dB "
+                         + (diff > 0.0f ? "over" : "under") + " the target, shared out by contribution: " + who.joinIntoString (", "), suite::MoveLog::fix);
+    return true;
 }
 
 float MentalismProcessor::tonalDistance (const Report& rep)

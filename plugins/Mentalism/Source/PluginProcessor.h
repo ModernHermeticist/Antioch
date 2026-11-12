@@ -245,6 +245,16 @@ public:
         tone is from its target before it and 3 s into it. More than 0.5 dB further away: the
         verdict is "worse" and the owner undoes it. Message thread (tests call it). */
     void conductTick (const Report& rep);
+
+    /** The master's tone, shared out: every 8 s of music, the band where the master is furthest
+        off its target (more than 1.5 dB) is corrected by the Quintessences of the tracks putting
+        energy there, each by its share (a track with 60% of it takes the most), up to 1.5 dB on
+        the master a round. 8 s later the round is kept if that band got closer (and the rest
+        didn't get worse), undone otherwise. Message thread (tests call it). */
+    bool masterTonePass (const Report& rep);
+    struct ToneShare { uint32_t id; juce::String track; float share, db; };
+    static std::vector<ToneShare> shareOut (const std::vector<suite::SuiteEntry>& entries, int band, float masterChangeDb);
+    std::atomic<int> toneRoundsKept { 0 }, toneRoundsUndone { 0 };
     static float tonalDistance (const Report& rep);
     static constexpr float balanceEverySeconds = 4.0f;
     std::atomic<int> balanceKept { 0 }, balanceUndone { 0 };
@@ -310,7 +320,10 @@ private:
     std::atomic<FinishStage> finishState { FinishStage::Idle };
     float finishMeasuredAt = 0.0f, lastMaskingCheckAt = 0.0f, lastBalanceAt = 0.0f, balanceBefore = -1.0f;
     int balanceRest = 0;
-    float lastWatchAt = 0.0f;
+    float lastWatchAt = 0.0f, lastToneAt = 0.0f, toneBefore = 0.0f, toneDistanceBefore = 0.0f;
+    int toneBand = -1;
+    std::vector<uint32_t> toneSeqs;
+    std::array<int, 10> toneCooldown {};
     uint32_t watchingTurn = 0;
 public:
     std::atomic<int> sectionTypeNow { -1 };   // the section playing (from the map), for the section-by-section check

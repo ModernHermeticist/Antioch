@@ -64,8 +64,9 @@ the suite, with the track, the bar, the reason, and whether it was kept or undon
 
 - **One move at a time (the conductor).** Every plugin that moves by itself (Quintessence,
   Antioch's space level, Vibration's drive, Lapis' tilt, Mentalism's balance loop) asks for
-  the turn first and gives it back once its move is checked. Whoever was turned away goes
-  next. While a move holds the turn, Mentalism measures the master's tone before it and
+  the turn first and gives it back once its move is checked. The turn goes by need: of the
+  plugins turned away, the one furthest from where it should be goes next (a Quintessence
+  also counts how much of the master's current problem band is its own energy). While a move holds the turn, Mentalism measures the master's tone before it and
   3 s into it. If the move took the master more than 0.5 dB further from its target, the
   owner undoes it, even if it helped its own track. So two plugins never chase each other,
   and nothing improves one track at the mix's expense.
@@ -519,6 +520,14 @@ songs) takes a 1 dB step towards it. A track that has just stepped waits until i
 has been heard before it steps again. On the next pass Mentalism checks the master: if it
 moved away from its tonal target by more than 0.5 dB, the step is undone. When no track
 needs a step, it rests for a while.
+
+**Share the master's tone** (on by default): every 8 s of music, the band where the master is
+furthest off its tonal target (more than 1.5 dB) is corrected by the Quintessences of the
+tracks that put energy there, each by its share: a track with 75% of the 250 Hz on the
+master takes most of the cut, one with 10% a little, one with less nothing. A round moves
+the master up to 1.5 dB, each track at most 3 dB, in a band labelled *Master balance* (up to
+4 dB in total). 8 s later the round is kept if the band got closer and the rest of the tone
+didn't get worse; otherwise every share is undone and that band rests a while.
 
 ### Problem watcher
 

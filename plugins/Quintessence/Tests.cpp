@@ -373,6 +373,38 @@ int main (int argc, char** argv)
         suite::Conductor::reset();
     }
 
+    section ("The master's tone: Mentalism's share, and turns by need");
+    {
+        suite::FixBus::reset();
+        auto p = make (4);
+        set (*p, qn::autoEqId, 0.0f);
+        set (*p, qn::autoMbId, 0.0f);
+        suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (p->getInstanceId(), 3, -1.5f));
+        p->fixes->poll();
+        const auto s = slotNear (*p, 250.0f);
+        check (s >= 0 && std::abs (v (*p, qn::gainId (s)) + 1.5f) < 0.05f && (int) v (*p, qn::reasonId (s)) == qn::masterBalance,
+               "Mentalism's share lands in a band: 250 Hz -1.5 dB, 'Master balance'");
+        const auto second = suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (p->getInstanceId(), 3, -1.0f));
+        p->fixes->poll();
+        check (slotNear (*p, 250.0f) == s && std::abs (v (*p, qn::gainId (s)) + 2.5f) < 0.05f, "the next round adds to the same band");
+        suite::FixBus::sendUndo (second);
+        p->fixes->poll();
+        check (std::abs (v (*p, qn::gainId (s)) + 1.5f) < 0.05f, "a round that didn't help is undone");
+        suite::FixBus::send (suite::Fix::MasterTone, suite::packMasterTone (p->getInstanceId() + 1, 5, -2.0f));
+        p->fixes->poll();
+        check (slotNear (*p, 1000.0f) < 0, "another track's share isn't taken");
+        suite::FixBus::reset();
+
+        suite::Conductor::reset();
+        check (suite::Conductor::request (11u, 1.0f), "(one plugin moves)");
+        check (! suite::Conductor::request (12u, 1.0f) && ! suite::Conductor::request (13u, 5.0f), "(two wait: one 1 dB off, one 5 dB off)");
+        suite::Conductor::release (11u);
+        check (! suite::Conductor::request (12u, 1.0f) && suite::Conductor::request (13u, 5.0f), "the turn goes to the neediest, not the first to ask");
+        suite::Conductor::release (13u);
+        check (suite::Conductor::request (12u, 1.0f), "then to the other");
+        suite::Conductor::reset();
+    }
+
     section ("Tone budget: room for the vocal");
     {
         suite::Conductor::reset();

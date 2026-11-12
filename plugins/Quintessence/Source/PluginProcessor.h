@@ -134,6 +134,8 @@ private:
     bool glueMove (const Measurement&, int role);
     bool deessMove (const Measurement&, int role);
     bool budgetMove (const Measurement&, int role);
+    float needNow (const Measurement&, int role) const;
+    std::function<void()> masterTone (uint32_t data);
     int budgetDone = -1;
     void drainSpectrum();
     bool mbMove (const Measurement&, int role);
@@ -191,6 +193,7 @@ private:
 public:
     std::atomic<float> deessNow { 0.0f };   // the de-esser's reduction now (dB, UI)
     std::atomic<float> buildNow { 0.0f };   // how far through a build (0 outside one)
+    mutable std::atomic<float> needShown { 0.0f };   // what it asked the conductor with (dB)
     std::atomic<bool> bypassedNow { false }, kickKeyed { false };   // (tests, UI)
     std::atomic<float> chordHzNow { 0.0f }, riserDipNow { 0.0f }, sideNow { -100.0f };
 private:

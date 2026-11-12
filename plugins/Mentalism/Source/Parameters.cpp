@@ -17,6 +17,7 @@ namespace Params
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoMasking, 1 }, "Resolve Masking Automatically", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoBalance, 1 }, "Balance the Mix Automatically", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { problemWatch, 1 }, "Watch for Problems", true));
+        layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { shareTone, 1 }, "Share the Master's Tone Across Quintessences", true));
         return layout;
     }
 }

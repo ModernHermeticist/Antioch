@@ -16,6 +16,7 @@ namespace
             case qn::harshness: return Colours::ember;
             case qn::yours:     return Colours::moss;
             case qn::resonance: return juce::Colour (0xffe89a5a);
+            case qn::masterBalance: return juce::Colour (0xff9fb8ff);
             default:            return Colours::dimText;
         }
     }

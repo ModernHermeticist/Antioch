@@ -130,6 +130,8 @@ between versions.
   tracks' throws wait. *Stereo field* lists each track's width.
 - [ ] **6b.21** Ouroboros *Finish everything*: play the song once; Mix it runs, the parts are exported, and the render
   plan is shown. Export again after changing the lead: only the lead's Quintessence re-learns.
+- [ ] **6b.22** Turn up the bass's 250 Hz by 4 dB with Quintessence on bass and pads: within a minute Mentalism
+  shares a cut out, most on the bass (a *Master balance* band), and *What changed* says kept or undone.
 
 ## 7. A song end to end
 
