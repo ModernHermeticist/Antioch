@@ -747,5 +747,21 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+
+    section ("Mixing helpers: the space at the lead's note, in time with the song");
+    {
+        suite::Autopilot::reset();
+        auto p = make();
+        FakePlayHead head; head.bpm = 120.0;
+        p->setPlayHead (&head);
+        render (*p, 0.5, {}, nullptr, &head);
+        check (p->timedNow.load(), "pre-delay and decay follow the tempo");
+        render (*p, 1.0, {}, nullptr, &head, [] (int64_t) { suite::Autopilot::publishLeadPitch (440.0f); suite::ActivityBus::write (suite::ActivityBus::lead, 1.0f); });
+        check (p->noteRoomNow.load() > 0.5f, "while the lead plays, the tail makes room at its note (" + juce::String (p->noteRoomNow.load(), 2) + ")");
+        p->setPlayHead (nullptr);
+        suite::Autopilot::reset();
+        suite::ActivityBus::clear();
+    }
+
     return finish();
 }

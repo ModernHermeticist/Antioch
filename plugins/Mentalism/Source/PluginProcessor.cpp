@@ -1195,6 +1195,80 @@ juce::StringArray MentalismProcessor::liveChecks() const
     return out;
 }
 
+juce::StringArray MentalismProcessor::mixChecks() const
+{
+    juce::StringArray out;
+    const auto entries = suite::Registry::list();
+    auto named = [] (const suite::SuiteEntry& e) { return e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track"); };
+
+    // Squashed before it arrives (Quintessence measures the crest of what comes in)
+    for (const auto& e : entries)
+        if (e.plugin == "Quintessence" && e.has (suite::Status::squashedInput))
+            out.add ("Mix: " + named (e) + " arrives flattened (its peaks barely stand over its level before Quintessence): back off the compressor or limiter on that track, or its saturation, and let Quintessence hold it.");
+
+    // Spaces on many tracks
+    juce::StringArray inserts;
+    for (const auto& e : entries)
+        if (e.plugin == "Antioch")
+        {
+            const auto t = e.track.toLowerCase();
+            bool isReturn = false;
+            for (const auto* w : { "return", "send", "reverb", "verb", "delay", "echo", "space", "fx bus" }) isReturn = isReturn || t.contains (w);
+            if (! isReturn) inserts.add (named (e));
+        }
+    if (inserts.size() > 2)
+        out.add ("Mix: " + juce::String (inserts.size()) + " tracks have their own Antioch (" + inserts.joinIntoString (", ")
+                 + "): put one or two on return tracks named 'Reverb Return' and send to them. Fewer spaces sound deeper, glue better and cost less CPU.");
+
+    // Section changes and the drops' low-mids
+    suite::SectionMap map;
+    if (suite::SectionBus::read (map) && map.count > 1)
+    {
+        const auto stats = sectionStats();
+        auto heard = [&] (int i) { return i >= 0 && i < (int) stats.size() && stats[(size_t) i].heard(); };
+        for (int i = 1; i < map.count; ++i)
+        {
+            if (! heard (i) || ! heard (i - 1)) continue;
+            const auto jump = stats[(size_t) i].lufs() - stats[(size_t) i - 1].lufs();
+            const auto sameKind = map.sections[(size_t) i].type == map.sections[(size_t) i - 1].type;
+            const auto energyMove = std::abs (map.energyOf (i) - map.energyOf (i - 1));
+            if (std::abs (jump) > 3.0f && (sameKind || energyMove < 0.1f))
+                out.add ("Mix: going into " + juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " (bar " + juce::String (map.sections[(size_t) i].startBar)
+                         + ") the level " + (jump > 0.0f ? "jumps up " : "drops ") + juce::String (std::abs (jump), 1)
+                         + " LU though the energy curve keeps it level: check that track faders and section moves there are meant (Prima Materia's suggestions show them).");
+        }
+        double dropLm = 0.0, restLm = 0.0;
+        int dropN = 0, restN = 0;
+        for (int i = 0; i < map.count && i < (int) statsBySection.size(); ++i)
+        {
+            const auto& a = statsBySection[(size_t) i];
+            if (a.lowMidBlocks.load() < 20) continue;
+            const auto lm = a.lowMid.load() / a.lowMidBlocks.load();
+            if (map.sections[(size_t) i].type == suite::SectionType::Drop) { dropLm += lm; ++dropN; }
+            else if (map.sections[(size_t) i].type != suite::SectionType::Breakdown) { restLm += lm; ++restN; }
+        }
+        if (dropN > 0 && restN > 0 && dropLm / dropN - restLm / restN > 2.0)
+        {
+            std::vector<std::pair<float, juce::String>> who;
+            for (const auto& e : entries)
+                if (e.plugin == "Quintessence" && e.has (suite::Status::hasBands))
+                    who.push_back ({ 0.5f * (e.bands[3] + e.bands[4]), named (e) });
+            std::sort (who.begin(), who.end(), [] (const auto& a, const auto& b) { return a.first > b.first; });
+            juce::StringArray top;
+            for (size_t k = 0; k < who.size() && k < 3; ++k) top.add (who[k].second);
+            out.add ("Mix: the drops build up " + juce::String (dropLm / dropN - restLm / restN, 1) + " dB more 250-500 Hz than the rest of the song"
+                     + (top.isEmpty() ? juce::String (": cut a little there on the busiest parts.") : ": most of it from " + top.joinIntoString (", ") + ". A small cut there on one or two of them clears the drop."));
+        }
+    }
+
+    // Ears: after every 45 minutes of listening, for the next 10
+    const auto minutes = listenedSeconds.load() / 60.0;
+    if (minutes >= 45.0 && std::fmod (minutes, 45.0) < 10.0)
+        out.add ("Ears: you've been listening for " + juce::String ((int) minutes) + " minutes. Take five, or turn the monitors down: tired ears hear less top end, "
+                 "and mixes made with them come out harsh.");
+    return out;
+}
+
 juce::String MentalismProcessor::soundsLikeMe() const
 {
     likeme::Song song;
@@ -1297,6 +1371,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         for (auto& st : statsBySection) st.clear();
     }
     const auto followSections = haveMap && host.playing && host.hasPpq;
+    if (host.playing) listenedSeconds.store (listenedSeconds.load() + buffer.getNumSamples() / sampleRate);
     const auto qPerSample = host.quartersPerSample (sampleRate);
     // Live check: a drop that has been almost mono for 8 s (measured with the previous block's correlation).
     if (followSections)
@@ -1333,6 +1408,14 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                     auto& st = statsBySection[(size_t) sec.index];
                     st.power.store (st.power.load() + power);
                     st.blocks.store (st.blocks.load() + 1);
+                    {
+                        const auto b3 = bands.shortDb[3].load(), b4 = bands.shortDb[4].load(), b5 = bands.shortDb[5].load(), b6 = bands.shortDb[6].load(), b7 = bands.shortDb[7].load();
+                        if (b3 > -90.0f && b5 > -90.0f && b6 > -90.0f)
+                        {
+                            st.lowMid.store (st.lowMid.load() + 0.5 * (b3 + b4) - (b5 + b6 + b7) / 3.0);
+                            st.lowMidBlocks.store (st.lowMidBlocks.load() + 1);
+                        }
+                    }
                     if (sec.type == suite::SectionType::Build)
                     {
                         const auto firstHalf = sec.progress (pos) < 0.5;
@@ -1576,6 +1659,7 @@ MentalismProcessor::Report MentalismProcessor::report() const
         }
     }
     for (const auto& note : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), note);
+    for (const auto& note : mixChecks()) rep.advice.add (note);
     for (const auto& note : liveChecks()) rep.advice.insert (0, note);   // live problems first
     {
         Pass before;

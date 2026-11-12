@@ -172,6 +172,11 @@ between versions.
 - [ ] **6d.7** A sine sub bass alone on a laptop speaker: after a few seconds you can hear its notes (harmonics added).
 - [ ] **6d.8** A track named "Reverb" with Quintessence: its low cut goes to 180 Hz and high cut to 12 kHz on the first pass.
 
+- [ ] **6d.9** A kick slightly off the key (e.g. 60 Hz in A minor) with Quintessence and the key broadcast: after a few hits
+  the body sounds on A; *kicks tuned to the key* counts up. The click is unchanged.
+- [ ] **6d.10** Three tracks with their own Antioch: Mentalism suggests moving them to returns. Leave FL playing 45 minutes:
+  the ear reminder appears.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

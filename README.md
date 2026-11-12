@@ -101,6 +101,20 @@ with the project), and a count of everything done. Every move is also in *What c
   a 180 Hz low cut and a 12 kHz high cut. Antioch's space always pumps a little with the kick and
   steps back while the vocal sings as well as the lead.
 
+- **More mixing helpers.** The bass dips 6 dB at the kick's own note for the 60 ms after each
+  hit (the kick's pitch comes from Kybalion), cleaner than ducking the whole bass. The kick's
+  body (under 150 Hz) is re-pitched down to the nearest note of the song's key, the root or
+  fifth by preference and 2 semitones at most, leaving its click alone. With two or more pads
+  (or leads) playing, each sits a little to one side, with the low end kept centred. Antioch's
+  tail dips at the lead's note and its octave while the lead plays. Its pre-delay snaps to the
+  nearest 1/128-1/16 note, and its decay is rounded down to whole beats. A track named drums,
+  perc or beats gets bus glue.
+- **Mixing suggestions** (in Mentalism's suggestions; they change nothing): a kick, percussion
+  or vocal arriving already flattened (back off the compressor before Quintessence); more than
+  two tracks with their own Antioch (move them to returns); a level jump at a section change
+  the energy curve doesn't ask for; the drops building up 250-500 Hz, with the tracks adding
+  most; and, after every 45 minutes of listening, a reminder to rest your ears.
+
 ## How the suite glues itself together
 
 - **One move at a time (the conductor).** Every plugin that moves by itself (Quintessence,

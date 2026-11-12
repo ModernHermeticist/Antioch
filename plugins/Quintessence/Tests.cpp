@@ -965,5 +965,90 @@ int main (int argc, char** argv)
         suite::Autopilot::reset();
     }
 
+
+    section ("Mixing helpers: kick and bass by note, layers spread, the kick in key, drum bus, squashed input");
+    {
+        suite::Autopilot::reset();
+        auto run = [] (qn::LiveMix& m, qn::LiveMix::Context c, double seconds, std::function<std::pair<float, float> (int64_t)> sig,
+                       std::function<void()> eachBlock = {}, bool kicks = false)
+        {
+            m.prepare (sampleRate);
+            std::vector<float> l, r;
+            const auto total = (int64_t) (seconds * sampleRate);
+            for (int64_t start = 0; start < total; start += 256)
+            {
+                if (eachBlock) eachBlock();
+                auto cc = c;
+                if (kicks) { cc.kickMs = (float) std::fmod ((double) start / sampleRate * 1000.0, 500.0); cc.msPerSample = (float) (1000.0 / sampleRate); }
+                const auto n = (int) std::min<int64_t> (256, total - start);
+                m.beginBlock (cc, n);
+                for (int i = 0; i < n; ++i) { auto [a, b] = sig (start + i); m.process (a, b, true); l.push_back (a); r.push_back (b); }
+                m.endBlock();
+            }
+            return std::make_pair (l, r);
+        };
+        auto rms = [] (const std::vector<float>& v, double a, double b)
+        {
+            double sum = 0.0; int n = 0;
+            for (auto i = (size_t) (a * sampleRate); i < (size_t) (b * sampleRate) && i < v.size(); ++i) { sum += (double) v[i] * v[i]; ++n; }
+            return (float) std::sqrt (sum / juce::jmax (1, n));
+        };
+        {
+            qn::LiveMix m;
+            qn::LiveMix::Context c; c.role = 2; c.kickBodyHz = 55.0f;
+            const auto [l, r] = run (m, c, 3.0, [] (int64_t i) { const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 55.0 * (double) i / sampleRate); return std::make_pair (v, v); }, {}, true);
+            const auto onHit = rms (l, 2.505, 2.53), between = rms (l, 2.8, 2.95);
+            check (juce::Decibels::gainToDecibels (onHit / between) < -3.0f, "the bass makes room at the kick's note just after each hit ("
+                       + juce::String (juce::Decibels::gainToDecibels (onHit / between), 1) + " dB), then comes back");
+        }
+        {
+            qn::LiveMix m;
+            qn::LiveMix::Context c; c.role = 4; c.id = 0x321u;
+            std::array<float, 10> pad; pad.fill (-100.0f); pad[5] = pad[6] = -20.0f;
+            const auto [l, r] = run (m, c, 2.0, [] (int64_t i) { const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * (double) i / sampleRate); return std::make_pair (v, v); },
+                                     [pad] { suite::Autopilot::postLive (0x555u, 4, pad.data()); });
+            const auto lr = juce::Decibels::gainToDecibels (rms (l, 1.5, 2.0) / rms (r, 1.5, 2.0));
+            check (std::abs (lr) > 1.5f && std::abs (m.spreadNow.load()) > 0.1f, "with another pad playing, this one sits to one side (" + juce::String (lr, 1) + " dB left/right)");
+            suite::Autopilot::reset();
+        }
+        {
+            // A kick whose body sits between A#1 and B1 in A minor: it's tuned down to A (the root)
+            auto kick = [] (int64_t i)
+            {
+                const auto t = std::fmod ((double) i / sampleRate, 0.5);
+                const auto body = 0.6 * std::exp (-t / 0.15) * std::sin (juce::MathConstants<double>::twoPi * 60.0 * t);
+                const auto click = t < 0.003 ? 0.3 * std::sin (juce::MathConstants<double>::twoPi * 3000.0 * t) : 0.0;
+                const auto v = (float) (body + click);
+                return std::make_pair (v, v);
+            };
+            qn::LiveMix m;
+            qn::LiveMix::Context c; c.role = 1; c.keyValid = true; c.keyRoot = 9; c.keyScale = 0;
+            const auto [l, r] = run (m, c, 4.0, kick);
+            // The body's pitch in the last hit, 20-120 ms in, from its zero crossings
+            int crossings = 0;
+            const auto a = (size_t) (3.52 * sampleRate), b = (size_t) (3.62 * sampleRate);
+            for (auto i = a + 1; i < b; ++i) crossings += l[i - 1] <= 0.0f && l[i] > 0.0f ? 1 : 0;
+            const auto hz = crossings / 0.1;
+            check (std::abs (m.tuneRatioNow.load() - std::pow (2.0f, -1.5f / 12.0f)) < 0.01f && std::abs (hz - 55.0) < 6.0,
+                   "a kick at 60 Hz in A minor is tuned down to A (ratio " + juce::String (m.tuneRatioNow.load(), 3) + ", body now about " + juce::String (hz, 0) + " Hz)");
+        }
+        {
+            auto drums = make (3);
+            juce::AudioProcessor::TrackProperties props; props.name = "Drums"; drums->updateTrackProperties (props);
+            suite::Conductor::reset();
+            Player music { bands (heavyPad) };
+            passes (*drums, music, 10);
+            check (v (*drums, qn::glueThrId) < -0.05f, "a track named Drums gets bus glue (threshold " + juce::String (v (*drums, qn::glueThrId), 1) + " dB)");
+        }
+        {
+            auto vox = make (6);
+            Player flat { sine (300.0f, 0.4f) };   // a sine's crest is 3 dB: nothing stands over its level
+            flat.play (*vox, 2.0);
+            check ((vox->suiteStatus().flags & suite::Status::squashedInput) != 0, "a vocal arriving with no peaks left is flagged as squashed ("
+                       + juce::String (vox->inCrestDb.load(), 1) + " dB crest)");
+        }
+        suite::Autopilot::reset();
+    }
+
     return finish();
 }

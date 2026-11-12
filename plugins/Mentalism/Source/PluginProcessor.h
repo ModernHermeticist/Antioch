@@ -142,6 +142,12 @@ public:
     /** Live mix checks, while the song plays: a track going over 0 dBFS (Prima Materia), a vocal
         buried for 4 bars (Solve et Coagula), a drop that's almost mono for 8 s. First in the suggestions. */
     juce::StringArray liveChecks() const;
+    /** Mixing suggestions (they never change anything): tracks arriving squashed, reverbs on many
+        tracks instead of returns, level jumps at section changes the energy curve doesn't ask for,
+        low-mids building up in the drops (with the tracks that add most), and a reminder after
+        45 minutes of listening. */
+    juce::StringArray mixChecks() const;
+    std::atomic<double> listenedSeconds { 0.0 };   // playback heard this session (the ear-fatigue reminder)
     /** A/B (Compare switch, or automate it from a key): while it's on, Mentalism plays the reference's
         loudest 20 s, looped, at the loudness the mix had when you switched, so you compare sound,
         not level. Put Mentalism last on the master to hear it. */
@@ -388,8 +394,9 @@ private:
     struct AtomicStat
     {
         std::atomic<double> power { 0.0 }, first { 0.0 }, second { 0.0 }, brightFirst { 0.0 }, brightSecond { 0.0 };
-        std::atomic<int> blocks { 0 }, firstBlocks { 0 }, secondBlocks { 0 };
-        void clear() { power = 0.0; first = 0.0; second = 0.0; brightFirst = 0.0; brightSecond = 0.0; blocks = 0; firstBlocks = 0; secondBlocks = 0; }
+        std::atomic<double> lowMid { 0.0 };   // the 250-500 Hz bands over the mids (dB), summed per reading
+        std::atomic<int> blocks { 0 }, firstBlocks { 0 }, secondBlocks { 0 }, lowMidBlocks { 0 };
+        void clear() { power = 0.0; first = 0.0; second = 0.0; brightFirst = 0.0; brightSecond = 0.0; lowMid = 0.0; blocks = 0; firstBlocks = 0; secondBlocks = 0; lowMidBlocks = 0; }
     };
     std::array<AtomicStat, suite::SectionMap::maxSections> statsBySection;
     suite::SectionFollower sections;

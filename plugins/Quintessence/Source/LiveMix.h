@@ -17,6 +17,11 @@
 //     neighbours dips while it rings, wherever the note takes it.
 //   - Even drum hits: on kicks and percussion, a hit far louder than the ones around it is evened.
 //   - The noise floor: under -60 dBFS the track is gently expanded down (tails, hiss).
+//   - Kick and bass by note: the bass dips 6 dB at the kick's body pitch for the 60 ms after each hit.
+//   - Layers spread: with two or more pads (or leads) playing, each sits a little left or right.
+//   - The kick in key: its body (under 150 Hz) is re-pitched down to the nearest note of the key
+//     (the root or fifth first, 2 semitones at most); the click is left alone. Only ever down,
+//     so it needs no look-ahead.
 
 #include <algorithm>
 #include <array>
@@ -25,6 +30,8 @@
 #include "SuiteDSP.h"
 #include "Analysis.h"
 #include "AutopilotBus.h"
+#include "Music.h"
+#include <vector>
 
 namespace qn
 {
@@ -38,6 +45,9 @@ namespace qn
             bool mixing = true, stability = true;
             float kickMs = 1.0e9f;     // since the shared kick's last hit, at the block start
             float msPerSample = 0.0f;
+            float kickBodyHz = 0.0f;   // the kick's body pitch (Kybalion), for the bass's dip
+            bool keyValid = false;     // the song's key (kick tuning)
+            int keyRoot = 0, keyScale = 0;
         };
 
         void prepare (double sampleRate)
@@ -83,6 +93,15 @@ namespace qn
             a80ms = 1.0f - std::exp (-1.0f / (0.08f * fs));
             a200ms = 1.0f - std::exp (-1.0f / (0.2f * fs));
             expCoeff = 1.0 - std::exp (-1.0 / (0.03 * sampleRate));
+            for (auto& f : kickDip) f.reset();
+            kickDipHz = 0.0f;
+            panNow = 0.0f;
+            for (auto& f : tuneSplit) { f.set (150.0f, 0.707f, fs); f.reset(); }
+            tuneLp.set (150.0f, 0.707f, fs); tuneLp.reset();
+            for (auto& b : tuneBuf) b.assign ((size_t) (fs * 1.0f) + 8, 0.0f);
+            tuneWrite = 0; tuneRead = 0.0; tuneOnsetAt = -1; tuneRatio = 1.0; tuneSince = 1 << 30; tuneFade = 0;
+            tuneFast.set (0.3f, 20.0f, fs); tuneSlow.set (15.0f, 150.0f, fs); tuneFast.reset(); tuneSlow.reset();
+            tuneZc = 0; tuneCrossings = 0; tuneLastSign = false; tunePeriodSum = 0.0; tunePeriods = 0; tuneBodyHz = 0.0f;
             counted = {};
         }
 
@@ -170,6 +189,53 @@ namespace qn
             harmonicsNow.store (harmAmt);
             once (harmAmt > 0.5f, 3, suite::Autopilot::harmonicsAdded);
             kickMsNow = c.kickMs;
+
+            // Kick and bass by note
+            if (c.mixing && c.role == 2 && c.kickBodyHz > 25.0f && std::abs (c.kickBodyHz - kickDipHz) > 0.5f)
+            {
+                for (auto& f : kickDip) f.set (c.kickBodyHz, 4.0f, fs);
+                kickDipHz = c.kickBodyHz;
+            }
+            if (c.role != 2 || c.kickBodyHz <= 25.0f) kickDipHz = 0.0f;
+
+            // Layers spread: another part with this role playing now
+            float panTarget = 0.0f;
+            if (c.mixing && (c.role == 4 || c.role == 5))
+            {
+                int same = 0;
+                suite::Autopilot::forEachLive (c.id, [&] (int role, const float* other)
+                {
+                    if (role == c.role && juce::jmax (other[4], other[5], other[6]) > -50.0f) ++same;
+                });
+                if (same > 0 && juce::jmax (bandsDb[4], bandsDb[5], bandsDb[6]) > -50.0f)
+                    panTarget = ((suite::Autopilot::detail::hash32 (c.id) & 1u) != 0 ? 0.15f : -0.15f);
+            }
+            panNow += blockA (0.5f) * (panTarget - panNow);
+            spreadNow.store (panNow);
+            once (std::abs (panNow) > 0.08f, 8, suite::Autopilot::layersSpread);
+
+            // The kick in key: from the body's measured pitch, the nearest key note below it
+            tuneRatio = 1.0;
+            if (c.mixing && c.role == 1 && c.keyValid && tuneBodyHz > 30.0f)
+            {
+                const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, c.keyScale)].steps;
+                const auto midi = 69.0 + 12.0 * std::log2 (tuneBodyHz / 440.0);
+                double best = 1.0e9;
+                for (int down = 0; down <= 200; ++down)   // hundredths of a semitone, downwards only
+                {
+                    const auto m = midi - down / 100.0;
+                    const auto rounded = std::round (m);
+                    if (std::abs (m - rounded) > 0.005) continue;
+                    const auto pc = (((int) rounded - c.keyRoot) % 12 + 12) % 12;
+                    if (std::find (steps.begin(), steps.end(), pc) == steps.end()) continue;
+                    const auto preferred = pc == 0 || pc == 7;
+                    const auto cost = down / 100.0 - (preferred ? 0.75 : 0.0);   // the root or fifth, if it's not much further
+                    if (cost < best) { best = cost; tuneRatio = std::pow (2.0, -(down / 100.0) / 12.0); }
+                }
+                if (tuneRatio > 0.9913) tuneRatio = 1.0;   // within 15 cents: in tune already
+            }
+            tuneRatioNow.store ((float) tuneRatio);
+            once (tuneRatio < 0.999, 9, suite::Autopilot::kickTuned);
         }
 
         /** One stereo sample (r == l for mono tracks). */
@@ -188,6 +254,8 @@ namespace qn
             float x[2] = { l, r };
             if (mix)
             {
+                // Layers spread (before the mono lows, so the low end stays centred)
+                if (std::abs (panNow) > 0.001f && stereo) { x[0] *= 1.0f - panNow; x[1] *= 1.0f + panNow; }
                 // Mono lows
                 if (stereo)
                 {
@@ -211,6 +279,17 @@ namespace qn
                     x[c] = v;
                 }
                 if (ctx.role == 2) bassNotes (0.5f * (l + r));
+                if (ctx.role == 2 && kickDipHz > 0.0f)
+                {
+                    const auto depth = kickMsNow < 200.0f ? 0.5f * std::exp (-kickMsNow / 60.0f) : 0.0f;   // up to 6 dB, gone in ~150 ms
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        const auto band = kickDip[(size_t) c].bandpass (x[c]) / 4.0f;
+                        x[c] -= band * depth;
+                    }
+                    once (depth > 0.25f, 10, suite::Autopilot::kickBassDips);
+                }
+                if (ctx.role == 1) tuneKick (x);
                 if (ctx.role == 2 && harmAmt > 0.01f)
                 {
                     const auto h = harmBp.bandpass (std::tanh (4.0f * harmLp.lowpass (0.5f * (x[0] + x[1])))) * 0.2f * harmAmt;
@@ -338,6 +417,58 @@ namespace qn
             once (deepest < -1.5f, 6, suite::Autopilot::resonancesSoothed);
         }
 
+        // The kick in key: each hit's body (under 150 Hz) is read back from the hit's start at the
+        // tuning ratio (slower = lower), the click above it untouched; between hits, 5 ms crossfades
+        void tuneKick (float* x) noexcept
+        {
+            const auto mono = 0.5f * (x[0] + x[1]);
+            const auto body = tuneLp.lowpass (mono);
+            const auto fast = tuneFast.process (std::abs (body)), slow = tuneSlow.process (std::abs (body));
+            ++tuneSince;
+            const auto size = (int) tuneBuf[0].size();
+            float lows[2];
+            for (int c = 0; c < 2; ++c) { lows[c] = tuneSplit[(size_t) c].lowpass (x[c]); tuneBuf[(size_t) c][(size_t) tuneWrite] = lows[c]; }
+            if (fast > 2.0f * slow && fast > 0.01f && tuneSince > (int) (0.1f * fs))
+            {
+                tuneSince = 0; tuneOnsetAt = tuneWrite; tuneRead = 0.0; tuneFade = (int) (0.005f * fs);
+                tuneCrossings = 0; tunePeriodSum = 0.0; tunePeriods = 0; tuneZc = 0;
+            }
+            // Measure the body's pitch 15-80 ms into the hit
+            if (tuneSince > (int) (0.015f * fs) && tuneSince < (int) (0.08f * fs))
+            {
+                ++tuneZc;
+                const auto sign = tuneLastSign ? body > -0.001f : body > 0.001f;
+                if (sign && ! tuneLastSign)
+                {
+                    if (tuneCrossings > 0) { tunePeriodSum += tuneZc; ++tunePeriods; }
+                    ++tuneCrossings; tuneZc = 0;
+                }
+                tuneLastSign = sign;
+            }
+            else if (tuneSince == (int) (0.08f * fs) && tunePeriods >= 2)
+            {
+                const auto hz = (float) (fs * tunePeriods / tunePeriodSum);
+                if (hz > 30.0f && hz < 150.0f) tuneBodyHz = tuneBodyHz <= 0.0f ? hz : tuneBodyHz + 0.3f * (hz - tuneBodyHz);
+                kickBodyNow.store (tuneBodyHz);
+            }
+            if (tuneRatio < 0.999 && tuneOnsetAt >= 0 && tuneSince < size - 8)
+            {
+                const auto pos = tuneOnsetAt + tuneRead;
+                const auto i0 = (int) std::floor (pos), i1 = i0 + 1;
+                const auto frac = (float) (pos - i0);
+                for (int c = 0; c < 2; ++c)
+                {
+                    const auto& b = tuneBuf[(size_t) c];
+                    const auto shifted = b[(size_t) (i0 % size)] * (1.0f - frac) + b[(size_t) (i1 % size)] * frac;
+                    const auto mixIn = tuneFade > 0 ? (float) tuneFade / (0.005f * fs) : 0.0f;   // fade from the old hit's read into this one
+                    x[c] += (shifted - lows[c]) * (1.0f - mixIn);
+                }
+                tuneRead += tuneRatio;
+            }
+            if (tuneFade > 0) --tuneFade;
+            tuneWrite = (tuneWrite + 1) % size;
+        }
+
         // Even drum hits: a hit 3 dB or more over the recent ones is brought most of the way back
         float hits (bool attack, float a) noexcept
         {
@@ -429,6 +560,18 @@ namespace qn
         int expHold = 0;
         bool wasLoud = false;
         float a1ms = 0.0f, a5ms = 0.0f, a20ms = 0.0f, a40ms = 0.0f, a80ms = 0.0f, a200ms = 0.0f;
-        std::array<bool, 8> counted {};
+        std::array<bool, 12> counted {};
+        std::array<suite::Svf, 2> kickDip;
+        float kickDipHz = 0.0f, panNow = 0.0f;
+        std::array<suite::Svf, 2> tuneSplit;
+        suite::Svf tuneLp;
+        std::array<std::vector<float>, 2> tuneBuf;
+        int tuneWrite = 0, tuneOnsetAt = -1, tuneSince = 1 << 30, tuneFade = 0, tuneZc = 0, tuneCrossings = 0, tunePeriods = 0;
+        double tuneRead = 0.0, tuneRatio = 1.0, tunePeriodSum = 0.0;
+        bool tuneLastSign = false;
+        float tuneBodyHz = 0.0f;
+        suite::EnvelopeFollower tuneFast, tuneSlow;
+    public:
+        std::atomic<float> spreadNow { 0.0f }, tuneRatioNow { 1.0f }, kickBodyNow { 0.0f };
     };
 }

@@ -154,8 +154,10 @@ public:
         fdn.setParameters (s.decay, s.size, s.dampHz, s.modulation);
         predelay.setTargetValue (juce::jmax (1.0f, s.predelayMs * 0.001f * sr));
         // The longer the decay, the more the reverb amplifies what is fed back into it,
-        // so the shimmer feedback is scaled down to keep the loop gain below 1.
-        shimmer.setTargetValue (s.shimmer * 0.5f / std::sqrt (juce::jmax (1.0f, s.decay / 1.5f)));
+        // so the shimmer feedback is scaled down to keep the loop gain below 1 - with a margin: at
+        // the longest decays the old 0.5 sat right at the edge, and a slightly different pre-delay
+        // could tip a 20 s shimmer into ringing on
+        shimmer.setTargetValue (s.shimmer * 0.5f / std::pow (juce::jmax (1.0f, s.decay / 1.5f), 0.6f));
         width.setTargetValue (s.width);
         shimL.setSemitones (s.shimmerSemitones);
         shimR.setSemitones (s.shimmerSemitones);

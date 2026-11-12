@@ -316,7 +316,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 if (phase < 0.0) phase += info.barQuarters();
                 lc.kickMs = kick.msSinceHit (sectionType, phase, info.barQuarters(), 60000.0 / juce::jmax (1.0, info.bpm));
                 lc.msPerSample = (float) (1000.0 / sr);
+                lc.kickBodyHz = kick.bodyHz;
             }
+        if (const auto key = suite::KeyBus::read(); key.valid) { lc.keyValid = true; lc.keyRoot = key.root; lc.keyScale = key.scale; }
         live.beginBlock (lc, n);
         if (mixing && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
     }
@@ -330,6 +332,21 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     for (int i = 0; i < n; ++i)
     {
         float x[2] = { ch[0][i], ch[1] != nullptr ? ch[1][i] : ch[0][i] };
+        {   // what comes in: its crest (peak over level), for the "squashed before it" suggestion
+            const auto a = juce::jmax (std::abs (x[0]), std::abs (x[1]));
+            inPeakWin = juce::jmax (inPeakWin, a);
+            inPowWin += 0.5 * ((double) x[0] * x[0] + (double) x[1] * x[1]);
+            if (++inWinCount >= (int) (sr * 0.4))
+            {
+                const auto rms = std::sqrt (inPowWin / inWinCount);
+                if (rms > 1.0e-3)
+                {
+                    const auto crest = juce::Decibels::gainToDecibels ((float) (inPeakWin / rms));
+                    inCrestDb.store (inCrestDb.load() < -50.0f ? crest : inCrestDb.load() + 0.05f * (crest - inCrestDb.load()));
+                }
+                inPeakWin = 0.0f; inPowWin = 0.0; inWinCount = 0;
+            }
+        }
         for (int c = 0; c < 2; ++c)
         {
             auto v = x[c];
@@ -1132,7 +1149,11 @@ bool QuintessenceProcessor::punchMove (const Measurement& m, int role)
 
 bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
 {
-    if (role != qn::targets::musicBus || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
+    // The music bus, and (with the autopilot's mixing) a drum bus: a track named drums, perc or beats
+    const auto track = getTrackName().toLowerCase();
+    const auto drumBus = suite::Autopilot::on (suite::Autopilot::mixing) && (track.contains ("drum") || track.contains ("perc") || track.contains ("beat"));
+    if ((role != qn::targets::musicBus && ! drumBus) || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
+    if (drumBus && ! drumBusCounted) { drumBusCounted = true; suite::Autopilot::count (suite::Autopilot::drumBusGlued); }
     const auto thr = value (qn::glueThrId);
     const auto on = thr < -0.05f;
     const auto err = (on ? m.glueGrDb : 0.0f) - glueTarget();
@@ -1519,6 +1540,12 @@ QuintessenceProcessor::SuiteStatus QuintessenceProcessor::suiteStatus()
     for (auto& g : grNow) gr = juce::jmax (gr, g.load());
     s.metrics = { (float) effectiveRole(), (float) active, gr, sideNow.load() };   // [3]: the side under the middle (dB): the stereo field map
     if (haveBands) { s.flags |= suite::Status::hasBands; s.bands = longBands; }
+    // Squashed before it arrives: a kick, percussion or vocal with almost no crest left
+    {
+        const auto role = effectiveRole();
+        const auto limit = role == 1 ? 8.0f : role == 3 ? 7.0f : role == 6 ? 6.0f : -1.0f;
+        if (limit > 0.0f && inCrestDb.load() > -50.0f && inCrestDb.load() < limit) s.flags |= suite::Status::squashedInput;
+    }
     return s;
 }
 

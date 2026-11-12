@@ -196,6 +196,26 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         s.decay = scenes.plain (sDecay);
         s.size = value (Verb::size);
         s.predelayMs = value (Verb::predelay);
+        // Autopilot (mixing): the space in time with the song - the pre-delay on the nearest note
+        // value (1/128 to 1/16), the decay down to whole beats (the section scenes still lengthen it in
+        // breakdowns and tighten it in drops)
+        if (suite::Autopilot::on (suite::Autopilot::mixing) && host.bpm > 1.0)
+        {
+            const auto beat = (float) (60.0 / host.bpm);
+            if (s.predelayMs > 1.0f)
+            {
+                float best = s.predelayMs, bestErr = 1.0e9f;
+                for (const auto div : { 32.0f, 16.0f, 8.0f, 4.0f })   // a beat over these: 1/128, 1/64, 1/32 and 1/16 notes
+                {
+                    const auto ms = 1000.0f * beat / div;
+                    if (std::abs (std::log (ms / s.predelayMs)) < bestErr) { bestErr = std::abs (std::log (ms / s.predelayMs)); best = ms; }
+                }
+                s.predelayMs = best;
+            }
+            s.decay = juce::jmax (beat, std::floor (s.decay / beat + 1.0e-3f) * beat);   // (rounded down: never longer than set)
+            timedNow.store (true);
+        }
+        else timedNow.store (false);
         // Autopilot (harshness): while the master is harsh, the tails darken (damping down an octave at most)
         const auto harsh = suite::Autopilot::on (suite::Autopilot::harshness) ? suite::Autopilot::harshNow() : 0.0f;
         darkening += 0.2f * (harsh - darkening);
@@ -258,6 +278,19 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     float minPump = 1.0f;
     // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
     const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
+    {
+        const auto hz = mixingRoom && ! onLeadTrack.load() ? suite::Autopilot::leadPitch() : 0.0f;
+        const auto act = hz > 100.0f ? juce::jlimit (0.0f, 1.0f, suite::ActivityBus::read (suite::ActivityBus::lead)) : 0.0f;
+        if (hz > 100.0f && std::abs (hz - noteDipHz) > 0.01f * hz)
+        {
+            for (int c = 0; c < 2; ++c) { noteDip[(size_t) c].set (hz, 4.0f, sr); noteDip[(size_t) c + 2].set (juce::jmin (hz * 2.0f, 0.45f * sr), 4.0f, sr); }
+            noteDipHz = hz;
+        }
+        noteRoom += 0.3f * (act - noteRoom);
+        if (noteRoom > 0.5f && ! noteRoomCounted) { noteRoomCounted = true; suite::Autopilot::count (suite::Autopilot::reverbMadeRoom); }
+        if (noteRoom < 0.1f) noteRoomCounted = false;
+        noteRoomNow.store (noteRoom);
+    }
     const auto leadNow = mixingRoom ? juce::jmax (suite::ActivityBus::read (suite::ActivityBus::lead), suite::ActivityBus::read (suite::ActivityBus::vocal))
                                     : suite::ActivityBus::read (suite::ActivityBus::lead);
     const auto leadTarget = 1.0f - 0.6f * leadAmount * juce::jlimit (0.0f, 1.0f, leadNow);
@@ -369,6 +402,13 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         const auto es = echoSend.getNextValue(), ts = throwSend.getNextValue();
         float rL, rR;
         reverb.process (inL + es * eL + ts * tL, inR + es * eR + ts * tR, vDuck, rL, rR);
+        // Autopilot (mixing): the tail makes room at the lead's note and its octave while it plays
+        if (noteRoom > 0.01f)
+        {
+            const auto g = 1.0f - 0.5f * noteRoom;   // up to 6 dB
+            rL -= (noteDip[0].bandpass (rL) + noteDip[2].bandpass (rL)) / 4.0f * (1.0f - g);
+            rR -= (noteDip[1].bandpass (rR) + noteDip[3].bandpass (rR)) / 4.0f * (1.0f - g);
+        }
         leadRoomGain += (leadTarget < leadRoomGain ? leadAttack : leadRelease) * (leadTarget - leadRoomGain);
         eL *= leadRoomGain; eR *= leadRoomGain; tL *= leadRoomGain; tR *= leadRoomGain;
         auto vg = verbGain.getNextValue() * leadRoomGain;

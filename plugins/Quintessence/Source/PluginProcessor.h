@@ -140,7 +140,13 @@ private:
     bool budgetMove (const Measurement&, int role);
     void keyMove (int role);       // the autopilot: a pitched FX note out of the song's key is notched
     void returnsMove();            // ... and an effect return gets its cuts
-    bool returnsDone = false, monoCounted = false;
+    bool returnsDone = false, monoCounted = false, drumBusCounted = false;
+    float inPeakWin = 0.0f;
+    double inPowWin = 0.0;
+    int inWinCount = 0;
+public:
+    std::atomic<float> inCrestDb { -100.0f };   // the crest of what comes in (peak over RMS, 400 ms windows, averaged)
+private:
     float needNow (const Measurement&, int role) const;
     std::function<void()> masterTone (uint32_t data);
     int budgetDone = -1;

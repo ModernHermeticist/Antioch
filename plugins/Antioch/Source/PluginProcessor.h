@@ -94,6 +94,12 @@ public:
     std::atomic<int> chordShift { 0 };   // semitones the resonators follow the chord (tests, UI)    // the wet gain lead-aware space is applying (tests, UI)
     float leadRoomGain = 1.0f;
     bool madeRoom = false;
+    std::array<suite::Svf, 4> noteDip;   // the lead's note and its octave, left and right
+    float noteDipHz = 0.0f, noteRoom = 0.0f;
+    bool noteRoomCounted = false;
+public:
+    std::atomic<float> noteRoomNow { 0.0f };   // how far the tail is making room at the lead's note (tests)
+    std::atomic<bool> timedNow { false };       // pre-delay and decay on the tempo (tests)
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

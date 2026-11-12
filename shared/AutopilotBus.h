@@ -31,6 +31,7 @@ namespace suite::Autopilot
         partsThinned, turnsTaken,
         masksDipped, partsLifted, lowEndCleared, transientsSoftened, outOfKeyNotched, bassNotesEvened, harmonicsAdded,
         resonancesSoothed, hitsEvened, tailsQuietened, returnsCleaned, sectionCorrections, reverbMadeRoom, monoLowsKept,
+        kickBassDips, layersSpread, kickTuned, drumBusGlued,
         numCounters
     };
     inline const char* counterName (int c)
@@ -41,7 +42,8 @@ namespace suite::Autopilot
                                    "masking dips (making room)", "lead / vocal lifted through a busy moment", "low end left to the kick and bass",
                                    "transients softened on the kick", "out-of-key FX notes cut", "bass notes evened out", "harmonics added for small speakers",
                                    "moving resonances soothed", "drum hits evened out", "quiet tails cleaned (noise floor)", "effect returns cleaned",
-                                   "groove / intro / outro corrections (EQ per section)", "reverb making room (kick, lead, vocal)", "tracks with mono lows" };
+                                   "groove / intro / outro corrections (EQ per section)", "reverb making room (kick, lead, vocal)", "tracks with mono lows",
+                                   "bass making room for the kick's note", "layers spread apart", "kicks tuned to the key", "drum buses glued" };
         return c >= 0 && c < numCounters ? n[c] : "";
     }
 
@@ -76,6 +78,7 @@ namespace suite::Autopilot
             }();
             return *s;
         }
+        inline uint32_t hash32 (uint32_t x) noexcept { x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }
         inline uint32_t nowMs() noexcept
         {
             using namespace std::chrono;

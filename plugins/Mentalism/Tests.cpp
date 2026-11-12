@@ -1366,5 +1366,22 @@ int main (int argc, char** argv)
         editor.reset();
     }
 
+
+    section ("Mixing suggestions");
+    {
+        suite::Registry::reset();
+        for (uint32_t k = 0; k < 3; ++k) suite::Registry::announce (0x900u + k, "Antioch", "Pad " + juce::String ((int) k + 1), 0, { 0, 0, 0, 0 });
+        suite::Registry::announce (0x910u, "Antioch", "Reverb Return", 0, { 0, 0, 0, 0 });
+        suite::Registry::announce (0x920u, "Quintessence", "Vox", suite::Status::squashedInput, { 6, 0, 0, 0 });
+        auto p = make();
+        auto all = p->mixChecks().joinIntoString ("\n");
+        check (all.contains ("3 tracks have their own Antioch"), "three Antiochs on tracks (not returns): move them to returns");
+        check (all.contains ("'Vox' arrives flattened"), "a track arriving squashed is named");
+        check (! all.contains ("Ears"), "no ear reminder yet");
+        p->listenedSeconds.store (46.0 * 60.0);
+        check (p->mixChecks().joinIntoString ("\n").contains ("Ears"), "after 45 minutes of listening: a reminder to rest your ears");
+        suite::Registry::reset();
+    }
+
     return finish();
 }
