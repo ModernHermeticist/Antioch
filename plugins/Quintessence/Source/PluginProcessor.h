@@ -32,6 +32,8 @@
 #include "Music.h"
 #include "Registry.h"
 #include "LiveMix.h"
+#include "DirectorStage.h"
+#include "Premaster.h"
 #include "KeyBus.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
@@ -169,6 +171,13 @@ private:
     std::atomic<int> measureGroup { 0 };
     std::array<suite::Svf, 4> lowCuts, highCuts;   // two per channel: 24 dB/oct
     float lowCutNow = -1.0f, highCutNow = -1.0f;
+    qn::DirectorStage directorStage;
+    float headroomGain = 1.0f;
+    suite::DirectorBus::Follower suiteDirector, suiteDirectorIdle;   // (idle: never refreshed, so the stage ramps back to neutral)
+public:
+    std::atomic<float> directorPresence { 0.0f };   // the director's room-making dip now (dB)
+    std::atomic<float> headroomTrimNow { 0.0f };    // the premaster headroom trim on this track now (dB)
+private:
     std::array<std::array<suite::Biquad, 2>, qn::numSlots> peaks;
     std::array<std::array<float, 3>, qn::numSlots> peakNow {};   // freq, gain, q in use
     // The multiband: a stereo Linkwitz-Riley tree (6 splits, and each lower band phase-matched to

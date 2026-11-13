@@ -6,6 +6,7 @@
 #include "FixBus.h"
 #include "Voices.h"
 #include "SectionBus.h"
+#include "DirectorBus.h"
 #include "HostInfo.h"
 #include "ReverseSwell.h"
 #include "StyleLog.h"
@@ -182,7 +183,13 @@ public:
 private:
     float value (const juce::String& id) const { return apvts.getRawParameterValue (id)->load(); }
     double tuning (int slot, float rootHz) const;   // playback ratio that puts a sample on the song's key
-    void enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop);
+    void enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop,
+                       float impactScale = 1.0f, float downScale = 1.0f);   // scales: the suite director's part for Azoth (0 = someone else's moment)
+    suite::DirectorBus::Follower suiteDirector;
+    int directorSection = -1;
+    float dirRiserNow = 1.0f, dirRollNow = 1.0f, dirSwellNow = 1.0f;
+    bool dirTapeNow = false;
+    double dirGapNow = 0.0;
 
     suite::SectionFollower sections;
     azoth::Impact impact;

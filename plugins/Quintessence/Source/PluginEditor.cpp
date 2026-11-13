@@ -76,6 +76,7 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         addAndMakeVisible (*mbLocks.back());
     }
     lowCut.maxHeight = highCut.maxHeight = width.maxHeight = 74;
+    autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueRoom); };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;

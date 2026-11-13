@@ -41,6 +41,13 @@ namespace trm
         std::vector<OtherTrack> others;                  // tracks that decide before this one
         std::vector<std::pair<double, double>> hookRests;  // where the song's hook rests (Correspondence), quarters
         std::vector<std::pair<double, double>> vocalNotes; // what the vocal sang (Solve et Coagula), quarters
+        // The suite director (Ouroboros): when its plan is live, every transition moment is its
+        // call. This track leads (part 1, in the family it asks for), supports (2: one small
+        // move) or rests (no cue). The director's silences have no moves in them.
+        struct SuiteCue { double fromQ = 0.0, toQ = 0.0; int part = 0, family = -1, heroRole = 0; };
+        bool suiteActive = false;
+        std::vector<SuiteCue> suiteCues;
+        std::vector<std::pair<double, double>> suiteSilences;
     };
 
     struct Plan
@@ -249,7 +256,7 @@ namespace trm
         // ---- song-wide choices (the same on every track: they use only the song's seed) ----
         int drops = 0;
         if (in.haveMap) for (int i = 0; i < in.map.count; ++i) if (in.map.sections[(size_t) i].type == suite::SectionType::Drop) ++drops;
-        if (drops >= 2 && mode (34) != mNever)
+        if (drops >= 2 && mode (34) != mNever && ! in.suiteActive)   // the suite director owns the silences (and the fake drop)
         {
             const auto r = unit (mix (in.songSeed, 34u));
             if (mode (34) == mAlways || r < 0.5f * juce::jlimit (0.0f, 2.0f, in.songSpice))
@@ -354,6 +361,20 @@ namespace trm
                 const auto r1 = unit (h), r2 = unit (h ^ 0xabcdu);
                 int picks = body ? (int) std::floor (p * 1.6f + r1) : (r1 < p ? 1 : 0) + (r2 < p - 1.0f ? 1 : 0);
                 picks = juce::jlimit (0, body ? 3 : 2, picks);
+                // the suite director decides the transitions: lead, support or rest
+                int suitePart = -1, suiteFamily = -1;
+                if (in.suiteActive && ! body)
+                {
+                    suitePart = 0;
+                    for (const auto& c : in.suiteCues)
+                        if (c.toQ > s.startQ - 1.0e-6 && c.fromQ < s.endQ + 1.0e-6)
+                        {
+                            auto part = c.part;
+                            if (part == 1 && c.heroRole != 0 && c.heroRole != in.role) part = 2;   // you chose another track to lead
+                            if (part == 1 || (part == 2 && suitePart != 1)) { suitePart = part; suiteFamily = c.family; }
+                        }
+                    picks = suitePart == 0 ? 0 : suitePart == 2 ? juce::jmin (picks, 1) : juce::jlimit (1, 2, picks);
+                }
                 for (int k = 0; k < picks; ++k)
                 {
                     std::vector<std::pair<int, float>> cands;
@@ -376,6 +397,8 @@ namespace trm
                         if (quietForVocal && e.size == 3) w *= 0.3f;
                         if (on (92) && e.size == 3) w *= s.dropOrdinal == 0 ? 0.6f : (drops > 1 && s.dropOrdinal == drops - 1) ? 1.4f : 1.0f;
                         if (! body && e.size == 3 && (s.kind & (sPhraseEnd | sSectionEnd))) w *= 0.5f;
+                        if (suitePart == 2 && e.size > 1) continue;
+                        if (suitePart == 1 && suiteFamily >= 0) w *= e.family == suiteFamily ? 4.0f : 0.35f;
                         if (w <= 0.0f) continue;
                         cands.push_back ({ e.id, w });
                         total += w;
@@ -387,7 +410,8 @@ namespace trm
                     uint8_t flags = 0;
                     if (on (94) && ! body && isMotif (effect (pick))) flags |= mfMotif;
                     if (on (91) && in.signature[(size_t) pick] >= 2.0f) flags |= mfSignature;
-                    addMove (pick, flags, baseAmount);
+                    if (suitePart > 0) flags |= mfSuite;
+                    addMove (pick, flags, suitePart == 2 ? baseAmount * 0.6f : baseAmount);
                 }
             }
 
@@ -422,7 +446,7 @@ namespace trm
         for (const auto& s : slots)
         {
             if (quiet) break;
-            if (s.kind == sBuildEnd && s.next == suite::SectionType::Drop && mode (100) != mNever && in.role != 1)
+            if (s.kind == sBuildEnd && s.next == suite::SectionType::Drop && mode (100) != mNever && in.role != 1 && ! in.suiteActive)
             {
                 const auto go = mode (100) == mAlways || unit (mix (in.songSeed, 100u + (uint32_t) s.dropOrdinal)) < 0.45f * juce::jlimit (0.0f, 2.0f, in.songSpice);
                 if (go)
@@ -467,7 +491,7 @@ namespace trm
             }
 
         // ---- call and response: answer the lead's or vocal's gestures a bar later ----
-        if (! quiet && on (93) && in.role != 1 && in.role != 2)
+        if (! quiet && on (93) && in.role != 1 && in.role != 2 && ! in.suiteActive)
         {
             for (const auto& o : in.others)
             {
@@ -495,6 +519,24 @@ namespace trm
             }
         }
 
+        // the director's silences: nothing plays into them
+        if (in.suiteActive && ! in.suiteSilences.empty())
+        {
+            std::vector<Move> kept;
+            for (auto mv : plan.moves)
+            {
+                bool drop = false;
+                if ((mv.slot & bodySlots) == 0)
+                    for (const auto& [a, b] : in.suiteSilences)
+                        if (mv.startQ < b && mv.endQ > a)
+                        {
+                            if (mv.startQ < a - 0.05) mv.endQ = (float) a;
+                            else drop = true;
+                        }
+                if (! drop) kept.push_back (mv);
+            }
+            plan.moves = std::move (kept);
+        }
         std::stable_sort (plan.moves.begin(), plan.moves.end(), [] (const Move& a, const Move& b) { return a.startQ < b.startQ; });
         if (plan.moves.size() > 256) plan.moves.resize (256);
         return plan;

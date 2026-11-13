@@ -8,6 +8,7 @@
 #include "SectionBus.h"
 #include "HostInfo.h"
 #include "Director.h"
+#include "DirectorBus.h"
 #include "Engine.h"
 #include "Recipes.h"
 #include <atomic>
@@ -105,6 +106,8 @@ private:
     trm::Engine engine;
     double sampleRate = 48000.0;
     suite::SectionFollower sections;
+    suite::DirectorBus::Follower suiteAudio, suiteMsg;   // the suite director's plan (audio thread / message thread)
+    float silenceGain = 1.0f;                             // the director's silences, ramped
     juce::SmoothedValue<float> outGain;
 
     // the plan, handed to the audio thread

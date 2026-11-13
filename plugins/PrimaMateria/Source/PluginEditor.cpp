@@ -94,6 +94,7 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &monoLows, &status })
         addAndMakeVisible (c);
 
+    autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueSilence); };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;

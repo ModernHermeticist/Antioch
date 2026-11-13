@@ -19,10 +19,12 @@ namespace advisor
             { "Loud club (-6 LUFS)",    -6.0f, -0.3f },
             { "Streaming (-14 LUFS)",  -14.0f, -1.0f },
             { "My sound (your tracks)",  0.0f, -0.3f },   // learned from your finished tracks
+            { "Label-ready premaster (peaks -6 dBFS)", -16.0f, -6.0f },   // the suite's deliverable (the default): loudness as it lands
         };
         return t;
     }
-    constexpr int mySoundIndex = 3;   // (a reference never sets the loudness: it plays at the project's target)
+    constexpr int mySoundIndex = 3;
+    constexpr int premasterIndex = 4;   // the default: the suite delivers an unmastered, label-ready track   // (a reference never sets the loudness: it plays at the project's target)
 
     struct TonalTarget { const char* name; Bands curve; };
 

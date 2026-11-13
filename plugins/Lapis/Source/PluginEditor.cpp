@@ -14,15 +14,18 @@ LapisEditor::LapisEditor (LapisProcessor& p)
       manualGain (p.apvts, LapisProcessor::manualGainId, "Manual gain", Colours::brass),
       toneLow (p.apvts, LapisProcessor::toneLowId, "Low tone", accent),
       toneHigh (p.apvts, LapisProcessor::toneHighId, "High tone", accent),
-      bitDepth (p.apvts, LapisProcessor::bitDepthId, "Export as")
+      bitDepth (p.apvts, LapisProcessor::bitDepthId, "Export as"),
+      hearMaster (p.apvts, LapisProcessor::hearMasterId, "Hear the master (A/B: never render with it on)", Colours::ember)
 {
+    hearMaster.setTooltip ("The suite delivers a label-ready premaster: Lapis is a reference. Off: the audio passes untouched (render this). "
+                           "On: hear how it would master, for A/B only.");
     setLookAndFeel (&lnf);
     resetButton.onClick = [this] { processor.resetLearning(); };
     fingerprintButton.setTooltip ("Save this master chain and the finished master's tonal shape, or match a new song to one you saved");
     fingerprintButton.onClick = [this] { showFingerprintMenu(); };
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth, &resetButton, &fingerprintButton, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth, &resetButton, &fingerprintButton, &status, &hearMaster })
         addAndMakeVisible (c);
     setSize (1000, 520);
     startTimerHz (20);
@@ -46,6 +49,21 @@ void LapisEditor::timerCallback()
     ceiling.setEnabled (! processor.followingMentalism.load());
 
     juce::String text;
+    if (! processor.hearingMaster.load())
+    {
+        // the premaster: what passes through, against the label-ready checks
+        const auto pk = processor.premasterPeakDb.load();
+        text = pk <= -99.0f ? juce::String ("Premaster: passing through untouched. Play the song to check it.")
+             : pk <= suite::premaster::peakDbfs + 0.05f ? "Premaster OK: peaks " + juce::String (pk, 1) + " dBTP (at or under -6 dBFS), nothing on the master. Render this."
+                                                        : "Premaster: peaks " + juce::String (pk, 1) + " dBTP. Bring the master fader down " + juce::String (suite::premaster::overBy (pk), 1)
+                                                              + " dB for -6 dBFS headroom.";
+        status.setColour (juce::Label::textColourId, pk > suite::premaster::peakDbfs + 0.05f ? Colours::ember : Colours::text);
+        status.setText (juce::Time::getMillisecondCounterHiRes() < noteUntil ? note : text, juce::dontSendNotification);
+        grShown = std::max (processor.gainReductionDb.load(), grShown * 0.85f);
+        repaint (meterArea);
+        return;
+    }
+    text = "MASTER PREVIEW (A/B only, not for the render). ";
     if ((int) processor.apvts.getRawParameterValue (LapisProcessor::targetId)->load() == LapisProcessor::followMentalism)
         text = processor.followingMentalism.load() ? "Following Mentalism's target. " : "Mentalism not found: using the club target. ";
     if (m == LapisProcessor::Auto)
@@ -66,8 +84,44 @@ void LapisEditor::timerCallback()
 void LapisEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "LAPIS", "master finisher", accent);
-    drawPanel (g, meterArea, "Output");
+    const auto preview = processor.hearingMaster.load();
+    drawHeader (g, { 20, 12, 700, 32 }, "LAPIS", preview ? "master preview (A/B)" : "premaster check (reference only)", accent);
+    drawPanel (g, meterArea, preview ? "Output: the master preview" : "The premaster (passing through untouched)");
+    if (! preview)
+    {
+        // the premaster's own numbers
+        auto r = meterArea.reduced (16, 10).withTrimmedTop (16);
+        auto numbers = r.removeFromTop (90);
+        const auto pk = processor.premasterPeakDb.load(), st = processor.premasterLufs.load();
+        const std::tuple<juce::String, juce::String, juce::String, juce::Colour> items[] =
+        {
+            { "Short-term", st <= -70.0f ? juce::String::fromUTF8 ("\xe2\x80\x93") : juce::String (st, 1), "LUFS (reported, never chased)", Colours::text },
+            { "True peak", pk <= -99.0f ? juce::String::fromUTF8 ("\xe2\x80\x93") : juce::String (pk, 1), "dBTP (premaster: -6 or under)",
+              pk > suite::premaster::peakDbfs + 0.05f ? Colours::ember : Colours::moss },
+            { "Headroom", pk <= -99.0f ? juce::String::fromUTF8 ("\xe2\x80\x93") : juce::String (-pk, 1), "dB to full scale", Colours::text },
+            { "Master would add", (processor.gainDb.load() > 0.05f ? "+" : "") + juce::String (processor.gainDb.load(), 1), "dB (preview only)", Colours::dimText },
+        };
+        const auto w = numbers.getWidth() / 4;
+        for (auto& [label, value, unit, colour] : items)
+        {
+            auto cell = numbers.removeFromLeft (w);
+            g.setColour (Colours::dimText);
+            g.setFont (juce::FontOptions (12.0f));
+            g.drawText (label, cell.removeFromTop (16), juce::Justification::centred);
+            g.setColour (colour);
+            g.setFont (juce::FontOptions (32.0f, juce::Font::bold));
+            g.drawText (value, cell.removeFromTop (40), juce::Justification::centred);
+            g.setColour (Colours::dimText);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText (unit, cell, juce::Justification::centredTop);
+        }
+        g.setColour (Colours::dimText);
+        g.setFont (juce::FontOptions (12.5f));
+        g.drawFittedText ("The suite delivers a label-ready premaster: no limiting, clipping or gain on the master, peaks at or under -6 dBFS, 24-bit, no dither. "
+                          "Lapis' controls shape the master preview only.", r.withTrimmedTop (8), juce::Justification::topLeft, 2);
+        drawPanel (g, controlArea, "Master preview controls (A/B only)", accent);
+        return;
+    }
     drawPanel (g, controlArea, "Controls", accent);
 
     auto r = meterArea.reduced (16, 10).withTrimmedTop (16);
@@ -153,6 +207,7 @@ void LapisEditor::resized()
 
     auto c = controlArea.reduced (12, 8).withTrimmedTop (14);
     auto statusRow = c.removeFromBottom (30);
+    hearMaster.setBounds (statusRow.removeFromLeft (360).reduced (2));
     resetButton.setBounds (statusRow.removeFromRight (140).reduced (2));
     fingerprintButton.setBounds (statusRow.removeFromRight (170).reduced (2));
     status.setBounds (statusRow);

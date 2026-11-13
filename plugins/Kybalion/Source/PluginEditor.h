@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "AutopilotStrip.h"
+#include "DirectorBus.h"
 #include "SceneUI.h"
 
 /** 16 bars you click or drag to draw step levels; the playing step lights up. */
@@ -86,6 +88,8 @@ private:
     juce::Rectangle<int> masterArea;
 
     std::unique_ptr<suite::ui::TweakBanner> tweakBanner;
+
+    suite::ui::AutopilotStrip directorStrip;   // the suite director's cue for this plugin
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (KybalionEditor)
 };

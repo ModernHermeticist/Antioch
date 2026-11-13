@@ -1,6 +1,7 @@
 // Offline tests for Correspondence. Usage: CorrespondenceTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "DirectorWriting.h"
 #include "PluginEditor.h"
 #include "TempoBus.h"
 #include "SpireTools.h"
@@ -2087,6 +2088,42 @@ int main (int argc, char** argv)
             check (r.valid && hits >= 2 && juce::String (r.name).isNotEmpty(), "the song's chord rhythm as 16 gate steps (" + juce::String (r.name) + ", " + juce::String (hits) + " steps)");
         }
         prefs.deleteFile();
+    }
+
+
+    section ("Writing for the suite director's plan");
+    {
+        namespace dr = suite::director;
+        using chords::Note;
+        dr::Moment m;
+        m.kind = dr::kIntoDrop; m.atQ = 32.0f; m.section = 2; m.dropOrdinal = 0;
+        m.silence = dr::gSiSnap; m.silenceStartQ = 31.5f; m.silenceEndQ = 32.0f;
+        m.edit = dr::eBassOut; m.editStartQ = 28.0f; m.editEndQ = 32.0f;
+        m.harmony = dr::hBorrowed;
+        m.gesture[dr::pCorrespondence] = dr::gCoPickup; m.hero = dr::pCorrespondence; m.heroGesture = dr::gCoPickup;
+        const std::vector<dr::Moment> plan { m };
+        std::vector<Note> bass, chordsPart, lead, drums;
+        for (int q = 0; q < 40; ++q) bass.push_back ({ 45, (double) q, 0.9, 100 });
+        for (int q = 0; q < 40; q += 4) for (int iv : { 0, 3, 7 }) chordsPart.push_back ({ 57 + iv, (double) q, 3.9, 90 });
+        for (int q = 0; q < 40; ++q) lead.push_back ({ 69, q + 0.5, 0.9, 100 });
+        for (int q = 0; q < 40; ++q) { drums.push_back ({ 36, (double) q, 0.25, 110 }); drums.push_back ({ 42, q + 0.5, 0.1, 90 }); }
+        auto anyIn = [] (const std::vector<Note>& v, double a, double b) { return std::any_of (v.begin(), v.end(), [&] (const Note& n) { return n.start < b && n.start + n.length > a + 1.0e-6; }); };
+        chords::directed::apply (bass, chords::directed::Part::Bass, plan, 4.0, 9, 0, 0);
+        check (! anyIn (bass, 28.0, 32.0), "the bass rests for the bar before the drop (the director's arrangement edit)");
+        chords::directed::apply (lead, chords::directed::Part::Lead, plan, 4.0, 9, 0, 0);
+        check (! anyIn (lead, 31.5, 32.0) && anyIn (lead, 30.0, 31.4), "the lead leaves room for the snap, and plays up to it");
+        chords::directed::apply (drums, chords::directed::Part::Drums, plan, 4.0, 9, 0, 0);
+        check (! anyIn (drums, 31.5, 32.0), "the drums too");
+        chords::directed::apply (chordsPart, chords::directed::Part::Chords, plan, 4.0, 9, 0, 0);
+        std::set<int> pcs;
+        for (const auto& n : chordsPart) if (n.start >= 28.0 && n.start < 31.5) pcs.insert (n.pitch % 12);
+        check (pcs.count ((9 + 8) % 12) && pcs.count ((9 + 10) % 12), "a borrowed bVI-bVII into the drop (F and G in A minor)");
+        const auto clip = chords::directed::transitionsClip (plan, 4.0, 9, 0, lead);
+        check (clip.size() == 4 && clip.front().start >= 30.4 && clip.back().start < 31.5, "the pickup fill: four notes into the snap (the Song Transitions clip)");
+        auto drumsKick = std::vector<Note> { { 36, 31.6, 0.2, 110 }, { 42, 31.6, 0.1, 90 } };
+        auto kickOnly = m; kickOnly.silence = dr::gSiKickOnly; kickOnly.silenceStartQ = 28.0f;
+        chords::directed::apply (drumsKick, chords::directed::Part::Drums, { kickOnly }, 4.0, 9, 0, 0);
+        check (drumsKick.size() == 1 && drumsKick[0].pitch == 36, "a kick-only bar keeps the kick");
     }
 
     return finish();

@@ -10,7 +10,7 @@ namespace Params
         for (auto& t : advisor::tonalTargets()) tonal.add (t.name);
 
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
-        layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { loudnessTarget, 1 }, "Loudness Target", loud, 0));
+        layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { loudnessTarget, 1 }, "Loudness Target", loud, advisor::premasterIndex));
         layout.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { tonalTarget, 1 }, "Tonal Target", tonal, 0));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { autoCoach, 1 }, "Auto-coach", false));
         layout.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { compareAB, 1 }, "Compare with Reference (A/B)", false));

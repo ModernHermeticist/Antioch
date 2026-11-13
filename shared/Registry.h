@@ -31,7 +31,8 @@ namespace suite
             vocalBuried        = 1u << 12,  // the vocal has been buried under the music for 4 bars or more
             olderState         = 1u << 13,  // loaded from a project saved by an older version of the suite
             missingFiles       = 1u << 14,  // files the project uses (samples) can't be found
-            squashedInput      = 1u << 15   // Quintessence: what comes in has almost no peaks over its level (squashed before it)
+            squashedInput      = 1u << 15,  // Quintessence: what comes in has almost no peaks over its level (squashed before it)
+            masterPreview      = 1u << 16   // Lapis: Hear the master is on (the render would be a master, not the premaster)
         };
     }
 

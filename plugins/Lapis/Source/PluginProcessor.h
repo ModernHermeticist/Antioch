@@ -3,6 +3,7 @@
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "Premaster.h"
 #include "ConductorBus.h"
 #include "Limiter.h"
 #include "Analysis.h"
@@ -49,7 +50,7 @@ public:
     static inline const juce::String targetId { "target" }, modeId { "mode" }, ceilingId { "ceiling" }, clipId { "clip" },
                                      releaseId { "release" }, manualGainId { "manualgain" },
                                      toneLowId { "tone_low" }, toneHighId { "tone_high" },
-                                     bitDepthId { "bitdepth" };   // 24-bit (no dither) or 16-bit (TPDF dither)   // gentle shelves (100 Hz / 8 kHz); Mentalism's reference match sets them
+                                     bitDepthId { "bitdepth" }, hearMasterId { "hear_master" };   // 24-bit (no dither) or 16-bit (TPDF dither)   // gentle shelves (100 Hz / 8 kHz); Mentalism's reference match sets them
     enum Mode { Auto = 0, Hold, Manual };
     static constexpr int followMentalism = 0;
     static float targetLufsFor (int index) { static const float t[] = { -8.0f, -8.0f, -6.0f, -14.0f }; return t[juce::jlimit (0, 3, index)]; }
@@ -109,7 +110,10 @@ public:
         is measured on its own: integrated loudness, true peak, length, the most gain reduction.
         When it stops, a note goes into <suite folder>/Export notes with the target and the
         dither used, and whether it hit them. */
-    struct PassResult { float lufs = -100.0f, truePeakDb = -100.0f, maxGrDb = 0.0f, seconds = 0.0f, targetLufs = -8.0f, ceilingDb = -0.3f; bool dithered = false; };
+    struct PassResult { float lufs = -100.0f, truePeakDb = -100.0f, maxGrDb = 0.0f, seconds = 0.0f, targetLufs = -8.0f, ceilingDb = -0.3f; bool dithered = false, premaster = false; };
+    /** Premaster (Hear the master off, the default): the audio passes untouched; these measure it. */
+    std::atomic<bool> hearingMaster { false };
+    std::atomic<float> premasterPeakDb { -100.0f }, premasterLufs { -100.0f };
     static juce::String exportNotes (const PassResult&);
     static juce::File& notesFolderOverride() { static juce::File f; return f; }   // tests
     static juce::File notesFolder() { return notesFolderOverride() != juce::File() ? notesFolderOverride() : suite::Alias::file ("Export notes"); }
@@ -119,7 +123,9 @@ public:
     {
         writeExportNotes();
         SuiteStatus s;
-        s.metrics[0] = maxReductionDb.load();
+        // the premaster (the default) has no limiting in it: only the master preview does
+        s.metrics[0] = hearingMaster.load() ? maxReductionDb.load() : 0.0f;
+        if (hearingMaster.load()) s.flags |= suite::Status::masterPreview;
         s.metrics[1] = grSinceStatus.exchange (0.0f);   // the most it held back since the last report (Mentalism: by section)
         return s;
     }
@@ -165,7 +171,11 @@ private:
 
     // The current play-through, for the export notes.
     analysis::LoudnessMeter passLoudness;
-    analysis::TruePeakMeter passPeak;
+    analysis::TruePeakMeter passPeak, premasterPeak;
+    analysis::LoudnessMeter premasterLoudness;
+    bool passHeardMaster = false;
+    std::array<std::vector<float>, 2> dryDelay;
+    int dryDelayPos = 0;
     bool wasPlaying = false;
     int64_t passSamples = 0;
     float passMaxGr = 0.0f;

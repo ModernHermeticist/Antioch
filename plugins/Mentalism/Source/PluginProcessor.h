@@ -8,6 +8,7 @@
 #include "AutopilotBus.h"
 #include "Spectrum.h"
 #include "Coach.h"
+#include "Premaster.h"
 #include "MySound.h"
 #include "Masking.h"
 #include "HostInfo.h"
@@ -118,6 +119,7 @@ public:
         advisor::Measurement measurement;
         float momentary, shortTerm, targetLufs, ceiling;
         juce::String targetName;
+        bool premaster = false;          // the target is a label-ready premaster (peaks -6 dBFS, loudness reported, never chased)
         advisor::Bands shortDiff {}, longDiff {};
         bool tonalAvailable = false;     // false when "Reference" is chosen but none is loaded
         bool arrangementAvailable = false;
@@ -148,6 +150,7 @@ public:
         45 minutes of listening. */
     juce::StringArray mixChecks() const;
     std::atomic<double> listenedSeconds { 0.0 };   // playback heard this session (the ear-fatigue reminder)
+    int directorFeedbackTicks = 0;                  // the suite director gets each section's loudness every few ticks
     /** A/B (Compare switch, or automate it from a key): while it's on, Mentalism plays the reference's
         loudest 20 s, looped, at the loudness the mix had when you switched, so you compare sound,
         not level. Put Mentalism last on the master to hear it. */
@@ -160,6 +163,12 @@ public:
     {
         const auto i = (int) apvts.getRawParameterValue (Params::loudnessTarget)->load();
         const auto mine = getMySound();
+        if (i == advisor::premasterIndex)   // a premaster: a reference plays at the mix's own loudness
+        {
+            const auto now = loudness.integrated();
+            projectTargetLufs.store (now > -70.0f ? now : -16.0f);
+            return;
+        }
         projectTargetLufs.store (i == advisor::mySoundIndex ? (mine.valid ? mine.lufs : advisor::loudnessTargets()[0].lufs)
                                                             : advisor::loudnessTargets()[(size_t) juce::jlimit (0, (int) advisor::loudnessTargets().size() - 1, i)].lufs);
     }
@@ -191,14 +200,17 @@ public:
 
     bool applyVersion (int kind) override
     {
-        setParameterPlain (apvts, Params::loudnessTarget, kind == suite::radioEdit ? 2.0f : 0.0f);
+        // every version is delivered as a premaster; only a master target follows the version
+        if ((int) apvts.getRawParameterValue (Params::loudnessTarget)->load() != advisor::premasterIndex)
+            setParameterPlain (apvts, Params::loudnessTarget, kind == suite::radioEdit ? 2.0f : 0.0f);
         return true;
     }
 
     /** New song (Ouroboros): the loudness target for the style. */
     bool applySession (const suite::SessionStyle& style, int, int) override
     {
-        setParameterPlain (apvts, Params::loudnessTarget, (float) style.loudnessTarget);
+        if ((int) apvts.getRawParameterValue (Params::loudnessTarget)->load() != advisor::premasterIndex)   // the premaster stays the goal
+            setParameterPlain (apvts, Params::loudnessTarget, (float) style.loudnessTarget);
         // Mix DNA: once your finished songs taught it your tonal balance, new songs aim for it.
         if (getMySound().valid && getMySound().learnedFromSongs())
             setParameterPlain (apvts, Params::tonalTarget, (float) advisor::mySoundTonalIndex);
@@ -300,6 +312,11 @@ public:
     /** Every timer tick: the slower readings the ladders judge by. */
     void measureTick (const Report& rep);
     std::atomic<float> windowPeak { 0.0f };   // the sample peak since the last tick (audio thread)
+    std::atomic<float> headroomPeak { 0.0f };   // the sample peak since the headroom keeper's last tick (audio thread)
+    std::array<float, 8> headroomTicks { { -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f } };
+    int headroomTick = 0;
+    float headroomTrim = 0.0f;
+    std::atomic<float> headroomNow { 0.0f };    // every track's premaster trim now (dB)
     float monoSlow = 0.0f, lowCorrSlow = 1.0f;
     std::array<float, (size_t) suite::SectionType::count> plrSum {}, grSum {};   // peak over loudness; Lapis' reduction (by kind of section)
     std::array<int, (size_t) suite::SectionType::count> plrCount {}, grCount {};

@@ -10,6 +10,7 @@
 #include "StyleLog.h"
 #include "Listen.h"
 #include "SuiteDSP.h"
+#include "DirectorHost.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <optional>
 #include <thread>
@@ -76,6 +77,8 @@ public:
     void analyseReference (const juce::File& file, double referenceBpm);
     /** Blocking version (tests): returns the proposal, count 0 if the file couldn't be read. */
     static suite::SectionMap proposeFromFile (const juce::File& file, double referenceBpm);
+    /** The file measured bar by bar (empty if it couldn't be read). */
+    static std::vector<listen::BarFeature> measureFile (const juce::File& file, double referenceBpm);
     std::optional<suite::SectionMap> takeReferenceProposal();
     std::atomic<bool> analysingReference { false };
     juce::String referenceName() const { const juce::ScopedLock sl (lock); return lastReferenceName; }
@@ -387,11 +390,35 @@ public:
         suite::RecipeBus::send (suite::RecipeAction::Save, lastDraftRecipe);
         addNote ("Drafted the song: MIDI in Drafts, setup saved as the recipe '" + lastDraftRecipe + "'");
     }
+    // ---- The suite director: one plan for every transition (DirectorHost.h) ----
+    ouro::DirectorHost director;
+    /** Re-plans now (after an edit) and publishes. True if the plan changed. */
+    bool replan()
+    {
+        directorDirty = false;
+        return director.update (getMap(), bpm.load(), barQuarters.load());
+    }
+    std::atomic<bool> directorDirty { true };
+    int directorTicks = 0, lastSampledBar = -1;
+    void tickDirector()
+    {
+        if (++directorTicks % 5 == 0 && playing.load())   // the rehearsal pass: how loud and busy each bar is
+        {
+            const auto bar = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load()) + 1.0e-9) + 1;
+            director.sampleLive (bar);
+            lastSampledBar = bar;
+        }
+        if (auto r = takeReferenceStyle(); r.valid) { director.reference = r; directorDirty = true; }
+        if (directorDirty.load() || directorTicks % 20 == 0) replan();
+    }
+    suite::director::ReferenceStyle takeReferenceStyle() { const juce::ScopedLock sl (lock); auto r = referenceStyleResult; referenceStyleResult = {}; return r; }
+    suite::director::ReferenceStyle referenceStyleResult;
+
     static inline const juce::String snapId { "snap" };
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); }
+    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); tickDirector(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "DirectorPanel.h"
 #include "AutopilotBus.h"
 #include "TransmuteBus.h"
 #include "../../Transmutation/Source/Effects.h"
@@ -1216,6 +1217,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
                                                     templateBox.getScreenBounds(), nullptr);
             return;
         }
+        if (id == 976)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            directorButton.triggerClick();
+            return;
+        }
         if (id == 977)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1478,6 +1485,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<SuitePanel> (&processor), suiteButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (suiteButton);
+    directorButton.setTooltip ("The director: one plan for every transition in the song, every plugin's part in it");
+    directorButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<ouro::DirectorPanel> (processor), directorButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (directorButton);
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
     {
@@ -1670,9 +1683,10 @@ void OuroborosEditor::timerCallback()
                               + " (" + juce::String (bar - s.startBar + 1) + " of " + juce::String (m.endBar (index) - s.startBar) + ")",
                           juce::dontSendNotification);
         const auto barsLeft = m.endBar (index) - bar;
-        nextLabel.setText (index + 1 < m.count ? juce::String ("Next: ") + suite::sectionName (m.sections[(size_t) index + 1].type)
-                                                     + " in " + juce::String (barsLeft) + (barsLeft == 1 ? " bar" : " bars")
-                                               : "Last section: song ends in " + juce::String (barsLeft) + " bars",
+        nextLabel.setText ((index + 1 < m.count ? juce::String ("Next: ") + suite::sectionName (m.sections[(size_t) index + 1].type)
+                                                      + " in " + juce::String (barsLeft) + (barsLeft == 1 ? " bar" : " bars")
+                                                : "Last section: song ends in " + juce::String (barsLeft) + " bars")
+                               + "\n" + processor.director.ticker (processor.ppq.load(), barQ),   // the director's "what's next" ticker
                            juce::dontSendNotification);
     }
     else
@@ -1707,6 +1721,7 @@ void OuroborosEditor::resized()
         slotButtons[(size_t) s].setBounds (header.removeFromRight (38).reduced (2, 8));
     snapshotStatus.setBounds (header.removeFromRight (170).reduced (4, 8));
     suiteButton.setBounds (header.removeFromRight (110).reduced (4, 8));
+    directorButton.setBounds (header.removeFromRight (110).reduced (4, 8));
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);
@@ -1813,6 +1828,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Stereo field: how wide each track sits...", 986);
     templateBox.addItem ("Autopilot: what the suite manages by itself...", 984);
     templateBox.addItem ("Mixer: every track's suggested moves (and export)...", 978);
+    templateBox.addItem ("The director: every transition, one plan...", 976);
     templateBox.addItem ("Transmutation: every track's creative moves, song spice...", 977);
     templateBox.addItem ("Mood: darker (the master's tilt)", 980);
     templateBox.addItem ("Mood: brighter (the master's tilt)", 981);

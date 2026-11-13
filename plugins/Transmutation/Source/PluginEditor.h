@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
 #include "AutopilotStrip.h"
+#include "DirectorBus.h"
 
 /** The plan on the song: sections along the top, each move as a block, the play position. */
 class PlanTimeline : public juce::Component

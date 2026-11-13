@@ -3,6 +3,7 @@
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
+#include "DirectorBus.h"
 #include "AutopilotBus.h"
 #include "SuiteDSP.h"
 #include "FixBus.h"
@@ -186,6 +187,7 @@ private:
 private:
     pm::Setting settingFor (int type) const;
 
+    suite::DirectorBus::Follower suiteDirector;   // the suite director's silences (suggested)
     suite::SectionFollower sections;
     analysis::LoudnessMeter loudness;
     analysis::BandAnalyzer spectrum;

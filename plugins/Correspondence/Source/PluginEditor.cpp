@@ -419,6 +419,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     songExportButton.setTooltip ("Write every song clip, the markers and a song pack to a folder");
     songExportButton.onClick = [this] { saveButton.triggerClick(); };
     addChildComponent (songExportButton);
+    directorStrip.director = [] { return suite::DirectorBus::cue (suite::director::pCorrespondence); };
+    addAndMakeVisible (directorStrip);
 
     // Resizable; the size is kept with the project
     setResizable (true, true);
@@ -1079,6 +1081,7 @@ void CorrespondenceEditor::resized()
         auto tabs = juce::Rectangle<int> (getWidth() - 16 - 260, 14, 260, 30);
         chordsTab.setBounds (tabs.removeFromLeft (130).reduced (3, 0));
         songTab.setBounds (tabs.reduced (3, 0));
+        directorStrip.setBounds (getWidth() - 16 - 260 - 12 - 440, 16, 440, suite::ui::AutopilotStrip::height);   // the director's cue, in the header
     }
     auto bounds = getLocalBounds().reduced (16);
     bounds.removeFromTop (48);

@@ -22,7 +22,7 @@ namespace trm
         uint32_t slot = 0;                  // the kind of moment (a Slot bit)
         uint8_t flags = 0;                  // see MoveFlags
     };
-    enum MoveFlags : uint8_t { mfLocked = 1, mfAlways = 2, mfAnswer = 4, mfMotif = 8, mfAudition = 16, mfSignature = 32 };
+    enum MoveFlags : uint8_t { mfLocked = 1, mfAlways = 2, mfAnswer = 4, mfMotif = 8, mfAudition = 16, mfSignature = 32, mfSuite = 64 };   // mfSuite: the suite director asked for it
 
     /** The song around a move, now. */
     struct Ctx

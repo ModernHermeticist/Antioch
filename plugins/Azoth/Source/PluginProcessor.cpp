@@ -177,13 +177,14 @@ void AzothProcessor::prepareToPlay (double newSampleRate, int)
     rollPos = -1.0e9;
 }
 
-void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop)
+void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType previous, double bpm, double barQ, float rootHz, bool laterDrop, float impactScale, float downScale)
 {
     using T = suite::SectionType;
     if (type == T::Drop)
     {
         // Second and later drops hit harder (up to +50% at full "Bigger later drops").
-        const auto boost = laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f;
+        if (impactScale <= 0.0f) return;   // the director gave this drop to someone else
+        const auto boost = (laterDrop ? 1.0f + 0.5f * value (laterDropsId) : 1.0f) * impactScale;
         if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId) * boost, tuning (slotImpact, rootHz));
         else
         {
@@ -203,9 +204,10 @@ void AzothProcessor::enterSection (suite::SectionType type, suite::SectionType p
     }
     else if (type == T::Breakdown)
     {
+        if (downScale <= 0.0f) return;
         const auto twoBars = (float) (2.0 * barQ * 60.0 / bpm);
-        if (samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (value (downId), tuning (slotDown, rootHz));
-        else downlifter.trigger (twoBars, rootHz * 4.0f, value (downId));
+        if (samplePlayers[slotDown].loaded()) samplePlayers[slotDown].trigger (value (downId) * downScale, tuning (slotDown, rootHz));
+        else downlifter.trigger (twoBars, rootHz * 4.0f, value (downId) * downScale);
     }
     else if (type == T::Groove && previous == T::Intro && value (grooveCrashId) > 0.5f)
     {
@@ -255,6 +257,12 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto riserRange = (int) value (riserRangeId) == 1 ? 24.0f : 12.0f;
     const auto riserRootHz = rootHz * 4.0f;   // octave 3
     const auto dropFx = (int) value (dropFxId);
+    auto dropFxNow = dropFx;
+    // The suite director: which of Azoth's gestures each moment gets (when its plan is live)
+    namespace dr = suite::director;
+    const auto directorLive = suiteDirector.refresh() && follow;
+    float dirRiser = 1.0f, dirRoll = 1.0f, dirSwell = 1.0f;
+    double dirGapQ = gapQ;
     const auto dropFxQ = dropFxQuarters ((int) value (dropFxLenId));
     const auto buildShape = (int) value (buildShapeId);
     const auto buildFilterAmount = value (buildFilterId);
@@ -314,7 +322,17 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             if (sec.valid && previousIndex >= 0 && ! jumped && sec.index != previousIndex)
             {
                 energyGain = juce::jlimit (0.0f, 3.0f, sec.energyRatio * sections.getMap().intensityScale());   // energy curve and Intensity
-                enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop());
+                float impactScale = 1.0f, downScale = 1.0f;
+                if (directorLive)
+                {
+                    const auto at = suiteDirector.momentNear (sec.startQ, 0.05, 0.05, dr::kIntoDrop | dr::kIntoBreak | dr::kIntoOther | dr::kPin);
+                    const auto g = at >= 0 ? suiteDirector[at].gesture[dr::pAzoth] : (uint8_t) dr::gNone;
+                    const auto part = at >= 0 && suiteDirector[at].hero == dr::pAzoth ? 1.0f : 0.6f;
+                    impactScale = g == dr::gAzImpact ? part : 0.0f;
+                    downScale = g == dr::gAzDown ? part : 0.0f;
+                    if (g == dr::gAzImpact || g == dr::gAzDown) suite::DirectorBus::reportActed (suiteDirector.hash(), at, dr::pAzoth);
+                }
+                enterSection (sec.type, previousType, host.bpm, barQ, rootHz * std::exp2 ((float) sec.keyShift / 12.0f), sec.isLaterDrop(), impactScale, downScale);
                 if (sec.type == T::Drop && sec.index == sections.getMap().lastDropIndex()) reachedFinalDrop.store (true);
             }
             // An impact moment (Ouroboros): the impact and crash on its bar, as on a drop.
@@ -338,9 +356,29 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             const auto rollPrevPos = rollPos;
             rollPos = pos;
 
+            if (sec.valid && directorLive && sec.index != directorSection)
+            {
+                // what the director wants from Azoth at the end of this section
+                directorSection = sec.index;
+                const auto at = suiteDirector.momentNear (sec.endQ, 0.05, 0.05, dr::kIntoDrop | dr::kIntoBuild | dr::kIntoBreak | dr::kIntoOther | dr::kBreakPeak);
+                const auto g = at >= 0 ? suiteDirector[at].gesture[dr::pAzoth] : (uint8_t) dr::gNone;
+                const auto part = at >= 0 && suiteDirector[at].hero == dr::pAzoth ? 1.0f : 0.6f;
+                dirRiserNow = g == dr::gAzRiser ? part : 0.0f;
+                dirRollNow = g == dr::gAzRoll ? part : 0.0f;
+                dirSwellNow = g == dr::gAzSwell ? part : 0.0f;
+                dirTapeNow = g == dr::gAzTapeStop;
+                dirGapNow = at >= 0 && suiteDirector[at].silence != dr::gNone && suiteDirector[at].silence != dr::gSiFakeDrop
+                              ? (double) (suiteDirector[at].atQ - suiteDirector[at].silenceStartQ) : 0.0;
+                if (g != dr::gNone && g != dr::gAzImpact && g != dr::gAzDown) suite::DirectorBus::reportActed (suiteDirector.hash(), at, dr::pAzoth);
+            }
+            if (directorLive)
+            {
+                dirRiser = dirRiserNow; dirRoll = dirRollNow; dirSwell = dirSwellNow; dirGapQ = dirGapNow;
+                dropFxNow = dirTapeNow ? (int) dfTapeStop : (int) dfOff;
+            }
             if (sec.valid)
             {
-                const auto end = sec.endQ - (sec.hasNext && sec.next == T::Drop ? gapQ : 0.0);
+                const auto end = sec.endQ - (sec.hasNext && sec.next == T::Drop ? dirGapQ : 0.0);
 
                 // Risers across the Build (same start as the roll), stopping for the gap.
                 if (sec.type == T::Build && followChords)
@@ -360,16 +398,16 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                     liftSemis = (float) (sec.nextKeyShift - sec.keyShift) * (float) ((pos - (end - 1.0)) / 1.0);
 
                 // Drop entrance: tape stop or stutter on this track's audio just before the drop.
-                if (dropFx != dfOff && sec.hasNext && sec.next == T::Drop)
+                if (dropFxNow != dfOff && sec.hasNext && sec.next == T::Drop)
                 {
                     if (pos >= end - dropFxQ && pos < end)
                         dropP = (float) ((pos - (end - dropFxQ)) / dropFxQ);
-                    else if (dropFx == dfTapeStop && pos >= end && pos < sec.endQ)
+                    else if (dropFxNow == dfTapeStop && pos >= end && pos < sec.endQ)
                         dropSilent = true;   // the tape has stopped: silence through the gap
                 }
 
                 // Snare roll through the Build, accelerating in steps and rising in pitch.
-                if (sec.type == T::Build && rollLevel > 0.0f)
+                if (sec.type == T::Build && rollLevel * dirRoll > 0.0f)
                 {
                     const auto startQ = rollStart == 0 ? sec.startQ
                                       : rollStart == 1 ? 0.5 * (sec.startQ + sec.endQ)
@@ -387,7 +425,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                                              && (int64_t) std::floor (w / rate) != (int64_t) std::floor (wPrev / rate);
                         if (crossed)
                         {
-                            snares[(size_t) nextSnare].trigger (rollLevel * (rollVel + (1.0f - rollVel) * (float) p),
+                            snares[(size_t) nextSnare].trigger (rollLevel * dirRoll * (rollVel + (1.0f - rollVel) * (float) p),
                                                                 std::exp2 (rollPitch * (float) rollPitchAmount (rollFrom, rollTo, rollCurve, p, rollPitchSpeed) / 12.0f));
                             rollPitchNow.store (rollPitch * (float) rollPitchAmount (rollFrom, rollTo, rollCurve, p, rollPitchSpeed));
                             nextSnare = (nextSnare + 1) % (int) snares.size();
@@ -397,7 +435,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 }
 
                 // Swell: rising, opening noise into every Drop.
-                if (swellLevel > 0.0f && sec.hasNext && sec.next == T::Drop)
+                if (swellLevel * dirSwell > 0.0f && sec.hasNext && sec.next == T::Drop)
                 {
                     // Into a later drop, the swell is longer (up to twice as long).
                     bool dropBefore = false;
@@ -409,7 +447,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                     {
                         const auto x = (float) s;
                         swellFilter.set (400.0f * std::pow (30.0f, x), 0.7f, sr);
-                        fx += swellFilter.lowpass (swellNoise.process()) * x * x * swellLevel * 0.6f;
+                        fx += swellFilter.lowpass (swellNoise.process()) * x * x * swellLevel * dirSwell * 0.6f;
                         riserActivity = juce::jmax (riserActivity, swellLevel > 0.0f ? x : 0.0f);
                     }
                 }
@@ -422,7 +460,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
         fx += (impact.process() + crash.process() + downlifter.process()) * energyGain;
         for (auto& sp : samplePlayers) fx += sp.process() * energyGain;
-        fx += riser.process (rise, riserRootHz * riseKey * chordRatio, riserRange, riserLevel) * riseGain;
+        fx += riser.process (rise, riserRootHz * riseKey * chordRatio, riserRange, riserLevel * dirRiser) * riseGain;
         if (rise >= 0.0f && riserLevel > 0.0f) riserActivity = juce::jmax (riserActivity, rise);
         for (auto& s : snares) fx += s.process() * riseGain;
 
@@ -529,7 +567,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                     dropFxRuns.fetch_add (1);
                 }
                 float outL = 0.0f, outR = 0.0f;
-                if (dropFx == dfTapeStop)
+                if (dropFxNow == dfTapeStop)
                 {
                     // The tape slows to a halt: read speed falls from 1 to 0, pitch with it.
                     const auto i0 = (int) tapeRead, i1 = (i0 + 1) % size;

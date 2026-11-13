@@ -21,6 +21,7 @@ private:
     suite::ui::Choice target, mode;
     suite::ui::Knob ceiling, clip, release, manualGain, toneLow, toneHigh;
     suite::ui::Choice bitDepth;
+    suite::ui::Toggle hearMaster;   // the master preview (A/B); off = the premaster passes untouched
     juce::File notesShown;
     juce::TextButton resetButton { "Reset learning" }, fingerprintButton { "Master fingerprint..." };
     std::unique_ptr<juce::AlertWindow> nameWindow;

@@ -251,6 +251,10 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
     const auto chordQ = (double) suiteChordQ.load();
     const auto stepQNow = Params::Gate::rateQuarters ((int) value (Params::Gate::rate));
     fillNow = 0;
+    // The suite director: when its plan is live, the fills are its call (and its silences close the gate)
+    const auto directorLive = suiteDirector.refresh() && host.playing && host.hasPpq;
+    const auto silenceStep = (float) (1.0 / (0.003 * sampleRate));
+    int dirIdx = -1, dirSilence = -1;
     int sectionNow = -1;
     bool pausedNow = false;
 
@@ -318,7 +322,20 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
             // Fills: the last bar before a drop (and a breakdown) plays a fill instead of the pattern.
             int fill = TranceGate::NoFill;
             double fillQ = 0.0;
-            if (followSections && fillWhen != Params::Fill::Off)
+            if (directorLive)
+            {
+                namespace dr = suite::director;
+                if ((n & 31) == 0) dirIdx = suiteDirector.actingAt (position, dr::pKybalion);
+                if (dirIdx >= 0)
+                {
+                    const auto& m = suiteDirector[dirIdx];
+                    const auto g = m.gesture[dr::pKybalion];
+                    fill = g == dr::gKyRoll ? TranceGate::Roll : g == dr::gKyGap ? TranceGate::Gap : g == dr::gKyStutter ? TranceGate::Stutter : TranceGate::HalfTime;
+                    fillQ = g == dr::gKyHalfTime ? position - m.atQ : position - (m.atQ - barQ);
+                    if (dirIdx != lastDirectorReport) { suite::DirectorBus::reportActed (suiteDirector.hash(), dirIdx, dr::pKybalion); lastDirectorReport = dirIdx; }
+                }
+            }
+            else if (followSections && fillWhen != Params::Fill::Off)
             {
                 const auto sec = sections.locate (position, barQ);
                 const auto intoDrop = sec.hasNext && sec.next == suite::SectionType::Drop;
@@ -404,6 +421,15 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
 
         if (duckEnabled)
             ducker.process (ms, l, r);
+
+        // the director's silences: the gate closes (3 ms), unless this is the kick in a kick-only bar
+        if (directorLive && (n & 31) == 0)
+        {
+            dirSilence = suiteDirector.silenceAt (position);
+            if (dirSilence >= 0 && suiteDirector[dirSilence].silence == suite::director::gSiKickOnly && sharing) dirSilence = -1;
+        }
+        directorSilence += juce::jlimit (-silenceStep, silenceStep, (directorLive && dirSilence >= 0 ? 0.0f : 1.0f) - directorSilence);
+        if (directorSilence < 0.999f) { l *= directorSilence; r *= directorSilence; }
 
         const auto o = outGain.getNextValue();
         left[n] = l * o;

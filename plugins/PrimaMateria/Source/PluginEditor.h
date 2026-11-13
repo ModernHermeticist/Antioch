@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "AutopilotStrip.h"
+#include "DirectorBus.h"
 #include "SceneUI.h"
 
 class PrimaMateriaEditor : public juce::AudioProcessorEditor, private juce::Timer

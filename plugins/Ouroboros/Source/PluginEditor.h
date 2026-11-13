@@ -272,7 +272,7 @@ private:
     juce::String lastSnapshotVerb;
     void snapshotCommand (suite::SnapshotAction, int slot);
     void refreshSnapshots();
-    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, referenceButton { "Reference..." }, sessionButton { "New song..." }, recipesButton { "Recipes..." }, versionsButton { "Make versions" };
+    juce::TextButton arrangeButton { "Arrange..." }, suiteButton { "Suite" }, directorButton { "Director" }, referenceButton { "Reference..." }, sessionButton { "New song..." }, recipesButton { "Recipes..." }, versionsButton { "Make versions" };
     uint32_t versionsSeq = 0;
     std::unique_ptr<juce::FileChooser> referenceChooser;
     double referenceBpm = 138.0;

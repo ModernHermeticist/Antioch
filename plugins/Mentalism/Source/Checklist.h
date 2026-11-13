@@ -65,6 +65,8 @@ namespace checklist
         // Loudness against the target.
         if (m.integratedLufs <= -70.0f)
             add ("Loudness", State::Unknown, "Nothing measured yet");
+        else if (rep.premaster)
+            add ("Loudness", State::Pass, juce::String (m.integratedLufs, 1) + " LUFS integrated: a premaster's loudness is reported, never chased (mastering sets it)");
         else
         {
             const auto diff = m.integratedLufs - rep.targetLufs;
@@ -77,11 +79,29 @@ namespace checklist
         if (m.truePeakDb <= -99.0f)
             add ("True peak", State::Unknown, "Nothing measured yet");
         else
-            add ("True peak", m.truePeakDb <= rep.ceiling + 0.05f ? State::Pass : State::Fail,
-                 juce::String (m.truePeakDb, 1) + " dBTP; ceiling " + juce::String (rep.ceiling, 1) + " dBTP");
+            add (rep.premaster ? "Headroom (premaster)" : "True peak", m.truePeakDb <= rep.ceiling + 0.05f ? State::Pass : State::Fail,
+                 juce::String (m.truePeakDb, 1) + " dBTP; " + (rep.premaster ? "a label-ready premaster peaks at or under " : "ceiling ") + juce::String (rep.ceiling, 1)
+                     + (rep.premaster ? " dBFS" + (m.truePeakDb > rep.ceiling + 0.05f ? juce::String (": bring the master down ") + juce::String (m.truePeakDb - rep.ceiling, 1) + " dB" : juce::String())
+                                      : juce::String (" dBTP")));
+        if (rep.premaster)
+        {
+            // nothing on the master: Lapis is a reference (its master preview must be off for the render)
+            bool preview = false;
+            for (const auto& e : suiteEntries) preview = preview || (e.plugin == "Lapis" && e.has (suite::Status::masterPreview));
+            add ("No master limiting", preview ? State::Fail : State::Pass,
+                 preview ? juce::String ("Lapis' Hear the master is on: switch it off before rendering (the premaster has no limiting)")
+                         : juce::String ("Nothing limits or clips the master (Lapis is a reference)"));
+            if (m.integratedLufs > -70.0f && m.truePeakDb > -99.0f)
+            {
+                const auto crest = m.truePeakDb - m.integratedLufs;
+                add ("Dynamics intact", crest >= suite::premaster::minCrestDb ? State::Pass : State::Warn,
+                     juce::String (crest, 1) + " dB from the loudness to the peaks" + (crest < suite::premaster::minCrestDb ? ": something is squashing the mix" : ""));
+            }
+            add ("Render format", State::Pass, "24-bit (or 32-bit float) WAV, no dither, at the project's sample rate");
+        }
         add ("Clipping", clippedSamples == 0 ? State::Pass : State::Fail,
              clippedSamples == 0 ? juce::String ("No samples at full scale")
-                                 : juce::String (clippedSamples) + " samples hit 0 dBFS: lower the master or use Lapis");
+                                 : juce::String (clippedSamples) + " samples hit 0 dBFS: lower the master" + (rep.premaster ? " (a premaster never clips)" : " or use Lapis"));
 
         // Mono and phase.
         if (rep.measuredSeconds > 2.0f)

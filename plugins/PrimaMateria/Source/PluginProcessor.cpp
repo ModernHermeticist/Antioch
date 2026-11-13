@@ -349,6 +349,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto host = suite::HostInfo::read (getPlayHead());
     lastBpm.store (host.bpm);
     const auto haveMap = sections.refresh();
+    const auto directorLive = suiteDirector.refresh();
     mapAvailable.store (haveMap);
     const auto follow = apvts.getRawParameterValue (pm::followId)->load() > 0.5f && haveMap && host.playing && host.hasPpq;
     const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f;
@@ -548,6 +549,11 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 const auto trackGap = juce::jmin (gapQ, barQ);
                 const auto thisGap = juce::jmax (trackGap, suiteGap);
                 inGap = thisGap > 0.0 && sec.hasNext && sec.next == T::Drop && pos >= sec.endQ - thisGap && sec.endQ - sec.startQ > thisGap;
+                if (directorLive)   // the suite director owns the silences: its snaps, breaths and kick-only bars (suggested here)
+                {
+                    const auto at = suiteDirector.silenceAt (pos);
+                    inGap = at >= 0 && ! (suiteDirector[at].silence == suite::director::gSiKickOnly && isKick);
+                }
                 // A stop moment (Ouroboros): the beat before its bar is silent on every track.
                 if (! inGap && sections.getMap().momentCount > 0)
                 {

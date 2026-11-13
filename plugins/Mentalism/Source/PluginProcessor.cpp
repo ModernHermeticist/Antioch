@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "DirectorBus.h"
 #include "PluginEditor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "TargetBus.h"
@@ -113,13 +114,49 @@ void MentalismProcessor::timerCallback()
     refreshProjectTarget();
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();
-    suite::TargetBus::publish (r.targetLufs, r.ceiling);
+    // Lapis follows this for its master preview (A/B): a premaster has no master target, so it previews the club master
+    if (r.premaster) suite::TargetBus::publish (advisor::loudnessTargets()[0].lufs, advisor::loudnessTargets()[0].ceilingDbtp);
+    else suite::TargetBus::publish (r.targetLufs, r.ceiling);
     // The loaded reference's tone, for every Quintessence's targets
     if (const auto refNow = getReference(); refNow.valid)
     {
         std::array<float, 10> b {};
         for (size_t i = 0; i < 10; ++i) b[i] = refNow.bands[i];
         suite::ReferenceBus::publish (b);
+    }
+    // The headroom keeper (premaster): peaks over -6 dBFS bring every Quintessence down together
+    // (the balance and dynamics untouched, no limiter); room to spare lets them back up, slowly
+    if (r.premaster && suite::Autopilot::on (suite::Autopilot::headroomF))
+    {
+        const auto pk = headroomPeak.exchange (0.0f);
+        headroomTicks[(size_t) (headroomTick++ % headroomTicks.size())] = pk > 1.0e-6f ? juce::Decibels::gainToDecibels (pk) : -100.0f;
+        float recent = -100.0f;
+        for (auto v : headroomTicks) recent = juce::jmax (recent, v);
+        if (pk > 1.0e-6f)
+        {
+            const auto before = headroomTrim;
+            headroomTrim = suite::premaster::headroom::step (recent, headroomTrim);
+            if (headroomTrim < before - 0.01f && before > -0.01f)
+                suite::MoveLog::add (getName(), getTrackName(), "Premaster headroom: the master peaked at " + juce::String (recent, 1)
+                                         + " dBFS: every track comes down together (no limiter)", suite::MoveLog::fix);
+        }
+        suite::premaster::headroom::publish (headroomTrim);
+        headroomNow.store (headroomTrim);
+    }
+    else if (headroomTrim != 0.0f || headroomNow.load() != 0.0f)
+    {
+        headroomTrim = 0.0f;
+        headroomNow.store (0.0f);
+        suite::premaster::headroom::withdraw();
+    }
+
+    // The suite director learns from what was heard: each section's loudness (whole, first and second half)
+    if (++directorFeedbackTicks % 8 == 0)
+    {
+        std::vector<suite::director::SectionFeedback> f;
+        for (const auto& st : sectionStats())
+            f.push_back ({ st.lufs(), st.firstLufs(), st.secondLufs(), st.heard() && st.firstBlocks > 0 && st.secondBlocks > 0 });
+        if (! f.empty()) suite::DirectorBus::publishFeedback (f);
     }
     runAutomation();
 }
@@ -564,6 +601,7 @@ bool MentalismProcessor::watchPass (const Report& rep)
     master.measured = rep.measurement.integratedLufs > -70.0f;
     master.truePeakDb = rep.measurement.truePeakDb;
     master.ceilingDb = rep.ceiling;
+    master.premaster = rep.premaster;
     master.monoLossDb = rep.measurement.monoLossDb;
     master.lowCorrelation = rep.measurement.lowCorrelation;
     const auto found = watcher::scan (suite::Registry::list(), master);
@@ -1493,6 +1531,7 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         mono[(size_t) i] = 0.5f * (l[i] + r[i]);
     }
     if (blockPeak > windowPeak.load()) windowPeak.store (blockPeak);
+    if (blockPeak > headroomPeak.load()) headroomPeak.store (blockPeak);
     spectrumTap.push (mono.data(), n);
 
     // A/B: the reference's loudest part, looped, at the loudness the mix had when you switched.
@@ -1647,7 +1686,16 @@ MentalismProcessor::Report MentalismProcessor::report() const
     const auto& lt = advisor::loudnessTargets()[(size_t) juce::jlimit (0, (int) advisor::loudnessTargets().size() - 1, loudIndex)];
     rep.ceiling = lt.ceilingDbtp;
     const auto mine = getMySound();
-    if (loudIndex == advisor::mySoundIndex)
+    if (loudIndex == advisor::premasterIndex)
+    {
+        // the suite's deliverable: peaks at or under -6 dBFS, no master limiting, loudness as it lands
+        rep.premaster = true;
+        rep.ceiling = suite::premaster::peakDbfs;
+        const auto now = loudness.integrated();
+        rep.targetLufs = now > -70.0f ? now : -16.0f;
+        rep.targetName = "a label-ready premaster (peaks at or under -6 dBFS, no limiting; loudness as it lands)";
+    }
+    else if (loudIndex == advisor::mySoundIndex)
     {
         rep.targetLufs = mine.valid ? mine.lufs : advisor::loudnessTargets()[0].lufs;
         rep.ceiling = mine.valid ? mine.ceiling() : rep.ceiling;
@@ -1700,6 +1748,14 @@ MentalismProcessor::Report MentalismProcessor::report() const
     rep.momentary = loudness.momentary.load();
     rep.shortTerm = loudness.shortTerm.load();
     rep.advice = advisor::suggestions (m, rep.targetLufs, rep.ceiling, rep.targetName);
+    if (rep.premaster)
+    {
+        // no limiter advice for a premaster: the peaks come down at the faders
+        for (int i = rep.advice.size(); --i >= 0;) if (rep.advice[i].containsIgnoreCase ("limiter")) rep.advice.remove (i);
+        if (m.truePeakDb > suite::premaster::peakDbfs + 0.05f)
+            rep.advice.insert (0, "True peak " + juce::String (m.truePeakDb, 1) + " dBTP: a label-ready premaster peaks at or under -6 dBFS. Bring the master fader (or every track, with Gain staging) down "
+                                      + juce::String (suite::premaster::overBy (m.truePeakDb), 1) + " dB. No limiter: mastering does that.");
+    }
 
     // Arrangement coach (needs Ouroboros).
     rep.arrangementAvailable = suite::SectionBus::read (rep.map);

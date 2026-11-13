@@ -327,7 +327,9 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     const auto qPerSample = host.quartersPerSample (sampleRate);
     const auto freezeBarsNow = host.hasPpq ? Verb::freezeBars (choiceParam (Verb::freeze)->getIndex()) : 0;
     const auto freezeLevelNow = value (Verb::freezeLevel);
-    if (freezeBarsNow == 0) freeze.stop();
+    const auto directorLive = suiteDirector.refresh() && host.playing && host.hasPpq;
+    const auto dirMuteStep = (float) (1.0 / (0.003 * sampleRate));
+    if (freezeBarsNow == 0 && ! directorLive) freeze.stop();
 
     // ---- Levels ----
     const auto out = juce::Decibels::decibelsToGain (value (output));
@@ -399,8 +401,45 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         const auto eg = echoGain.getNextValue();
         eL *= eg; eR *= eg;
 
+        // The suite director (every 32 samples): this track's throw, wash or freeze, the tails cut
+        // at drops, dry into the hit and wide on it, and the director's silences
+        if (directorLive && (n & 31) == 0)
+        {
+            namespace dr = suite::director;
+            const auto posQ = host.ppq + qPerSample * n;
+            dirThrow = false; dirWash = 0.0f; dirSpace = 1.0f; dirWide = 0.0f;
+            if (const auto at = suiteDirector.actingAt (posQ, dr::pAntioch); at >= 0)
+            {
+                const auto& m = suiteDirector[at];
+                const auto part = m.hero == dr::pAntioch ? 1.0f : 0.6f;
+                const auto g = m.gesture[dr::pAntioch];
+                if (g == dr::gAnThrow) dirThrow = true;
+                if (g == dr::gAnWash) dirWash = 0.8f * part;
+                if (g == dr::gAnFreeze && at != dirFrozeAt) { freeze.trigger ((int) (2.0 * barQ / qPerSample), 0.7f * part); dirFrozeAt = at; freezesPlayed.fetch_add (1); }
+                if (at != dirReported) { suite::DirectorBus::reportActed (suiteDirector.hash(), at, dr::pAntioch); dirReported = at; }
+            }
+            if (const auto at = suiteDirector.momentNear (posQ, barQ, barQ, dr::kIntoDrop | dr::kPin); at >= 0)
+            {
+                const auto& m = suiteDirector[at];
+                if (posQ < m.atQ)
+                {
+                    const auto into = juce::jlimit (0.0, 1.0, (posQ - (m.atQ - barQ)) / barQ);
+                    dirSpace = 1.0f - m.dryBefore * (float) into;                                // dry into the hit
+                    if (m.cutTails && posQ >= (m.silence != dr::gNone ? m.silenceStartQ : m.atQ - 0.25f)) dirSpace = 0.0f;   // tails cut
+                }
+                else
+                {
+                    dirWide = m.wideOnHit * (float) (1.0 - (posQ - m.atQ) / barQ);              // wide on the one, settling over the bar
+                }
+            }
+            dirSilent = suiteDirector.silenceAt (posQ) >= 0;
+        }
+        if (! directorLive) { dirThrow = false; dirWash = 0.0f; dirSpace = 1.0f; dirWide = 0.0f; dirSilent = false; }
+        dirSpaceGain += (dirSpace < dirSpaceGain ? 0.004f : 0.0002f) * (dirSpace - dirSpaceGain);   // cut in ~5 ms, back over ~100 ms
+        dirMute += juce::jlimit (-dirMuteStep, dirMuteStep, (dirSilent ? 0.0f : 1.0f) - dirMute);
+
         // Throw (manual button/automation or automatic phrase-end window)
-        bool gateOpen = manualThrow;
+        bool gateOpen = manualThrow || dirThrow;
         if (autoOn && ! gateOpen && ! holdForLead)
         {
             auto pos = std::fmod (host.ppq + qPerSample * n, phraseQ);
@@ -469,7 +508,8 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
 
         // Reverb freeze: entering a breakdown, the last half second of reverb holds as a wash.
         float fL = 0.0f, fR = 0.0f;
-        if (freezeBarsNow > 0)
+        if (dirWash > 0.0f) vg *= 1.0f + dirWash;   // the director's wash: the space opens up
+        if (freezeBarsNow > 0 || directorLive)
         {
             freeze.push (rL * vg, rR * vg);
             if (host.playing && haveSections)
@@ -477,7 +517,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
                 const auto posQ = host.ppq + qPerSample * n;
                 const auto sec = sections.locate (posQ, barQ);
                 const auto jumped = posQ < freezeLastPos - 1.0e-6 || posQ > freezeLastPos + 0.5;
-                if (sec.valid && sec.index != freezeSectionIndex && freezeSectionIndex >= 0 && ! jumped && sec.type == suite::SectionType::Breakdown)
+                if (freezeBarsNow > 0 && ! directorLive && sec.valid && sec.index != freezeSectionIndex && freezeSectionIndex >= 0 && ! jumped && sec.type == suite::SectionType::Breakdown)
                 {
                     freeze.trigger ((int) (freezeBarsNow * barQ / qPerSample), freezeLevelNow);
                     freezesPlayed.fetch_add (1);
@@ -490,7 +530,13 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
 
         const auto d = dryGain.getNextValue();
         const auto o = outGain.getNextValue();
-        auto spaceL = (eL + rL * vg + fL) * spaceGain, spaceR = (eR + rR * vg + fR) * spaceGain;
+        auto spaceL = (eL + rL * vg + fL) * spaceGain * dirSpaceGain, spaceR = (eR + rR * vg + fR) * spaceGain * dirSpaceGain;
+        if (dirWide > 0.01f)
+        {
+            // wide on the hit (the mono-safety below still narrows anything that would cancel)
+            const auto mid = 0.5f * (spaceL + spaceR), side = 0.5f * (spaceL - spaceR) * (1.0f + dirWide);
+            spaceL = mid + side; spaceR = mid - side;
+        }
         // Autopilot (mixing): the space stays mono-safe - where its two sides would cancel (correlation
         // under -0.2 over 300 ms), its stereo part narrows to half until it's safe again
         {
@@ -510,8 +556,8 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         }
         // Autopilot (mixing): a clean ending - past the map's last bar, the space fades out over 2 bars
         if (endFade < 1.0f) { spaceL *= endFade; spaceR *= endFade; tL *= endFade; tR *= endFade; }
-        auto oL = (inL * d + spaceL + tL) * o;
-        auto oR = (inR * d + spaceR + tR) * o;
+        auto oL = (inL * d + spaceL + tL) * o * dirMute;
+        auto oR = (inR * d + spaceR + tR) * o * dirMute;
         // Autopilot (stability): level-matched - what the space adds never lifts the track over its
         // input's loudness (300 ms; the last 3 s of input carry the tails after a phrase ends)
         if (holdLevel)

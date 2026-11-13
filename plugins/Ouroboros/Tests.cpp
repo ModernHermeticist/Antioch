@@ -811,8 +811,9 @@ int main (int argc, char** argv)
         p->setMap (arrangement::fromTemplate (arrangement::templates()[1]));
         p->makeVersions();
         const auto plan = p->renderPlan();
-        check (plan.contains ("1. Original mix") && plan.contains ("2. Radio edit") && plan.contains ("-14 LUFS") && plan.contains ("4. Club edit"),
-               "after Make versions: four renders, with their loudness");
+        check (plan.contains ("1. Original mix") && plan.contains ("2. Radio edit") && plan.contains ("-6 dBFS") && plan.contains ("4. Club edit")
+                   && plan.contains ("premaster") && ! plan.contains ("-8 LUFS"),
+               "after Make versions: four label-ready premaster renders (peaks -6 dBFS, no loudness target)");
 
         // Section snapshots: entering a breakdown recalls snapshot B for the rest of the suite.
         suite::SnapshotBus::reset();
@@ -1150,6 +1151,162 @@ int main (int argc, char** argv)
         check (! suite::Autopilot::switchedOn (suite::Autopilot::humF) && suite::Autopilot::switchedOn (suite::Autopilot::maskingF) && ! suite::Autopilot::on (suite::Autopilot::harshness),
                "a saved project brings back each fix's switch");
         suite::Autopilot::reset();
+    }
+
+
+    section ("The suite director: one plan for every transition");
+    {
+        namespace dr = suite::director;
+        suite::Registry::reset();
+        suite::DirectorBus::reset();
+        const auto map = arrangement::fromTemplate (arrangement::templates()[1]);   // two breakdowns, two drops
+        dr::Input in;
+        in.map = map; in.bpm = 138.0; in.seed = 7;
+        const auto plan = dr::makePlan (in);
+        int intoDrops = 0, ledDrops = 0, heroes = 0;
+        bool pileUp = false;
+        const dr::Moment* lastHero = nullptr;
+        for (const auto& m : plan.moments)
+        {
+            if (m.kind == dr::kIntoDrop) { ++intoDrops; if (m.hero != dr::pNone || m.silence != dr::gNone) ++ledDrops; }
+            if (m.hero != dr::pNone)
+            {
+                ++heroes;
+                if (lastHero != nullptr && m.atQ - lastHero->atQ < 8.0f - 1.0e-3f) pileUp = true;
+                lastHero = &m;
+                check (m.gesture[(size_t) m.hero] == m.heroGesture && dr::gesture (m.heroGesture).player == m.hero, "the hero plays its own gesture");
+            }
+        }
+        check (intoDrops == 2 && ledDrops == 2, "both drops get a lead-in (a hero or the director's silence): " + juce::String (ledDrops));
+        check (heroes >= 4 && ! pileUp, "the transitions have heroes, never two within two bars (" + juce::String (heroes) + " led)");
+        check (dr::makePlan (in).hash == plan.hash, "the same inputs give the same plan");
+        auto other = in; other.seed = 8;
+        check (dr::makePlan (other).hash != plan.hash, "new dice, a new plan");
+        check (plan.candidatesTried == 6 && plan.score.total == plan.score.total, "the best of six scored candidates: " + plan.score.text());
+        check ((int) plan.tension.size() == map.totalBars && plan.tension[(size_t) (88 - 1)] > plan.tension[(size_t) (81 - 1)], "the tension rises through a build");
+        check (plan.character.size() == 2 && plan.character[1] == dr::chHuge, "drop identities: the last drop is the Huge one");
+        check (plan.breakdowns.size() == 2 && plan.motif != dr::gNone, "two breakdown stories, and a motif");
+        const auto firstDrop = std::find_if (plan.moments.begin(), plan.moments.end(), [] (const dr::Moment& m) { return m.kind == dr::kIntoDrop; });
+        check (firstDrop != plan.moments.end() && firstDrop->buildHoldDb > 0.0f && firstDrop->cutTails && firstDrop->wideOnHit > 0.0f && firstDrop->evenDb == 0.0f,
+               "into a drop: the build held back (a level ride, no limiter), the tails cut, wide on the hit");
+
+        // stories, safe mode, the plugins in the session
+        auto restrained = in; restrained.story = dr::storyRestrained;
+        auto festival = in; festival.story = dr::storyFestival;
+        auto spentOf = [] (const dr::Plan& p) { float t = 0.0f; for (const auto& m : p.moments) t += m.spent; return t; };
+        check (spentOf (dr::makePlan (restrained)) < spentOf (dr::makePlan (festival)), "a Festival story does more than a Restrained one");
+        auto safe = in; safe.safe = true;
+        bool risky = false;
+        for (const auto& m : dr::makePlan (safe).moments) for (auto g : m.gesture) if (g != dr::gNone && ! dr::gesture (g).safe) risky = true;
+        check (! risky, "safe mode: only filters, levels and space");
+        auto onlyAzoth = in; onlyAzoth.present = (uint8_t) ((1u << dr::pAzoth) | (1u << dr::pScene) | (1u << dr::pSilence));
+        bool foreign = false;
+        for (const auto& m : dr::makePlan (onlyAzoth).moments) if (m.hero != dr::pNone && m.hero != dr::pAzoth && m.hero != dr::pSilence) foreign = true;
+        check (! foreign, "only plugins in the session are given parts");
+
+        // steering: intent, pins, requests
+        auto calm = in;
+        calm.intent.assign ((size_t) map.count, (uint8_t) dr::iAuto);
+        calm.intent[4] = dr::iNoMoves;   // the first drop
+        bool movedInDrop = false;
+        for (const auto& m : dr::makePlan (calm).moments)
+            if (m.section == 4 && m.kind != dr::kIntoDrop && m.hero != dr::pNone) movedInDrop = true;
+        check (! movedInDrop, "painted 'No moves': the first drop's phrases are left alone");
+        auto pinned = in;
+        pinned.pins.push_back ({ 50, dr::pKybalion, dr::gNone });
+        const auto pp = dr::makePlan (pinned);
+        const auto pinAt = std::find_if (pp.moments.begin(), pp.moments.end(), [] (const dr::Moment& m) { return m.kind == dr::kPin; });
+        check (pinAt != pp.moments.end() && pinAt->hero == dr::pKybalion && (pinAt->flags & dr::fPinned), "a pin: Kybalion leads at bar 50");
+        const auto r1 = dr::parseRequest ("make the second drop hit harder");
+        const auto r2 = dr::parseRequest ("less glitch in the breakdown");
+        check (r1.words == dr::wHarder && r1.sectionType == (int) suite::SectionType::Drop && r1.dropOrdinal == 1, "chat: 'the second drop hit harder'");
+        check ((r2.words & dr::wLessGlitch) && r2.sectionType == (int) suite::SectionType::Breakdown, "chat: 'less glitch in the breakdown'");
+        auto darker = in; darker.requests.push_back (dr::parseRequest ("darker"));
+        check (dr::makePlan (darker).character[0] == dr::chDark, "'darker': the drops turn Dark");
+
+        // what was heard: a drop that doesn't land gets more
+        auto heard = in;
+        heard.feedback.assign ((size_t) map.count, {});
+        heard.feedback[3] = { -10.0f, -11.0f, -9.5f, true };   // the build
+        heard.feedback[4] = { -9.0f, -9.0f, -9.0f, true };     // the drop, only 0.5 LU over the build's end
+        const auto hp = dr::makePlan (heard);
+        const auto into = std::find_if (hp.moments.begin(), hp.moments.end(), [] (const dr::Moment& m) { return m.kind == dr::kIntoDrop; });
+        check (into != hp.moments.end() && (into->flags & dr::fAudio) && into->buildHoldDb >= 1.5f, "a drop Mentalism heard not landing gets more contrast");
+        heard.feedback[1] = { -14.0f, -14.0f, -14.0f, true };   // the groove ...
+        heard.feedback[2] = { -8.0f, -8.0f, -8.0f, true };      // ... jumps 6 LU into the breakdown
+        const auto jump = dr::makePlan (heard);
+        const auto br = std::find_if (jump.moments.begin(), jump.moments.end(), [] (const dr::Moment& m) { return m.kind == dr::kIntoBreak; });
+        check (br != jump.moments.end() && br->evenDb < -1.0f, "an unplanned jump is evened out (a level ride over two bars)");
+
+        // trust: lint, summary, explain, structure
+        check (std::none_of (plan.lints.begin(), plan.lints.end(), [] (const dr::Lint& l) { return l.text.startsWith ("Two heroes"); }), "the lint finds no two heroes at once");
+        check (dr::summary (plan, map, 4.0).contains ("Drop 2 is Huge"), "the plan in words");
+        check (dr::explain (plan, map, (89 - 1) * 4.0 - 0.5, 4.0, 138.0).size() >= 3, "explain any second");
+        auto shortBuild = arrangement::fromTemplate (arrangement::templates()[1]);
+        shortBuild.sections[4].startBar = 84;   // a 3-bar build
+        auto sb = in; sb.map = shortBuild;
+        check (dr::adviseStructure (sb).any, "the structure: a build too short to climb is lengthened");
+
+        // Ouroboros' host: lock, re-roll, freeze, undo, version lock, history, chat, teach, profile
+        ouro::DirectorHost host;
+        host.presentOverride = 0x7f;
+        host.update (map, 138.0, 4.0);
+        check (host.havePlan && suite::DirectorBus::live(), "the plan is published");
+        const auto& led = *std::find_if (host.plan.moments.begin(), host.plan.moments.end(), [] (const dr::Moment& m) { return m.hero != dr::pNone && m.kind == dr::kIntoDrop; });
+        const auto key = led.key;
+        const auto heroBefore = led.heroGesture;
+        host.lock (key);
+        host.rerollSong();
+        host.update (map, 138.0, 4.0);
+        const auto li = host.plan.indexOf (key);
+        check (li >= 0 && host.plan.moments[(size_t) li].heroGesture == heroBefore && (host.plan.moments[(size_t) li].flags & dr::fLocked), "a locked moment keeps its hero through a re-roll");
+        host.undoMoment (key);
+        host.update (map, 138.0, 4.0);
+        check ((host.plan.moments[(size_t) host.plan.indexOf (key)].flags & dr::fLocked) == 0, "undo takes the lock back");
+        host.freeze (key, true);
+        const auto frozen = host.plan.moments[(size_t) host.plan.indexOf (key)];
+        host.rerollSong(); host.rerollSong();
+        host.update (map, 138.0, 4.0);
+        check (host.plan.moments[(size_t) host.plan.indexOf (key)].same (frozen), "a frozen moment stays exactly as it was");
+        const auto reply = host.chat ("less glitch in the breakdown");
+        check (reply.startsWith ("OK") && host.settings.requests.size() == 1, "chat: a request is kept");
+        check (host.chat ("undo").startsWith ("Took back") && host.settings.requests.empty(), "chat: undo");
+        host.setVersionLock (true);
+        const auto lockedHash = host.plan.hash;
+        host.rerollSong();
+        host.update (map, 138.0, 4.0);
+        check (host.plan.hash == lockedHash, "version lock: the plan reproduces exactly");
+        host.setVersionLock (false);
+        check (host.history.size() >= 6 && host.stepBack (0), "every plan is in the history, to step back to");
+        host.update (map, 138.0, 4.0);
+        host.teach (host.plan.moments[(size_t) host.plan.indexOf (key)].key, "My drop");
+        auto saved = host.profileTree (true);
+        ouro::DirectorHost again;
+        again.applyProfileTree (saved, true);
+        check (again.settings.learned.size() == 1 && again.settings.learned[0].name == "My drop" && again.settings.frozen.size() == host.settings.frozen.size()
+                   && again.settings.seed == host.settings.seed, "the director's state saves with the project (taught gestures, freezes, the dice)");
+        bool learnedUsed = false;
+        auto taught = host.inputFor (map, 138.0, 4.0);
+        for (uint32_t sd = 1; sd < 12 && ! learnedUsed; ++sd)
+        {
+            taught.seed = sd; taught.frozen.clear();
+            for (const auto& m : dr::makePlan (taught).moments) learnedUsed = learnedUsed || (m.flags & dr::fLearned);
+        }
+        check (learnedUsed, "a taught gesture comes back at that kind of moment");
+        check (! host.renderList (4.0, 138.0).isEmpty() && host.renderMarkers (4.0, 138.0).getNumTracks() == 1, "the transitions render list and its markers");
+        check (host.ticker (0.0, 4.0).startsWith ("Next: bar"), "the ticker: what's next");
+
+        // the bus: what each plugin sees, and the fidelity check
+        suite::DirectorBus::Follower f;
+        check (f.refresh() && f.size() == (int) host.plan.moments.size(), "every plugin reads the same plan");
+        const auto hi = host.plan.indexOf (key);
+        const auto& hm = host.plan.moments[(size_t) hi];
+        const auto w = suite::DirectorBus::windowFor (f, hi, hm.hero);
+        check (hm.hero == dr::pSilence || f.actingAt (0.5 * (w.first + w.second), hm.hero) >= 0, "the hero finds its moment on the audio thread");
+        suite::DirectorBus::reportActed (host.plan.hash, hi, hm.hero);
+        check (host.fidelityReport (4.0).contains ("1 of"), "the fidelity check counts what happened: " + host.fidelityReport (4.0).upToFirstOccurrenceOf ("\n", false, false));
+        suite::DirectorBus::withdraw();
+        check (! f.refresh(), "no plan published: every plugin plays its own transitions");
     }
 
     return finish();

@@ -344,6 +344,7 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     addChildComponent (undoFixButton);
     addChildComponent (fixStatus);
 
+    autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueGeneral); };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;

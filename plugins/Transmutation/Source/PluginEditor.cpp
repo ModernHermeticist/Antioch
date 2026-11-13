@@ -199,6 +199,7 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
       timeline (p), effectList (p)
 {
     setLookAndFeel (&lnf);
+    autopilot.director = [] { return suite::DirectorBus::cue (suite::director::pTransmute); };
     for (auto* c : std::initializer_list<juce::Component*> { &spice, &builds, &drops, &amount, &output, &genre, &role, &director, &status, &nowPlaying,
                                                              &timeline, &moveInfo, &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton, &exportButton,
                                                              &category, &effectList, &autopilot })

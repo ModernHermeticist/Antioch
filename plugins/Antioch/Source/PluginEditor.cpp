@@ -397,6 +397,7 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
 
     tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
     addChildComponent (*tweakBanner);
+    autopilotStrip.director = [] { return suite::DirectorBus::cue (suite::director::pAntioch); };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;

@@ -103,6 +103,7 @@ bool QuintessenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 
 void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
 {
+    directorStage.prepare (sampleRate);
     sr = sampleRate;
     const auto fs = (float) sr;
     for (auto& f : lowCuts) f.reset();
@@ -613,6 +614,25 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             sibWin.fill (0.0); sibPostWin = crestPow = 0.0; crestPeak = 0.0f;
             mbWinPre.fill (0.0); mbWinPost.fill (0.0); mbWinCount = 0;
         }
+    }
+    // The suite director: the mix around each moment (DirectorStage.h)
+    {
+        const auto live = suiteDirector.refresh() && info.playing && info.hasPpq;
+        uint32_t silent = 0;
+        directorStage.process (ch, chs, n, info.ppq, info.bpm / 60.0 / sr, live ? suiteDirector : suiteDirectorIdle, roleNow, silent);
+        directorPresence.store (directorStage.presenceNow());
+    }
+    // The premaster's headroom (Mentalism's keeper): every track comes down together when the
+    // master peaks over -6 dBFS (a master fader pulled down: no limiter), ramped across the block
+    {
+        const auto target = suite::Autopilot::on (suite::Autopilot::headroomF) ? juce::Decibels::decibelsToGain (suite::premaster::headroom::trimDb()) : 1.0f;
+        if (std::abs (target - headroomGain) > 1.0e-5f || headroomGain < 0.99999f)
+        {
+            const auto from = headroomGain;
+            for (int c = 0; c < chs; ++c) buffer.applyGainRamp (c, 0, n, from, target);
+            headroomGain = target;
+        }
+        headroomTrimNow.store (juce::Decibels::gainToDecibels (headroomGain, -60.0f));
     }
     for (int b = 0; b < qn::numMbBands; ++b) grNow[(size_t) b].store (juce::jmax (0.0f, grMax[(size_t) b]));
     deessNow.store (deessMax);

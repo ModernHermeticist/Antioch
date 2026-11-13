@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SceneUI.h"
+#include "AutopilotStrip.h"
+#include "DirectorBus.h"
 
 class AzothEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -39,6 +41,8 @@ private:
     void showSamplesMenu();
     void updateSamplesNote();
     juce::Rectangle<int> elementArea, shapeArea, riserArea, reverseArea, entranceArea;
+
+    suite::ui::AutopilotStrip directorStrip;   // the suite director's cue for this plugin
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AzothEditor)
 };

@@ -3,6 +3,8 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SuiteUI.h"
+#include "AutopilotStrip.h"
+#include "DirectorBus.h"
 
 /** A tile you drag straight into FL Studio's playlist or piano roll as a .mid clip. */
 class DragTile : public juce::Component
@@ -125,6 +127,8 @@ private:
     bool playing = false;
 
     juce::Rectangle<int> keyArea, progressionArea, voicingArea, patternArea, exportArea, songGridArea, songTilesArea;
+
+    suite::ui::AutopilotStrip directorStrip;   // the suite director's cue for Correspondence
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CorrespondenceEditor)
 };

@@ -31,6 +31,9 @@ namespace
                                                       NormalisableRange<float> (-6.0f, 24.0f), 0.0f, db));
         l.add (std::make_unique<AudioParameterChoice> (ParameterID { LapisProcessor::bitDepthId, 1 }, "Export Bit Depth",
                                                        StringArray { "24-bit (no dither)", "16-bit (dither)" }, 0));
+        // The suite delivers a label-ready premaster: Lapis is a reference. Off (the default), the
+        // audio passes untouched and Lapis checks the premaster; on, you hear how it would master (A/B).
+        l.add (std::make_unique<AudioParameterBool> (ParameterID { LapisProcessor::hearMasterId, 1 }, "Hear the Master (A/B)", false));
         return l;
     }
 }
@@ -232,6 +235,12 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
     outputPeak.reset();
     passLoudness.prepare (sampleRate);
     passPeak.reset();
+    premasterLoudness.prepare (sampleRate);
+    premasterPeak.reset();
+    // the premaster comes out as late as the master would (the limiter's look-ahead), so the host's
+    // delay compensation lines it up either way
+    for (auto& d : dryDelay) d.assign ((size_t) juce::jmax (1, limiter.getLatency()), 0.0f);
+    dryDelayPos = 0;
     wasPlaying = false;
     passSamples = 0;
     updateInterval = juce::jmax (1, (int) (sampleRate * 0.1));
@@ -309,16 +318,21 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Export notes: a play-through starts when the transport starts and ends when it stops.
     const auto playing = suite::HostInfo::read (getPlayHead()).playing;
-    if (playing && ! wasPlaying) { passLoudness.reset(); passPeak.reset(); passSamples = 0; passMaxGr = 0.0f; }
+    if (playing && ! wasPlaying) { passLoudness.reset(); passPeak.reset(); passSamples = 0; passMaxGr = 0.0f; passHeardMaster = false; }
     if (! playing && wasPlaying && passSamples >= (int64_t) (30.0 * sampleRate) && ! passReady.load())
     {
-        finished = { passLoudness.integrated(), passPeak.peakDb(), passMaxGr, (float) ((double) passSamples / sampleRate), target, ceilingDb,
-                     (int) value (bitDepthId) == 1 };
+        finished = { passLoudness.integrated(), passPeak.peakDb(), passHeardMaster ? passMaxGr : 0.0f, (float) ((double) passSamples / sampleRate), target, ceilingDb,
+                     passHeardMaster && (int) value (bitDepthId) == 1, ! passHeardMaster };
         passReady.store (true);
     }
     wasPlaying = playing;
-    // 16-bit exports: TPDF dither of one 16-bit step (24-bit needs none).
-    const auto dither = (int) value (bitDepthId) == 1;
+    // Premaster (the default): what comes in goes out untouched; the master chain runs alongside,
+    // so you can hear how it would master (Hear the master) and Lapis keeps learning.
+    const auto hearMaster = value (hearMasterId) > 0.5f;
+    hearingMaster.store (hearMaster);
+    if (playing && hearMaster) passHeardMaster = true;
+    // 16-bit exports: TPDF dither of one 16-bit step (24-bit needs none; a premaster never gets any).
+    const auto dither = hearMaster && (int) value (bitDepthId) == 1;
     constexpr float lsb16 = 1.0f / 32768.0f;
 
     for (int n = 0; n < buffer.getNumSamples(); ++n)
@@ -326,6 +340,15 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         // Smooth gain changes (they come in small steps from the learning loop).
         appliedGainDb += 0.0005f * (wantedGainDb - appliedGainDb);
         const auto g = juce::Decibels::decibelsToGain (appliedGainDb);
+        auto dryL = L[n], dryR = R[n];
+        if (limiter.getLatency() > 0 && (int) dryDelay[0].size() == limiter.getLatency())
+        {
+            std::swap (dryL, dryDelay[0][(size_t) dryDelayPos]);
+            std::swap (dryR, dryDelay[1][(size_t) dryDelayPos]);
+            dryDelayPos = (dryDelayPos + 1) % (int) dryDelay[0].size();
+        }
+        premasterPeak.process (dryL, dryR);
+        premasterLoudness.process (dryL, dryR);
         auto l = L[n] * g, r = R[n] * g;
         if (toneOn)
         {
@@ -354,9 +377,11 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         // Final safety: never exceed the ceiling by more than rounding.
-        L[n] = juce::jlimit (-ceiling, ceiling, l);
-        R[n] = juce::jlimit (-ceiling, ceiling, r);
-        toneBands.process (L[n], R[n]);
+        const auto mL = juce::jlimit (-ceiling, ceiling, l), mR = juce::jlimit (-ceiling, ceiling, r);
+        // What's rendered: the premaster untouched, or (Hear the master) the master
+        L[n] = hearMaster ? mL : dryL;
+        R[n] = hearMaster ? mR : dryR;
+        toneBands.process (mL, mR);
         if (playing)
         {
             passLoudness.process (L[n], R[n]);
@@ -364,8 +389,8 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             ++passSamples;
         }
 
-        loudness.process (L[n], R[n]);
-        outBands.process (L[n], R[n]);
+        loudness.process (mL, mR);     // the learning loop works on the master it would make
+        outBands.process (mL, mR);
         outputPeak.process (L[n], R[n]);
         maxGr = std::max (maxGr, -juce::Decibels::gainToDecibels (limiter.getGain()));
 
@@ -405,10 +430,29 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     if (maxGr > maxReductionDb.load()) maxReductionDb.store (maxGr);
     if (playing && maxGr > grSinceStatus.load()) grSinceStatus.store (maxGr);
     outShortTerm.store (loudness.shortTerm.load());
+    premasterPeakDb.store (premasterPeak.peakDb());
+    premasterLufs.store (premasterLoudness.shortTerm.load());
 }
 
 juce::String LapisProcessor::exportNotes (const PassResult& p)
 {
+    if (p.premaster)
+    {
+        // The suite's deliverable: a label-ready premaster
+        juce::StringArray lines;
+        lines.add ("PREMASTER NOTES  " + juce::Time::getCurrentTime().toString (true, true, false, true));
+        lines.add ("");
+        lines.add ("Length:      " + juce::String ((int) p.seconds / 60) + ":" + juce::String ((int) p.seconds % 60).paddedLeft ('0', 2));
+        lines.add ("Loudness:    " + juce::String (p.lufs, 1) + " LUFS integrated (reported, not chased)");
+        lines.add ("True peak:   " + juce::String (p.truePeakDb, 1) + " dBTP (a premaster stays at or under " + juce::String (suite::premaster::peakDbfs, 0) + " dBFS)");
+        lines.add ("Master:      untouched (Lapis was a reference: no limiting, clipping or gain)");
+        lines.add ("Format:      24-bit (or 32-bit float) WAV, no dither, at the project's sample rate");
+        lines.add ("");
+        for (const auto& c : suite::premaster::checks (p.truePeakDb, p.lufs, 0.0f, false)) lines.add (c);
+        lines.add ("");
+        lines.add (suite::premaster::ready (p.truePeakDb, p.lufs, 0.0f, false) ? "Label-ready: send it to mastering as it is." : "Not label-ready yet: fix the lines marked FIX and render again.");
+        return lines.joinIntoString ("\n") + "\n";
+    }
     const auto offTarget = p.lufs - p.targetLufs;
     juce::StringArray lines;
     lines.add ("EXPORT NOTES  " + juce::Time::getCurrentTime().toString (true, true, false, true));
@@ -417,6 +461,7 @@ juce::String LapisProcessor::exportNotes (const PassResult& p)
     lines.add ("Loudness:    " + juce::String (p.lufs, 1) + " LUFS integrated (target " + juce::String (p.targetLufs, 1) + ")");
     lines.add ("True peak:   " + juce::String (p.truePeakDb, 1) + " dBTP (ceiling " + juce::String (p.ceilingDb, 1) + ")");
     lines.add ("Limiting:    up to " + juce::String (p.maxGrDb, 1) + " dB");
+    lines.add ("NOTE:        rendered WITH Lapis' master preview on: this is a master, not the suite's premaster. Switch Hear the master off to render the premaster.");
     lines.add ("Format:      " + juce::String (p.dithered ? "16-bit WAV, TPDF dither on (in Lapis: don't add more in FL)"
                                                          : "24-bit WAV, no dither (Lapis: 24-bit)"));
     lines.add ("");

@@ -27,6 +27,7 @@ namespace watcher
     {
         bool measured = false;
         float truePeakDb = -100.0f, ceilingDb = -0.3f, monoLossDb = 0.0f, lowCorrelation = 1.0f;
+        bool premaster = false;  // true: the goal is a label-ready premaster (peaks at or under -6 dBFS, nothing on the master)
     };
 
     inline std::vector<Problem> scan (const std::vector<suite::SuiteEntry>& entries, const Master& master)
@@ -41,7 +42,7 @@ namespace watcher
         }
         auto where = [] (const suite::SuiteEntry& e) { return e.track.isNotEmpty() ? "'" + e.track + "'" : juce::String ("a track"); };
         for (const auto& e : entries)
-            if (e.plugin == "Lapis" && e.metrics[0] > 6.0f)   // the limiter holding more than 6 dB
+            if (! master.premaster && e.plugin == "Lapis" && e.metrics[0] > 6.0f)   // the limiter holding more than 6 dB
                 out.push_back ({ "limiter", "Lapis is holding back " + juce::String (e.metrics[0], 1) + " dB",
                                  "gain staging brings every track down together, so the limiter needn't clamp", suite::Fix::GainStage, 0, true });
 
@@ -58,10 +59,21 @@ namespace watcher
         }
         if (master.measured)
         {
-            if (master.truePeakDb > 0.0f && haveLapis)   // over full scale going into the limiter (Mentalism sits before Lapis)
+            if (master.premaster)
+            {
+                if (master.truePeakDb > master.ceilingDb + 0.1f)   // the premaster's headroom: every track comes down together
+                    out.push_back ({ "headroom", "The master peaks at " + juce::String (master.truePeakDb, 1) + " dBTP: a label-ready premaster stays at or under "
+                                                     + juce::String (master.ceilingDb, 0) + " dBFS",
+                                     "gain staging brings every track down together (no limiter: mastering does that)", suite::Fix::GainStage, 0, true });
+                for (const auto& e : entries)
+                    if (e.plugin == "Lapis" && e.has (suite::Status::masterPreview))
+                        out.push_back ({ "preview", "Lapis' master preview is on: a render now would be a master, not the premaster",
+                                         "switch off Hear the master in Lapis before rendering (nothing to click here)", suite::Fix::None, 0, false });
+            }
+            else if (master.truePeakDb > 0.0f && haveLapis)   // over full scale going into the limiter (Mentalism sits before Lapis)
                 out.push_back ({ "headroom", "The master runs into Lapis at " + juce::String (master.truePeakDb, 1) + " dBTP",
                                  "gain staging brings every track down together, so the limiter needn't clamp", suite::Fix::GainStage, 0, true });
-            if (master.truePeakDb > master.ceilingDb + 0.1f && ! haveLapis)
+            if (! master.premaster && master.truePeakDb > master.ceilingDb + 0.1f && ! haveLapis)
                 out.push_back ({ "peak", "The master peaks at " + juce::String (master.truePeakDb, 1) + " dBTP with no limiter",
                                  "put Lapis last on the master (nothing to click: it needs placing)", suite::Fix::None, 0, false });
             if (master.monoLossDb > 3.0f && havePrima)

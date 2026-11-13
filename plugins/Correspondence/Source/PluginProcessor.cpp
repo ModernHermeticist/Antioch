@@ -1,5 +1,6 @@
 #include <set>
 #include "PluginProcessor.h"
+#include "DirectorWriting.h"
 #include "KitBus.h"
 #include "Drums.h"
 #include "TempoBus.h"
@@ -452,6 +453,13 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
             notes = vocalaware::layerClip (s, map, suite::WritingBus::thin());
             if (notes.empty()) return none();
         }
+        else if (kind == "Song Transitions")   // the suite director's transition parts (pickups, riser arps, stabs, the hook's hint)
+        {
+            float barQ = 4.0f;
+            const auto plan = suite::DirectorBus::moments (&barQ);
+            notes = chords::directed::transitionsClip (plan, barQ, s.root, s.scale, chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead));
+            if (notes.empty()) return none();
+        }
         else if (kind == "Song Vocal Answer")   // a line in the vocal's gaps (needs Solve et Coagula's vocal bars)
         {
             notes = chords::vocalAnswer (s, map, currentSongPatterns().vocalBars);
@@ -497,6 +505,17 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
         notes = kind == "Bass" ? chords::bassClip (s) : kind == "Arp" ? chords::arpClip (s)
               : kind == "Melody" ? chords::melody (s, melodySettings())
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
+    }
+    // The suite director: the parts leave room for its silences and carry its arrangement edits and harmony moves
+    if (kind.startsWith ("Song ") && kind != "Song Transitions" && kind != "Song Fills")
+    {
+        float barQ = 4.0f;
+        if (const auto plan = suite::DirectorBus::moments (&barQ); ! plan.empty())
+        {
+            suite::SectionMap map;
+            suite::SectionBus::read (map);
+            directedChanges.store (chords::directed::apply (notes, chords::directed::partOf (kind), plan, barQ, s.root, s.scale, map.finalLift));
+        }
     }
     // Autopilot (arrangement): song parts don't ring on into a chord they clash with
     if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && kind != "Song Drums" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
@@ -686,7 +705,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder.createDirectory();
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Drums", "Song Piano",
-                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer",
+                       "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer", "Song Transitions",
                        "Song Strings", "Song Brass", "Song Choir", "Song Timpani", "Song Acid", "Song Chops", "Song Candy" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
     // The mix follows the writing: parts whose notes changed since the last export are measured

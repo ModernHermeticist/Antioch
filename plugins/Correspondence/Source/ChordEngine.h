@@ -4,6 +4,7 @@
 // voice leading, rhythm patterns for chords/bass/arp, presets and MIDI export.
 // No audio or UI code here so it can be unit-tested directly.
 
+#include "DirectorBus.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include "Music.h"
 #include "TempoBus.h"
@@ -2072,6 +2073,9 @@ namespace chords
         if (! markers.empty())
             for (const auto& [bar, tempo] : suite::TempoBus::changes ((int) std::ceil (markers.back().first / 4.0) + 64, (float) bpm))
                 if (bar > 1) conductor.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / tempo)), (bar - 1) * 4.0 * ppq);
+        // The suite director's tempo moves (a 2% ease through a breakdown, climbing back in the build)
+        for (const auto& [q, tempo] : suite::DirectorBus::tempoChanges (bpm))
+            conductor.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::round (60000000.0 / tempo)), q * ppq);
         conductor.sort();
         file.addTrack (conductor);
 

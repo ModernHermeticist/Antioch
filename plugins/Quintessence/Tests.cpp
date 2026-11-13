@@ -1336,5 +1336,53 @@ int main (int argc, char** argv)
                "an old project's low / mid / high settings move to sub-low-mid / mid-upper-mid / presence-air");
     }
 
+
+    section ("The suite director: the mix around each moment; the premaster's headroom");
+    {
+        namespace dr = suite::director;
+        dr::Plan plan;
+        dr::Moment m;
+        m.key = 1; m.kind = dr::kIntoDrop; m.atQ = 64.0f; m.startQ = 48.0f; m.endQ = 68.0f;
+        m.hero = dr::pAzoth; m.heroGesture = dr::gAzImpact; m.gesture[dr::pAzoth] = dr::gAzImpact;
+        m.premixDb = -2.0f; m.hookDipDb = -1.5f; m.buildHoldDb = 1.0f; m.narrowBefore = 0.5f; m.wideOnHit = 0.6f; m.lowClearBeats = 1.0f;
+        m.silence = dr::gSiSnap; m.gesture[dr::pSilence] = dr::gSiSnap; m.silenceStartQ = 63.5f; m.silenceEndQ = 64.0f;
+        plan.moments.push_back (m);
+        plan.tension.assign (32, 0.5f);
+        plan.hash = 0x1234u;
+        suite::DirectorBus::publish (plan, 4.0, 138.0);
+        suite::DirectorBus::Follower f;
+        check (f.refresh(), "the plan reaches the track");
+        using St = qn::DirectorStage;
+        const auto pads = St::targetsAt (f, 60.0, 4), kick = St::targetsAt (f, 63.7, 1), hook = St::targetsAt (f, 64.5, 4), bass = St::targetsAt (f, 64.5, 2);
+        check (pads.presenceDb < -1.0f && pads.gainDb < -0.4f && pads.side < 1.0f, "before an FX-led drop the pads make room, the build is held (a level ride), the image narrows");
+        check (kick.silent && St::targetsAt (f, 63.7, 4).silent, "the director's snap: every track falls silent");
+        check (hook.presenceDb <= -1.4f && hook.side > 1.0f && hook.gainDb == 0.0f, "the hook's first bar back: the pads step aside, wide, the build released");
+        check (bass.subClear > 0.5f && ! St::targetsAt (f, 64.5, 1).silent, "the bass's sub clears for the impact");
+        // the audio: silence in the snap, back after it
+        St stage;
+        stage.prepare (sampleRate);
+        juce::AudioBuffer<float> buf (2, 4800);
+        for (int c = 0; c < 2; ++c) for (int i = 0; i < 4800; ++i) buf.setSample (c, i, 0.5f * std::sin (0.05f * (float) i));
+        uint32_t silentTicks = 0;
+        float* ch[2] = { buf.getWritePointer (0), buf.getWritePointer (1) };
+        const auto qPerSample = 138.0 / 60.0 / sampleRate;
+        stage.process (ch, 2, 4800, 63.55, qPerSample, f, 4, silentTicks);   // 0.1 s from inside the snap
+        check (silentTicks > 0 && buf.getMagnitude (0, 2400, 400) < 0.01f, "the snap is silent on the track");
+        suite::DirectorBus::withdraw();
+
+        // the headroom keeper: over -6 dBFS the trim comes down, with room to spare it comes back
+        using namespace suite::premaster;
+        auto trim = headroom::step (-3.0f, 0.0f);
+        check (trim < -0.2f, "the master peaking at -3 dBFS: every track comes down (" + juce::String (trim, 2) + " dB)");
+        float t2 = trim;
+        for (int i = 0; i < 40; ++i) t2 = headroom::step (-10.0f, t2);
+        check (t2 > trim && t2 <= 0.0f, "plenty of room: it eases back towards 0 dB");
+        headroom::publish (-3.0f);
+        auto q = make (4);
+        const auto st = render (*q, 0.5, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.5f * std::sin (0.03f * (float) (pos + i))); });
+        check (std::abs (q->headroomTrimNow.load() + 3.0f) < 0.05f && st.peak < 0.45f, "every Quintessence applies the keeper's trim (-3 dB): no limiter, the same balance");
+        headroom::withdraw();
+    }
+
     return finish();
 }

@@ -618,5 +618,46 @@ int main (int argc, char** argv)
 
     suite::SectionBus::withdraw();
     testStyleLog.deleteFile();
+
+    section ("Under the suite director: lead, support or rest as Ouroboros says");
+    {
+        auto free = baseInput (5);
+        const auto own = trm::makePlan (free);
+        int ownTransitions = 0;
+        for (const auto& m : own.moves) if ((m.slot & trm::bodySlots) == 0) ++ownTransitions;
+        auto rests = baseInput (5);
+        rests.suiteActive = true;   // a live plan that gives this track no part anywhere
+        const auto quiet = trm::makePlan (rests);
+        int quietTransitions = 0;
+        for (const auto& m : quiet.moves) if ((m.slot & trm::bodySlots) == 0) ++quietTransitions;
+        check (ownTransitions > 0 && quietTransitions == 0, "with no part in the director's plan, no transition moves of its own ("
+                                                            + juce::String (ownTransitions) + " without the director)");
+        check (quiet.fakeDrop < 0, "the fake drop is the director's (its silences)");
+        // a lead at the first drop, in the tape family, and a snap the moves stay out of
+        auto lead = baseInput (5);
+        lead.suiteActive = true;
+        const auto map = lead.map;
+        double dropQ = 0.0;
+        for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].type == suite::SectionType::Drop) { dropQ = (map.sections[(size_t) i].startBar - 1) * 4.0; break; }
+        lead.suiteCues.push_back ({ dropQ - 4.0, dropQ, 1, trm::fTape, 0 });
+        lead.suiteSilences.push_back ({ dropQ - 0.5, dropQ });
+        const auto led = trm::makePlan (lead);
+        bool tape = false, intoSnap = false;
+        for (const auto& m : led.moves)
+        {
+            if ((m.slot & trm::bodySlots) != 0) continue;
+            if (m.startQ >= dropQ - 4.01 && m.startQ < dropQ && trm::effect (m.effect).family == trm::fTape && (m.flags & trm::mfSuite)) tape = true;
+            if (m.startQ < dropQ && m.endQ > dropQ - 0.5 + 1.0e-3) intoSnap = true;
+        }
+        check (tape, "the lead it's given: a tape move into the first drop");
+        check (! intoSnap, "nothing plays into the director's snap");
+        // you chose another track to lead: this one supports with one small move
+        auto support = lead;
+        support.suiteCues[0].heroRole = 6;
+        bool big = false;
+        for (const auto& m : trm::makePlan (support).moves) if ((m.slot & trm::bodySlots) == 0 && trm::effect (m.effect).size > 1) big = true;
+        check (! big, "another track leads: only small supporting moves");
+    }
+
     return finish();
 }

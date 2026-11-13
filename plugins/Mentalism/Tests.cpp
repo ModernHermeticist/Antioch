@@ -170,7 +170,9 @@ int main (int argc, char** argv)
 
         auto p = make();
         p->setReference (profile);
-        check (std::abs (p->report().targetLufs + 8.0f) < 0.01f, "a quiet reference never sets the project's loudness (still the club target)");
+        check (p->report().premaster && std::abs (p->report().targetLufs + 23.0f) > 1.0f, "a quiet reference never sets the project's loudness (the premaster's loudness is the mix's own)");
+        set (*p, Params::loudnessTarget, 0.0f);
+        check (std::abs (p->report().targetLufs + 8.0f) < 0.01f, "nor a master target's (still the club target)");
 
         juce::MemoryBlock state;
         p->getStateInformation (state);
@@ -277,6 +279,44 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    section ("The goal: a label-ready premaster (peaks -6 dBFS, nothing on the master)");
+    {
+        using checklist::State;
+        auto stateOf = [] (const std::vector<checklist::Item>& list, const juce::String& name)
+        {
+            for (auto& i : list) if (i.name == name) return i.state;
+            return State::Unknown;
+        };
+        MentalismProcessor::Report rep;
+        rep.premaster = true;
+        rep.measuredSeconds = 240.0f;
+        rep.targetLufs = -15.8f; rep.ceiling = suite::premaster::peakDbfs;
+        rep.measurement.integratedLufs = -15.8f; rep.measurement.truePeakDb = -6.6f;
+        rep.measurement.correlation = 0.6f; rep.measurement.lowCorrelation = 0.97f; rep.measurement.monoLossDb = 1.2f;
+        auto items = checklist::check (rep, 0);
+        bool allPass = true;
+        for (auto& i : items) allPass = allPass && i.state != State::Fail;
+        check (allPass && stateOf (items, "Headroom (premaster)") == State::Pass && stateOf (items, "No master limiting") == State::Pass
+                   && stateOf (items, "Loudness") == State::Pass,
+               "a premaster at -6.6 dBTP, nothing on the master, loudness as it lands: label-ready");
+        rep.measurement.truePeakDb = -1.0f;
+        items = checklist::check (rep, 0);
+        check (stateOf (items, "Headroom (premaster)") == State::Fail, "peaks at -1 dBTP: not enough headroom for mastering");
+        suite::Registry::reset();
+        suite::Registry::announce (0x1a915u, "Lapis", "Master", suite::Status::masterPreview, {});
+        items = checklist::check (rep, 0, suite::Registry::list());
+        check (stateOf (items, "No master limiting") == State::Fail, "Lapis' master preview left on: the checklist stops the render");
+        watcher::Master master;
+        master.measured = true; master.premaster = true; master.truePeakDb = -2.5f; master.ceilingDb = suite::premaster::peakDbfs;
+        const auto found = watcher::scan (suite::Registry::list(), master);
+        bool headroom = false, preview = false;
+        for (const auto& f : found) { headroom = headroom || (f.key == "headroom" && f.fix == suite::Fix::GainStage && f.automatic); preview = preview || f.key == "preview"; }
+        check (headroom && preview, "the watcher brings every track down for the headroom (no limiter), and flags the master preview");
+        suite::Registry::reset();
+        auto p = make();
+        check (p->report().premaster && std::abs (p->report().ceiling + 6.0f) < 0.01f, "Mentalism's default target is the premaster");
+    }
+
     section ("Pre-export checklist");
     {
         using checklist::State;
@@ -356,6 +396,11 @@ int main (int argc, char** argv)
     section ("New song (session preset)");
     {
         auto p = make();
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::premasterIndex, "the default goal is a label-ready premaster");
+        suite::SessionBus::send ({ 1, 9, 0 });
+        p->pollSession();
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::premasterIndex, "a new song keeps the premaster as the goal");
+        set (*p, Params::loudnessTarget, 0.0f);   // with a master target chosen, the style sets it
         suite::SessionBus::send ({ 1, 9, 0 });   // Uplifting radio edit: streaming target
         p->pollSession();
         check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == suite::sessionStyles()[1].loudnessTarget,
@@ -418,7 +463,7 @@ int main (int argc, char** argv)
         const auto lo = p->lastMatchLow.load(), hi = p->lastMatchHigh.load();
         check (seq != 0 && lo < -0.5f && lo > -1.5f && hi > 1.5f && hi < 2.5f,
                "moves half-way: less low, more top (" + juce::String (lo, 2) + " / +" + juce::String (hi, 2) + " dB)");
-        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == 0, "and leaves the loudness target alone");
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::premasterIndex, "and leaves the loudness target alone");
         float l = 0, h = 0;
         suite::FixBus::Message m;
         check (suite::FixBus::read (seq, m) && m.fix == suite::Fix::ReferenceTone && (suite::unpackTone (m.target, l, h), std::abs (l - lo) < 0.01f && std::abs (h - hi) < 0.01f),
@@ -429,6 +474,9 @@ int main (int argc, char** argv)
     section ("Versions");
     {
         auto p = make();
+        p->applyVersion (suite::radioEdit);
+        check ((int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load() == advisor::premasterIndex, "every version is delivered as a premaster");
+        set (*p, Params::loudnessTarget, 0.0f);
         p->applyVersion (suite::radioEdit);
         const auto radio = (int) p->apvts.getRawParameterValue (Params::loudnessTarget)->load();
         p->applyVersion (suite::extendedMix);

@@ -7,6 +7,7 @@
 #include "KickBus.h"
 #include "Engines.h"
 #include "SectionBus.h"
+#include "DirectorBus.h"
 #include "Scenes.h"
 #include "StyleLog.h"
 #include "FixBus.h"
@@ -194,6 +195,9 @@ private:
     TranceGate gate;
     Ducker ducker;
     SidechainTrigger scTrigger;
+    suite::DirectorBus::Follower suiteDirector;   // the suite director's plan
+    int lastDirectorReport = -1;
+    float directorSilence = 1.0f;
     suite::SectionFollower sections;
     std::array<std::atomic<float>*, Params::numSteps> stepParams {};
     juce::SmoothedValue<float> outGain;

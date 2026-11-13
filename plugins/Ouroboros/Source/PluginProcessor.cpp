@@ -112,7 +112,10 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (host.playing) playedSinceAutosave.store (true);
     if (host.playing && host.hasPpq) suite::MoveLog::setBar ((int) std::floor (host.ppq / host.barQuarters()) + 1);   // What changed: which bar a move happened on
     if (host.hasPpq)
+    {
         ppq.store (host.ppq);
+        suite::DirectorBus::setPlayhead (host.ppq);   // the director strips in every plugin
+    }
     // Tempo changes: note each bar's tempo as the song plays, for times in the cue sheet and exports.
     if (host.playing && host.hasPpq && host.barQuarters() > 0.0)
     {
@@ -293,6 +296,12 @@ void OuroborosProcessor::markAtPlayhead (suite::SectionType type)
 
 suite::SectionMap OuroborosProcessor::proposeFromFile (const juce::File& file, double referenceBpm)
 {
+    const auto bars = measureFile (file, referenceBpm);
+    return bars.empty() ? suite::SectionMap {} : listen::propose (bars);
+}
+
+std::vector<listen::BarFeature> OuroborosProcessor::measureFile (const juce::File& file, double referenceBpm)
+{
     juce::AudioFormatManager formats;
     formats.registerBasicFormats();
     std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
@@ -301,7 +310,7 @@ suite::SectionMap OuroborosProcessor::proposeFromFile (const juce::File& file, d
     const auto length = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (reader->sampleRate * 15.0 * 60.0));   // up to 15 minutes
     juce::AudioBuffer<float> audio ((int) juce::jlimit (1u, 2u, reader->numChannels), length);
     reader->read (&audio, 0, length, 0, true, true);
-    return listen::propose (listen::analyseAudio (audio, reader->sampleRate, referenceBpm));
+    return listen::analyseAudio (audio, reader->sampleRate, referenceBpm);
 }
 
 void OuroborosProcessor::analyseReference (const juce::File& file, double referenceBpm)
@@ -311,10 +320,13 @@ void OuroborosProcessor::analyseReference (const juce::File& file, double refere
     if (referenceThread.joinable()) referenceThread.join();
     referenceThread = std::thread ([this, file, referenceBpm]
     {
-        auto proposal = proposeFromFile (file, referenceBpm);
+        const auto bars = measureFile (file, referenceBpm);
+        auto proposal = bars.empty() ? suite::SectionMap {} : listen::propose (bars);
+        const auto style = ouro::DirectorHost::referenceStyle (bars, proposal, referenceBpm, file.getFileNameWithoutExtension());
         {
             const juce::ScopedLock sl (lock);
             referenceResult = proposal;
+            referenceStyleResult = style;
             lastReferenceName = file.getFileNameWithoutExtension();
         }
         analysingReference.store (false);
@@ -450,14 +462,12 @@ void OuroborosProcessor::followSectionSnapshots()
 
 juce::String OuroborosProcessor::renderPlan() const
 {
+    // The suite delivers label-ready premasters: every version is rendered unmastered
     juce::StringArray lines;
-    lines.add ("RENDER PLAN");
+    lines.add ("RENDER PLAN (label-ready premasters)");
     lines.add ("");
-    struct Version { int slot; const char* name; const char* target; };
-    const Version versions[] = { { 0, "Original mix", "club master: -8 LUFS integrated, -0.3 dBTP" },
-                                 { 1, "Radio edit", "streaming: -14 LUFS, -1 dBTP" },
-                                 { 2, "Extended mix", "club master: -8 LUFS, -0.3 dBTP" },
-                                 { 3, "Club edit", "club master: -8 LUFS, -0.3 dBTP" } };
+    struct Version { int slot; const char* name; };
+    const Version versions[] = { { 0, "Original mix" }, { 1, "Radio edit" }, { 2, "Extended mix" }, { 3, "Club edit" } };
     int step = 1;
     bool any = false;
     for (const auto& v : versions)
@@ -465,14 +475,16 @@ juce::String OuroborosProcessor::renderPlan() const
         if (! hasSnapshot (v.slot)) continue;
         any = true;
         lines.add (juce::String (step++) + ". " + v.name + " (snapshot " + SuiteProcessor::slotName (v.slot) + ")");
-        lines.add ("   Click " + SuiteProcessor::slotName (v.slot) + " in Ouroboros, press Reset in Mentalism, play it through once so Lapis settles on "
-                   + v.target + ", check Mentalism's export checklist, then export from FL.");
-        lines.add ("   File name: <Artist> - <Title> (" + juce::String (v.name) + ").wav");
+        lines.add ("   Click " + SuiteProcessor::slotName (v.slot) + " in Ouroboros, press Reset in Mentalism, play it through once, check Mentalism's export checklist "
+                   "(peaks at or under -6 dBFS, nothing on the master), then export from FL.");
+        lines.add ("   File name: <Artist> - <Title> (" + juce::String (v.name) + ") [premaster].wav");
     }
     if (! any)
         lines.add ("No versions yet: click Make versions first (original, radio edit, extended mix, club edit).");
     lines.add ("");
-    lines.add ("For every version: WAV, 24-bit, the project's sample rate; no dither needed after Lapis at 24-bit; leave a second of silence at the end.");
+    lines.add ("For every version: a premaster for the label's mastering. WAV, 24-bit (or 32-bit float), the project's sample rate, no dither;");
+    lines.add ("peaks at or under -6 dBFS (true peak); no limiting, clipping or loudness gain on the master (Lapis' Hear the master OFF);");
+    lines.add ("the loudness lands where the mix lands (it's reported in the export notes, never chased); a second of silence at the end.");
     return lines.joinIntoString ("\n") + "\n";
 }
 
@@ -553,6 +565,8 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     juce::ValueTree notesTree ("Notes");
     notesTree.setProperty ("text", getNotes().joinIntoString ("\n"), nullptr);
     state.appendChild (notesTree, nullptr);
+    state.removeChild (state.getChildWithName ("DirectorProfile"), nullptr);
+    state.appendChild (director.profileTree (true), nullptr);
     state.removeChild (state.getChildWithName ("Autopilot"), nullptr);
     juce::ValueTree autopilotTree ("Autopilot");
     autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
@@ -604,6 +618,12 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
         suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
         state.removeChild (ap, nullptr);
+    }
+    if (const auto dt = state.getChildWithName ("DirectorProfile"); dt.isValid())
+    {
+        director.applyProfileTree (dt, true);
+        directorDirty = true;
+        state.removeChild (dt, nullptr);
     }
     if (const auto mt = state.getChildWithName ("Moments"); mt.isValid())
     {

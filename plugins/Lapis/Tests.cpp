@@ -13,6 +13,7 @@ namespace
         suite::TargetBus::withdraw();
         auto p = std::make_unique<LapisProcessor>();
         set (*p, LapisProcessor::targetId, (float) targetIndex);
+        set (*p, LapisProcessor::hearMasterId, 1.0f);   // these tests are about the master preview (the premaster has its own section)
         prepare (*p);
         return p;
     }
@@ -305,6 +306,52 @@ int main (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("lapis.png"));
         editor.reset();
+    }
+
+    section ("The premaster: Lapis is a reference, the audio passes untouched");
+    {
+        suite::TargetBus::withdraw();
+        auto p = std::make_unique<LapisProcessor>();
+        prepare (*p);
+        check (p->apvts.getRawParameterValue (LapisProcessor::hearMasterId)->load() < 0.5f, "Hear the master is off by default: the premaster is what's rendered");
+        // loud music (peaks well over -6 dBFS): nothing is limited, clipped or turned up
+        juce::AudioBuffer<float> in, out;
+        auto src = music ([] (double) { return -6.0f; });
+        in.setSize (2, (int) (4.0 * sampleRate));
+        {
+            juce::AudioBuffer<float> b (2, blockSize);
+            for (int64_t pos = 0; pos < in.getNumSamples(); pos += blockSize)
+            {
+                const auto n = (int) std::min<int64_t> (blockSize, in.getNumSamples() - pos);
+                b.setSize (2, n, false, false, true);
+                src (b, pos);
+                for (int c = 0; c < 2; ++c) in.copyFrom (c, (int) pos, b, c, 0, n);
+            }
+        }
+        render (*p, 4.0, src, &out);
+        const auto lat = p->getLatencySamples();
+        float worst = 0.0f;
+        for (int i = lat; i < out.getNumSamples(); ++i) worst = juce::jmax (worst, std::abs (out.getSample (0, i) - in.getSample (0, i - lat)));
+        check (worst < 1.0e-6f, "the output is the input, sample for sample (delayed by the reported latency): off by " + juce::String (worst, 8));
+        const auto inPeak = in.getMagnitude (0, 0, in.getNumSamples());
+        check (inPeak > 1.0f && out.getMagnitude (0, 0, out.getNumSamples()) > 1.0f, "over full scale stays over full scale: nothing clamps it");
+        check (p->premasterPeakDb.load() > -6.0f, "and the premaster check sees peaks over -6 dBFS: " + juce::String (p->premasterPeakDb.load(), 1) + " dBTP");
+        check (p->gainDb.load() != 0.0f || p->outShortTerm.load() > -70.0f, "the master preview keeps learning alongside (for the A/B)");
+
+        // the export notes for a premaster
+        LapisProcessor::PassResult r;
+        r.lufs = -15.5f; r.truePeakDb = -6.4f; r.seconds = 300.0f; r.premaster = true;
+        const auto ok = LapisProcessor::exportNotes (r);
+        check (ok.contains ("PREMASTER") && ok.contains ("Label-ready") && ! ok.contains ("FIX"), "premaster notes: peaks under -6 dBFS, untouched, 24-bit: label-ready");
+        r.truePeakDb = -2.0f;
+        const auto hot = LapisProcessor::exportNotes (r);
+        check (hot.contains ("FIX: peaks") && hot.contains ("4.0 dB") && hot.contains ("Not label-ready"), "too hot: says how far to bring the master down");
+        r.premaster = false; r.maxGrDb = 3.0f;
+        check (LapisProcessor::exportNotes (r).contains ("WITH Lapis' master preview"), "a pass rendered with the preview on says it isn't the premaster");
+        // and Hear the master is the A/B: on, the master chain is heard
+        set (*p, LapisProcessor::hearMasterId, 1.0f);
+        const auto st = render (*p, 2.0, music ([] (double) { return -6.0f; }));
+        check (st.peak <= 1.0f, "Hear the master on: the preview is limited under full scale (A/B only)");
     }
 
     section ("Reports how hard it works, for Mentalism's section-by-section check");

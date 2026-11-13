@@ -6,6 +6,7 @@
 #include "Engines.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
+#include "DirectorBus.h"
 #include "Scenes.h"
 #include "Parameters.h"
 #include "MoveLog.h"
@@ -189,6 +190,10 @@ private:
     ThrowDelay throwDelay;
     suite::EnvelopeFollower dryEnvelope;
     suite::SectionFollower sections;
+    suite::DirectorBus::Follower suiteDirector;   // the suite director's plan
+    bool dirThrow = false, dirSilent = false;
+    float dirWash = 0.0f, dirSpace = 1.0f, dirWide = 0.0f, dirSpaceGain = 1.0f, dirMute = 1.0f;
+    int dirFrozeAt = -1, dirReported = -1;
 
     juce::SmoothedValue<float> dryGain, echoGain, verbGain, throwGain, outGain, echoSend, throwSend, verbDuck, throwDuck;
     double sampleRate = 44100.0;

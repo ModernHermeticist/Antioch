@@ -181,6 +181,7 @@ void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     }
 
     const auto director = value (TParams::direct) > 0.5f && suite::Autopilot::on (suite::Autopilot::transmuteF);
+    const auto suiteLive = suiteAudio.refresh();
     const auto chosenRole = (int) value (TParams::role);
     const auto role = chosenRole > 0 ? chosenRole : autoRole.load();
     const auto kicks = suite::KickBus::read();
@@ -261,6 +262,12 @@ void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
             auto addMove = [&] (const trm::Move& mv, int64_t& anchor)
             {
+                if (anchor < 0 && suiteLive && (mv.slot & trm::bodySlots) == 0 && (mv.flags & trm::mfAudition) == 0)
+                {
+                    // the fidelity check: a transition move the plan asked for, or one it didn't
+                    if (const auto at = suiteAudio.actingAt (posQ, suite::director::pTransmute); at >= 0) suite::DirectorBus::reportActed (suiteAudio.hash(), at, suite::director::pTransmute);
+                    else if ((mv.flags & trm::mfLocked) == 0) suite::DirectorBus::reportExtra (suite::director::pTransmute);
+                }
                 if (anchor < 0) anchor = engine.now() - (int64_t) std::llround ((posQ - mv.startQ) * samplesPerQ);
                 auto c = contextFor (mv, posQ, sec, barQ);
                 c.role = role; c.samplesPerQ = samplesPerQ; c.anchor = anchor; c.chordAnchor = chordAnchor;
@@ -312,6 +319,27 @@ void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
         }
         engine.tgt = mod;
         engine.process (L + off, R + off, n, e);
+    }
+
+    // the director's silences (a snap, a breath, a kick-only bar, a fake drop's gap): this track
+    // falls silent with a 3 ms fade, unless it's the kick in a kick-only bar
+    const auto silenceStep = (float) (1.0 / (0.003 * sampleRate));
+    float silenceTarget = 1.0f;
+    for (int i = 0; i < numSamples; ++i)
+    {
+        if ((i & 31) == 0)
+        {
+            silenceTarget = 1.0f;
+            if (suiteLive && running)
+                if (const auto at = suiteAudio.silenceAt (host.ppq + i / samplesPerQ); at >= 0
+                    && ! (suiteAudio[at].silence == suite::director::gSiKickOnly && role == 1))
+                {
+                    silenceTarget = 0.0f;
+                    suite::DirectorBus::reportActed (suiteAudio.hash(), at, suite::director::pSilence);
+                }
+        }
+        silenceGain += juce::jlimit (-silenceStep, silenceStep, silenceTarget - silenceGain);
+        if (silenceGain < 0.999f) { L[i] *= silenceGain; if (numOut > 1) R[i] *= silenceGain; }
     }
 
     // output (and a mono output gets both sides)
@@ -432,6 +460,22 @@ bool TransmutationProcessor::replan (bool force)
     in.vocalBars = suite::VocalBus::read();
     for (const auto& [a, b] : suite::KitBus::rests()) in.hookRests.push_back ({ a, b });
     for (const auto& n : suite::WritingBus::sung()) in.vocalNotes.push_back ({ n.start, n.start + n.length });
+    // the suite director: which transitions this track leads, supports or sits out
+    if (suiteMsg.refresh())
+    {
+        namespace dr = suite::director;
+        in.suiteActive = true;
+        static const int families[] = { -1, trm::fRepeat, trm::fReverse, trm::fPitch, trm::fFilter, trm::fSpace, trm::fGrain, trm::fStereo, trm::fTape };
+        for (int i = 0; i < suiteMsg.size(); ++i)
+        {
+            const auto& m = suiteMsg[i];
+            if (m.silence != dr::gNone && ! (m.silence == dr::gSiKickOnly && in.role == 1)) in.suiteSilences.push_back ({ m.silenceStartQ, m.silenceEndQ });
+            if (! m.acts (dr::pTransmute)) continue;
+            const auto w = suite::DirectorBus::windowFor (suiteMsg, i, dr::pTransmute);
+            const auto g = m.gesture[dr::pTransmute];
+            in.suiteCues.push_back ({ w.first, w.second, m.hero == dr::pTransmute ? 1 : 2, g >= dr::gTmRepeat && g <= dr::gTmTape ? families[g] : -1, (int) m.heroRole });
+        }
+    }
 
     // what you've kept in earlier songs (the style log), re-read once a minute
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
@@ -489,6 +533,7 @@ bool TransmutationProcessor::replan (bool force)
     h.add ((uint64_t) in.pluckName); h.add ((uint64_t) in.arpName);
     for (const auto& [a, b] : in.hookRests) { h.add (a); h.add (b); }
     for (const auto& [a, b] : in.vocalNotes) { h.add (a); h.add (b); }
+    h.add ((uint64_t) in.suiteActive); h.add ((uint64_t) (in.suiteActive ? suiteMsg.hash() : 0u));
 
     if (! force && h.h == inputHash) return false;
     auto fresh = directorOn ? trm::makePlan (in) : trm::Plan {};

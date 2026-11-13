@@ -72,7 +72,9 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     samplesNote.setJustificationType (juce::Justification::centredLeft);
     samplesButton.onClick = [this] { showSamplesMenu(); };
     updateSamplesNote();
-    setSize (980, 980);
+    setSize (980, 1014);
+    directorStrip.director = [] { return suite::DirectorBus::cue (suite::director::pAzoth); };
+    addAndMakeVisible (directorStrip);
     timerCallback();
     startTimerHz (10);
 }
@@ -181,7 +183,8 @@ void AzothEditor::paint (juce::Graphics& g)
 
 void AzothEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (16);
+    directorStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     auto header = bounds.removeFromTop (48);
     follow.setBounds (header.removeFromRight (180).reduced (4, 8));
     impactTune.setBounds (header.removeFromRight (180).reduced (4, 8));

@@ -13,12 +13,147 @@ in **Correspondence**, and the others follow it.
 | **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
 | **Mentalism**: mix assistant | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong |
 | **Ouroboros**: arrangement conductor | Automation clips that switch builds, ducking and throws on and off across the song |
-| **Lapis**: master finisher | Riding the master limiter until the drop is loud enough, and checking true peak |
+| **Lapis**: premaster check and master preview | Checking a premaster's headroom before it goes to mastering, and hearing how it would master (A/B only) |
 | **Emerald Tablet**: key detector | Working out the key of a track, loop or acapella by ear |
 | **Azoth**: automatic transition FX | Placing impacts, crashes, swells, downlifters and snare rolls at every transition |
 | **Prima Materia**: section mixer | Muting, filtering and riding individual tracks section by section with automation |
 | **Solve et Coagula**: vocal unmasking | Carving EQ space for the vocal by hand, or a static cut that's there even when nobody sings |
 | **Quintessence**: self-managing EQ and multiband dynamics | The channel EQ and multiband compressor you set by ear on every track, then forget to revisit |
+
+## The goal: a label-ready premaster
+
+Every automatic tuning in the suite drives towards one deliverable: a **label-ready, unmastered
+track** (a premaster) for the label's mastering engineer.
+
+- **Peaks at or under -6 dBFS** (true peak). The **headroom keeper** (Mentalism on the
+  master, autopilot switch *Keep the premaster's headroom*) hears the master's peaks. When they
+  go over -6 dBFS, it brings every Quintessence down together: like pulling the master fader,
+  the balance and the dynamics stay as they are. With room to spare, it eases them back up.
+- **Nothing on the master bus limits, clips or adds loudness.** **Lapis is a reference:** by
+  default it passes the audio through untouched and checks the premaster. *Hear the master*
+  plays how it would master, for A/B only; Mentalism's checklist and watcher stop a render
+  with it left on.
+- **The loudness lands where the mix lands** (usually -18 to -14 LUFS integrated). It's
+  reported, never chased. Mentalism's default target is *Label-ready premaster*; the master
+  targets (club, streaming, your sound) are still there for the preview.
+- **Transitions ride levels, never a limiter.** The director holds a build back with a level
+  ride, so the drop lands bigger at the same level, and evens out a loudness jump at a
+  section change (2 bars, measured by Mentalism).
+- **The render plan, the export notes and the checklist** all describe a premaster: 24-bit
+  (or 32-bit float) WAV, no dither, the project's sample rate, peaks under -6 dBFS, no master
+  limiting, dynamics intact (at least 7 dB from the loudness to the peaks).
+
+## The suite director: one plan for every transition
+
+**Ouroboros** owns one plan for every transition in the song, and every plugin plays its
+part in it. Open it with **Director** in Ouroboros' header. When the director is off, or
+Ouroboros isn't running, every plugin plays its own transitions as before.
+
+**One hero, quiet supporters, one sentence.**
+- Each moment (a section change, a breakdown's hint and peak, a phrase end, a bar you pin)
+  gets one **hero**: the plugin that leads it, with its gesture. The others **support**
+  quietly or rest.
+- Into a drop, the moment can be a **handoff**: Azoth's riser ends into the director's snap,
+  then Kybalion's gate re-enters on the one. It plays as one sentence, not three noises.
+- The players and their gestures:
+  - **Transmutation**: repeat, reverse, pitch, filter, space, grain, stereo or tape stop, on
+    the track you choose to lead, or on any track.
+  - **Kybalion**: gate roll, gap, half-time or stutter.
+  - **Antioch**: echo throw, reverb wash or freeze.
+  - **Azoth**: impact, riser, swell, snare roll, downlifter or tape stop.
+  - **Correspondence**: a pickup fill, a riser arp, a bass drop-out, a chord stab, or the
+    hook's first notes alone in the breakdown.
+  - **Scenes**: how a drop arrives: a slam, staggered (kick, bass, then the rest), or through
+    a filter that opens over a bar.
+  - **Silence**, owned by the director: a half-beat snap, a whole-beat breath, a kick-only
+    bar, or one fake drop per song.
+
+**How it plans.**
+- **An energy budget per moment**, from the tension curve, the story, your painted intent and
+  the bigger / smaller knob. One hero, supporters only within what's left, and no two heroes
+  within two bars (the pile-up guard). Most phrase ends are left plain, so the big moments
+  stand out.
+- **Story presets:** Restrained, Classic, Festival, Experimental. **Genre profiles:** Auto,
+  Uplifting, Tech, Psy, Progressive, Orchestral.
+- **The song's shape:**
+  - a **tension curve** beside the energy curve;
+  - a **mood** per section (hope, tension, release, nostalgia and others);
+  - a **character** per drop (Statement, Euphoric, Dark, Stripped, Huge), and every plugin
+    dresses for it;
+  - a **breakdown story**: empty, a hint, the swell, the peak;
+  - a **motif** heard small at the first drop and recalled bigger at the last;
+  - **fatigue memory**: a gesture waits 32 bars before it's used again, unless it's the motif;
+  - a small **surprise budget**.
+- **Harmony, key and tempo moves**, written by Correspondence:
+  - a borrowed bVI-bVII into a drop, a pedal under the build, a V pickup into the new key,
+    or a sus4 resolving on the one;
+  - a half-time bass for a breakdown's first bars;
+  - an Experimental story can ease the tempo 2% through a breakdown and climb back in the
+    build (in every export's tempo track).
+- **Arrangement edits**, as moves: the bass drops out for the bar before a drop, the arp rests
+  before a breakdown, the pads come in late in a Stripped drop.
+- **Placement:**
+  - real phrase lengths;
+  - gestures that would cover the vocal step back, while Antioch's throw of its last word is
+    welcome;
+  - a phrase-end move slides into the hook's rest;
+  - gestures take more beats at faster tempos.
+- **Several candidate plans are scored**, and the best is kept. The score weighs energy fit,
+  contrast between drops, variety, clutter, your taste, a reference's style and what was heard.
+- **It plans from what it hears:**
+  - a **rehearsal pass**: how loud and busy each bar is, from the Quintessences;
+  - **Mentalism's measurements**: a drop that didn't land gets more contrast, a sagging drop
+    gets a lift, and an unplanned loudness jump is evened out;
+  - a **reference track's style**: moves a minute, how often it goes silent, how big its
+    changes are.
+- **The structure is suggested along with the moves.** A build too short to climb or a
+  breakdown too short for its story is lengthened, and a Festival story gets a key change
+  into the last drop. Apply it on the *Structure* page.
+
+**The mix around each moment** (Quintessence on every track, Antioch, Lapis untouched):
+- **Making room:** two bars ahead, the other tracks make room for the hero (a gentle
+  presence dip) and hand it back.
+- **The hook first:** on the hook's first bar back, the pads and FX step aside.
+- **The low end:** the bass's sub clears for the impact's beat.
+- **Holding the build back:** the build is held back a little with a level ride, then
+  released on the one.
+- **Space and width:** the space goes dry into the drop, its tails are cut at the drop, and it
+  opens wide on the hit. Every track narrows into the drop and widens on the one (not the
+  kick or bass, and mono-safe).
+- **Silence:** every track falls silent in the director's silences, except the kick in a
+  kick-only bar.
+
+**Steering:**
+- **Paint intent:** right-click a section on the timeline for *Calmer*, *More*, *No moves*,
+  its own spice or its mood. Right-click a lane to pin a hero to a bar, or to block moves for
+  8 bars.
+- **Per moment:** lock, re-roll, freeze, undo, *Edit…* (who leads, what each plugin plays,
+  the silence, which track leads), rate up or down, *Like this* (teach it: the moment becomes
+  one of your gestures for that kind of moment), and save it as a template or apply one.
+- **Plan history:** every plan you've heard is kept, and you can step back to any of them.
+- **Director chat:** "make the second drop hit harder", "less glitch in the breakdown",
+  "darker", "more silence before the final drop", "simpler", "wider", "undo", "reset".
+- **Profiles:** save your story, genre, taste, requests and taught gestures; export one to
+  share, or import a friend's.
+
+**Trust:**
+- **What it plans:** the plan in words (*Summary*), the *Legend* of every gesture, *What
+  changed* since the last plan, and a **?** on the timeline at low-confidence moments.
+- **Before it plays:** the *Lint* page lists collisions, two heroes at once, a gesture under a
+  sung word, a key clash, a drop with no contrast, or a long section with no moves.
+- **The why of any second:** click anywhere on the timeline to see which plugins act there
+  and why (*Explain*). The inspector gives the why of each moment.
+- **Hearing it:**
+  - the *Render list* gives just the transitions, 2 bars either side, as bar ranges and FL
+    markers;
+  - *Hear the previous plan* is the before/after A/B;
+  - **Safe mode** keeps only filters, levels and space.
+- **After a play-through:** the *Fidelity* page shows what every plugin actually played at
+  each moment, and anything it played outside the plan.
+- **Version lock:** keeps this exact plan, so a render can be redone later.
+- **The ticker:** Ouroboros shows what's next ("Next: bar 89 (in 6 beats), into the drop:
+  Azoth impact, snap"). Every plugin's window has a director strip: "bar 89: you lead, gate
+  roll", or what it does around the moment.
 
 ## How much runs on its own
 
@@ -1020,9 +1155,21 @@ top end falls away at the end, it proposes the Outro. Press **Apply** to use the
 **Discard** it. Everything snaps to 4-bar phrases. Treat the proposal as a starting point:
 check it and nudge the edges if needed.
 
-## Lapis: master finisher
+## Lapis: premaster check and master preview
 
 ![Lapis](docs/lapis.png)
+
+**The suite delivers a label-ready premaster, so Lapis is a reference.**
+- **Hear the master off (the default):** the audio passes through untouched (delayed by the
+  limiter's look-ahead, which FL compensates). Lapis shows the premaster's true peak, its
+  headroom and its loudness, and says what to fix.
+- **Hear the master on:** you hear the master the controls below would make. It's for A/B
+  only, never for the render.
+- **The export notes for a premaster:** the peak against -6 dBFS, the loudness as reported,
+  "untouched", 24-bit with no dither, and either *label-ready* or what to fix. A pass
+  rendered with the preview on is labelled as a master.
+
+The rest of this section describes the master preview.
 
 Lapis goes on the master, just before Mentalism. In **Auto** mode, play the loudest part
 (the drop): Lapis learns the gain that puts steady loud sections at the target. By default

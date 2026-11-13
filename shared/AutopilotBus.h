@@ -40,6 +40,7 @@ namespace suite::Autopilot
         cleanEndingF, layerAlignF, equalBypassF,
         // arrangement (added later: kept at the end so saved switches keep their places)
         transmuteF,
+        headroomF,          // mixing: keep the premaster's -6 dBFS headroom (every Quintessence down together)
         numFeatures
     };
     inline const char* featureName (int f)
@@ -55,7 +56,7 @@ namespace suite::Autopilot
             "Bass dips at the kick's note", "Spread layers left and right", "Tune the kick to the key", "Glue on a drum bus",
             "Out-of-key FX re-pitched", "Clear the sub before each kick", "Cut vocal pops", "Lower vocal breaths", "Smooth clip starts and ends", "Re-centre a leaning track", "Keep the reverb mono-safe",
             "Remove hum", "De-ess the space", "Fade the space after the last bar", "Line up layered parts", "Equal loudness for the A/B bypass",
-            "Creative moves at transitions (Transmutation)" };
+            "Creative moves at transitions (Transmutation)", "Keep the premaster's headroom (-6 dBFS)" };
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
     inline uint32_t featureGroup (int f)

@@ -67,6 +67,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
     addAndMakeVisible (fingerprintStatus);
     tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
     addChildComponent (*tweakBanner);
+    autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueStereo); };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;
