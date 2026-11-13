@@ -253,6 +253,23 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6g.13** Ouroboros, *Delivery package for the label*: pick a profile and a folder: the brief, the render plan (with Mentalism's
   gate), the files to deliver, the markers, the director's plan and the premaster report are there.
 
+## 6h. Label-ready (new)
+
+- [ ] **6h.1** Ouroboros on the master, Correspondence open once. Play the song through: *Label-ready* fills in area by area
+  (areas it can't hear yet say "not measured yet").
+- [ ] **6h.2** *References... > Add a reference*: pick two or three released tracks (with their BPM). After a few seconds each
+  they're in the profile; *Closest released track* names one.
+- [ ] **6h.3** Click a check: the detail says what it found, the bar, and what moving it would take. *Fix this* on one with a
+  fix: the fix is sent (Mentalism's What changed shows it).
+- [ ] **6h.4** *Fix all safe ones*: only undoable fixes go out.
+- [ ] **6h.5** Mentalism's strip shows "label-ready N/100, next: ...".
+- [ ] **6h.6** Correspondence, *Writing > Write the hook stronger*: three new hooks with scores; pick one, hear it; *Undo* brings
+  the old one back.
+- [ ] **6h.7** *Milestones... > Save*: name it. Change a few things, save another, *Compare*: it lists the plugins that changed.
+  *Restore* the first: every plugin goes back.
+- [ ] **6h.8** *Hand-off pack...*: the folder has the report, known issues, session notes, the plan and the re-render instructions.
+- [ ] **6h.9** Save the FL project, reload: the profile, the history graph and the milestones are back.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

@@ -11,6 +11,7 @@
 #include "Listen.h"
 #include "SuiteDSP.h"
 #include "DirectorHost.h"
+#include "LabelReadyHost.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <optional>
 #include <thread>
@@ -396,6 +397,23 @@ public:
         suite::RecipeBus::send (suite::RecipeAction::Save, lastDraftRecipe);
         addNote ("Drafted the song: MIDI in Drafts, setup saved as the recipe '" + lastDraftRecipe + "'");
     }
+    // ---- Label-ready: the song measured as it plays, scored against the label (LabelReadyHost.h) ----
+    lab::LabelReadyHost labelReady;
+    lab::Analyser songAnalyser;          // audio thread
+    lab::Accumulator songBar;            // audio thread: the bar being heard
+    int songBarIndex = -1;               // audio thread
+    int labelTicks = 0;
+    void tickLabelReady()
+    {
+        ++labelTicks;
+        if (playing.load() && labelTicks % 5 == 0) labelReady.sampleTracks (getMap(), ppq.load(), barQuarters.load(), bpm.load());
+        if (labelTicks % 40 == 0)
+        {
+            labelReady.live.expectedSamples = (float) (sampleRate * barQuarters.load() * 60.0 / juce::jmax (1.0, bpm.load()));
+            labelReady.update (getMap(), bpm.load(), barQuarters.load(), director.havePlan ? &director.plan : nullptr);
+        }
+    }
+
     // ---- The suite director: one plan for every transition (DirectorHost.h) ----
     ouro::DirectorHost director;
     /** Re-plans now (after an edit) and publishes. True if the plan changed. */
@@ -427,7 +445,7 @@ public:
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); tickDirector(); }
+    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); tickDirector(); tickLabelReady(); }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

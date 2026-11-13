@@ -5,6 +5,9 @@
 #include "TransmuteBus.h"
 #include "StyleLog.h"
 #include "KeyBus.h"
+#include "DirectorBus.h"
+#include "KitBus.h"
+#include "WritingBus.h"
 #include "TestUtils.h"
 #include <set>
 
@@ -92,6 +95,10 @@ int main (int argc, char** argv)
     suite::StyleLog::setFileForTests (testStyleLog);
     suite::TransmuteBus::reset();
     suite::Autopilot::reset();
+    // other plugins' test runs can leave their shared state behind (same machine): start clean
+    suite::DirectorBus::reset();
+    suite::KitBus::withdraw();
+    suite::WritingBus::clearSung();
     suite::KeyBus::publish (9, 0);
 
     section ("The catalogue: all 118 moves");

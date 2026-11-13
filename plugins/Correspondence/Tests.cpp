@@ -19,6 +19,7 @@
 #include "VocalBus.h"
 #include "WritingBus.h"
 #include "StyleLog.h"
+#include "SongBus.h"
 
 using namespace suite::test;
 
@@ -2124,6 +2125,43 @@ int main (int argc, char** argv)
         auto kickOnly = m; kickOnly.silence = dr::gSiKickOnly; kickOnly.silenceStartQ = 28.0f;
         chords::directed::apply (drumsKick, chords::directed::Part::Drums, { kickOnly }, 4.0, 9, 0, 0);
         check (drumsKick.size() == 1 && drumsKick[0].pitch == 36, "a kick-only bar keeps the kick");
+    }
+
+
+    section ("Label-ready: the song's parts shared, and the hook written stronger");
+    {
+        auto p = make();
+        p->applyPreset (0);
+        const auto map = CorrespondenceProcessor::songMapOrDefault();
+        const auto song = p->songForLabel (map);
+        int firstDrop = -1;
+        for (int i = 0; i < map.count && firstDrop < 0; ++i) if (map.sections[(size_t) i].type == suite::SectionType::Drop) firstDrop = i;
+        bool inHook = ! song.hook.empty();
+        for (const auto& n : song.hook) inHook = inHook && n.start >= song.hookStartQ && n.start < song.hookStartQ + 32.0;
+        check (firstDrop >= 0 && std::abs (song.hookStartQ - 4.0 * (map.sections[(size_t) firstDrop].startBar - 1)) < 1.0e-6 && inHook,
+               "the hook is the first drop's lead, 8 bars (" + juce::String ((int) song.hook.size()) + " notes)");
+        check (! song.bass.empty() && song.chordCount[(size_t) suite::SectionType::Drop] > 0 && song.chordRoots[(size_t) suite::SectionType::Drop][0] >= 0,
+               "the bass and the drop's chord roots go with it");
+        suite::SongBus::publish (song);
+        check (suite::SongBus::read().hook.size() == song.hook.size(), "and reach the song bus");
+        suite::SongBus::withdraw();
+
+        float current = -1.0f;
+        const auto options = p->strongerHooks (current);
+        bool better = true;
+        for (const auto& o : options) better = better && o.score > current;
+        check (current >= 0.0f && current <= 1.0f && options.size() <= 3 && better,
+               "write it stronger: today's hook scores " + juce::String (current, 2) + ", " + juce::String ((int) options.size()) + " stronger one(s) offered");
+        if (! options.empty())
+        {
+            const auto seedBefore = p->currentSongPatterns().melody.seed;
+            p->applyStrongerHook (options[0]);
+            const auto now = p->songForLabel (map);
+            const auto score = suite::SongBus::hookScore (now.hook, now.hookStartQ, now.root, now.scale);
+            check (std::abs (score - options[0].score) < 0.01f && p->currentSongPatterns().melody.seed == options[0].seed,
+                   "applying one writes that hook (" + juce::String (score, 2) + ")");
+            check (p->undoVariation() && p->currentSongPatterns().melody.seed == seedBefore, "and Undo puts the old one back");
+        }
     }
 
     return finish();

@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "DirectorPanel.h"
+#include "LabelReadyPanel.h"
 #include "Delivery.h"
 #include "AutopilotBus.h"
 #include "TransmuteBus.h"
@@ -1511,6 +1512,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         juce::CallOutBox::launchAsynchronously (std::make_unique<ouro::DirectorPanel> (processor), directorButton.getScreenBounds(), nullptr);
     };
     addAndMakeVisible (directorButton);
+    labelButton.setTooltip ("Label-ready: is this a track a label signs? Every check against the label's references, the gate, milestones");
+    labelButton.onClick = [this]
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<lab::LabelReadyPanel> (processor), labelButton.getScreenBounds(), nullptr);
+    };
+    addAndMakeVisible (labelButton);
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
     {
@@ -1742,6 +1749,7 @@ void OuroborosEditor::resized()
     snapshotStatus.setBounds (header.removeFromRight (170).reduced (4, 8));
     suiteButton.setBounds (header.removeFromRight (110).reduced (4, 8));
     directorButton.setBounds (header.removeFromRight (110).reduced (4, 8));
+    labelButton.setBounds (header.removeFromRight (120).reduced (4, 8));
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);

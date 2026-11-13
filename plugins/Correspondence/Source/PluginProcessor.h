@@ -14,6 +14,7 @@
 #include <map>
 #include <optional>
 #include "Alias.h"
+#include "SongBus.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -167,6 +168,19 @@ public:
     /** Variation engine: alternatives for a kind of section; applying one keeps what was there, for Undo. */
     std::vector<harmony::Variation> sectionVariations (suite::SectionType type) const { return harmony::variations (currentSongPatterns(), type); }
     bool applyVariation (suite::SectionType type, int index);
+    /** The song's parts for Ouroboros' label-ready checks: the hook (the first drop's lead, 8 bars),
+        the bass, the counter-line under the hook, the chord roots per kind of section, the key. */
+    suite::SongBus::Song songForLabel (const suite::SectionMap& map, const chords::SongPatterns& sp) const;
+    suite::SongBus::Song songForLabel (const suite::SectionMap& map) const { return songForLabel (map, currentSongPatterns()); }
+    /** Write the hook stronger: new Melodia hooks for the drop (other seeds and rhythms) scored as
+        hooks (SongBus::hookScore), the best three that beat today's; `current` is today's score.
+        Applying one sets the melody's seed and style (and Melodia over the library's hook); Undo
+        (the variation Undo) puts them back. */
+    struct StrongerHook { juce::String name; float score = 0.0f; int seed = 7, style = 1; bool libLead = false; };
+    std::vector<StrongerHook> strongerHooks (float& current) const;
+    bool applyStrongerHook (const StrongerHook&);
+    /** The map the song is written against: Ouroboros' when it shares one, else a standard trance form. */
+    static suite::SectionMap songMapOrDefault();
     /** Clash check: parts in the song clips that sit in the same register, each with a fix. */
     std::vector<clash::Clash> clashes() const;
     bool fixClash (const clash::Clash&);

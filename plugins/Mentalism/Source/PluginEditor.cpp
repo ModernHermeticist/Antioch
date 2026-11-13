@@ -363,7 +363,12 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     addChildComponent (undoFixButton);
     addChildComponent (fixStatus);
 
-    autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueGeneral); };
+    autopilotStrip.director = []
+    {
+        // the label-ready score and the next action (Ouroboros), else the director's next moment
+        const auto lr = suite::LabelReadyBus::overallLine();
+        return lr.isNotEmpty() ? lr : suite::DirectorBus::mixCue (suite::DirectorBus::cueGeneral);
+    };
     autopilotStrip.moves = [&p]
     {
         juce::StringArray m;

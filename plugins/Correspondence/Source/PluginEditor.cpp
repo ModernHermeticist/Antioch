@@ -16,7 +16,7 @@ namespace
 }
 
 //==============================================================================
-namespace { std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState&); }
+namespace { std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState&, std::function<void (juce::Component&)> writeStronger); }
 
 DragTile::DragTile (CorrespondenceProcessor& p, juce::String k, juce::Colour c)
     : processor (p), kind (std::move (k)), colour (c)
@@ -403,7 +403,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
         addAndMakeVisible (c);
 
     // Two pages: Chords and Song
-    songGrid = makeSongGrid (processor.apvts);
+    songGrid = makeSongGrid (processor.apvts, [this] (juce::Component& c) { showStrongerHooks (c); });
     addChildComponent (*songGrid);
     for (auto* t : { &songHarmonyTile, &songCounterTile, &songSubTile, &songFillsTile }) addChildComponent (*t);
     for (auto* b : { &chordsTab, &songTab })
@@ -596,6 +596,8 @@ namespace
             setSize (1200, 492);
         }
 
+        std::function<void (juce::Component&)> writeStronger;   // the editor's: scores the drop leads
+
         /** The Writing menu: the groups on or off, favourites and bans, and the library's tools. */
         void showWritingMenu()
         {
@@ -636,6 +638,7 @@ namespace
             m.addItem (34, "Check the library (validator)");
             m.addItem (35, "Sound guide: what each part should sound like...");
             m.addItem (36, "Save this song's hook to the hook bank");
+            m.addItem (37, "Write the hook stronger (3 scored new hooks)...", writeStronger != nullptr);
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writingButton), [this, kitName = kit != nullptr ? kit->name : std::string(), hookKey = patterns::familyKey (hook)] (int id)
             {
                 if (id <= 0 || stateRef == nullptr) return;
@@ -659,6 +662,7 @@ namespace
                     juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Sound guide", chords::drums::soundGuide (Params::readSongPatterns (st)));
                     return;
                 }
+                if (id == 37) { if (writeStronger) writeStronger (writingButton); return; }
                 if (id == 36)
                 {
                     juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Hook bank", saveHookToBank());
@@ -878,7 +882,35 @@ namespace
     };
 }
 
-namespace { std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState& s) { return std::make_unique<SongPatternGrid> (s); } }
+namespace
+{
+    std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState& s, std::function<void (juce::Component&)> writeStronger)
+    {
+        auto g = std::make_unique<SongPatternGrid> (s);
+        g->writeStronger = std::move (writeStronger);
+        return g;
+    }
+}
+
+/** Write the hook stronger: the drop's lead variations scored as hooks, the best three offered. */
+void CorrespondenceEditor::showStrongerHooks (juce::Component& target)
+{
+    float current = 0.0f;
+    const auto options = processor.strongerHooks (current);
+    juce::PopupMenu m;
+    m.addSectionHeader ("Your hook now: " + juce::String (juce::roundToInt (current * 100.0f)) + "/100");
+    if (options.empty()) m.addItem (-1, "Nothing stronger found (or the drop has no melody lead, or a learned motif writes it)", false);
+    for (size_t i = 0; i < options.size(); ++i)
+        m.addItem ((int) i + 1, options[i].name + "  (" + juce::String (juce::roundToInt (options[i].score * 100.0f)) + "/100)");
+    m.addSeparator();
+    m.addItem (99, "Undo the last change", ! processor.beforeVariation.empty());
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target), [this, options] (int id)
+    {
+        if (id == 99) { processor.undoVariation(); return; }
+        if (id <= 0 || id > (int) options.size()) return;
+        processor.applyStrongerHook (options[(size_t) id - 1]);
+    });
+}
 
 void CorrespondenceEditor::showSongPatterns() { showPage (1); }
 

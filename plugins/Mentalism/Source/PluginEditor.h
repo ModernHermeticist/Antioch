@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "AutopilotStrip.h"
 #include "DirectorBus.h"
+#include "LabelReadyBus.h"
 #include "SuiteUI.h"
 #include "Checklist.h"
 #include "Masking.h"

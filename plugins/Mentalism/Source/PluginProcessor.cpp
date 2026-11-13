@@ -158,6 +158,15 @@ void MentalismProcessor::timerCallback()
         suite::premaster::headroom::withdraw();
     }
 
+    // The label-ready dashboard (Ouroboros) hears the master through Mentalism
+    {
+        suite::LabelReadyBus::Master lm;
+        lm.lufs = r.measurement.integratedLufs; lm.truePeakDb = r.measurement.truePeakDb;
+        lm.correlation = r.measurement.correlation; lm.lowCorrelation = r.measurement.lowCorrelation; lm.monoLossDb = r.measurement.monoLossDb;
+        lm.measuredSeconds = r.measuredSeconds; lm.clippedSamples = clippedSamples.load(); lm.readiness = r.readiness.total;
+        for (size_t b = 0; b < lm.toneDiff.size() && b < (size_t) analysis::numBands; ++b) lm.toneDiff[b] = r.longDiff[b];
+        suite::LabelReadyBus::publishMaster (lm);
+    }
     // The premaster report (for the delivery package), and a revision logged each time a measured pass stops
     if (r.premaster && r.measuredSeconds >= 30.0f)
     {

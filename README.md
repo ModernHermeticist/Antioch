@@ -63,6 +63,49 @@ track** (a premaster) for the label's mastering engineer.
   (ending with Mentalism's gate: ready or not), the files to deliver with their names, the section markers, the director's
   plan and moves, and the premaster report.
 
+## Label-ready: will a label sign it?
+
+The premaster checks say whether the file is technically clean. **Label-ready** (Ouroboros, the *Label-ready* button)
+asks the bigger question: is this a track a label signs and can release? Ouroboros on the master measures the song bar
+by bar as it plays (loudness, ten octave bands, the side, new events), gathers what the rest of the suite knows (the
+master from Mentalism, every Quintessence's track, the parts from Correspondence, the kick from Kybalion, the director's
+plan) and scores about 60 checks in eight areas. Each check says what it found, where (the bar), what moving it would
+take, and gives a fix where the suite has one.
+
+- **Against the label (the profile):** a label profile learns from reference tracks you add (drop WAVs or MP3s in, with
+  their BPM): length, intro and breakdown lengths, drops, drop impact, breakdown depth, build rise, the tone and width per
+  kind of section. Each norm is a median with a 20-80% range; recent references count more (half every two years) and your
+  own signed tracks count double. It names the closest released track and compares your sections with the label's. Profiles
+  are shared files ("Label profiles" folder) with a sub-style and their own *ready* threshold.
+- **A&R:** the first idea (in 20-30 s), the first big moment, drop impact, the last drop outdoing the first, contrast,
+  nothing standing still, pacing, the breakdown's emotion, the emotional peak, the builds' promise kept, one signature idea,
+  drop 2 not a copy of drop 1, the outro winding down, and a one-line verdict.
+- **Writing** (needs Correspondence open once): the hook's range, peak, rhythm and resolution, repetition with variation,
+  not a copy of your last hooks, the key change suiting the hook, the vocal and the hook taking turns, a fresh progression,
+  the breakdown's own harmony, the build pointing at the drop, the bass fitting the chords, the counter-line out of the
+  hook's way. Correspondence's *Writing > Write the hook stronger* tries new Melodia hooks for the drop, scores each the
+  same way and offers the best three (with Undo).
+- **Low end:** kick and bass in phase, the kick's body and tail against the bass notes, the sub even across the drops and
+  between bass notes, the low mids, the breakdown's low end, small speakers, against the label.
+- **Mids, top and space:** the lead cutting through, pad and supersaw mud, one voice at a time (lead / vocal), FX
+  discipline, top polish, air without harshness, headphone fatigue, width per section.
+- **Hygiene:** timing, velocities, clipping inside tracks, missing samples, forgotten parts, duplicates, squashed tracks,
+  level jumps, FX in key, clean edits, and Mentalism's premaster readiness.
+- **Translation and mono:** mono (and per section), phone, earbuds, car, club, low volume.
+- **Balance:** each role's level against the label (or your best mixes), per section.
+
+**The dashboard and the gate:** the overall score (weighted by area), the score tree, *Fix this* and *Fix all safe ones*
+(only fixes the suite can undo), the history graph, and the gate: ready when the score reaches the profile's threshold and
+no blocking check (drop impact, kick/bass phase, mono, premaster readiness) is under half. Mentalism's strip shows
+"label-ready N/100, next: ...". A plugin can't move FL's playhead, so a check's bar is shown to jump to by hand.
+
+**Milestones and hand-off:** *Milestones* saves the whole suite (every plugin's state, as a recipe) under a name ("sent to
+vocalist", "A&R round 1"), restores it, and compares two (which plugins changed, which areas moved). *Hand-off pack*
+writes the report, the known issues, your session notes, the director's plan and how to render it again exactly.
+
+**Honestly not measured yet** (left out rather than guessed): sidechain recovery time, the phase between layers of one
+part, stereo lows per track, reverb sizes and depth, supersaw stacking, automation leftovers, clip gain.
+
 ## The suite director: one plan for every transition
 
 **Ouroboros** owns one plan for every transition in the song, and every plugin plays its
@@ -1995,7 +2038,13 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   playhead, and save/restore. The followers' own tests check that builds ramp and drop on
   the Build section, that ducking pauses in breakdowns, and that throws land on section
   ends. **Listen** is tested on a synthetic 104-bar arrangement, and its proposal matches
-  the real structure exactly.
+  the real structure exactly. **Label-ready:** a rendered WAV is measured bar by bar (four kicks
+  count as four onsets, the kick sits in the low bands, mono has no side); the label's norms
+  (weighted medians, recency, yours double), the closest reference, a profile's save and load; a
+  well-shaped clean song outscores a flat clipping one, which the gate holds back with its
+  blockers; the hook score, the song bus, the hand-off pack and the saved history.
+  Correspondence's tests check the parts it shares and that *Write the hook stronger* offers
+  only higher-scoring hooks, writes the one picked, and undoes it.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true

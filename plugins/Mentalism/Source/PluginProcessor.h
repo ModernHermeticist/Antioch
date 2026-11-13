@@ -12,6 +12,7 @@
 #include "Readiness.h"
 #include "PeakBus.h"
 #include "Delivery.h"
+#include "LabelReadyBus.h"
 #include "MySound.h"
 #include "Masking.h"
 #include "HostInfo.h"

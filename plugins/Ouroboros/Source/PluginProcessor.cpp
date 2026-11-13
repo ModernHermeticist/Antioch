@@ -103,6 +103,9 @@ void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
     envAttack = 1.0f - std::exp (-1.0f / (0.002f * sr));
     envRelease = 1.0f - std::exp (-1.0f / (0.04f * sr));
     lowEnv = 0.0f;
+    songAnalyser.prepare (newSampleRate);
+    songBar = {};
+    songBarIndex = -1;
 }
 
 void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -169,6 +172,22 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
     else
         morphAmount.store (0.0f);
+
+    // Label-ready: the song, bar by bar, whenever it plays (the master: Ouroboros goes on the master)
+    if (host.playing && host.hasPpq && buffer.getNumChannels() > 0)
+    {
+        const auto* sl = buffer.getReadPointer (0);
+        const auto* sr = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : sl;
+        const auto qps = host.quartersPerSample (sampleRate);
+        const auto bq = host.barQuarters();
+        for (int n = 0; n < buffer.getNumSamples(); ++n)
+        {
+            const auto bar = (int) std::floor ((host.ppq + qps * n) / bq);
+            if (bar != songBarIndex) { labelReady.live.add (songBarIndex, songBar); songBar = {}; songBarIndex = bar; }
+            songAnalyser.process (sl[n], sr[n], songBar);
+        }
+    }
+    else if (songBarIndex >= 0) { labelReady.live.add (songBarIndex, songBar); songBar = {}; songBarIndex = -1; }
 
     if (resetFeatures.exchange (false))
         for (auto& b : barData) { b.flux.store (0.0f); b.high.store (0.0f); b.full.store (0.0f); b.samples.store (0); }
@@ -576,6 +595,8 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     juce::ValueTree notesTree ("Notes");
     notesTree.setProperty ("text", getNotes().joinIntoString ("\n"), nullptr);
     state.appendChild (notesTree, nullptr);
+    state.removeChild (state.getChildWithName ("LabelReady"), nullptr);
+    state.appendChild (labelReady.toTree(), nullptr);
     state.removeChild (state.getChildWithName ("DirectorProfile"), nullptr);
     state.appendChild (director.profileTree (true), nullptr);
     state.removeChild (state.getChildWithName ("Autopilot"), nullptr);
@@ -629,6 +650,11 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
         suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
         state.removeChild (ap, nullptr);
+    }
+    if (const auto lt = state.getChildWithName ("LabelReady"); lt.isValid())
+    {
+        labelReady.fromTree (lt);
+        state.removeChild (lt, nullptr);
     }
     if (const auto dt = state.getChildWithName ("DirectorProfile"); dt.isValid())
     {

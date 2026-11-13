@@ -117,6 +117,7 @@ private:
     juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." },
                      colourButton { "Colour..." }, varyButton { "Vary..." };
     void showSongPatterns();
+    void showStrongerHooks (juce::Component& target);
     void layoutKeyRow();
     std::unique_ptr<juce::FileChooser> chooser;
 

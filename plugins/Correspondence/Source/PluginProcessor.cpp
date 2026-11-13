@@ -132,6 +132,8 @@ void CorrespondenceProcessor::publishKey()
                 }
                 hookRestsMs = juce::Time::getMillisecondCounter();
                 suite::KitBus::publishRests (hookRests);
+                // the song's parts for Ouroboros' label-ready checks
+                suite::SongBus::publish (songForLabel (map));
             }
         }
         suite::KeyBus::publish ((int) apvts.getRawParameterValue (Params::rootNote)->load(),
@@ -196,6 +198,131 @@ bool CorrespondenceProcessor::applyHarmonyIdea (int index)
     if (! juce::isPositiveAndBelow (index, (int) list.size())) return false;
     beforeIdea = currentSettings();
     applySlots (list[(size_t) index].result);
+    return true;
+}
+
+suite::SectionMap CorrespondenceProcessor::songMapOrDefault()
+{
+    suite::SectionMap map;
+    if (suite::SectionBus::read (map) && map.count > 0) return map;
+    map = {};
+    using T = suite::SectionType;
+    const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Groove, 17 }, { T::Build, 33 }, { T::Drop, 41 }, { T::Breakdown, 57 },
+                                       { T::Build, 73 }, { T::Drop, 81 }, { T::Outro, 97 } };
+    for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+    map.totalBars = 112;
+    return map;
+}
+
+suite::SongBus::Song CorrespondenceProcessor::songForLabel (const suite::SectionMap& map, const chords::SongPatterns& sp) const
+{
+    suite::SongBus::Song song;
+    const auto s = currentSettings();
+    song.valid = true;
+    song.root = s.root; song.scale = s.scale; song.finalLift = map.finalLift;
+    song.quartersPerChord = s.quartersPerChord;
+    auto toBus = [] (const std::vector<chords::Note>& notes, double from, double to, std::vector<suite::SongBus::Note>& out, size_t max)
+    {
+        for (const auto& n : notes)
+            if (n.start >= from && n.start < to && out.size() < max)
+                out.push_back ({ n.pitch, (float) n.start, (float) n.length, n.velocity });
+    };
+    // the hook: the first drop's lead, 8 bars
+    int firstDrop = -1;
+    for (int i = 0; i < map.count && firstDrop < 0; ++i) if (map.sections[(size_t) i].type == suite::SectionType::Drop) firstDrop = i;
+    if (firstDrop >= 0)
+    {
+        song.hookStartQ = 4.0 * (map.sections[(size_t) firstDrop].startBar - 1);
+        const auto to = song.hookStartQ + 4.0 * juce::jmin (8, map.endBar (firstDrop) - map.sections[(size_t) firstDrop].startBar);
+        auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        std::sort (lead.begin(), lead.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+        toBus (lead, song.hookStartQ, to, song.hook, (size_t) suite::SongBus::maxHook);
+        auto counter = chords::songClip (s, map, sp, chords::SongPart::Counter);
+        std::sort (counter.begin(), counter.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+        toBus (counter, song.hookStartQ, to, song.counter, (size_t) suite::SongBus::maxCounter);
+    }
+    auto bass = chords::songClip (s, map, sp, chords::SongPart::Bass);
+    std::sort (bass.begin(), bass.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+    toBus (bass, 0.0, 1.0e9, song.bass, (size_t) suite::SongBus::maxBass);
+    // the chord roots per kind of section: the lowest note of each chord slot, the first time the kind plays
+    const auto chordsClip = chords::songClip (s, map, sp, chords::SongPart::Chords);
+    const auto qpc = juce::jmax (0.5, s.quartersPerChord);
+    const auto slots = juce::jlimit (1, suite::SongBus::maxChords, s.count);
+    for (auto& row : song.chordRoots) row.fill (-1);
+    for (int i = 0; i < map.count; ++i)
+    {
+        const auto t = (size_t) map.sections[(size_t) i].type;
+        if (t >= (size_t) suite::SongBus::numTypes || song.chordCount[t] > 0) continue;
+        const auto start = 4.0 * (map.sections[(size_t) i].startBar - 1), end = 4.0 * (map.endBar (i) - 1);
+        int found = 0;
+        for (int k = 0; k < slots; ++k)
+        {
+            const auto from = start + k * qpc, to = from + qpc;
+            if (from >= end) break;
+            int lowest = 200;
+            for (const auto& n : chordsClip) if (n.start >= from - 1.0e-6 && n.start < to) lowest = juce::jmin (lowest, n.pitch);
+            if (lowest < 200) { song.chordRoots[t][(size_t) k] = ((lowest - s.root) % 12 + 12) % 12; ++found; }
+        }
+        if (found > 0) song.chordCount[t] = slots;
+    }
+    return song;
+}
+
+std::vector<CorrespondenceProcessor::StrongerHook> CorrespondenceProcessor::strongerHooks (float& current) const
+{
+    const auto map = songMapOrDefault();
+    const auto sp = currentSongPatterns();
+    const auto s = currentSettings();
+    int firstDrop = -1;
+    for (int i = 0; i < map.count && firstDrop < 0; ++i) if (map.sections[(size_t) i].type == suite::SectionType::Drop) firstDrop = i;
+    if (firstDrop < 0) { current = 0.0f; return {}; }
+    const auto from = 4.0 * (map.sections[(size_t) firstDrop].startBar - 1);
+    const auto to = from + 4.0 * juce::jmin (8, map.endBar (firstDrop) - map.sections[(size_t) firstDrop].startBar);
+    auto scoreOf = [&] (const chords::SongPatterns& patterns)
+    {
+        std::vector<suite::SongBus::Note> hook;
+        for (const auto& n : chords::songClip (s, map, patterns, chords::SongPart::Lead))
+            if (n.start >= from && n.start < to) hook.push_back ({ n.pitch, (float) n.start, (float) n.length, n.velocity });
+        std::sort (hook.begin(), hook.end(), [] (const suite::SongBus::Note& x, const suite::SongBus::Note& y) { return x.start < y.start; });
+        return suite::SongBus::hookScore (hook, from, s.root, s.scale);
+    };
+    current = scoreOf (sp);
+    std::vector<StrongerHook> out;
+    if (sp.lead[(size_t) suite::SectionType::Drop] != 1 || ! sp.melody.motif.empty()) return out;   // the drop has no written lead, or a learned motif rules
+    const auto styles = chords::melodyStyleNames();
+    for (int style = 0; style < styles.size(); ++style)
+        for (int k = 0; k < 10; ++k)
+        {
+            auto changed = sp;
+            changed.libLead = false;
+            changed.melody.style = (chords::MelodyStyle) style;
+            changed.melody.seed = 1 + (int) ((sp.melody.seed + 97 * (k + 1) + 31 * style) % 999);
+            if (changed.melody.seed == sp.melody.seed && style == (int) sp.melody.style && ! sp.libLead) continue;
+            const auto score = scoreOf (changed);
+            if (score > current + 0.005f)
+                out.push_back ({ "Melodia " + styles[style] + ", seed " + juce::String (changed.melody.seed), score, changed.melody.seed, style, false });
+        }
+    std::stable_sort (out.begin(), out.end(), [] (const StrongerHook& x, const StrongerHook& y) { return x.score > y.score; });
+    if (out.size() > 3) out.resize (3);
+    return out;
+}
+
+bool CorrespondenceProcessor::applyStrongerHook (const StrongerHook& h)
+{
+    beforeVariation.clear();
+    auto set = [this] (const juce::String& id, float value)
+    {
+        if (auto* param = apvts.getParameter (id))
+        {
+            beforeVariation.push_back ({ id, param->convertFrom0to1 (param->getValue()) });
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (value));
+            param->endChangeGesture();
+        }
+    };
+    set (Params::melodySeed, (float) h.seed);
+    set (Params::melodyStyle, (float) h.style);
+    set (Params::libLead, h.libLead ? 1.0f : 0.0f);
     return true;
 }
 

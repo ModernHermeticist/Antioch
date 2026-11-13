@@ -1396,5 +1396,215 @@ int main (int argc, char** argv)
         suite::DirectorBus::withdraw();
     }
 
+
+    section ("Label-ready: the song measured, the label's norms, the checks and the gate");
+    {
+        using T = suite::SectionType;
+        // a song: intro, build, drop, breakdown, build, drop, outro (96 bars)
+        suite::SectionMap map;
+        const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+        for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+        map.totalBars = 96;
+
+        // the analyser, on a file: a quiet bar of pad, then a loud bar with four kicks
+        {
+            const double fs = 44100.0, bpm = 120.0;
+            const auto barSamples = (int) (fs * 2.0);
+            juce::AudioBuffer<float> audio (2, barSamples * 4);
+            audio.clear();
+            for (int i = 0; i < audio.getNumSamples(); ++i)
+            {
+                const auto bar = i / barSamples, inBar = i % barSamples;
+                const auto t = (double) i / fs;
+                float v = 0.02f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 440.0 * t);
+                if (bar % 2 == 1)
+                {
+                    const auto beatPos = inBar % (barSamples / 4);
+                    v += 0.6f * (float) std::exp (-beatPos / (0.05 * fs)) * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 55.0 * beatPos / fs);
+                }
+                audio.setSample (0, i, v); audio.setSample (1, i, v);
+            }
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("LabLabTest.wav");
+            wav.deleteFile();
+            {
+                juce::WavAudioFormat fmt;
+                std::unique_ptr<juce::AudioFormatWriter> w (fmt.createWriterFor (new juce::FileOutputStream (wav), fs, 2, 24, {}, 0));
+                if (w != nullptr) w->writeFromAudioSampleBuffer (audio, 0, audio.getNumSamples());
+            }
+            double seconds = 0.0;
+            const auto bars = lab::analyseFile (wav, bpm, seconds);
+            check (bars.size() == 4 && std::abs (seconds - 8.0) < 0.01, "a file is measured bar by bar (" + juce::String ((int) bars.size()) + " bars, " + juce::String (seconds, 2) + " s)");
+            if (bars.size() == 4)
+            {
+                check (bars[1].db > bars[0].db + 10.0f && bars[3].db > bars[2].db + 10.0f, "the kick bars measure louder than the pad bars");
+                check (bars[1].onsets >= 3.0f && bars[1].onsets <= 5.0f && bars[0].onsets <= 1.0f,
+                       "four kicks count as about four onsets (" + juce::String (bars[1].onsets, 0) + "), the steady pad as none (" + juce::String (bars[0].onsets, 0) + ")");
+                check (bars[1].bandDb (1) > bars[1].bandDb (6) + 10.0f, "the kick's energy sits in the low bands");
+                check (bars[0].sideDb < bars[0].db - 40.0f, "a mono file has no side");
+            }
+            wav.deleteFile();
+        }
+
+        // a song's bars, made directly: levels per section, onsets in the drops
+        auto makeBars = [&map] (bool good)
+        {
+            std::vector<lab::Bar> bars ((size_t) map.totalBars);
+            for (int b = 0; b < map.totalBars; ++b)
+            {
+                int i = 0;
+                for (int k = 0; k < map.count; ++k) if (map.sections[(size_t) k].startBar <= b + 1) i = k;
+                const auto type = map.sections[(size_t) juce::jmax (0, i)].type;
+                const auto start = map.sections[(size_t) juce::jmax (0, i)].startBar - 1, len = map.endBar (i) - 1 - start;
+                const auto pos = (float) (b - start) / (float) juce::jmax (1, len - 1);
+                float db = -10.0f;
+                if (good)
+                    db = type == T::Intro ? -15.0f : type == T::Build ? -17.0f + 6.0f * pos : type == T::Drop ? -8.0f : type == T::Breakdown ? -18.0f : -12.0f - 6.0f * pos;
+                auto& x = bars[(size_t) b];
+                x.heard = true; x.db = db; x.sideDb = db - (good ? 8.0f : 30.0f);
+                x.onsets = good ? (type == T::Drop ? 8.0f : type == T::Breakdown ? 1.0f : 4.0f) : 4.0f;
+                x.lowFlux = type == T::Drop ? 4.0f : 1.0f;
+                for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = db - 3.0f * (float) std::abs (k - 3) - (good ? 0.0f : (k == 4 ? -8.0f : 0.0f));
+            }
+            return bars;
+        };
+
+        // statistics: a weighted median and its spread; recent references count more, yours double
+        {
+            const auto st = lab::statOf ({ { 1.0f, 1.0f }, { 2.0f, 1.0f }, { 3.0f, 1.0f }, { 4.0f, 1.0f }, { 100.0f, 1.0f } });
+            check (std::abs (st.median - 3.0f) < 1.0e-4f && st.lo <= 2.0f && st.hi >= 4.0f && st.outside (3.0f) == 0.0f && st.outside (100.0f) > 1.0f,
+                   "the label's norms: a median and a 20-80% range (" + st.text() + "), an outlier is outside it");
+            lab::Reference fresh, old, mine;
+            fresh.addedMs = juce::Time::currentTimeMillis();
+            old.addedMs = fresh.addedMs - (juce::int64) (2.0 * 365.25 * 24 * 3600 * 1000.0);
+            mine.addedMs = fresh.addedMs; mine.yours = true;
+            check (std::abs (lab::Profile::weightOf (old) - 0.5f) < 0.02f && std::abs (lab::Profile::weightOf (mine) - 2.0f) < 0.02f,
+                   "a reference two years old counts half; your own signed track counts double");
+        }
+
+        // a profile from two references; the song is closest to the one that sounds like it
+        lab::Profile prof;
+        prof.name = "Test label";
+        {
+            for (int r = 0; r < 2; ++r)
+            {
+                lab::Reference ref;
+                ref.name = r == 0 ? "Bright" : "Dark"; ref.bpm = 138.0; ref.seconds = 96 * 4 * 60.0 / 138.0;
+                ref.addedMs = juce::Time::currentTimeMillis();
+                ref.map = map;
+                auto bars = makeBars (true);
+                for (auto& b : bars) for (int k = 0; k < lab::numBands; ++k) b.band[(size_t) k] += (r == 0 ? 1.5f : -1.5f) * (float) k;
+                ref.sections = lab::sections (bars, map);
+                ref.summarise();
+                prof.refs.push_back (ref);
+            }
+            prof.learn();
+            check (prof.drops.valid() && std::abs (prof.drops.median - 2.0f) < 1.0e-4f && prof.introBars.valid() && std::abs (prof.introBars.median - 16.0f) < 1.0e-4f,
+                   "the profile learns the references' form (2 drops, a 16-bar intro)");
+            check (prof.impactDb.valid() && prof.impactDb.median > 2.0f && prof.breakdownDepthDb.median > 6.0f,
+                   "and their drop impact (" + prof.impactDb.text() + " dB) and breakdown depth (" + prof.breakdownDepthDb.text() + " dB)");
+            auto songBars = makeBars (true);
+            for (auto& b : songBars) for (int k = 0; k < lab::numBands; ++k) b.band[(size_t) k] -= 1.4f * (float) k;
+            const auto [best, dist] = prof.closest (lab::sections (songBars, map), 138.0);
+            check (best == 1, "a dark song's closest reference is the dark one (" + juce::String (best) + ", " + juce::String (dist, 2) + " dB)");
+            const auto back = lab::Profile::fromTree (prof.toTree());
+            check (back.name == prof.name && back.refs.size() == 2 && back.drops.valid() && std::abs (back.impactDb.median - prof.impactDb.median) < 0.01f,
+                   "a profile saves and loads with its references");
+        }
+
+        // the checks: a well-shaped, clean song scores higher than a flat, clipping one, and the gate holds it back
+        auto inputsFor = [&] (bool good)
+        {
+            lab::Inputs in;
+            in.map = map; in.bpm = 138.0;
+            in.bars = makeBars (good);
+            in.sections = lab::sections (in.bars, map);
+            in.profile = &prof;
+            in.master.valid = true;
+            in.master.lufs = good ? -14.0f : -7.0f;
+            in.master.truePeakDb = good ? -6.2f : 0.4f;
+            in.master.correlation = good ? 0.6f : -0.3f;
+            in.master.lowCorrelation = good ? 0.98f : 0.2f;
+            in.master.monoLossDb = good ? 0.8f : 6.0f;
+            in.master.measuredSeconds = 200.0f;
+            in.master.clippedSamples = good ? 0 : 500;
+            in.master.readiness = good ? 92 : 30;
+            return in;
+        };
+        const auto goodIn = inputsFor (true), badIn = inputsFor (false);
+        const auto good = lab::evaluate (goodIn), bad = lab::evaluate (badIn);
+        bool inRange = true, named = true;
+        std::set<int> areas;
+        for (const auto* r : { &good, &bad })
+            for (const auto& c : r->checks)
+            {
+                inRange = inRange && c.score >= 0.0f && c.score <= 1.0f;
+                named = named && c.name.isNotEmpty() && c.detail.isNotEmpty();
+                if (c.measured) areas.insert (c.area);
+            }
+        check (inRange && named, "every check has a name, says what it found, and scores 0..1 (" + juce::String ((int) good.checks.size()) + " checks)");
+        check (areas.size() >= 6, "the checks cover the areas the suite can hear (" + juce::String ((int) areas.size()) + " of 8 measured without the parts)");
+        check (good.overall > bad.overall + 10, "a well-shaped clean song scores higher (" + juce::String (good.overall) + ") than a flat clipping one (" + juce::String (bad.overall) + ")");
+        check (! bad.ready && ! bad.blockers.isEmpty(), "the flat clipping song is held back, with what blocks it (" + bad.blockers.joinIntoString ("; ") + ")");
+        check (good.verdict.isNotEmpty() && bad.nextAction.isNotEmpty(), "a one-line verdict and the next thing to do (" + bad.nextAction + ")");
+        bool barred = false;
+        for (const auto& c : bad.checks) barred = barred || (c.measured && c.score < 0.8f && c.bar > 0);
+        check (barred, "problems say where they are (a bar)");
+        {
+            auto strict = prof; strict.readyThreshold = 101;
+            auto in = goodIn; in.profile = &strict;
+            check (! lab::evaluate (in).ready, "the ready threshold is the profile's");
+        }
+
+        // the writing checks need Correspondence's parts: a hook with shape scores higher than one note repeated
+        {
+            suite::SongBus::Song song;
+            song.valid = true; song.root = 9; song.scale = 0; song.hookStartQ = 96.0;
+            const int shapeNotes[] = { 69, 72, 76, 74, 72, 76, 79, 81, 69, 72, 76, 74, 72, 74, 76, 69 };
+            for (int i = 0; i < 16; ++i) song.hook.push_back ({ shapeNotes[i], (float) (96.0 + i * 2.0), i % 2 == 0 ? 1.5f : 0.5f, 100 });
+            std::vector<suite::SongBus::Note> flat;
+            for (int i = 0; i < 16; ++i) flat.push_back ({ 70, (float) (96.0 + i * 2.0), 0.5f, 100 });
+            const auto strong = suite::SongBus::hookScore (song.hook, 96.0, 9, 0), weak = suite::SongBus::hookScore (flat, 96.0, 9, 0);
+            check (strong > weak + 0.2f, "a hook with range, a late peak and a resolution scores higher (" + juce::String (strong, 2) + ") than one note repeated (" + juce::String (weak, 2) + ")");
+            for (int i = 0; i < 64; ++i) song.bass.push_back ({ 33, (float) (i * 4.0), 1.0f, 100 });
+            for (int t = 0; t < suite::SongBus::numTypes; ++t) { song.chordCount[(size_t) t] = 4; song.chordRoots[(size_t) t] = { 0, 8, 3, 10, -1, -1, -1, -1 }; }
+            suite::SongBus::publish (song);
+            const auto got = suite::SongBus::read();
+            check (got.valid && got.hook.size() == 16 && got.bass.size() == 64 && got.hook[6].pitch == 79 && std::abs (got.hookStartQ - 96.0) < 1.0e-6 && got.chordRoots[4][1] == 8,
+                   "Correspondence's parts reach Ouroboros (the song bus)");
+            auto in = goodIn; in.song = got;
+            const auto withParts = lab::evaluate (in);
+            bool writing = false;
+            for (const auto& c : withParts.checks) writing = writing || (c.area == lab::aWriting && c.measured && c.name.contains ("hook"));
+            check (writing && withParts.areaMeasured[(size_t) lab::aWriting], "with the parts, the writing checks run");
+            suite::SongBus::withdraw();
+        }
+
+        // the bus: the score and the next step reach Mentalism's strip
+        suite::LabelReadyBus::reset();
+        check (suite::LabelReadyBus::overallLine().isEmpty(), "nothing shown before a score");
+        suite::LabelReadyBus::publishOverall (73, "make the first drop hit harder");
+        check (suite::LabelReadyBus::overallLine().contains ("73") && suite::LabelReadyBus::overallLine().contains ("first drop"), "Mentalism's strip line: " + suite::LabelReadyBus::overallLine());
+        suite::LabelReadyBus::reset();
+
+        // the host: the report, the hand-off pack, saved with the project
+        {
+            lab::LabelReadyHost host;
+            host.report = bad;
+            host.history = { { 1000, 40 }, { 70000, 55 } };
+            const auto text = host.reportText (map);
+            check (text.contains ("LABEL-READY REPORT") && text.contains ("Blocking:") && text.contains ("Low end"), "the report lists every area and what blocks it");
+            const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroHandoff");
+            dir.deleteRecursively(); dir.createDirectory();
+            const auto pack = host.writeHandoff (dir, "Mix engineer", "Notes", "Plan", "Render plan", map);
+            check (pack.getChildFile ("Label-ready report.txt").existsAsFile() && pack.getChildFile ("Known issues.txt").loadFileAsString().contains ("-")
+                       && pack.getChildFile ("Re-render instructions.txt").loadFileAsString().contains ("Render plan"),
+                   "the hand-off pack: the report, the known issues, the session notes, how to render it again");
+            dir.deleteRecursively();
+            lab::LabelReadyHost other;
+            other.fromTree (host.toTree());
+            check (other.history.size() == 2 && other.history[1].second == 55, "the score's history is saved with the project");
+        }
+    }
+
     return finish();
 }
