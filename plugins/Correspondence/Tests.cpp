@@ -1867,5 +1867,20 @@ int main (int argc, char** argv)
         check (chords::foldLowBass (low) == 1 && low[0].pitch == 33 && low[1].pitch == 33 && low[2].pitch == 24, "a bass note under C1 folds up an octave; the rest stay");
     }
 
+
+    section ("Round B: notes ringing over a chord change");
+    {
+        chords::Settings s;   // A minor, Am F C G, a bar each
+        s.slots[0].degree = 1; s.slots[1].degree = 6; s.slots[2].degree = 3; s.slots[3].degree = 7;
+        suite::SectionMap map;
+        map.totalBars = 8; map.count = 1;
+        map.sections[0] = { 1, suite::SectionType::Drop };
+        // A held E (in Am, not in F) across the change to F; a held C (in both Am and F) too
+        std::vector<chords::Note> notes { { 76, 2.0, 4.0, 100 }, { 72, 2.0, 4.0, 100 } };
+        const auto t = chords::trimChordHangovers (notes, s, map);
+        check (t == 1 && std::abs (notes[0].start + notes[0].length - 4.0) < 0.02 && std::abs (notes[1].length - 4.0) < 1.0e-6,
+               "a held E ending into F is trimmed at the change; a C that fits F rings on");
+    }
+
     return finish();
 }
