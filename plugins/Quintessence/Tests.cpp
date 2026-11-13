@@ -1236,6 +1236,17 @@ int main (int argc, char** argv)
                     m.endBlock();
                 }
             }
+            if (std::getenv ("QDEBUG"))
+            {
+                auto& sh = suite::Autopilot::detail::shared();
+                for (int i = 0; i < suite::Autopilot::maxLive; ++i)
+                    if (sh.liveId[i].load() == 0x601u || sh.liveId[i].load() == 0x602u)
+                    {
+                        std::cout << std::hex << sh.liveId[i].load() << std::dec << ":";
+                        for (int k = 0; k < 16; ++k) std::cout << " " << sh.liveOnset[i][k].load();
+                        std::cout << std::endl;
+                    }
+            }
             check (std::abs (a.alignNowMs.load() - 3.0f) < 0.6f && b.alignNowMs.load() < 0.3f, "two kick layers 3 ms apart: the earlier waits " + juce::String (a.alignNowMs.load(), 2)
                        + " ms, the later stays put");
         }

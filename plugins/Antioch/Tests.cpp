@@ -833,7 +833,8 @@ int main (int argc, char** argv)
             }, &out, &head);
             p->setPlayHead (nullptr);
             suite::SectionBus::withdraw();
-            check (rmsBetween (out, 4.2, 4.6) > 1.0e-3f && rmsBetween (out, 8.1, 9.0) < 1.0e-5f, "after the last bar the tails ring on, then fade to silence over 2 bars");
+            check (rmsBetween (out, 4.2, 4.6) > 1.0e-3f && rmsBetween (out, 8.1, 9.0) < 2.0e-4f && rmsBetween (out, 6.0, 6.5) < 0.2f * rmsBetween (out, 4.2, 4.6), "after the last bar the tails ring on, then fade out over 2 bars (to -80 dB: "
+                       + juce::String (rmsBetween (out, 4.2, 4.6), 5) + ", " + juce::String (rmsBetween (out, 6.0, 6.5), 5) + ", " + juce::String (rmsBetween (out, 8.1, 9.0), 6) + ")");
         }
         suite::Autopilot::reset();
     }

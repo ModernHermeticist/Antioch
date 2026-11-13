@@ -118,6 +118,16 @@ with the project), and a count of everything done. Every move is also in *What c
   stereo sound) is re-centred, 3 dB at most. A pitched FX holding a note outside the key is
   re-pitched to the nearest key note, a semitone at most. *Hear without the automation* plays
   each track at the loudness it had with Quintessence, so the comparison is about the sound.
+- **Round B.** A steady 50 or 60 Hz hum (heard in a track's quiet moments) is notched with
+  three of its harmonics. A clip that stops dead gets a 1 ms tail instead of a step. Two
+  tracks of the same role hitting together a few ms apart (two kick layers, a layered lead)
+  are lined up: the earlier one waits for the later, up to 12 ms, with no added latency.
+  Antioch de-esses what it sends into its reverb and echo (the track keeps its "s"). Past the
+  map's last bar, Antioch's and Cause & Effect's tails fade out over 2 bars, so a render ends
+  clean. Vibration's drive is fed a steady level (around -12 dBFS) whatever arrives, and
+  the level is given back after, so turning the synth up doesn't make the lead dirtier (the
+  drive already runs 2x oversampled). In the song exports, a note ringing on into a chord it
+  clashes with ends at the change.
 - **Mixing suggestions** (in Mentalism's suggestions; they change nothing): a kick, percussion
   or vocal arriving already flattened (back off the compressor before Quintessence); more than
   two tracks with their own Antioch (move them to returns); a level jump at a section change

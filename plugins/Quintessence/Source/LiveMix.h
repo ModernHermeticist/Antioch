@@ -131,6 +131,7 @@ namespace qn
             lastOut = { 0.0f, 0.0f }; tailVal = { 0.0f, 0.0f }; tailLeft = 0;
             for (auto& d : alignLine) { d.prepare ((int) (0.02 * sampleRate) + 8); d.reset(); }
             alignSamples = 0.0f; alignTarget = 0.0f; sampleInBlock = 0; lastOnsetPpq = -1.0e9; alignCheck = 0;
+            onsetFast.set (0.5f, 30.0f, fs); onsetSlow.set (20.0f, 200.0f, fs); onsetFast.reset(); onsetSlow.reset();
             counted = {};
         }
 
@@ -322,6 +323,18 @@ namespace qn
                 }
             }
             float x[2] = { l, r };
+            // Layered parts: the attacks as they come in (before any delay, so lining up doesn't
+            // undo itself), shared with the other tracks
+            {
+                const auto a = 0.5f * (std::abs (x[0]) + std::abs (x[1]));
+                const auto af = onsetFast.process (a), as = onsetSlow.process (a);
+                if (af > 2.0f * as && af > 1.0e-3f && ctx.ppq >= 0.0 && ctx.samplesPerQ > 0.0 && ctx.id != 0)
+                {
+                    const auto at = ctx.ppq + (double) sampleInBlock / ctx.samplesPerQ;
+                    if ((at - lastOnsetPpq) * ctx.samplesPerQ > 0.05 * fs) { suite::Autopilot::postOnset (ctx.id, at); lastOnsetPpq = at; }
+                }
+                ++sampleInBlock;
+            }
             // Layered parts: this one waits for the later layer (the delay glides, so it never clicks)
             {
                 alignSamples += (alignTarget > alignSamples ? 1.0f : -1.0f) * juce::jmin (std::abs (alignTarget - alignSamples), 0.02f);
@@ -401,12 +414,7 @@ namespace qn
             const auto a = 0.5f * (std::abs (x[0]) + std::abs (x[1]));
             const auto f = fastEnv.process (a), sl = slowEnv.process (a);
             const auto attack = f > 2.0f * sl && f > 1.0e-3f;
-            if (attack && ctx.ppq >= 0.0 && ctx.samplesPerQ > 0.0 && ctx.id != 0)
-            {
-                const auto at = ctx.ppq + (double) sampleInBlock / ctx.samplesPerQ;
-                if ((at - lastOnsetPpq) * ctx.samplesPerQ > 0.05 * fs) { suite::Autopilot::postOnset (ctx.id, at); lastOnsetPpq = at; }
-            }
-            ++sampleInBlock;
+
             float gain = 1.0f;
             if (mix)
             {
@@ -808,6 +816,7 @@ namespace qn
         float alignSamples = 0.0f, alignTarget = 0.0f;
         int sampleInBlock = 0, alignCheck = 0;
         double lastOnsetPpq = -1.0e9;
+        suite::EnvelopeFollower onsetFast, onsetSlow;
         std::array<suite::Svf, 2> kickDip;
         float kickDipHz = 0.0f, panNow = 0.0f;
         std::array<suite::Svf, 2> tuneSplit;
