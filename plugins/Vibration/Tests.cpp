@@ -502,5 +502,29 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+
+    section ("Round B: the drive sees a steady level");
+    {
+        suite::Autopilot::reset();
+        auto run = [] (float amp)
+        {
+            auto p = makeNeutral();
+            set (*p, Params::drive, 12.0f);
+            juce::AudioBuffer<float> out;
+            render (*p, 2.0, [amp] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = amp * (float) std::sin (juce::MathConstants<double>::twoPi * 440.0 * (double) (pos + i) / sampleRate);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, &out);
+            return p->driveLevelDb.load();
+        };
+        const auto quiet = run (0.02f), loud = run (0.6f);
+        check (quiet > 6.0f && loud < -1.0f, "a quiet lead is brought up into the drive, a loud one down (" + juce::String (quiet, 1) + " / " + juce::String (loud, 1)
+                   + " dB), and given back after");
+    }
+
     return finish();
 }

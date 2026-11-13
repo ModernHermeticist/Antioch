@@ -1166,5 +1166,81 @@ int main (int argc, char** argv)
         suite::Autopilot::reset();
     }
 
+
+    section ("Round B: hum, clip ends, layered parts in time");
+    {
+        suite::Autopilot::reset();
+        auto rms = [] (const std::vector<float>& v, double a, double b)
+        {
+            double sum = 0.0; int n = 0;
+            for (auto i = (size_t) (a * sampleRate); i < (size_t) (b * sampleRate) && i < v.size(); ++i) { sum += (double) v[i] * v[i]; ++n; }
+            return (float) std::sqrt (sum / juce::jmax (1, n));
+        };
+        auto runOne = [] (qn::LiveMix& m, qn::LiveMix::Context c, double seconds, std::function<float (int64_t)> sig)
+        {
+            m.prepare (sampleRate);
+            std::vector<float> out;
+            const auto total = (int64_t) (seconds * sampleRate);
+            for (int64_t start = 0; start < total; start += 256)
+            {
+                const auto n = (int) std::min<int64_t> (256, total - start);
+                m.beginBlock (c, n);
+                for (int i = 0; i < n; ++i) { auto a = sig (start + i), b = a; m.process (a, b, true); out.push_back (a); }
+                m.endBlock();
+            }
+            return out;
+        };
+        {
+            // A vocal take with 50 Hz hum under it: phrases, then gaps where only the hum is left
+            auto take = [] (int64_t i)
+            {
+                const auto t = (double) i / sampleRate;
+                const auto hum = 0.003f * (float) std::sin (juce::MathConstants<double>::twoPi * 50.0 * t);
+                const auto phrase = std::fmod (t, 2.0) < 1.0 ? 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 330.0 * t) : 0.0f;
+                return hum + phrase;
+            };
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 6;
+            const auto out = runOne (m, c, 8.0, take);
+            const auto gap = rms (out, 7.3, 7.9) / (0.003f / std::sqrt (2.0f));
+            check (m.humNow.load() == 50.0f && juce::Decibels::gainToDecibels (gap) < -15.0f, "50 Hz hum heard in the gaps is found and notched ("
+                       + juce::String (juce::Decibels::gainToDecibels (gap), 1) + " dB in the gaps)");
+            const auto phrase = rms (out, 6.2, 6.8) / (0.2f / std::sqrt (2.0f));
+            check (std::abs (juce::Decibels::gainToDecibels (phrase)) < 0.5f, "the voice itself is untouched");
+        }
+        {
+            auto clip = [] (int64_t i) { const auto t = (double) i / sampleRate; return t < 0.5 ? 0.5f : 0.0f; };   // stops dead
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 5;
+            const auto out = runOne (m, c, 0.6, clip);
+            const auto stop = (size_t) (0.5 * sampleRate);
+            check (out[stop] > 0.3f && out[stop + 24] > 0.1f && std::abs (out[stop + 60]) < 1.0e-6f, "a clip that stops dead gets a 1 ms tail instead of a step");
+        }
+        {
+            // Two kick layers, the second 3 ms behind the first: the first waits for it
+            qn::LiveMix a, b;
+            a.prepare (sampleRate); b.prepare (sampleRate);
+            auto hit = [] (double t, double delayMs)
+            {
+                const auto ph = std::fmod (t - delayMs / 1000.0 + 10.0, 0.5);
+                return (float) (std::exp (-ph / 0.03) * std::sin (juce::MathConstants<double>::twoPi * 60.0 * ph));
+            };
+            const auto samplesPerQ = sampleRate * 60.0 / 120.0;
+            for (int64_t start = 0; start < (int64_t) (8.0 * sampleRate); start += 256)
+            {
+                for (int k = 0; k < 2; ++k)
+                {
+                    auto& m = k == 0 ? a : b;
+                    qn::LiveMix::Context c; c.role = 1; c.id = k == 0 ? 0x601u : 0x602u;
+                    c.ppq = (double) start / samplesPerQ; c.samplesPerQ = samplesPerQ;
+                    m.beginBlock (c, 256);
+                    for (int i = 0; i < 256; ++i) { auto v = hit ((double) (start + i) / sampleRate, k == 0 ? 0.0 : 3.0); auto w = v; m.process (v, w, true); }
+                    m.endBlock();
+                }
+            }
+            check (std::abs (a.alignNowMs.load() - 3.0f) < 0.6f && b.alignNowMs.load() < 0.3f, "two kick layers 3 ms apart: the earlier waits " + juce::String (a.alignNowMs.load(), 2)
+                       + " ms, the later stays put");
+        }
+        suite::Autopilot::reset();
+    }
+
     return finish();
 }

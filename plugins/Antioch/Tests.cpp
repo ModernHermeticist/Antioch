@@ -789,5 +789,54 @@ int main (int argc, char** argv)
         check (off - on > 0.5f && on < 0.3f, "the reverb on top no longer lifts the track over its input (" + juce::String (off, 1) + " dB without, " + juce::String (on, 1) + " dB with)");
     }
 
+
+    section ("Round B: the space de-essed, a clean ending");
+    {
+        suite::Autopilot::reset();
+        {
+            auto p = make();
+            soloSection (*p, 0.0f, 1.0f, 0.0f);
+            auto essFilter = std::make_shared<suite::Svf>();
+            essFilter->set (7000.0f, 2.0f, (float) sampleRate);
+            juce::AudioBuffer<float> out;
+            render (*p, 4.0, [essFilter] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                juce::Random rng (pos + 3);
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto ess = std::fmod (t, 0.5) < 0.08 ? 0.6f * essFilter->bandpass (rng.nextFloat() * 2.0f - 1.0f) : 0.0f;
+                    const auto v = 0.15f * (float) std::sin (juce::MathConstants<double>::twoPi * 220.0 * t) + ess;
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, &out);
+            check (suite::Autopilot::countOf (suite::Autopilot::spaceDeessed) > 0, "an 's' spiking at 7 kHz is de-essed on its way into the space");
+        }
+        {
+            suite::SectionMap map;
+            map.totalBars = 2; map.count = 1;
+            map.sections[0] = { 1, suite::SectionType::Drop };
+            suite::SectionBus::publish (map);
+            auto p = make();
+            set (*p, Params::Verb::duck, 0.0f);
+            FakePlayHead head; head.bpm = 120.0;   // 2 s a bar: the song ends at 4 s
+            p->setPlayHead (&head);
+            juce::AudioBuffer<float> out;
+            render (*p, 9.0, [] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto t = (double) (pos + i) / sampleRate;
+                    const auto v = t < 4.0 ? 0.2f * (float) std::sin (juce::MathConstants<double>::twoPi * 330.0 * t) : 0.0f;
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            }, &out, &head);
+            p->setPlayHead (nullptr);
+            suite::SectionBus::withdraw();
+            check (rmsBetween (out, 4.2, 4.6) > 1.0e-3f && rmsBetween (out, 8.1, 9.0) < 1.0e-5f, "after the last bar the tails ring on, then fade to silence over 2 bars");
+        }
+        suite::Autopilot::reset();
+    }
+
     return finish();
 }
