@@ -1325,5 +1325,76 @@ int main (int argc, char** argv)
         check (! f.refresh(), "no plan published: every plugin plays its own transitions");
     }
 
+
+    section ("Round 1: per-player control, opt-outs, alternatives, the plan for FL; the delivery package");
+    {
+        namespace dr = suite::director;
+        suite::Registry::reset();
+        suite::DirectorBus::reset();
+        const auto map = arrangement::fromTemplate (arrangement::templates()[1]);
+        ouro::DirectorHost h;
+        h.presentOverride = 0x7f;
+        h.update (map, 138.0, 4.0);
+        // supporters never outlive a trimmed hero
+        bool orphan = false;
+        for (const auto& m : h.plan.moments)
+            if ((m.flags & dr::fTrimmed) && m.supporters() > (m.acts (dr::pScene) ? 1 : 0) + (m.silence != dr::gNone ? 1 : 0)) orphan = true;
+        check (! orphan, "a hero stepping back takes its supporters with it");
+        // re-plan only when something changed
+        const auto hash = h.plan.hash;
+        check (! h.update (map, 138.0, 4.0) && h.plan.hash == hash, "nothing changed: no re-plan");
+        // lock one player, re-roll another
+        const dr::Moment* rich = nullptr;
+        for (const auto& m : h.plan.moments) if (m.hero != dr::pNone && m.supporters() >= 1 && ! (m.flags & dr::fTrimmed)) { rich = &m; break; }
+        if (rich != nullptr)
+        {
+            const auto key = rich->key;
+            const auto hero = rich->hero, heroGesture = rich->heroGesture;
+            h.rerollPlayer (key, dr::pScene);   // everything else stays
+            h.update (map, 138.0, 4.0);
+            const auto& after = h.plan.moments[(size_t) h.plan.indexOf (key)];
+            check (after.hero == hero && after.heroGesture == heroGesture, "re-roll one player: the hero and the others keep what they play");
+            h.lockPlayer (key, hero, true);
+            h.rerollSong(); h.rerollSong();
+            h.update (map, 138.0, 4.0);
+            check (h.plan.moments[(size_t) h.plan.indexOf (key)].gesture[(size_t) hero] == heroGesture, "lock one player: it keeps its gesture through re-rolls");
+            const auto alts = h.alternatives (key, map, 138.0, 4.0);
+            check (! alts.empty(), "alternatives for a moment: " + juce::String ((int) alts.size()));
+        }
+        else check (false, "a led moment with supporters to test on");
+        h.lockAllExcept (h.plan.moments.front().key);
+        check (h.settings.locks.size() >= 3, "lock every other moment");
+        // opt-out: a track that ignores the director
+        suite::Registry::announce (0xabcu, "Kybalion", "Pad Bus", 0, {});
+        h.settings.optOut.add ("Pad Bus");
+        h.update (map, 138.0, 4.0);
+        h.publishNow (4.0, 138.0);
+        suite::DirectorBus::Follower f;
+        check (f.refresh() && f.optedOut (0xabcu) && ! f.refreshFor (0xabcu) && f.refreshFor (0x123u), "a track told to ignore the director plays its own transitions");
+        // the plan for collaborators and for FL
+        check (h.planSheet (map, 4.0).contains ("DIRECTOR PLAN") && h.movesMidi (4.0, 138.0).getNumTracks() == 1 + dr::numPlayers, "the plan sheet, and the moves as MIDI (a track per plugin)");
+        auto saved = h.profileTree (true);
+        ouro::DirectorHost back;
+        back.applyProfileTree (saved, true);
+        check ((int) saved["version"] == 2 && back.settings.optOut.contains ("Pad Bus") && back.settings.playerLocks.size() == h.settings.playerLocks.size(),
+               "saved with a format version: opt-outs and player locks come back");
+        // the delivery package
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroDelivery");
+        dir.deleteRecursively();
+        dir.createDirectory();
+        auto o = std::make_unique<OuroborosProcessor>();
+        o->setMap (map);
+        o->replan();
+        const auto pkg = o->writeDeliveryPackage (dir, 1, "Artist", "Song");
+        check (pkg.getChildFile ("Mastering brief.txt").existsAsFile() && pkg.getChildFile ("Render plan.txt").existsAsFile()
+                   && pkg.getChildFile ("Files to deliver.txt").loadFileAsString().contains ("Stem - Drums") && pkg.getChildFile ("Section markers.mid").existsAsFile()
+                   && pkg.getChildFile ("Director moves.mid").existsAsFile(),
+               "the delivery package: brief, render plan, the label's file list with stems, markers, the director's moves");
+        check (o->renderPlan().contains ("Gate:"), "the render plan ends with Mentalism's gate");
+        dir.deleteRecursively();
+        suite::Registry::reset();
+        suite::DirectorBus::withdraw();
+    }
+
     return finish();
 }

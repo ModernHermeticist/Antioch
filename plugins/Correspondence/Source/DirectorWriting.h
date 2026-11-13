@@ -168,7 +168,7 @@ namespace chords::directed
     }
 
     /** The director's transition parts for Correspondence: one clip ("Song Transitions"). */
-    inline std::vector<Note> transitionsClip (const std::vector<dr::Moment>& plan, double barQ, int root, int scale, const std::vector<Note>& lead)
+    inline std::vector<Note> transitionsClip (const std::vector<dr::Moment>& plan, double barQ, int root, int scale, const std::vector<Note>& lead, int finalLift = 0)
     {
         std::vector<Note> out;
         const auto minor = scale != 1;
@@ -178,7 +178,8 @@ namespace chords::directed
             if (! m.acts (dr::pCorrespondence)) continue;
             const auto hero = m.hero == dr::pCorrespondence;
             const auto vel = hero ? 104 : 84;
-            const auto base = 72 + root;   // written in the song's key (the key change is Ouroboros' to make)
+            // into the lifted (key-change) drop, the pickup and the riser arp are written in the new key
+            const auto base = 72 + root + (m.harmony == dr::hKeyPrep ? finalLift : 0);
             switch (m.gesture[dr::pCorrespondence])
             {
                 case dr::gCoPickup:

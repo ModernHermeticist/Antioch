@@ -110,11 +110,15 @@ public:
         is measured on its own: integrated loudness, true peak, length, the most gain reduction.
         When it stops, a note goes into <suite folder>/Export notes with the target and the
         dither used, and whether it hit them. */
-    struct PassResult { float lufs = -100.0f, truePeakDb = -100.0f, maxGrDb = 0.0f, seconds = 0.0f, targetLufs = -8.0f, ceilingDb = -0.3f; bool dithered = false, premaster = false; };
+    struct PassResult { float lufs = -100.0f, truePeakDb = -100.0f, maxGrDb = 0.0f, seconds = 0.0f, targetLufs = -8.0f, ceilingDb = -0.3f; bool dithered = false, premaster = false;
+                        float startSilence = -1.0f, lastSoundAt = -1.0f, dcOffset = 0.0f; int clipped = 0; };
     /** Premaster (Hear the master off, the default): the audio passes untouched; these measure it. */
     std::atomic<bool> hearingMaster { false };
     std::atomic<float> premasterPeakDb { -100.0f }, premasterLufs { -100.0f };
     static juce::String exportNotes (const PassResult&);
+    /** Proof after the render: the rendered file itself, through the same premaster checks (plus
+        its sample rate and bit depth). Empty if it can't be read. */
+    static juce::String checkRenderedFile (const juce::File&);
     static juce::File& notesFolderOverride() { static juce::File f; return f; }   // tests
     static juce::File notesFolder() { return notesFolderOverride() != juce::File() ? notesFolderOverride() : suite::Alias::file ("Export notes"); }
     juce::File writeExportNotes();   // message thread; the newest finished pass, if any
@@ -174,6 +178,9 @@ private:
     analysis::TruePeakMeter passPeak, premasterPeak;
     analysis::LoudnessMeter premasterLoudness;
     bool passHeardMaster = false;
+    int64_t passFirstSound = -1, passLastSound = -1;
+    double passDc = 0.0;
+    int passClipped = 0;
     std::array<std::vector<float>, 2> dryDelay;
     int dryDelayPos = 0;
     bool wasPlaying = false;

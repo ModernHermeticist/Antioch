@@ -228,6 +228,31 @@ between versions.
 - [ ] **6f.10** Solve et Coagula, *Check tuning & timing* after a play-through: the notes listed match what you hear as off.
   *Save vocal MIDI* also writes the double guide and the harmony below.
 
+## 6g. The suite director and the premaster (new)
+
+Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-through is quick.
+
+- [ ] **6g.1** Ouroboros, **Director**: the timeline shows every plugin's lane. The ticker under *Now playing*
+  says what's next, and each plugin's strip says "bar N: you lead, …" or "you support, …".
+- [ ] **6g.2** Play into the first drop: the hero you see on the timeline is the one you hear (Azoth's impact, Kybalion's roll,
+  Transmutation's tape stop…), the others are quiet, and there's no full silence before the drop (Silences before drops is off).
+- [ ] **6g.3** After the drop, each plugin's strip shows "bar N: played … ✓". The *Fidelity* page counts what happened.
+- [ ] **6g.4** Right-click a lane: *Tracks that ignore the director*, tick one track. Its plugins play their own transitions again.
+- [ ] **6g.5** Inspector, *Edit… > Re-roll one player here*: only that plugin's move changes; *Alternatives* offers other ways.
+- [ ] **6g.6** Loop 8 bars around a drop: every gesture re-fires cleanly each time round (no stuck silences, no doubled impacts).
+- [ ] **6g.7** Export the song from FL (offline): the director's moves are in the render (the plan stays alive during it).
+- [ ] **6g.8** *Summary > Export the director's moves*: drag the MIDI into FL; a track per plugin, a marker per move.
+- [ ] **6g.9** Lapis: *Hear the master* off, the status says "Premaster…" and the audio is untouched. Turn it on: the master preview.
+  Mentalism's checklist then shows *No master limiting: FIX*.
+- [ ] **6g.10** Push a track hot so the master peaks over -6 dBFS: within a second or two every Quintessence comes down
+  together (What changed: "Premaster headroom…"); Mentalism's premaster report names the loudest tracks.
+- [ ] **6g.11** Mentalism, *Finish… > Premaster report*: the readiness score and what holds it back. *Mastering / label notes*:
+  paste "a bit harsh, bass too loud in the drop" and the fixes are sent.
+- [ ] **6g.12** Export the song from FL with Hear the master off: Lapis' note says *PREMASTER NOTES* and *Label-ready* (or what to fix).
+  Lapis, *Master fingerprint… > Check a rendered premaster file*: pick the WAV, the same checks on the file itself.
+- [ ] **6g.13** Ouroboros, *Delivery package for the label*: pick a profile and a folder: the brief, the render plan (with Mentalism's
+  gate), the files to deliver, the markers, the director's plan and the premaster report are there.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

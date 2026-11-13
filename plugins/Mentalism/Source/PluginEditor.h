@@ -103,5 +103,7 @@ private:
 
     suite::ui::AutopilotStrip autopilotStrip;   // what the autopilot is doing on this track now
 
+    std::unique_ptr<juce::AlertWindow> notesWindow;   // mastering / label notes
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MentalismEditor)
 };

@@ -349,7 +349,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     const auto host = suite::HostInfo::read (getPlayHead());
     lastBpm.store (host.bpm);
     const auto haveMap = sections.refresh();
-    const auto directorLive = suiteDirector.refresh();
+    const auto directorLive = suiteDirector.refreshFor (getInstanceId());
     mapAvailable.store (haveMap);
     const auto follow = apvts.getRawParameterValue (pm::followId)->load() > 0.5f && haveMap && host.playing && host.hasPpq;
     const auto ramp = apvts.getRawParameterValue (pm::rampId)->load() > 0.5f;

@@ -189,7 +189,7 @@ private:
     int directorSection = -1;
     float dirRiserNow = 1.0f, dirRollNow = 1.0f, dirSwellNow = 1.0f;
     bool dirTapeNow = false;
-    double dirGapNow = 0.0;
+    double dirGapNow = 0.0, dirFakeReturnQ = -1.0;
 
     suite::SectionFollower sections;
     azoth::Impact impact;

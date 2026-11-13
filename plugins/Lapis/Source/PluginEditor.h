@@ -25,6 +25,7 @@ private:
     juce::File notesShown;
     juce::TextButton resetButton { "Reset learning" }, fingerprintButton { "Master fingerprint..." };
     std::unique_ptr<juce::AlertWindow> nameWindow;
+    std::unique_ptr<juce::FileChooser> fileChooser;
     void showFingerprintMenu();
     void showNote (const juce::String& text) { note = text; noteUntil = juce::Time::getMillisecondCounterHiRes() + 8000.0; status.setText (text, juce::dontSendNotification); }
     juce::String note;

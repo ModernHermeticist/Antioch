@@ -98,6 +98,18 @@ namespace checklist
                      juce::String (crest, 1) + " dB from the loudness to the peaks" + (crest < suite::premaster::minCrestDb ? ": something is squashing the mix" : ""));
             }
             add ("Render format", State::Pass, "24-bit (or 32-bit float) WAV, no dither, at the project's sample rate");
+            int squashed = 0, clipping = 0;
+            for (const auto& e : suiteEntries) { squashed += e.has (suite::Status::squashedInput) ? 1 : 0; clipping += e.has (suite::Status::clipping) ? 1 : 0; }
+            add ("Nothing squashed before the master", squashed == 0 ? State::Pass : State::Warn,
+                 squashed == 0 ? juce::String ("no track arrives flattened") : juce::String (squashed) + " track(s) arrive squashed (a limiter or heavy compression on them): back it off");
+            add ("No clipping inside tracks", clipping == 0 ? State::Pass : State::Fail,
+                 clipping == 0 ? juce::String ("no track goes over full scale") : juce::String (clipping) + " track(s) clip inside: gain staging brings them down");
+            if (m.integratedLufs > -70.0f)
+                add ("Loudness window", m.integratedLufs <= -12.0f ? State::Pass : State::Warn,
+                     juce::String (m.integratedLufs, 1) + " LUFS" + (m.integratedLufs > -12.0f ? ": loud for a premaster (is something squashing it?)" : ": a premaster's range"));
+            if (rep.readiness.total > 0)
+                add ("Premaster readiness", rep.readiness.total >= 85 ? State::Pass : rep.readiness.total >= 70 ? State::Warn : State::Fail,
+                     juce::String (rep.readiness.total) + "/100; holding it back most: " + rep.readiness.weakest());
         }
         add ("Clipping", clippedSamples == 0 ? State::Pass : State::Fail,
              clippedSamples == 0 ? juce::String ("No samples at full scale")

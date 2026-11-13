@@ -2,6 +2,9 @@
 #include "AutopilotBus.h"
 #include "TempoBus.h"
 #include "PluginEditor.h"
+#include "Delivery.h"
+#include "KeyBus.h"
+#include "Music.h"
 #include "Music.h"
 #include "HostInfo.h"
 
@@ -115,6 +118,7 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     {
         ppq.store (host.ppq);
         suite::DirectorBus::setPlayhead (host.ppq);   // the director strips in every plugin
+        if (directorPublished.load()) suite::DirectorBus::touch();   // the plan stays live through an offline render
     }
     // Tempo changes: note each bar's tempo as the song plays, for times in the cue sheet and exports.
     if (host.playing && host.hasPpq && host.barQuarters() > 0.0)
@@ -485,6 +489,13 @@ juce::String OuroborosProcessor::renderPlan() const
     lines.add ("For every version: a premaster for the label's mastering. WAV, 24-bit (or 32-bit float), the project's sample rate, no dither;");
     lines.add ("peaks at or under -6 dBFS (true peak); no limiting, clipping or loudness gain on the master (Lapis' Hear the master OFF);");
     lines.add ("the loudness lands where the mix lands (it's reported in the export notes, never chased); a second of silence at the end.");
+    // the final gate: Mentalism's checklist
+    bool mentalism = false, ready = false;
+    for (const auto& e : suite::Registry::list()) if (e.plugin == "Mentalism") { mentalism = true; ready = ready || e.metrics[3] > 0.5f; }
+    lines.add ("");
+    lines.add (! mentalism ? juce::String ("Gate: put Mentalism on the master to check each premaster before it goes out.")
+               : ready ? juce::String ("Gate: Mentalism's checklist passes: ready to render.")
+                       : juce::String ("Gate: NOT READY: Mentalism's checklist has items to fix (its Premaster report says what) before these renders go out."));
     return lines.joinIntoString ("\n") + "\n";
 }
 
@@ -661,4 +672,32 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new OuroborosProcessor();
+}
+
+juce::File OuroborosProcessor::writeDeliveryPackage (const juce::File& parent, int profileIndex, const juce::String& artist, const juce::String& title)
+{
+    const auto& profile = suite::delivery::profile (profileIndex);
+    const auto dir = parent.getChildFile (juce::File::createLegalFileName ((title.isNotEmpty() ? title : juce::String ("Song")) + " - delivery "
+                                                                           + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M")));
+    dir.createDirectory();
+    const auto barQ = barQuarters.load(), tempo = bpm.load();
+    dir.getChildFile ("Render plan.txt").replaceWithText (renderPlan());
+    suite::delivery::Brief b;
+    b.artist = artist; b.title = title; b.bpm = tempo; b.label = profile.name;
+    if (const auto k = suite::KeyBus::read (60 * 60); k.valid) b.key = suite::music::keyName (k.root, k.scale);
+    b.versions = suite::delivery::fileList (profile, artist, title);
+    const auto report = suite::Alias::file ("Premaster report.txt");
+    if (report.existsAsFile()) b.readiness = report.loadFileAsString().upToFirstOccurrenceOf ("Checklist:", false, false).trim();
+    dir.getChildFile ("Mastering brief.txt").replaceWithText (suite::delivery::briefText (b));
+    dir.getChildFile ("Files to deliver.txt").replaceWithText (juce::String (profile.name) + ": " + profile.notes + "\nFormat: " + profile.format + "\n\n" + b.versions.joinIntoString ("\n") + "\n");
+    if (report.existsAsFile()) report.copyFileTo (dir.getChildFile ("Premaster report.txt"));
+    exportMarkers (dir.getChildFile ("Section markers.mid"));
+    if (director.havePlan)
+    {
+        dir.getChildFile ("Director plan.txt").replaceWithText (director.planSheet (getMap(), barQ));
+        juce::FileOutputStream out (dir.getChildFile ("Director moves.mid"));
+        if (out.openedOk()) director.movesMidi (barQ, tempo).writeTo (out);
+    }
+    addNote ("Delivery package written: " + dir.getFileName());
+    return dir;
 }

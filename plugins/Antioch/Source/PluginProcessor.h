@@ -57,6 +57,7 @@ public:
     {
         scenes.watchTweaks (isMorphing());
         onLeadTrack.store (roleForTrack() == suite::roleLead);
+        trackRole.store (roleForTrack());
         glueRoomTick();
         spacePass();
         runawayTick();
@@ -194,6 +195,7 @@ private:
     bool dirThrow = false, dirSilent = false;
     float dirWash = 0.0f, dirSpace = 1.0f, dirWide = 0.0f, dirSpaceGain = 1.0f, dirMute = 1.0f;
     int dirFrozeAt = -1, dirReported = -1;
+    std::atomic<int> trackRole { -1 };   // this track's role (-1: a return or unnamed): the director's throws go to the track that leads
 
     juce::SmoothedValue<float> dryGain, echoGain, verbGain, throwGain, outGain, echoSend, throwSend, verbDuck, throwDuck;
     double sampleRate = 44100.0;

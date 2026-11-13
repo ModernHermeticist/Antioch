@@ -327,7 +327,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     const auto qPerSample = host.quartersPerSample (sampleRate);
     const auto freezeBarsNow = host.hasPpq ? Verb::freezeBars (choiceParam (Verb::freeze)->getIndex()) : 0;
     const auto freezeLevelNow = value (Verb::freezeLevel);
-    const auto directorLive = suiteDirector.refresh() && host.playing && host.hasPpq;
+    const auto directorLive = suiteDirector.refreshFor (getInstanceId()) && host.playing && host.hasPpq;
     const auto dirMuteStep = (float) (1.0 / (0.003 * sampleRate));
     if (freezeBarsNow == 0 && ! directorLive) freeze.stop();
 
@@ -408,7 +408,8 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             namespace dr = suite::director;
             const auto posQ = host.ppq + qPerSample * n;
             dirThrow = false; dirWash = 0.0f; dirSpace = 1.0f; dirWide = 0.0f;
-            if (const auto at = suiteDirector.actingAt (posQ, dr::pAntioch); at >= 0)
+            if (const auto at = suiteDirector.actingAt (posQ, dr::pAntioch);
+                at >= 0 && (suiteDirector[at].heroRole == 0 || trackRole.load() <= 0 || trackRole.load() == (int) suiteDirector[at].heroRole))   // the leading track's Antioch (or a return)
             {
                 const auto& m = suiteDirector[at];
                 const auto part = m.hero == dr::pAntioch ? 1.0f : 0.6f;

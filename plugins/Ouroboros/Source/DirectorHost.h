@@ -36,6 +36,8 @@ namespace ouro
             std::map<uint32_t, int> rerolls;
             std::map<uint32_t, std::pair<uint8_t, uint8_t>> locks;
             std::map<uint32_t, dr::Moment> frozen;
+            std::map<uint32_t, std::array<uint8_t, dr::numPlayers>> playerLocks;
+            juce::StringArray optOut;   // tracks whose plugins ignore the director (they play their own transitions)
             std::vector<uint8_t> intent;
             std::vector<float> sectionSpice;
             std::vector<std::pair<int, int>> noMoves;
@@ -71,12 +73,13 @@ namespace ouro
             in.silencesBeforeDrops = settings.silencesBeforeDrops;
             in.seed = settings.seed;
             in.present = presentOverride != 0 ? presentOverride : presentPlayers();
-            in.rerolls = settings.rerolls; in.locks = settings.locks; in.frozen = settings.frozen;
+            in.rerolls = settings.rerolls; in.locks = settings.locks; in.frozen = settings.frozen; in.playerLocks = settings.playerLocks;
             in.intent = settings.intent; in.sectionSpice = settings.sectionSpice; in.noMoves = settings.noMoves; in.pins = settings.pins;
             in.heroRole = settings.heroRole; in.sectionMood = settings.sectionMood; in.requests = settings.requests;
             in.taste = settings.taste; in.learned = settings.learned;
             if (rehearsalBars >= 8) { in.barLoudness = barLoudness; in.barDensity = barDensity; }
             in.feedback = suite::DirectorBus::feedback();
+            if ((int) in.feedback.size() != map.count) in.feedback.clear();   // measured on another map: forgotten
             in.reference = reference;
             // the vocal's phrases (notes closer than a beat joined) and the hook's rests
             std::vector<std::pair<double, double>> phrases;
@@ -113,7 +116,19 @@ namespace ouro
             }
             dr::Plan fresh;
             if (settings.versionLock && ! lockedPlan.moments.empty()) fresh = lockedPlan;
-            else fresh = dr::makePlan (inputFor (map, bpm, barQ));
+            else
+            {
+                // re-plan only when something it depends on changed
+                const auto in = inputFor (map, bpm, barQ);
+                const auto sig = signature (in);
+                if (havePlan && sig == lastSignature)
+                {
+                    publishNow (barQ, bpm);
+                    return false;
+                }
+                lastSignature = sig;
+                fresh = dr::makePlan (in);
+            }
             const auto changed = ! havePlan || fresh.hash != plan.hash;
             if (changed)
             {
@@ -125,9 +140,158 @@ namespace ouro
                 plan = std::move (fresh);
                 havePlan = true;
             }
-            const auto& out = abPrevious && ! previous.moments.empty() ? previous : plan;
-            suite::DirectorBus::publish (out, barQ, bpm, abPrevious);
+            publishNow (barQ, bpm);
             return changed;
+        }
+        void publishNow (double barQ, double bpm)
+        {
+            const auto& out = abPrevious && ! previous.moments.empty() ? previous : plan;
+            std::vector<uint32_t> ids;
+            if (! settings.optOut.isEmpty())
+                for (const auto& e : suite::Registry::list())
+                    if (settings.optOut.contains (e.track)) ids.push_back (e.id);
+            suite::DirectorBus::publish (out, barQ, bpm, abPrevious, ids);
+        }
+        juce::int64 lastSignature = 0;
+        /** Everything a plan depends on, as one number. */
+        juce::int64 signature (const dr::Input& in) const
+        {
+            juce::String s = profileTree (true).toXmlString();
+            s << in.map.count << "/" << in.map.totalBars << "/" << in.map.finalLift << "/" << juce::roundToInt (in.bpm * 10.0) << "/" << (int) in.present;
+            for (int i = 0; i < in.map.count; ++i) s << "," << in.map.sections[(size_t) i].startBar << ":" << (int) in.map.sections[(size_t) i].type << ":" << in.map.sections[(size_t) i].energy;
+            for (const auto& f : in.feedback) s << ";" << juce::roundToInt (f.first * 10.0f) << ":" << juce::roundToInt (f.second * 10.0f) << ":" << (int) f.heard;
+            for (const auto& [a, b] : in.vocal) s << "v" << juce::roundToInt (a * 4.0) << ":" << juce::roundToInt (b * 4.0);
+            for (const auto& [a, b] : in.hookRests) s << "r" << juce::roundToInt (a * 4.0) << ":" << juce::roundToInt (b * 4.0);
+            s << "rb" << rehearsalBars << (reference.valid ? "ref" : "") << juce::roundToInt (reference.movesPerMinute * 10.0f);
+            return s.hashCode64();
+        }
+
+        // ---- per player: lock one, re-roll one, lock all but one moment ----
+        bool lockPlayer (uint32_t key, int player, bool on)
+        {
+            const auto i = plan.indexOf (key);
+            if (i < 0 || player < 0 || player >= dr::numPlayers) return false;
+            remember (key, juce::String (on ? "Lock " : "Unlock ") + dr::playerName (player) + " at bar " + barText (key));
+            auto& l = settings.playerLocks[key];
+            l[(size_t) player] = on ? plan.moments[(size_t) i].gesture[(size_t) player] : (uint8_t) dr::gNone;
+            if (std::all_of (l.begin(), l.end(), [] (uint8_t g) { return g == dr::gNone; })) settings.playerLocks.erase (key);
+            return true;
+        }
+        /** A new choice for one player here; every other player keeps what it plays. */
+        bool rerollPlayer (uint32_t key, int player)
+        {
+            const auto i = plan.indexOf (key);
+            if (i < 0) return false;
+            remember (key, juce::String ("Re-roll ") + dr::playerName (player) + " at bar " + barText (key));
+            const auto& m = plan.moments[(size_t) i];
+            auto& l = settings.playerLocks[key];
+            for (int p = 0; p < dr::numPlayers; ++p) l[(size_t) p] = p == player ? (uint8_t) dr::gNone : m.gesture[(size_t) p];
+            settings.frozen.erase (key);
+            settings.locks.erase (key);
+            ++settings.rerolls[key];
+            return true;
+        }
+        /** Every moment locked except this one (it alone is re-planned from now on). */
+        void lockAllExcept (uint32_t key)
+        {
+            pushHistory ("Lock every moment but bar " + barText (key));
+            for (const auto& m : plan.moments)
+                if (m.key != key && m.hero != dr::pNone) settings.locks[m.key] = { m.hero, m.heroGesture };
+            settings.locks.erase (key);
+        }
+        /** Up to three other ways this moment could go (re-roll counts to apply, and what they give). */
+        std::vector<std::pair<int, dr::Moment>> alternatives (uint32_t key, const suite::SectionMap& map, double bpm, double barQ) const
+        {
+            std::vector<std::pair<int, dr::Moment>> out;
+            auto in = inputFor (map, bpm, barQ);
+            in.candidates = 2;
+            in.frozen.erase (key); in.locks.erase (key); in.playerLocks.erase (key);
+            const auto base = in.rerolls.count (key) > 0 ? in.rerolls.at (key) : 0;
+            for (int d = 1; d <= 6 && out.size() < 3; ++d)
+            {
+                in.rerolls[key] = base + d;
+                const auto p = dr::makePlan (in);
+                const auto i = p.indexOf (key);
+                if (i < 0) continue;
+                const auto& m = p.moments[(size_t) i];
+                const auto dup = std::any_of (out.begin(), out.end(), [&] (const auto& o) { return o.second.same (m); });
+                const auto cur = plan.indexOf (key);
+                if (! dup && (cur < 0 || ! plan.moments[(size_t) cur].same (m))) out.push_back ({ base + d, m });
+            }
+            return out;
+        }
+        bool useAlternative (uint32_t key, int rerollCount)
+        {
+            remember (key, "Alternative at bar " + barText (key));
+            settings.frozen.erase (key); settings.locks.erase (key); settings.playerLocks.erase (key);
+            settings.rerolls[key] = rerollCount;
+            return true;
+        }
+        /** Re-roll every moment the lint names. Returns how many. */
+        int rerollProblems()
+        {
+            int n = 0;
+            pushHistory ("Re-roll the moments with problems");
+            for (const auto& l : plan.lints)
+                if (l.severity >= 2 && l.moment >= 0 && l.moment < (int) plan.moments.size())
+                {
+                    const auto key = plan.moments[(size_t) l.moment].key;
+                    if (settings.frozen.count (key) || settings.locks.count (key)) continue;
+                    ++settings.rerolls[key];
+                    ++n;
+                }
+            return n;
+        }
+        void forgetLearned (int index) { if (index >= 0 && index < (int) settings.learned.size()) { pushHistory ("Forget " + settings.learned[(size_t) index].name); settings.learned.erase (settings.learned.begin() + index); } }
+        void deleteTemplate (int index) { if (index >= 0 && index < (int) templates.size()) { templates.erase (templates.begin() + index); saveTemplates(); } }
+
+        /** The plan as a sheet (for collaborators): the summary, then every moment and why. */
+        juce::String planSheet (const suite::SectionMap& map, double barQ) const
+        {
+            juce::StringArray l;
+            l.add ("DIRECTOR PLAN");
+            l.add ("");
+            l.add (dr::summary (plan, map, barQ));
+            l.add ("");
+            for (size_t i = 0; i < plan.moments.size(); ++i)
+            {
+                const auto& m = plan.moments[i];
+                juce::StringArray who;
+                for (int p = 0; p < dr::numPlayers; ++p) if (m.acts (p)) who.add (juce::String (dr::playerName (p)) + (m.hero == p ? " (hero) " : " ") + dr::gesture (m.gesture[(size_t) p]).name);
+                l.add ("Bar " + juce::String ((int) std::floor (m.atQ / barQ + 1.0e-6) + 1) + ", " + dr::kindName (m.kind) + ": " + (who.isEmpty() ? juce::String ("nothing") : who.joinIntoString ("; ")));
+                if (i < plan.why.size()) for (const auto& w : plan.why[i]) l.add ("    " + w);
+            }
+            return l.joinIntoString ("\n") + "\n";
+        }
+        /** The director's moves as MIDI for FL: a track per player, a note per gesture (the note
+            number is the gesture's number), a marker naming each, to see or turn into automation. */
+        juce::MidiFile movesMidi (double barQ, double bpm) const
+        {
+            juce::MidiFile file;
+            file.setTicksPerQuarterNote (960);
+            juce::MidiMessageSequence tempo;
+            tempo.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::lround (60000000.0 / juce::jlimit (60.0, 200.0, bpm))), 0.0);
+            file.addTrack (tempo);
+            for (int p = 0; p < dr::numPlayers; ++p)
+            {
+                juce::MidiMessageSequence seq;
+                seq.addEvent (juce::MidiMessage::textMetaEvent (3, juce::String ("Director: ") + dr::playerName (p)), 0.0);
+                for (const auto& m : plan.moments)
+                {
+                    if (! m.acts (p)) continue;
+                    const auto g = m.gesture[(size_t) p];
+                    auto w = dr::windowOf (m, p, g, barQ, bpm);
+                    if (p == dr::pSilence) w = { m.silenceStartQ, m.silenceEndQ };
+                    const auto on = juce::jmax (0.0, w.first) * 960.0, off = juce::jmax (w.first + 0.05, w.second) * 960.0;
+                    seq.addEvent (juce::MidiMessage::textMetaEvent (6, juce::String (m.hero == p ? "lead: " : "support: ") + dr::gesture (g).name), on);
+                    seq.addEvent (juce::MidiMessage::noteOn (1, juce::jlimit (1, 127, (int) g), (juce::uint8) (m.hero == p ? 110 : 70)), on);
+                    seq.addEvent (juce::MidiMessage::noteOff (1, juce::jlimit (1, 127, (int) g)), off);
+                }
+                seq.sort();
+                seq.updateMatchedPairs();
+                file.addTrack (seq);
+            }
+            return file;
         }
 
         //==============================================================================
@@ -206,6 +370,7 @@ namespace ouro
         void pushHistory (const juce::String& label)
         {
             history.push_back ({ label, juce::Time::getCurrentTime(), settings, plan.hash });
+            suite::MoveLog::add ("Ouroboros", {}, "Director: " + label, suite::MoveLog::fix);   // in What changed, with the rest of the suite
             if (history.size() > 64) history.erase (history.begin());
         }
         bool stepBack (int index)
@@ -351,6 +516,7 @@ namespace ouro
         juce::ValueTree profileTree (bool withMoments) const
         {
             juce::ValueTree t ("DirectorProfile");
+            t.setProperty ("version", 2, nullptr);   // the saved format (1: before player locks and opt-outs)
             t.setProperty ("story", settings.story, nullptr);
             t.setProperty ("genre", settings.genre, nullptr);
             t.setProperty ("safe", settings.safe, nullptr);
@@ -389,6 +555,9 @@ namespace ouro
                 t.setProperty ("mood", mood.joinIntoString (","), nullptr);
                 t.setProperty ("noMoves", nm.joinIntoString (","), nullptr);
                 t.setProperty ("pins", pins.joinIntoString (","), nullptr);
+                t.setProperty ("optOut", settings.optOut.joinIntoString ("\n"), nullptr);
+                t.setProperty ("playerLocks", mapText (settings.playerLocks, [] (const std::array<uint8_t, dr::numPlayers>& v)
+                                                    { juce::StringArray a; for (auto g : v) a.add (juce::String (g)); return a.joinIntoString ("."); }), nullptr);
                 for (const auto& [k, m] : settings.frozen) { juce::ValueTree c ("Frozen"); c.setProperty ("m", dr::momentToString (m), nullptr); t.appendChild (c, nullptr); }
                 for (const auto& m : lockedPlan.moments) { juce::ValueTree c ("Locked"); c.setProperty ("m", dr::momentToString (m), nullptr); t.appendChild (c, nullptr); }
                 if (! lockedPlan.moments.empty()) t.setProperty ("lockedHash", (juce::int64) lockedPlan.hash, nullptr);
@@ -428,6 +597,16 @@ namespace ouro
             readMap (t["rerolls"].toString(), [this] (uint32_t k, const juce::String& v) { settings.rerolls[k] = v.getIntValue(); });
             readMap (t["locks"].toString(), [this] (uint32_t k, const juce::String& v) { settings.locks[k] = { (uint8_t) v.upToFirstOccurrenceOf ("/", false, false).getIntValue(), (uint8_t) v.fromFirstOccurrenceOf ("/", false, false).getIntValue() }; });
             readMap (t["heroRole"].toString(), [this] (uint32_t k, const juce::String& v) { settings.heroRole[k] = v.getIntValue(); });
+            settings.playerLocks.clear();
+            readMap (t["playerLocks"].toString(), [this] (uint32_t k, const juce::String& v)
+            {
+                std::array<uint8_t, dr::numPlayers> a {};
+                const auto g = juce::StringArray::fromTokens (v, ".", "");
+                for (int p = 0; p < dr::numPlayers && p < g.size(); ++p) a[(size_t) p] = (uint8_t) juce::jlimit (0, (int) dr::numGestures - 1, g[p].getIntValue());
+                settings.playerLocks[k] = a;
+            });
+            settings.optOut = juce::StringArray::fromLines (t["optOut"].toString());
+            settings.optOut.removeEmptyStrings();
             settings.intent.clear(); settings.sectionSpice.clear(); settings.sectionMood.clear(); settings.noMoves.clear(); settings.pins.clear();
             for (const auto& v : juce::StringArray::fromTokens (t["intent"].toString(), ",", "")) settings.intent.push_back ((uint8_t) v.getIntValue());
             for (const auto& v : juce::StringArray::fromTokens (t["spice"].toString(), ",", "")) settings.sectionSpice.push_back (v.getFloatValue());

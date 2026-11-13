@@ -211,6 +211,9 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
         m.addSeparator();
         m.addItem (4, "Translation check (phone, earbuds, mono)...");
         m.addItem (5, "Last Mix it report...", processor.mixItReport().isNotEmpty());
+        m.addSeparator();
+        m.addItem (6, "Premaster report (readiness, checks, peak sources)...");
+        m.addItem (7, "Mastering / label notes -> fixes...");
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&finishButton), [this] (int id)
         {
             if (id == 1) processor.finishSong();
@@ -218,6 +221,22 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
             if (id == 3) processor.undoMixIt();
             if (id == 4) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Translation check", processor.translationCheck().joinIntoString ("\n\n"));
             if (id == 5) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Mix it", processor.mixItReport());
+            if (id == 6) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Premaster report", processor.premasterReport());
+            if (id == 7)
+            {
+                notesWindow = std::make_unique<juce::AlertWindow> ("Mastering / label notes", "Paste the notes (one per line): the suite turns what it can into fixes.", juce::MessageBoxIconType::NoIcon);
+                notesWindow->addTextEditor ("notes", "", "Notes");
+                if (auto* ed = notesWindow->getTextEditor ("notes")) { ed->setMultiLine (true); ed->setReturnKeyStartsNewLine (true); ed->setSize (460, 140); }
+                notesWindow->addButton ("Apply", 1);
+                notesWindow->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+                notesWindow->enterModalState (true, juce::ModalCallbackFunction::create ([this] (int r)
+                {
+                    if (r == 1 && notesWindow != nullptr)
+                        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Notes -> fixes",
+                                                                processor.applyMasteringNotes (notesWindow->getTextEditorContents ("notes")).joinIntoString ("\n"));
+                    notesWindow.reset();
+                }));
+            }
         });
     };
     automationStatus.setFont (juce::FontOptions (12.0f));

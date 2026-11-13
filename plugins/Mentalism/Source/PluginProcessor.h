@@ -9,6 +9,9 @@
 #include "Spectrum.h"
 #include "Coach.h"
 #include "Premaster.h"
+#include "Readiness.h"
+#include "PeakBus.h"
+#include "Delivery.h"
 #include "MySound.h"
 #include "Masking.h"
 #include "HostInfo.h"
@@ -120,6 +123,8 @@ public:
         float momentary, shortTerm, targetLufs, ceiling;
         juce::String targetName;
         bool premaster = false;          // the target is a label-ready premaster (peaks -6 dBFS, loudness reported, never chased)
+        suite::premaster::Readiness readiness;   // the premaster readiness score (0-100) and its parts
+        juce::StringArray peakCulprits;  // the tracks that set the master's peak (from the Quintessences)
         advisor::Bands shortDiff {}, longDiff {};
         bool tonalAvailable = false;     // false when "Reference" is chosen but none is loaded
         bool arrangementAvailable = false;
@@ -150,7 +155,18 @@ public:
         45 minutes of listening. */
     juce::StringArray mixChecks() const;
     std::atomic<double> listenedSeconds { 0.0 };   // playback heard this session (the ear-fatigue reminder)
-    int directorFeedbackTicks = 0;                  // the suite director gets each section's loudness every few ticks
+    int directorFeedbackTicks = 0;
+    juce::StringArray headroomLog;                  // the headroom keeper's moves (time, peak, trim), newest last
+    double reportWrittenMs = 0.0, lastListened = 0.0;
+    int stoppedTicks = 0;
+    /** The premaster report: readiness, checklist, peak sources, the keeper's moves, and what
+        changed since the last revision. Also written to "Premaster report.txt" for the delivery package. */
+    juce::String premasterReport() const;
+    static juce::File premasterReportFile() { return suite::Alias::file ("Premaster report.txt"); }
+    /** Mastering / label notes, turned into the suite's fixes (sent). Returns what was done. */
+    juce::StringArray applyMasteringNotes (const juce::String& notes);
+    /** The last logged premaster revision (the style log), for "since the last revision". */
+    static std::map<juce::String, juce::String> lastRevision();                  // the suite director gets each section's loudness every few ticks
     /** A/B (Compare switch, or automate it from a key): while it's on, Mentalism plays the reference's
         loudest 20 s, looped, at the loudness the mix had when you switched, so you compare sound,
         not level. Put Mentalism last on the master to hear it. */

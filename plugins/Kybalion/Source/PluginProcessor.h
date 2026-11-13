@@ -198,6 +198,7 @@ private:
     suite::DirectorBus::Follower suiteDirector;   // the suite director's plan
     int lastDirectorReport = -1;
     float directorSilence = 1.0f;
+    bool reentryAccent = false;
     suite::SectionFollower sections;
     std::array<std::atomic<float>*, Params::numSteps> stepParams {};
     juce::SmoothedValue<float> outGain;

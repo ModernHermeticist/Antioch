@@ -99,11 +99,12 @@ namespace suite::delivery
             else if (t.contains ("intro")) section = (int) SectionType::Intro;
             else if (t.contains ("outro")) section = (int) SectionType::Outro;
             auto has = [&t] (std::initializer_list<const char*> w) { for (auto* x : w) if (t.contains (x)) return true; return false; };
-            const auto sectionName = juce::String (sectionName ((SectionType) section)).toLowerCase();
-            if (has ({ "bass too loud", "too much bass", "boomy", "low end heavy", "low end too loud", "sub too loud", "too much sub", "bass heavy" }))
-                out.push_back ({ line.trim(), Fix::SectionLowsDown, (uint32_t) section, "the bass 2 dB down in the " + sectionName });
+            const auto where = juce::String (suite::sectionName ((SectionType) section)).toLowerCase();
+            const auto lows = has ({ "bass", " sub", "low end", "lows", "low-end" }), tooMuch = has ({ "too loud", "too much", "heavy", "boomy", "overpowering", "too big", "loud" });
+            if ((lows && tooMuch) || has ({ "boomy" }))
+                out.push_back ({ line.trim(), Fix::SectionLowsDown, (uint32_t) section, "the bass 2 dB down in the " + where });
             else if (has ({ "too loud" }))
-                out.push_back ({ line.trim(), Fix::SectionDown, (uint32_t) section, "every track 1 dB down in the " + sectionName });
+                out.push_back ({ line.trim(), Fix::SectionDown, (uint32_t) section, "every track 1 dB down in the " + where });
             if (has ({ "harsh", "too bright", "sharp", "piercing", "fizzy", "brittle" })) out.push_back ({ line.trim(), Fix::Darker, 0, "the master's tilt a dB darker, shared out" });
             if (has ({ "dull", "too dark", "no air", "muffled", "lacks top" })) out.push_back ({ line.trim(), Fix::Brighter, 0, "the master's tilt a dB brighter, shared out" });
             if (has ({ "squashed", "over-compressed", "overcompressed", "no punch", "flat dynamics", "lifeless" })) out.push_back ({ line.trim(), Fix::LessSquash, 0, "every Quintessence lets the drops breathe" });

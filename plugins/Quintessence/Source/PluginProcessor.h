@@ -34,6 +34,7 @@
 #include "LiveMix.h"
 #include "DirectorStage.h"
 #include "Premaster.h"
+#include "PeakBus.h"
 #include "KeyBus.h"
 
 class QuintessenceProcessor : public suite::SuiteProcessor, private juce::AudioProcessorValueTreeState::Listener
@@ -67,7 +68,17 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
     SuiteStatus suiteStatus() override;
     bool morphsWithSnapshots() const override { return false; }   // it manages its own settings
-    void pollTick() override { applyLocks(); autoPass(); }
+    void pollTick() override
+    {
+        applyLocks();
+        autoPass();
+        // where the master's peaks come from: this track's last 2 s
+        const auto pk = peakHold.exchange (0.0f);
+        peakWindow[(size_t) (peakTick++ % peakWindow.size())] = pk;
+        float recent = 0.0f;
+        for (auto v : peakWindow) recent = juce::jmax (recent, v);
+        if (recent > 1.0e-5f) suite::PeakBus::post (getInstanceId(), getTrackName(), roleShown.load(), juce::Decibels::gainToDecibels (recent), peakAtQ.load());
+    }
 
     //==============================================================================
     static constexpr double passSeconds = 3.0;   // music heard per pass
@@ -177,6 +188,10 @@ private:
 public:
     std::atomic<float> directorPresence { 0.0f };   // the director's room-making dip now (dB)
     std::atomic<float> headroomTrimNow { 0.0f };    // the premaster headroom trim on this track now (dB)
+    std::atomic<float> peakHold { 0.0f };           // the output's peak since the last tick (audio thread)
+    std::atomic<double> peakAtQ { 0.0 };            // where it was (song position)
+    std::array<float, 8> peakWindow {};
+    int peakTick = 0;
 private:
     std::array<std::array<suite::Biquad, 2>, qn::numSlots> peaks;
     std::array<std::array<float, 3>, qn::numSlots> peakNow {};   // freq, gain, q in use
@@ -254,7 +269,8 @@ public:
     float dynamicsError (const Measurement&, int role) const;
     static void migrateBands (juce::ValueTree& state);
     float swingOffset() const { return (float) apvts.state.getProperty (swingOffsetKey, 0.0f); }
-    float glueTarget() const { return juce::jmax (0.5f, qn::targets::glueTargetDb - 0.25f * swingOffset()); }
+    // premaster-safe: the bus glue never holds more than 2 dB on average (mastering does the rest)
+    float glueTarget() const { return juce::jlimit (0.5f, 2.0f, qn::targets::glueTargetDb - 0.25f * swingOffset()); }
     mutable std::atomic<float> needShown { 0.0f };   // what it asked the conductor with (dB)
     std::atomic<bool> bypassedNow { false }, kickKeyed { false };   // (tests, UI)
     std::atomic<float> chordHzNow { 0.0f }, riserDipNow { 0.0f }, sideNow { -100.0f };

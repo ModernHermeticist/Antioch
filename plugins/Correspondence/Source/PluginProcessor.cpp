@@ -456,8 +456,8 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
         else if (kind == "Song Transitions")   // the suite director's transition parts (pickups, riser arps, stabs, the hook's hint)
         {
             float barQ = 4.0f;
-            const auto plan = suite::DirectorBus::moments (&barQ);
-            notes = chords::directed::transitionsClip (plan, barQ, s.root, s.scale, chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead));
+            const auto plan = suite::DirectorBus::moments (&barQ, getInstanceId());
+            notes = chords::directed::transitionsClip (plan, barQ, s.root, s.scale, chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead), map.finalLift);
             if (notes.empty()) return none();
         }
         else if (kind == "Song Vocal Answer")   // a line in the vocal's gaps (needs Solve et Coagula's vocal bars)
@@ -510,7 +510,7 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
     if (kind.startsWith ("Song ") && kind != "Song Transitions" && kind != "Song Fills")
     {
         float barQ = 4.0f;
-        if (const auto plan = suite::DirectorBus::moments (&barQ); ! plan.empty())
+        if (const auto plan = suite::DirectorBus::moments (&barQ, getInstanceId()); ! plan.empty())
         {
             suite::SectionMap map;
             suite::SectionBus::read (map);

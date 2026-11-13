@@ -138,6 +138,12 @@ public:
 
     /** Render plan: what to export, how loud, in what order (from the versions made). */
     juce::String renderPlan() const;
+    /** The delivery package for the label: a folder with the render plan, the mastering brief,
+        the file list for the label profile, the section markers and cue sheet, the director's
+        plan and moves, and Mentalism's premaster report. Returns the folder. */
+    juce::File writeDeliveryPackage (const juce::File& parent, int profileIndex, const juce::String& artist = {}, const juce::String& title = {});
+    int deliveryProfile() const { return (int) apvts.state.getProperty ("deliveryProfile", 0); }
+    void setDeliveryProfile (int i) { apvts.state.setProperty ("deliveryProfile", i, nullptr); }
     /** One-click finish: the learning pass starts (play the song once), Mentalism mixes it (Mix
         it), Correspondence exports every part, and the render plan follows. Returns what was set
         going, as a report to read while the song plays. */
@@ -396,9 +402,12 @@ public:
     bool replan()
     {
         directorDirty = false;
-        return director.update (getMap(), bpm.load(), barQuarters.load());
+        const auto changed = director.update (getMap(), bpm.load(), barQuarters.load());
+        directorPublished.store (director.havePlan);
+        return changed;
     }
     std::atomic<bool> directorDirty { true };
+    std::atomic<bool> directorPublished { false };   // the audio thread keeps the plan alive (an offline render runs faster than the timer)
     int directorTicks = 0, lastSampledBar = -1;
     void tickDirector()
     {

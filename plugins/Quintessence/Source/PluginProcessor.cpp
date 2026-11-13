@@ -617,7 +617,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     // The suite director: the mix around each moment (DirectorStage.h)
     {
-        const auto live = suiteDirector.refresh() && info.playing && info.hasPpq;
+        const auto live = suiteDirector.refreshFor (getInstanceId()) && info.playing && info.hasPpq;
         uint32_t silent = 0;
         directorStage.process (ch, chs, n, info.ppq, info.bpm / 60.0 / sr, live ? suiteDirector : suiteDirectorIdle, roleNow, silent);
         directorPresence.store (directorStage.presenceNow());
@@ -633,6 +633,8 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             headroomGain = target;
         }
         headroomTrimNow.store (juce::Decibels::gainToDecibels (headroomGain, -60.0f));
+        const auto pk = buffer.getMagnitude (0, n);
+        if (pk > peakHold.load()) { peakHold.store (pk); peakAtQ.store (info.ppq); }
     }
     for (int b = 0; b < qn::numMbBands; ++b) grNow[(size_t) b].store (juce::jmax (0.0f, grMax[(size_t) b]));
     deessNow.store (deessMax);

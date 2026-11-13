@@ -389,6 +389,8 @@ namespace ouro
         double explainAt = 0.0;
         std::unique_ptr<juce::FileChooser> chooser;
         std::unique_ptr<juce::AlertWindow> nameWindow;
+        std::vector<std::pair<int, dr::Moment>> altChoices;
+        juce::StringArray optTracks;
 
         const dr::Moment* current() const
         {
@@ -485,12 +487,23 @@ namespace ouro
             juce::String text, action;
             switch (which)
             {
-                case pSummary: text = d.havePlan ? dr::summary (d.plan, map, barQ) : juce::String ("No plan: the director needs a section map (and to be on)."); break;
+                case pSummary:
+                {
+                    text = d.havePlan ? dr::summary (d.plan, map, barQ) : juce::String ("No plan: the director needs a section map (and to be on).");
+                    const auto present = d.presentOverride != 0 ? d.presentOverride : DirectorHost::presentPlayers();
+                    juce::StringArray who, missing;
+                    for (int p = 0; p < dr::pScene; ++p) ((present & (1u << p)) ? who : missing).add (dr::playerName (p));
+                    text << "\n\nCan play: " << who.joinIntoString (", ") << (missing.isEmpty() ? juce::String() : ". Not in the session (no parts for them): " + missing.joinIntoString (", ")) << ".";
+                    if (! d.settings.optOut.isEmpty()) text << "\nIgnoring the director (their own transitions): " << d.settings.optOut.joinIntoString (", ") << ".";
+                    action = "Save the plan / export its moves...";
+                    break;
+                }
                 case pLint:
                 {
                     juce::StringArray l;
                     for (const auto& x : d.plan.lints) l.add ((x.severity >= 2 ? "PROBLEM  " : "note  ") + x.text);
                     text = l.isEmpty() ? "Nothing to fix: no collisions, no drop without contrast, no gesture under a sung word." : l.joinIntoString ("\n");
+                    if (std::any_of (d.plan.lints.begin(), d.plan.lints.end(), [] (const dr::Lint& x) { return x.severity >= 2 && x.moment >= 0; })) action = "Re-roll the moments with problems";
                     break;
                 }
                 case pDiff: text = d.lastDiff.isEmpty() ? "No changes since the last plan." : "Since the last plan:\n" + d.lastDiff.joinIntoString ("\n"); break;
@@ -515,7 +528,7 @@ namespace ouro
                         for (const auto& q : d.settings.requests) r.add (dr::describe (q));
                         text << "\n\nYour requests: " << r.joinIntoString ("; ");
                     }
-                    action = "Save my profile...";
+                    action = "Profiles, taught gestures, templates...";
                     break;
                 }
                 case pLegend: text = dr::legend().joinIntoString ("\n"); break;
@@ -551,8 +564,50 @@ namespace ouro
                     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&pageAction), [this] (int r) { if (r > 0) { processor.director.stepBack (r - 1); changed(); } });
                     break;
                 }
-                case pTaste: askName ("Save a director profile", "A name for your profile (story, genre, taste, requests, taught gestures)", [this] (juce::String n)
-                             { processor.director.saveProfile (DirectorHost::profileFolder().getChildFile (juce::File::createLegalFileName (n) + ".xml")); fillProfiles(); }); break;
+                case pTaste:
+                {
+                    juce::PopupMenu menu, learned, templates;
+                    for (int i = 0; i < (int) d.settings.learned.size(); ++i) learned.addItem (100 + i, d.settings.learned[(size_t) i].name);
+                    for (int i = 0; i < (int) d.templates.size(); ++i) templates.addItem (300 + i, d.templates[(size_t) i].name);
+                    menu.addItem (1, "Save my profile...");
+                    menu.addSubMenu ("Forget a taught gesture", learned, ! d.settings.learned.empty());
+                    menu.addSubMenu ("Delete a template", templates, ! d.templates.empty());
+                    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&pageAction), [this] (int r)
+                    {
+                        auto& dd = processor.director;
+                        if (r == 1) askName ("Save a director profile", "A name for your profile (story, genre, taste, requests, taught gestures)", [this] (juce::String n)
+                                             { processor.director.saveProfile (DirectorHost::profileFolder().getChildFile (juce::File::createLegalFileName (n) + ".xml")); fillProfiles(); });
+                        else if (r >= 300) { dd.deleteTemplate (r - 300); show (pTaste); }
+                        else if (r >= 100) { dd.forgetLearned (r - 100); changed(); }
+                    });
+                    break;
+                }
+                case pLint: { const auto n = d.rerollProblems(); changed(); reply.setText ("Re-rolled " + juce::String (n) + " moment(s) the lint flagged.", juce::dontSendNotification); break; }
+                case pSummary:
+                {
+                    juce::PopupMenu menu;
+                    menu.addItem (1, "Save the plan as a sheet (text)...");
+                    menu.addItem (2, "Export the director's moves for FL (MIDI: a track per plugin)...");
+                    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&pageAction), [this] (int r)
+                    {
+                        if (r <= 0) return;
+                        const auto midi = r == 2;
+                        chooser = std::make_unique<juce::FileChooser> (midi ? "Export the director's moves" : "Save the plan sheet",
+                                                                       juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile (midi ? "Director moves.mid" : "Director plan.txt"),
+                                                                       midi ? "*.mid" : "*.txt");
+                        chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting, [this, midi] (const juce::FileChooser& fc)
+                        {
+                            const auto f = fc.getResult();
+                            if (f == juce::File()) return;
+                            const auto barQ = processor.barQuarters.load(), bpm = processor.bpm.load();
+                            f.deleteFile();
+                            if (midi) { juce::FileOutputStream out (f); if (out.openedOk()) processor.director.movesMidi (barQ, bpm).writeTo (out); }
+                            else f.replaceWithText (processor.director.planSheet (processor.getMap(), barQ));
+                            f.revealToUser();
+                        });
+                    });
+                    break;
+                }
                 case pFidelity: suite::DirectorBus::clearActed(); show (pFidelity); break;
                 case pStructure: if (d.plan.structure.any) { processor.setMap (d.plan.structure.suggested); processor.addNote ("Director: structure applied (" + d.plan.structure.reasons.joinIntoString ("; ") + ")"); changed(); } break;
                 case pRender:
@@ -580,12 +635,18 @@ namespace ouro
         {
             const auto text = chat.getText();
             if (text.trim().isEmpty()) return;
-            reply.setText (processor.director.chat (text), juce::dontSendNotification);
+            auto said = processor.director.chat (text);
             chat.clear();
             safe.setToggleState (processor.director.settings.safe, juce::dontSendNotification);
             silences.setToggleState (processor.director.settings.silencesBeforeDrops, juce::dontSendNotification);
             story.setSelectedId (processor.director.settings.story + 1, juce::dontSendNotification);
+            const auto before = processor.director.plan.hash;
             changed();
+            // what it changed, in a line
+            if (processor.director.plan.hash != before && ! processor.director.lastDiff.isEmpty())
+                said << "  Changed: " << processor.director.lastDiff.size() << " moment(s), e.g. " << processor.director.lastDiff[0] << ".";
+            else if (processor.director.plan.hash == before) said << "  (The plan didn't change.)";
+            reply.setText (said, juce::dontSendNotification);
         }
         void sectionMenu (int sec)
         {
@@ -616,6 +677,13 @@ namespace ouro
             menu.addItem (1, "Remove the pin at bar " + juce::String (bar));
             menu.addItem (2, "No moves for 8 bars from bar " + juce::String (bar));
             menu.addItem (3, "Allow moves everywhere again");
+            juce::PopupMenu opt;
+            optTracks.clear();
+            for (const auto& e : suite::Registry::list())
+                if (e.track.isNotEmpty() && ! optTracks.contains (e.track) && juce::String ("Transmutation Kybalion Antioch Azoth Quintessence Prima Materia").contains (e.plugin)) optTracks.add (e.track);
+            optTracks.sort (true);
+            for (int t = 0; t < optTracks.size(); ++t) opt.addItem (900 + t, optTracks[t], true, processor.director.settings.optOut.contains (optTracks[t]));
+            menu.addSubMenu ("Tracks that ignore the director (their own transitions)", opt, ! optTracks.isEmpty());
             menu.showMenuAsync ({}, [this, bar] (int r)
             {
                 auto& d = processor.director;
@@ -623,6 +691,14 @@ namespace ouro
                 else if (r == 1) edit ("Unpin bar " + juce::String (bar), [&d, bar] { d.pin ({ bar, dr::pNone, dr::gNone }); });
                 else if (r == 2) edit ("No moves", [&d, bar] { d.addNoMoves (bar, bar + 7); });
                 else if (r == 3) edit ("Moves everywhere", [&d] { d.clearNoMoves(); });
+                else if (r >= 900 && r - 900 < optTracks.size())
+                {
+                    const auto t = optTracks[r - 900];
+                    edit ((d.settings.optOut.contains (t) ? "Follow the director again: " : "Ignore the director: ") + t, [&d, t]
+                    {
+                        if (d.settings.optOut.contains (t)) d.settings.optOut.removeString (t); else d.settings.optOut.add (t);
+                    });
+                }
             });
         }
         /** Edit a moment by hand: the hero, each player's gesture, the silence, the lead track. */
@@ -642,15 +718,40 @@ namespace ouro
                 per[(size_t) p].addItem (3000 + p, "Make it the hero", cur->acts (p) && cur->hero != p);
                 menu.addSubMenu (dr::playerName (p), per[(size_t) p]);
             }
-            juce::PopupMenu roles;
+            juce::PopupMenu roles, lockOne, rerollOne, alternatives;
             for (int r = 0; r <= 7; ++r) roles.addItem (4000 + r, juce::String (dr::roleName (r)));
             menu.addSubMenu ("The track that leads (Transmutation, Antioch)", roles);
+            menu.addSeparator();
+            const auto& d0 = processor.director;
+            const auto locked = d0.settings.playerLocks.count (cur->key) ? d0.settings.playerLocks.at (cur->key) : std::array<uint8_t, dr::numPlayers> {};
+            for (int p = 0; p < dr::numPlayers; ++p)
+                if (cur->acts (p))
+                {
+                    lockOne.addItem (5000 + p, juce::String (dr::playerName (p)) + ": " + dr::gesture (cur->gesture[(size_t) p]).name, true, locked[(size_t) p] != dr::gNone);
+                    rerollOne.addItem (6000 + p, juce::String ("A different ") + dr::playerName (p) + " move (the rest stay)");
+                }
+            menu.addSubMenu ("Lock one player here", lockOne);
+            menu.addSubMenu ("Re-roll one player here", rerollOne);
+            alternatives = juce::PopupMenu();
+            altChoices = d0.alternatives (cur->key, processor.getMap(), processor.bpm.load(), processor.barQuarters.load());
+            for (int a = 0; a < (int) altChoices.size(); ++a)
+            {
+                const auto& m = altChoices[(size_t) a].second;
+                alternatives.addItem (7000 + a, (m.hero != dr::pNone ? juce::String (dr::playerName (m.hero)) + " " + dr::gesture (m.heroGesture).name : juce::String ("nobody leads"))
+                                                    + "  (" + juce::String (m.supporters()) + " supporting)");
+            }
+            menu.addSubMenu ("Alternatives for this moment", alternatives, ! altChoices.empty());
+            menu.addItem (8000, "Lock every other moment (only this one moves)");
             const auto key = cur->key;
             menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&editB), [this, key] (int r)
             {
                 auto& d = processor.director;
                 const auto i = d.plan.indexOf (key);
                 if (i < 0 || r <= 0) return;
+                if (r == 8000) { d.lockAllExcept (key); changed(); return; }
+                if (r >= 7000) { if (r - 7000 < (int) altChoices.size()) d.useAlternative (key, altChoices[(size_t) (r - 7000)].first); changed(); return; }
+                if (r >= 6000) { d.rerollPlayer (key, r - 6000); changed(); return; }
+                if (r >= 5000) { const auto p = r - 5000; const auto has = d.settings.playerLocks.count (key) && d.settings.playerLocks.at (key)[(size_t) p] != dr::gNone; d.lockPlayer (key, p, ! has); changed(); return; }
                 if (r >= 4000) { d.setHeroRole (key, r - 4000); changed(); return; }
                 auto m = d.plan.moments[(size_t) i];
                 if (r >= 3000) { const auto p = r - 3000; m.hero = (uint8_t) p; m.heroGesture = m.gesture[(size_t) p]; }

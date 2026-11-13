@@ -135,7 +135,15 @@ void MentalismProcessor::timerCallback()
         if (pk > 1.0e-6f)
         {
             const auto before = headroomTrim;
-            headroomTrim = suite::premaster::headroom::step (recent, headroomTrim);
+            // sample peaks miss what happens between samples: half a dB of margin for the true peak
+            headroomTrim = suite::premaster::headroom::step (recent + 0.5f, headroomTrim);
+            if (std::abs (headroomTrim - before) > 0.2f || (headroomTrim < before - 0.01f && before > -0.01f))
+            {
+                const auto who = suite::PeakBus::culprits (suite::PeakBus::read());
+                headroomLog.add (juce::Time::getCurrentTime().formatted ("%H:%M:%S  ") + "peak " + juce::String (recent, 1) + " dBFS -> every track " + juce::String (headroomTrim, 1)
+                                 + " dB" + (who.isEmpty() ? juce::String() : " (loudest: " + who.joinIntoString (", ") + ")"));
+                while (headroomLog.size() > 40) headroomLog.remove (0);
+            }
             if (headroomTrim < before - 0.01f && before > -0.01f)
                 suite::MoveLog::add (getName(), getTrackName(), "Premaster headroom: the master peaked at " + juce::String (recent, 1)
                                          + " dBFS: every track comes down together (no limiter)", suite::MoveLog::fix);
@@ -148,6 +156,32 @@ void MentalismProcessor::timerCallback()
         headroomTrim = 0.0f;
         headroomNow.store (0.0f);
         suite::premaster::headroom::withdraw();
+    }
+
+    // The premaster report (for the delivery package), and a revision logged each time a measured pass stops
+    if (r.premaster && r.measuredSeconds >= 30.0f)
+    {
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+        if (now - reportWrittenMs > 10000.0)
+        {
+            reportWrittenMs = now;
+            premasterReportFile().getParentDirectory().createDirectory();
+            premasterReportFile().replaceWithText (premasterReport());
+        }
+        const auto heard = listenedSeconds.load();
+        stoppedTicks = heard > lastListened + 1.0e-6 ? 0 : stoppedTicks + 1;
+        if (stoppedTicks == 8 && r.measuredSeconds >= 60.0f && r.readiness.total > 0)   // two seconds after the transport stopped
+        {
+            std::map<juce::String, juce::String> f;
+            f["peak"] = juce::String (r.measurement.truePeakDb, 1);
+            f["lufs"] = juce::String (r.measurement.integratedLufs, 1);
+            f["score"] = juce::String (r.readiness.total);
+            f["trim"] = juce::String (headroomTrim, 1);
+            const auto last = lastRevision();
+            const auto same = last.count ("score") && last.at ("score") == f["score"] && last.count ("peak") && last.at ("peak") == f["peak"];
+            if (! same) suite::StyleLog::add ("premaster", f);
+        }
+        lastListened = heard;
     }
 
     // The suite director learns from what was heard: each section's loudness (whole, first and second half)
@@ -602,6 +636,8 @@ bool MentalismProcessor::watchPass (const Report& rep)
     master.truePeakDb = rep.measurement.truePeakDb;
     master.ceilingDb = rep.ceiling;
     master.premaster = rep.premaster;
+    master.culprits = rep.peakCulprits;
+    master.trimDb = headroomNow.load();
     master.monoLossDb = rep.measurement.monoLossDb;
     master.lowCorrelation = rep.measurement.lowCorrelation;
     const auto found = watcher::scan (suite::Registry::list(), master);
@@ -1770,6 +1806,40 @@ MentalismProcessor::Report MentalismProcessor::report() const
         }
     }
     for (const auto& note : maskingSuggestions()) rep.advice.insert (juce::jmin (1, rep.advice.size()), note);
+    // the premaster readiness score
+    {
+        suite::premaster::ReadinessInput ri;
+        ri.truePeakDb = m.truePeakDb; ri.lufs = m.integratedLufs;
+        if (rep.measuredSeconds > 2.0f) { ri.lowCorrelation = m.lowCorrelation; ri.correlation = m.correlation; ri.monoLossDb = m.monoLossDb; }
+        if (m.haveTonal)
+        {
+            float worst = 0.0f;
+            for (size_t b = 1; b + 1 < (size_t) analysis::numBands; ++b) worst = juce::jmax (worst, std::abs (rep.longDiff[b]));
+            ri.worstToneDb = worst;
+            ri.subShareDb = rep.longDiff[0];
+        }
+        ri.clippedSamples = clippedSamples.load();
+        for (const auto& e : suite::Registry::list())
+        {
+            if (e.plugin == "Lapis" && e.has (suite::Status::masterPreview)) { ri.previewOn = true; ri.masterLimitingDb = juce::jmax (ri.masterLimitingDb, e.metrics[0]); }
+            if (e.has (suite::Status::clipping)) ++ri.clippingTracks;
+            if (e.has (suite::Status::squashedInput)) ++ri.squashedTracks;
+        }
+        if (rep.arrangementAvailable)
+        {
+            float loudestDrop = -100.0f, quietestBreak = 100.0f;
+            for (int i = 0; i < rep.map.count && i < (int) rep.sections.size(); ++i)
+            {
+                if (! rep.sections[(size_t) i].heard()) continue;
+                const auto t = rep.map.sections[(size_t) i].type;
+                if (t == suite::SectionType::Drop) loudestDrop = juce::jmax (loudestDrop, rep.sections[(size_t) i].lufs());
+                if (t == suite::SectionType::Breakdown) quietestBreak = juce::jmin (quietestBreak, rep.sections[(size_t) i].lufs());
+            }
+            if (loudestDrop > -90.0f && quietestBreak < 90.0f) ri.breakdownGapLu = juce::jmax (0.0f, loudestDrop - quietestBreak);
+        }
+        rep.readiness = suite::premaster::readiness (ri);
+        if (m.truePeakDb > suite::premaster::peakDbfs) rep.peakCulprits = suite::PeakBus::culprits (suite::PeakBus::read());
+    }
     for (const auto& note : mixChecks()) rep.advice.add (note);
     for (const auto& note : liveChecks()) rep.advice.insert (0, note);   // live problems first
     {
@@ -1853,4 +1923,49 @@ void MentalismProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new MentalismProcessor();
+}
+
+std::map<juce::String, juce::String> MentalismProcessor::lastRevision()
+{
+    std::map<juce::String, juce::String> out;
+    for (const auto& e : suite::StyleLog::read()) if (e.kind == "premaster") out = e.fields;
+    return out;
+}
+
+juce::String MentalismProcessor::premasterReport() const
+{
+    const auto rep = report();
+    juce::StringArray l;
+    l.add ("PREMASTER REPORT  " + juce::Time::getCurrentTime().toString (true, true, false, true));
+    l.add ("");
+    l.add (rep.readiness.text());
+    l.add ("Holding it back most: " + rep.readiness.weakest());
+    l.add ("");
+    l.add ("Checklist:");
+    for (const auto& item : checklist::check (rep, clippedSamples.load(), suite::Registry::list()))
+        l.add (juce::String (item.state == checklist::State::Pass ? "  OK    " : item.state == checklist::State::Fail ? "  FIX   " : "  ...   ") + item.name + ": " + item.detail);
+    if (! rep.peakCulprits.isEmpty()) { l.add (""); l.add ("The master's peaks come from: " + rep.peakCulprits.joinIntoString (", ") + " (fix them there: a gentler hit, softer transients)"); }
+    if (! headroomLog.isEmpty()) { l.add (""); l.add ("The headroom keeper:"); for (const auto& h : headroomLog) l.add ("  " + h); }
+    const auto last = lastRevision();
+    if (last.count ("score"))
+    {
+        l.add ("");
+        l.add ("Since the last revision: readiness " + last.at ("score") + " -> " + juce::String (rep.readiness.total)
+               + ", peak " + (last.count ("peak") ? last.at ("peak") : juce::String ("?")) + " -> " + juce::String (rep.measurement.truePeakDb, 1)
+               + " dBTP, loudness " + (last.count ("lufs") ? last.at ("lufs") : juce::String ("?")) + " -> " + juce::String (rep.measurement.integratedLufs, 1) + " LUFS");
+    }
+    return l.joinIntoString ("\n") + "\n";
+}
+
+juce::StringArray MentalismProcessor::applyMasteringNotes (const juce::String& notes)
+{
+    juce::StringArray done;
+    for (const auto& f : suite::delivery::notesToFixes (notes))
+    {
+        if (f.fix != suite::Fix::None) sendFix (f.fix, f.data);
+        done.add ("\"" + f.heard + "\": " + f.does + (f.fix != suite::Fix::None ? juce::String() : juce::String (" (nothing to click)")));
+    }
+    if (done.isEmpty()) done.add ("Nothing in those notes the suite knows how to fix (try words like harsh, muddy, bass too loud, squashed, vocal buried).");
+    else suite::MoveLog::add (getName(), getTrackName(), "Mastering notes: " + juce::String (done.size()) + " fix(es) sent", suite::MoveLog::fix);
+    return done;
 }

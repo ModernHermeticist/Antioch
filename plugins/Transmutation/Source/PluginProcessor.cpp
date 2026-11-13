@@ -181,7 +181,7 @@ void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     }
 
     const auto director = value (TParams::direct) > 0.5f && suite::Autopilot::on (suite::Autopilot::transmuteF);
-    const auto suiteLive = suiteAudio.refresh();
+    const auto suiteLive = suiteAudio.refreshFor (getInstanceId());
     const auto chosenRole = (int) value (TParams::role);
     const auto role = chosenRole > 0 ? chosenRole : autoRole.load();
     const auto kicks = suite::KickBus::read();
@@ -461,7 +461,7 @@ bool TransmutationProcessor::replan (bool force)
     for (const auto& [a, b] : suite::KitBus::rests()) in.hookRests.push_back ({ a, b });
     for (const auto& n : suite::WritingBus::sung()) in.vocalNotes.push_back ({ n.start, n.start + n.length });
     // the suite director: which transitions this track leads, supports or sits out
-    if (suiteMsg.refresh())
+    if (suiteMsg.refreshFor (getInstanceId()))
     {
         namespace dr = suite::director;
         in.suiteActive = true;

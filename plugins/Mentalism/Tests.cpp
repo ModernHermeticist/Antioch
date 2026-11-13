@@ -1438,5 +1438,43 @@ int main (int argc, char** argv)
         suite::Registry::reset();
     }
 
+
+    section ("Premaster readiness, peak sources, mastering notes");
+    {
+        using namespace suite::premaster;
+        ReadinessInput good;
+        good.truePeakDb = -6.4f; good.lufs = -15.8f; good.lowCorrelation = 0.96f; good.correlation = 0.5f; good.monoLossDb = 1.5f; good.worstToneDb = 2.0f; good.breakdownGapLu = 7.0f;
+        const auto g = readiness (good);
+        auto bad = good; bad.truePeakDb = -1.5f; bad.previewOn = true; bad.lowCorrelation = 0.5f;
+        const auto b = readiness (bad);
+        check (g.total >= 95 && b.total < 60, "readiness: a clean premaster " + juce::String (g.total) + "/100, a hot one with the preview on " + juce::String (b.total) + "/100");
+        check (b.weakest().startsWith ("Headroom") || b.weakest().startsWith ("Nothing on the master"), "and it names what holds it back most: " + b.weakest());
+        ReadinessInput none;
+        check (readiness (none).parts.size() == 8 && ! readiness (none).parts[0].measured, "unmeasured parts are left out, not counted against it");
+
+        suite::PeakBus::reset();
+        suite::PeakBus::post (11u, "Impact FX", 7, -3.0f, 128.0);
+        suite::PeakBus::post (12u, "Kick", 1, -4.5f, 128.0);
+        suite::PeakBus::post (13u, "Pad", 4, -14.0f, 64.0);
+        const auto who = suite::PeakBus::culprits (suite::PeakBus::read());
+        check (who.size() == 2 && who[0].startsWith ("Impact FX") && who[1].startsWith ("Kick"), "the peaks' sources: the impact and the kick, not the pad");
+        suite::PeakBus::reset();
+
+        const auto fixes = suite::delivery::notesToFixes ("The bass is too loud in the drop.\nA bit harsh overall\nthe breakdown is muddy");
+        bool lows = false, darker = false, mud = false;
+        for (const auto& f : fixes) { lows = lows || (f.fix == suite::Fix::SectionLowsDown && f.data == (uint32_t) suite::SectionType::Drop); darker = darker || f.fix == suite::Fix::Darker; mud = mud || f.fix == suite::Fix::ReverbLowCut; }
+        check (lows && darker && mud, "mastering notes become the suite's fixes (bass down in the drop, darker, the reverbs' low cut)");
+
+        watcher::Master hot;
+        hot.measured = true; hot.premaster = true; hot.truePeakDb = -6.5f; hot.ceilingDb = -6.0f; hot.trimDb = -8.0f;
+        bool hotFound = false;
+        for (const auto& f : watcher::scan ({}, hot)) hotFound = hotFound || (f.key == "hot" && f.fix == suite::Fix::GainStage);
+        check (hotFound, "the keeper holding every track 8 dB down: the tracks run hot, gain staging is offered");
+        auto p = make();
+        check (p->premasterReport().contains ("PREMASTER REPORT") && p->premasterReport().contains ("Premaster readiness"), "the premaster report");
+        const auto brief = suite::delivery::briefText ({ "Artist", "Song", "A minor", "Label", "Club", "Ref A", "", 138.0, "", suite::delivery::fileList (suite::delivery::profile (1), "Artist", "Song") });
+        check (brief.contains ("MASTERING BRIEF") && brief.contains ("Song - Stem - Drums.wav") && brief.contains ("-6 dBFS"), "the mastering brief, with the label profile's files and stems");
+    }
+
     return finish();
 }

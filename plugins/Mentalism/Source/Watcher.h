@@ -27,6 +27,8 @@ namespace watcher
     {
         bool measured = false;
         float truePeakDb = -100.0f, ceilingDb = -0.3f, monoLossDb = 0.0f, lowCorrelation = 1.0f;
+        juce::StringArray culprits;   // the tracks setting the peak (premaster)
+        float trimDb = 0.0f;          // the headroom keeper's trim now
         bool premaster = false;  // true: the goal is a label-ready premaster (peaks at or under -6 dBFS, nothing on the master)
     };
 
@@ -63,8 +65,11 @@ namespace watcher
             {
                 if (master.truePeakDb > master.ceilingDb + 0.1f)   // the premaster's headroom: every track comes down together
                     out.push_back ({ "headroom", "The master peaks at " + juce::String (master.truePeakDb, 1) + " dBTP: a label-ready premaster stays at or under "
-                                                     + juce::String (master.ceilingDb, 0) + " dBFS",
+                                                     + juce::String (master.ceilingDb, 0) + " dBFS" + (master.culprits.isEmpty() ? juce::String() : " (the peaks: " + master.culprits.joinIntoString (", ") + ")"),
                                      "gain staging brings every track down together (no limiter: mastering does that)", suite::Fix::GainStage, 0, true });
+                if (master.trimDb < -6.0f)   // the keeper is doing too much: the tracks run hot
+                    out.push_back ({ "hot", "Every track is held " + juce::String (-master.trimDb, 1) + " dB down for the headroom: the tracks run hot",
+                                     "gain staging sets every track's level again, so the keeper can let go", suite::Fix::GainStage, 0, false });
                 for (const auto& e : entries)
                     if (e.plugin == "Lapis" && e.has (suite::Status::masterPreview))
                         out.push_back ({ "preview", "Lapis' master preview is on: a render now would be a master, not the premaster",

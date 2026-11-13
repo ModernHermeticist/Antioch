@@ -260,7 +260,7 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
     auto dropFxNow = dropFx;
     // The suite director: which of Azoth's gestures each moment gets (when its plan is live)
     namespace dr = suite::director;
-    const auto directorLive = suiteDirector.refresh() && follow;
+    const auto directorLive = suiteDirector.refreshFor (getInstanceId()) && follow;
     float dirRiser = 1.0f, dirRoll = 1.0f, dirSwell = 1.0f;
     double dirGapQ = gapQ;
     const auto dropFxQ = dropFxQuarters ((int) value (dropFxLenId));
@@ -356,6 +356,13 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
             const auto rollPrevPos = rollPos;
             rollPos = pos;
 
+            // the fake drop comes back: Azoth hits again on its return
+            if (directorLive && dirFakeReturnQ > 0.0 && rollPrevPos < dirFakeReturnQ && pos >= dirFakeReturnQ && pos - rollPrevPos < 0.5)
+            {
+                if (samplePlayers[slotImpact].loaded()) samplePlayers[slotImpact].trigger (value (impactId), tuning (slotImpact, rootHz));
+                else impact.trigger (impactPitch (rootHz, 0.0f, true), juce::jmax (0.5f, value (impactId)));
+                dirFakeReturnQ = -1.0;
+            }
             if (sec.valid && directorLive && sec.index != directorSection)
             {
                 // what the director wants from Azoth at the end of this section
@@ -363,7 +370,9 @@ void AzothProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
                 const auto at = suiteDirector.momentNear (sec.endQ, 0.05, 0.05, dr::kIntoDrop | dr::kIntoBuild | dr::kIntoBreak | dr::kIntoOther | dr::kBreakPeak);
                 const auto g = at >= 0 ? suiteDirector[at].gesture[dr::pAzoth] : (uint8_t) dr::gNone;
                 const auto part = at >= 0 && suiteDirector[at].hero == dr::pAzoth ? 1.0f : 0.6f;
-                dirRiserNow = g == dr::gAzRiser ? part : 0.0f;
+                // a build always keeps a quiet riser under it when another plugin leads (so it never sounds empty)
+                dirRiserNow = g == dr::gAzRiser ? part : sec.type == T::Build ? 0.35f : 0.0f;
+                if (at >= 0 && suiteDirector[at].silence == dr::gSiFakeDrop) dirFakeReturnQ = (double) suiteDirector[at].silenceEndQ;   // (kept into the drop, where it returns)
                 dirRollNow = g == dr::gAzRoll ? part : 0.0f;
                 dirSwellNow = g == dr::gAzSwell ? part : 0.0f;
                 dirTapeNow = g == dr::gAzTapeStop;

@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "PluginEditor.h"
 
 namespace
@@ -318,11 +319,15 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Export notes: a play-through starts when the transport starts and ends when it stops.
     const auto playing = suite::HostInfo::read (getPlayHead()).playing;
-    if (playing && ! wasPlaying) { passLoudness.reset(); passPeak.reset(); passSamples = 0; passMaxGr = 0.0f; passHeardMaster = false; }
+    if (playing && ! wasPlaying) { passLoudness.reset(); passPeak.reset(); passSamples = 0; passMaxGr = 0.0f; passHeardMaster = false;
+                                   passFirstSound = passLastSound = -1; passDc = 0.0; passClipped = 0; }
     if (! playing && wasPlaying && passSamples >= (int64_t) (30.0 * sampleRate) && ! passReady.load())
     {
         finished = { passLoudness.integrated(), passPeak.peakDb(), passHeardMaster ? passMaxGr : 0.0f, (float) ((double) passSamples / sampleRate), target, ceilingDb,
-                     passHeardMaster && (int) value (bitDepthId) == 1, ! passHeardMaster };
+                     passHeardMaster && (int) value (bitDepthId) == 1, ! passHeardMaster,
+                     passFirstSound >= 0 ? (float) ((double) passFirstSound / sampleRate) : -1.0f,
+                     passLastSound >= 0 ? (float) ((double) passLastSound / sampleRate) : -1.0f,
+                     (float) (passDc / juce::jmax ((int64_t) 1, passSamples)), passClipped };
         passReady.store (true);
     }
     wasPlaying = playing;
@@ -386,6 +391,12 @@ void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiB
         {
             passLoudness.process (L[n], R[n]);
             passPeak.process (L[n], R[n]);
+            // a clean file: where the sound starts and ends, DC, clipped samples
+            const auto a = juce::jmax (std::abs (L[n]), std::abs (R[n]));
+            if (passFirstSound < 0 && a > 1.0e-4f) passFirstSound = passSamples;
+            if (a > 0.001f) passLastSound = passSamples;
+            passDc += 0.5 * ((double) L[n] + R[n]);
+            if (a >= 0.99999f) ++passClipped;
             ++passSamples;
         }
 
@@ -450,7 +461,16 @@ juce::String LapisProcessor::exportNotes (const PassResult& p)
         lines.add ("");
         for (const auto& c : suite::premaster::checks (p.truePeakDb, p.lufs, 0.0f, false)) lines.add (c);
         lines.add ("");
-        lines.add (suite::premaster::ready (p.truePeakDb, p.lufs, 0.0f, false) ? "Label-ready: send it to mastering as it is." : "Not label-ready yet: fix the lines marked FIX and render again.");
+        // a clean file
+        auto clean = true;
+        if (p.startSilence > 0.5f) { lines.add ("FIX: " + juce::String (p.startSilence, 2) + " s of silence before the first sound: trim the start (under half a second)"); clean = false; }
+        else if (p.startSilence >= 0.0f) lines.add ("OK: the sound starts " + juce::String (p.startSilence, 2) + " s in");
+        if (p.lastSoundAt >= 0.0f && p.seconds - p.lastSoundAt < 0.5f) { lines.add ("FIX: the sound is still going at the end of the file: leave the tail to decay (a second or two of silence)"); clean = false; }
+        else if (p.lastSoundAt >= 0.0f) lines.add ("OK: the tail decays to silence " + juce::String (p.seconds - p.lastSoundAt, 1) + " s before the end");
+        if (std::abs (p.dcOffset) > 0.001f) { lines.add ("FIX: DC offset " + juce::String (p.dcOffset, 4) + " (a DC filter on the track causing it)"); clean = false; }
+        if (p.clipped > 0) { lines.add ("FIX: " + juce::String (p.clipped) + " samples at full scale"); clean = false; }
+        lines.add ("");
+        lines.add (suite::premaster::ready (p.truePeakDb, p.lufs, 0.0f, false) && clean ? "Label-ready: send it to mastering as it is." : "Not label-ready yet: fix the lines marked FIX and render again.");
         return lines.joinIntoString ("\n") + "\n";
     }
     const auto offTarget = p.lufs - p.targetLufs;
@@ -524,4 +544,52 @@ void LapisProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new LapisProcessor();
+}
+
+juce::String LapisProcessor::checkRenderedFile (const juce::File& file)
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+    if (reader == nullptr || reader->lengthInSamples <= 0) return {};
+    analysis::LoudnessMeter loud;
+    analysis::TruePeakMeter peak;
+    loud.prepare (reader->sampleRate);
+    peak.reset();
+    PassResult r;
+    r.premaster = true;
+    r.seconds = (float) ((double) reader->lengthInSamples / reader->sampleRate);
+    juce::AudioBuffer<float> buf (2, 65536);
+    int64_t first = -1, last = -1;
+    double dc = 0.0;
+    int clipped = 0;
+    for (juce::int64 pos = 0; pos < reader->lengthInSamples; pos += buf.getNumSamples())
+    {
+        const auto n = (int) std::min<juce::int64> (buf.getNumSamples(), reader->lengthInSamples - pos);
+        reader->read (&buf, 0, n, pos, true, true);
+        const auto* L = buf.getReadPointer (0);
+        const auto* R = buf.getReadPointer (reader->numChannels > 1 ? 1 : 0);
+        for (int i = 0; i < n; ++i)
+        {
+            loud.process (L[i], R[i]);
+            peak.process (L[i], R[i]);
+            const auto a = juce::jmax (std::abs (L[i]), std::abs (R[i]));
+            if (first < 0 && a > 1.0e-4f) first = pos + i;
+            if (a > 0.001f) last = pos + i;
+            dc += 0.5 * ((double) L[i] + R[i]);
+            if (a >= 0.99999f) ++clipped;
+        }
+    }
+    r.lufs = loud.integrated();
+    r.truePeakDb = peak.peakDb();
+    r.startSilence = first >= 0 ? (float) ((double) first / reader->sampleRate) : -1.0f;
+    r.lastSoundAt = last >= 0 ? (float) ((double) last / reader->sampleRate) : -1.0f;
+    r.dcOffset = (float) (dc / (double) reader->lengthInSamples);
+    r.clipped = clipped;
+    auto notes = exportNotes (r).replace ("PREMASTER NOTES", "RENDERED FILE CHECK: " + file.getFileName());
+    juce::StringArray extra;
+    extra.add ("File:        " + juce::String (reader->sampleRate, 0) + " Hz, " + juce::String ((int) reader->bitsPerSample) + "-bit" + (reader->usesFloatingPointData ? " float" : "")
+               + ", " + juce::String ((int) reader->numChannels) + " channel(s)");
+    if (reader->bitsPerSample < 24) extra.add ("FIX: " + juce::String ((int) reader->bitsPerSample) + "-bit: a premaster goes out at 24-bit or 32-bit float");
+    return notes + extra.joinIntoString ("\n") + "\n";
 }

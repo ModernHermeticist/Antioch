@@ -352,6 +352,22 @@ int main (int argc, char** argv)
         r.truePeakDb = -2.0f;
         const auto hot = LapisProcessor::exportNotes (r);
         check (hot.contains ("FIX: peaks") && hot.contains ("4.0 dB") && hot.contains ("Not label-ready"), "too hot: says how far to bring the master down");
+        r.truePeakDb = -6.4f; r.startSilence = 1.2f; r.lastSoundAt = 299.0f;
+        const auto late = LapisProcessor::exportNotes (r);
+        check (late.contains ("FIX: 1.20 s of silence") && late.contains ("Not label-ready"), "a clean file: a late start is flagged");
+        r.startSilence = 0.01f; r.lastSoundAt = 299.95f;
+        check (LapisProcessor::exportNotes (r).contains ("still going at the end"), "and a tail cut off at the end");
+        {
+            // proof after the render: a file at -8 dBFS, 24-bit, starting at once and ending in silence
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("lapis_premaster_check.wav");
+            juce::AudioBuffer<float> audio (2, (int) (sampleRate * 6.0));
+            audio.clear();
+            for (int i = 0; i < (int) (sampleRate * 4.0); ++i) { const auto v = 0.4f * std::sin (0.05f * (float) i); audio.setSample (0, i, v); audio.setSample (1, i, v); }
+            writeWav (wav, audio);
+            const auto check1 = LapisProcessor::checkRenderedFile (wav);
+            check (check1.contains ("RENDERED FILE CHECK") && check1.contains ("OK: peaks") && check1.contains ("Hz"), "proof after the render: the file itself goes through the premaster checks");
+            wav.deleteFile();
+        }
         r.premaster = false; r.maxGrDb = 3.0f;
         check (LapisProcessor::exportNotes (r).contains ("WITH Lapis' master preview"), "a pass rendered with the preview on says it isn't the premaster");
         // and Hear the master is the A/B: on, the master chain is heard

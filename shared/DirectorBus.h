@@ -25,6 +25,8 @@ namespace suite::DirectorBus
         int32_t count = 0, bars = 0;
         float barQ = 4.0f, bpm = 138.0f;
         uint8_t safe = 0, story = 0, genre = 0, abPrevious = 0;
+        int32_t optOutCount = 0;
+        uint32_t optOut[16] {};   // plugin instances you told to ignore the director (their own transitions)
     };
 
     namespace detail
@@ -61,7 +63,7 @@ namespace suite::DirectorBus
     }
 
     /** Ouroboros (message thread): the plan everyone follows. */
-    inline void publish (const director::Plan& plan, double barQ, double bpm, bool abPrevious = false) noexcept
+    inline void publish (const director::Plan& plan, double barQ, double bpm, bool abPrevious = false, const std::vector<uint32_t>& optOut = {}) noexcept
     {
         auto& s = detail::shared();
         s.seq.fetch_add (1, std::memory_order_acq_rel);   // odd: being written
@@ -72,6 +74,8 @@ namespace suite::DirectorBus
         h.bars = (int32_t) std::min<size_t> (plan.tension.size(), (size_t) maxBars);
         h.barQ = (float) barQ; h.bpm = (float) bpm;
         h.safe = plan.safe ? 1 : 0; h.story = (uint8_t) plan.story; h.genre = (uint8_t) plan.genre; h.abPrevious = abPrevious ? 1 : 0;
+        h.optOutCount = (int32_t) std::min<size_t> (optOut.size(), 16);
+        for (int i = 0; i < h.optOutCount; ++i) h.optOut[i] = optOut[(size_t) i];
         std::memcpy (&s.header, &h, sizeof (Header));
         if (h.count > 0) std::memcpy (s.moments, plan.moments.data(), sizeof (director::Moment) * (size_t) h.count);
         if (h.bars > 0) std::memcpy (s.tension, plan.tension.data(), sizeof (float) * (size_t) h.bars);
@@ -168,6 +172,14 @@ namespace suite::DirectorBus
             return true;
         }
         bool isActive() const noexcept { return active; }
+        /** True when you told this plugin instance to ignore the director (it plays its own transitions). */
+        bool optedOut (uint32_t instanceId) const noexcept
+        {
+            for (int i = 0; i < juce::jlimit (0, 16, (int) header.optOutCount); ++i) if (header.optOut[i] == instanceId) return true;
+            return false;
+        }
+        /** Refresh, and live for this instance (not opted out). */
+        bool refreshFor (uint32_t instanceId) noexcept { return refresh() && ! optedOut (instanceId); }
         int size() const noexcept { return active ? count : 0; }
         const director::Moment& operator[] (int i) const noexcept { return moments[juce::jlimit (0, maxMoments - 1, i)]; }
         const Header& info() const noexcept { return header; }
@@ -216,6 +228,23 @@ namespace suite::DirectorBus
         }
         /** Every plugin's line in the director strip: what it does at the next moment. */
         juce::String cueFor (double q, int player) const
+        {
+            if (! active) return {};
+            // what it played last ("bar 81: played gate roll"), then what's next
+            juce::String last;
+            for (int i = count - 1; i >= 0; --i)
+            {
+                const auto& m = moments[i];
+                if (m.endQ >= q || ! m.acts (player)) continue;
+                const auto bar = (int) std::floor (m.atQ / juce::jmax (0.25f, header.barQ) + 1.0e-6) + 1;
+                const auto did = (acted (i) & (1u << player)) != 0;
+                last = "bar " + juce::String (bar) + (did ? ": played " : ": missed ") + juce::String (director::gesture (m.gesture[(size_t) player]).name).toLowerCase() + (did ? juce::String (juce::CharPointer_UTF8 (" \xe2\x9c\x93")) : juce::String()) + "   ";
+                break;
+            }
+            const auto next = nextCueFor (q, player);
+            return last + next;
+        }
+        juce::String nextCueFor (double q, int player) const
         {
             if (! active) return {};
             for (int i = 0; i < count; ++i)
@@ -321,11 +350,11 @@ namespace suite::DirectorBus
         return out;
     }
     /** Message thread: the plan's moments (a copy), for writing parts around them. */
-    inline std::vector<director::Moment> moments (float* barQ = nullptr)
+    inline std::vector<director::Moment> moments (float* barQ = nullptr, uint32_t instanceId = 0)
     {
         std::vector<director::Moment> out;
         auto& f = detail::messageFollower();
-        if (! f.refresh()) return out;
+        if (! f.refresh() || (instanceId != 0 && f.optedOut (instanceId))) return out;
         if (barQ != nullptr) *barQ = f.info().barQ;
         for (int i = 0; i < f.size(); ++i) out.push_back (f[i]);
         return out;

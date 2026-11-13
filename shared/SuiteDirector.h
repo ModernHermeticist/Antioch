@@ -334,6 +334,7 @@ namespace suite::director
         std::map<uint32_t, int> rerolls;             // moment key -> re-roll count
         std::map<uint32_t, std::pair<uint8_t, uint8_t>> locks;   // moment key -> hero, gesture
         std::map<uint32_t, Moment> frozen;           // moment key -> the whole moment, kept as is (freeze, templates, hand edits)
+        std::map<uint32_t, std::array<uint8_t, numPlayers>> playerLocks;   // moment key -> gestures kept per player (0 = the director's choice)
         std::vector<uint8_t> intent;                 // per section (Intent)
         std::vector<float> sectionSpice;             // per section (0..2, 1 = as the story says)
         std::vector<std::pair<int, int>> noMoves;    // bar ranges (inclusive) the director leaves alone
@@ -962,6 +963,22 @@ namespace suite::director
                     }
                 }
 
+                // ---- players you locked keep their gesture here (the rest re-rolled around them) ----
+                if (const auto it = in.playerLocks.find (mo.key); it != in.playerLocks.end())
+                {
+                    for (int p = 0; p < numPlayers; ++p)
+                    {
+                        const auto g = it->second[(size_t) p];
+                        if (g == gNone || g >= numGestures || gesture (g).player != p) continue;
+                        if (mo.gesture[(size_t) p] != g) mo.spent += 0.5f * (float) gesture (g).size;
+                        mo.gesture[(size_t) p] = g;
+                        if (p == pSilence) mo.silence = g;
+                        else if (mo.hero == pNone || mo.hero == p) { mo.hero = (uint8_t) p; mo.heroGesture = g; }
+                    }
+                    mo.flags |= fLocked;
+                    why.add ("Some players locked by you: kept as they were.");
+                }
+
                 // ---- the windows ----
                 if (mo.silence != gNone)
                 {
@@ -1103,7 +1120,7 @@ namespace suite::director
                 auto& loser = loserIsA ? a : b;
                 const auto idx = loserIsA ? (size_t) lastLed : i;
                 plan.why[idx].add (juce::String ("Stepped back: ") + gesture (loser.heroGesture).name + " was too close to the next moment (pile-up guard).");
-                loser.gesture[(size_t) loser.hero] = gNone;
+                for (int p = 0; p < numPlayers; ++p) if (p != pScene && p != pSilence) loser.gesture[(size_t) p] = gNone;   // its supporters step back with it
                 loser.hero = pNone; loser.heroGesture = gNone; loser.spent = 0.0f;
                 loser.flags |= fTrimmed;
                 loser.legs = {};
@@ -1227,6 +1244,8 @@ namespace suite::director
                 out.push_back ({ 1, -1, juce::String ("The ") + juce::String (sectionName (in.map.sections[(size_t) s].type)).toLowerCase() + " at bar "
                                         + juce::String (in.map.sections[(size_t) s].startBar) + " has no moves at all (" + juce::String (lenBars) + " bars)." });
         }
+        if (p.moments.size() > 128) out.push_back ({ 2, -1, juce::String ((int) p.moments.size()) + " moments: only the first 128 reach the plugins (a long song: fewer phrase moves)" });
+        if (in.map.totalBars > 512) out.push_back ({ 1, -1, "The song is over 512 bars: the tension shown stops at bar 512 in the plugins" });
         std::stable_sort (out.begin(), out.end(), [] (const Lint& a, const Lint& b) { return a.severity > b.severity; });
         return out;
     }

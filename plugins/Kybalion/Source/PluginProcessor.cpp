@@ -252,7 +252,7 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
     const auto stepQNow = Params::Gate::rateQuarters ((int) value (Params::Gate::rate));
     fillNow = 0;
     // The suite director: when its plan is live, the fills are its call (and its silences close the gate)
-    const auto directorLive = suiteDirector.refresh() && host.playing && host.hasPpq;
+    const auto directorLive = suiteDirector.refreshFor (getInstanceId()) && host.playing && host.hasPpq;
     const auto silenceStep = (float) (1.0 / (0.003 * sampleRate));
     int dirIdx = -1, dirSilence = -1;
     int sectionNow = -1;
@@ -369,6 +369,18 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
                     if (! inChordAccent) chordAccents.fetch_add (1);
                 }
                 inChordAccent = accent > 0.0f;
+            }
+            if (directorLive && fill == TranceGate::NoFill)
+            {
+                // the handoff's last leg: Kybalion re-enters on the one, its first step wide open
+                if ((n & 31) == 0)
+                {
+                    reentryAccent = false;
+                    if (const auto at = suiteDirector.momentNear (position, 0.0, stepQNow, suite::director::kIntoDrop); at >= 0)
+                        for (const auto& leg : suiteDirector[at].legs)
+                            if (leg.player == suite::director::pKybalion && leg.gesture == suite::director::gNone) reentryAccent = true;
+                }
+                if (reentryAccent) accent = juce::jmax (accent, 1.0f);
             }
             gate.process (gatePos, l, r, fill, fillQ, barQ, accent);
         }

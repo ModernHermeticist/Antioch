@@ -175,12 +175,24 @@ void LapisEditor::showFingerprintMenu()
     juce::PopupMenu m;
     m.addItem (1, processor.fingerprintReady() ? "Save this master's fingerprint..." : "Save this master's fingerprint (play 10 s first)",
                processor.fingerprintReady());
+    m.addItem (2, "Check a rendered premaster file (proof after the render)...");
     if (! saved.empty()) m.addSeparator();
     for (size_t i = 0; i < saved.size(); ++i) m.addItem (100 + (int) i, "Match: " + saved[i].name);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&fingerprintButton), [this, saved] (int id)
     {
         if (id >= 100 && id - 100 < (int) saved.size())
             showNote (processor.matchFingerprint (saved[(size_t) (id - 100)]));
+        else if (id == 2)
+        {
+            fileChooser = std::make_unique<juce::FileChooser> ("Check a rendered premaster", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory), "*.wav;*.aif;*.aiff;*.flac");
+            fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& fc)
+            {
+                const auto f = fc.getResult();
+                if (! f.existsAsFile()) return;
+                const auto text = LapisProcessor::checkRenderedFile (f);
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Rendered file check", text.isNotEmpty() ? text : juce::String ("Couldn't read that file."));
+            });
+        }
         else if (id == 1)
         {
             nameWindow = std::make_unique<juce::AlertWindow> ("Master fingerprint", "Name this master sound:", juce::MessageBoxIconType::NoIcon);

@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "DirectorPanel.h"
+#include "Delivery.h"
 #include "AutopilotBus.h"
 #include "TransmuteBus.h"
 #include "../../Transmutation/Source/Effects.h"
@@ -1217,6 +1218,25 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
                                                     templateBox.getScreenBounds(), nullptr);
             return;
         }
+        if (id == 975)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::PopupMenu m;
+            for (int i = 0; i < (int) suite::delivery::profiles().size(); ++i)
+                m.addItem (1 + i, suite::delivery::profiles()[(size_t) i].name, true, processor.deliveryProfile() == i);
+            m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&templateBox), [this] (int r)
+            {
+                if (r <= 0) return;
+                processor.setDeliveryProfile (r - 1);
+                markerChooser = std::make_unique<juce::FileChooser> ("Where to put the delivery package", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
+                markerChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+                {
+                    const auto f = fc.getResult();
+                    if (f.isDirectory()) processor.writeDeliveryPackage (f, processor.deliveryProfile()).revealToUser();
+                });
+            });
+            return;
+        }
         if (id == 976)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1829,6 +1849,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Autopilot: what the suite manages by itself...", 984);
     templateBox.addItem ("Mixer: every track's suggested moves (and export)...", 978);
     templateBox.addItem ("The director: every transition, one plan...", 976);
+    templateBox.addItem ("Delivery package for the label (premasters, brief, report, markers)...", 975);
     templateBox.addItem ("Transmutation: every track's creative moves, song spice...", 977);
     templateBox.addItem ("Mood: darker (the master's tilt)", 980);
     templateBox.addItem ("Mood: brighter (the master's tilt)", 981);

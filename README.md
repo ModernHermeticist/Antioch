@@ -43,6 +43,26 @@ track** (a premaster) for the label's mastering engineer.
   (or 32-bit float) WAV, no dither, the project's sample rate, peaks under -6 dBFS, no master
   limiting, dynamics intact (at least 7 dB from the loudness to the peaks).
 
+**Proving it (Mentalism, Lapis, Ouroboros):**
+- **The readiness score** (0-100) in Mentalism's checklist and its *Premaster report*: headroom, nothing on the master,
+  dynamics, low end, mono, tonal balance, clean (no clipping), and breakdowns mastering won't have to pull up. It names
+  what holds it back most.
+- **Peaks fixed at their source:** every Quintessence reports its track's peaks, and the report names the tracks that set
+  the master's peak. The headroom keeper works on the true peak (half a dB of margin), keeps a log of its moves, and when
+  it holds every track more than 6 dB down it offers gain staging instead.
+- **Nothing squashed:** the bus glue never holds more than 2 dB on average; tracks that arrive squashed, tracks that clip
+  inside, and a mix louder than -12 LUFS are flagged.
+- **A clean file:** Lapis' premaster notes check the start (under half a second of silence), the tail (decayed to silence
+  before the end), DC and clipped samples. *Check a rendered premaster file* runs the same checks, plus the sample rate and
+  bit depth, on the WAV itself (proof after the render).
+- **Revisions:** each measured pass is logged; the report says what changed since the last one (readiness, peak, loudness).
+- **Mastering and label notes become fixes:** paste "a bit harsh, the bass is too loud in the drop, the breakdown is muddy"
+  into Mentalism and the suite sends the matching fixes (darker, the drop's bass down, the reverbs' low cut up).
+- **The delivery package** (Ouroboros' menu): pick a label profile (generic, with stems, club and DJ promo, the mastering
+  engineer's full pack) and a folder. It writes the mastering brief (key, BPM, the files, the readiness), the render plan
+  (ending with Mentalism's gate: ready or not), the files to deliver with their names, the section markers, the director's
+  plan and moves, and the premaster report.
+
 ## The suite director: one plan for every transition
 
 **Ouroboros** owns one plan for every transition in the song, and every plugin plays its
@@ -137,6 +157,19 @@ Ouroboros isn't running, every plugin plays its own transitions as before.
   "darker", "more silence before the final drop", "simpler", "wider", "undo", "reset".
 - **Profiles:** save your story, genre, taste, requests and taught gestures; export one to
   share, or import a friend's.
+
+**Control and safety:**
+- **Per player:** lock one player at a moment, re-roll just one (the rest keep what they play), see up to three
+  *Alternatives* for any moment, or lock every other moment so only one moves.
+- **Tracks that ignore the director:** right-click a lane and tick a track; its plugins play their own transitions.
+- **The lint's problems in one click** (*Re-roll the moments with problems*), and the chat says what each request changed.
+- **For FL and collaborators:** the plan as a text sheet, and the director's moves as MIDI (a track per plugin, a marker
+  per move) to see in the playlist or turn into automation.
+- **Solid timing:** the plan is re-made only when something it depends on changes; Ouroboros keeps it alive through an
+  offline render; a hero that steps back takes its supporters with it; a build always keeps a quiet riser when another
+  plugin leads; Antioch's throws go to the leading track's Antioch (or a return); Kybalion's gate re-enters on the one
+  when a handoff ends with it; the fake drop's return gets Azoth's hit; pickups into a key change are written in the new key.
+- Every director change also shows in *What changed*. The saved state carries a format version.
 
 **Trust:**
 - **What it plans:** the plan in words (*Summary*), the *Legend* of every gesture, *What
