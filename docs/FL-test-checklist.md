@@ -207,6 +207,27 @@ between versions.
 - [ ] **6e.10** CPU: 8 Transmutations playing a full song stay well under one core in FL's CPU meter.
 - [ ] **6e.11** Mentalism: a build that doesn't rise -> each Transmutation's *Builds* goes up (What changed says so); undo puts it back.
 
+## 6f. Writing and helpers (new)
+- [ ] **6f.1** Correspondence, Song page, *Writing...*: all eight groups ticked. *Export all* with the pattern library on, then
+  load the parts. The hook climbs in bars 5-6 of each phrase and the breakdown hints at the hook before singing it slowly.
+  The beat before each drop is empty, and the intro's first 16 bars are bass alone.
+- [ ] **6f.2** Untick each group in turn and export again: the change is audible and nothing breaks.
+- [ ] **6f.3** *Ban this kit*, then *New patterns* a few times: it never comes back. *Favourite this hook*: it's in the hook
+  bank (Melodia's motif list).
+- [ ] **6f.4** Edit the exported bass (delete half the notes, move it an octave up), save it as "my bass.mid", then
+  *Learn from my edit*: the next export's bass is thinner and higher.
+- [ ] **6f.5** *Suggest new kits*, *Library report*, *Render this song's drop to a WAV*, *Check the library* and *Sound guide*
+  each do what they say. The WAV plays the drop.
+- [ ] **6f.6** *Song Drums* on FPC: four on the floor, claps on 2 and 4, the style's hats, a snare roll through builds,
+  nothing in breakdowns. The percussion sits between the bass notes.
+- [ ] **6f.7** Kybalion, pattern list, *From the song's chords*: the gate matches the chord part's rhythm.
+- [ ] **6f.8** Transmutation, *Export plan (MIDI)*, and Ouroboros' *Export every track's moves*: drag them into FL. A marker
+  names each move at its bar.
+- [ ] **6f.9** With Correspondence's hook and a vocal in Solve et Coagula, Transmutation's phrase-end moves land in the
+  hook's rests and between the vocal's words.
+- [ ] **6f.10** Solve et Coagula, *Check tuning & timing* after a play-through: the notes listed match what you hear as off.
+  *Save vocal MIDI* also writes the double guide and the harmony below.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

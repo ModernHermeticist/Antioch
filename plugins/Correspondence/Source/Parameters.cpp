@@ -92,6 +92,7 @@ namespace Params
         for (int i = 0; i < writingNames().size(); ++i)
             layout.add (std::make_unique<AudioParameterBool> (id (writingId (i)), "Writing: " + writingNames()[i].upToFirstOccurrenceOf (" (", false, false), true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
+        layout.add (std::make_unique<AudioParameterBool> (id (songDrums), "Drums", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (leadExpression), "Lead Expression",
                                                             StringArray { "Plain lead", "Glide", "Glide + scoops (bend 2)", "Glide + scoops (bend 12)" }, 2));

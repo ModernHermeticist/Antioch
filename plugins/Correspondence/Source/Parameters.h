@@ -56,6 +56,7 @@ namespace Params
     }
     inline juce::String writingId (int i) { static const char* ids[] { "write_phrase", "write_develop", "write_harmony", "write_feel", "write_parts", "write_arrange", "write_ornaments", "write_learned" }; return ids[juce::jlimit (0, 7, i)]; }     // ghost notes in bass and arp exports
     inline const juce::String songFills    { "song_fills" };     // drum fill clip
+    inline const juce::String songDrums    { "song_drums" };     // the drum grooves (kick, clap, hats, percussion)
     inline const juce::String songVocalRoom { "song_vocalroom" }; // the lead thins out where the vocal sings
     inline const juce::String groove       { "groove" };         // exported MIDI feel: straight / trance shuffle / hard shuffle
     inline const juce::String accentCC     { "accent_cc" };      // write accents as CC 74 too

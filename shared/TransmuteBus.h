@@ -7,6 +7,8 @@
 
 #include "SharedMemory.h"
 #include <juce_core/juce_core.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <functional>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -136,6 +138,36 @@ namespace suite::TransmuteBus
         std::sort (out.begin(), out.end(), [] (const TrackPlan& a, const TrackPlan& b) { return a.track.compareNatural (b.track) < 0; });
         return out;
     }
+    /** The plans printed: one MIDI track per FL track, a note per move (its number = the move's
+        number, its length the move's), and a marker naming each move ("bar 33: Beat-repeat roll"),
+        so the moves can be seen, edited or turned into automation in FL. */
+    inline juce::MidiFile planMidi (const std::vector<TrackPlan>& plans, double bpm, const std::function<juce::String (int)>& nameOf)
+    {
+        constexpr int ppq = 960;
+        juce::MidiFile file;
+        file.setTicksPerQuarterNote (ppq);
+        juce::MidiMessageSequence tempo;
+        tempo.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::lround (60000000.0 / juce::jlimit (60.0, 200.0, bpm))), 0.0);
+        file.addTrack (tempo);
+        for (const auto& p : plans)
+        {
+            juce::MidiMessageSequence seq;
+            seq.addEvent (juce::MidiMessage::textMetaEvent (3, p.track.isNotEmpty() ? p.track : juce::String ("Track")), 0.0);
+            for (const auto& m : p.moves)
+            {
+                if (m.effect < 1 || m.effect > 127) continue;
+                const auto on = (double) m.startQ * ppq, off = (double) juce::jmax (m.startQ + 0.05f, m.endQ) * ppq;
+                seq.addEvent (juce::MidiMessage::textMetaEvent (6, "bar " + juce::String ((int) std::floor (m.startQ / 4.0f) + 1) + ": " + nameOf (m.effect)), juce::jmax (0.0, on));
+                seq.addEvent (juce::MidiMessage::noteOn (1, m.effect, (juce::uint8) 100), juce::jmax (0.0, on));
+                seq.addEvent (juce::MidiMessage::noteOff (1, m.effect), off);
+            }
+            seq.sort();
+            seq.updateMatchedPairs();
+            file.addTrack (seq);
+        }
+        return file;
+    }
+
     inline void reset() noexcept   // tests
     {
         auto& s = detail::shared();

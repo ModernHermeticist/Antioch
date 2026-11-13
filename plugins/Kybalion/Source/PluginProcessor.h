@@ -1,4 +1,5 @@
 #pragma once
+#include "KitBus.h"
 
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -138,6 +139,17 @@ public:
         }
         std::sort (out.begin(), out.end(), [] (const auto& a, const auto& b) { return a.first < b.first; });
         return out;
+    }
+    /** The gate takes the song's kit rhythm (Correspondence): its chord part's or its arp's 16
+        steps. Returns false if Correspondence isn't sharing one. */
+    bool applyKitRhythm (bool arp)
+    {
+        const auto kit = suite::KitBus::read();
+        if (! kit.valid) return false;
+        std::array<float, Params::numSteps> steps {};
+        for (int i = 0; i < Params::numSteps; ++i) steps[(size_t) i] = (arp ? kit.arp : kit.chords)[(size_t) i];
+        applySteps (steps);
+        return true;
     }
     void applySteps (const std::array<float, Params::numSteps>& steps)
     {

@@ -114,11 +114,28 @@ public:
         const auto harmony = VocalMelody::harmony (notes, key.valid ? key.root : -1, key.valid ? key.scale : 0);
         auto ok = write (notes, "Vocal melody");
         if (! harmony.empty()) ok = write (harmony, "Vocal harmony") && ok;
+        ok = write (VocalMelody::doubles (notes, songBpm.load()), "Vocal double (guide)") && ok;   // 8
+        const auto below = VocalMelody::harmonyBelow (notes, key.valid ? key.root : -1, key.valid ? key.scale : 0);
+        if (! below.empty()) ok = write (below, "Vocal harmony below") && ok;
         return ok ? juce::String ((int) notes.size()) + " notes written to " + folder.getFullPathName()
-                        + (harmony.empty() ? juce::String (" (no key set: no harmony)") : juce::String (", with a harmony a third above"))
+                        + (harmony.empty() ? juce::String (" (no key set: no harmony)") : juce::String (", with harmonies a third above and a sixth below"))
+                        + ", and a guide for a double (each note 10-25 ms off, like a second take)"
                   : juce::String ("Couldn't write to ") + folder.getFullPathName();
     }
     static juce::File vocalMidiFolder() { return suite::Alias::file ("Vocal MIDI"); }
+    /** 7: the vocal's tuning and timing as heard so far, in words (a check: nothing is moved). */
+    juce::String checkVocal()
+    {
+        collectMelody();
+        const auto& notes = melody.notes();
+        if (notes.empty()) return "Nothing heard yet: play the song with the vocal on the sidechain.";
+        const auto issues = VocalMelody::check (notes, songBpm.load());
+        if (issues.empty()) return juce::String ((int) notes.size()) + " notes heard: all within 25 cents and 30 ms of the grid.";
+        juce::StringArray lines { juce::String ((int) issues.size()) + " of " + juce::String ((int) notes.size()) + " notes to look at (tune or nudge them in your editor):" };
+        for (size_t i = 0; i < issues.size() && i < 40; ++i) lines.add (issues[i].text);
+        if (issues.size() > 40) lines.add ("... and " + juce::String ((int) issues.size() - 40) + " more");
+        return lines.joinIntoString ("\n");
+    }
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override
     {

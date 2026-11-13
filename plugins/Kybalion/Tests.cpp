@@ -4,6 +4,7 @@
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "KitBus.h"
 #include "Registry.h"
 #include "KickBus.h"
 
@@ -754,6 +755,24 @@ int main (int argc, char** argv)
         if (tabs != nullptr) tabs->setSelected (2);
         snapshot (*editor, outDir.getChildFile ("kybalion_scenes.png"));
         editor.reset();
+    }
+
+
+    section ("The gate from the song's kit (Correspondence)");
+    {
+        suite::KitBus::withdraw();
+        auto p = std::make_unique<KybalionProcessor>();
+        check (! p->applyKitRhythm (false), "with no kit shared, nothing changes");
+        suite::KitBus::Rhythm r;
+        for (int i = 0; i < 16; ++i) { r.chords[(size_t) i] = i % 4 == 2 ? 1.0f : i % 2 == 0 ? 0.8f : 0.0f; r.arp[(size_t) i] = 0.8f; }
+        juce::String ("Test kit").copyToUTF8 (r.name, 40);
+        r.valid = true;
+        suite::KitBus::publish (r);
+        check (p->applyKitRhythm (false), "a shared kit rhythm is taken");
+        bool same = true;
+        for (int i = 0; i < 16; ++i) same = same && std::abs (p->apvts.getRawParameterValue (Params::Gate::step (i))->load() - r.chords[(size_t) i]) < 0.01f;
+        check (same && juce::String (suite::KitBus::read().name) == "Test kit", "the gate's 16 steps are the kit's chord rhythm");
+        suite::KitBus::withdraw();
     }
 
     return finish();

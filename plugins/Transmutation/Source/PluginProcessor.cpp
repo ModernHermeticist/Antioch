@@ -6,6 +6,8 @@
 #include "VocalBus.h"
 #include "StyleLog.h"
 #include "TransmuteBus.h"
+#include "KitBus.h"
+#include "WritingBus.h"
 #include "Music.h"
 #include "Roles.h"
 
@@ -428,6 +430,8 @@ bool TransmutationProcessor::replan (bool force)
     in.genre = (int) value (TParams::genre);
     in.songSeed = suite::TransmuteBus::songSeed();
     in.vocalBars = suite::VocalBus::read();
+    for (const auto& [a, b] : suite::KitBus::rests()) in.hookRests.push_back ({ a, b });
+    for (const auto& n : suite::WritingBus::sung()) in.vocalNotes.push_back ({ n.start, n.start + n.length });
 
     // what you've kept in earlier songs (the style log), re-read once a minute
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
@@ -483,6 +487,8 @@ bool TransmutationProcessor::replan (bool force)
     for (size_t b = 0; b < in.vocalBars.size(); ++b) if (in.vocalBars[b]) h.add ((uint64_t) b);
     for (const auto& o : in.others) { h.add ((uint64_t) o.id); for (const auto& m : o.moves) { h.add ((double) m.startQ); h.add ((uint64_t) m.effect); } }
     h.add ((uint64_t) in.pluckName); h.add ((uint64_t) in.arpName);
+    for (const auto& [a, b] : in.hookRests) { h.add (a); h.add (b); }
+    for (const auto& [a, b] : in.vocalNotes) { h.add (a); h.add (b); }
 
     if (! force && h.h == inputHash) return false;
     auto fresh = directorOn ? trm::makePlan (in) : trm::Plan {};
@@ -516,6 +522,20 @@ void TransmutationProcessor::publishPlan()
                 tp.moves.push_back ({ m.startQ, m.endQ, m.effect });
     }
     suite::TransmuteBus::publish (tp);
+}
+
+bool TransmutationProcessor::exportPlan (const juce::File& file) const
+{
+    suite::TransmuteBus::TrackPlan tp;
+    tp.track = getTrackName().isNotEmpty() ? getTrackName() : juce::String ("Transmutation");
+    {
+        const juce::ScopedLock sl (planLock);
+        for (const auto& m : plan.moves) if ((m.slot & trm::sSong) == 0) tp.moves.push_back ({ m.startQ, m.endQ, m.effect });
+    }
+    if (tp.moves.empty()) return false;
+    file.deleteFile();
+    juce::FileOutputStream out (file);
+    return out.openedOk() && suite::TransmuteBus::planMidi ({ tp }, bpmNow.load(), [] (int id) { return juce::String (trm::effect (id).name); }).writeTo (out);
 }
 
 void TransmutationProcessor::setMode (int id, uint8_t mode)

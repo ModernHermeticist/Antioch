@@ -1,5 +1,7 @@
 #include <set>
 #include "PluginProcessor.h"
+#include "KitBus.h"
+#include "Drums.h"
 #include "TempoBus.h"
 #include "SpireTools.h"
 #include "StyleLog.h"
@@ -98,6 +100,39 @@ void CorrespondenceProcessor::publishKey()
         prog.quartersPerChord = s.quartersPerChord;
         for (int i = 0; i < prog.count; ++i) prog.chordRoots[(size_t) i] = ((chords::chordRootPitchClass (s, i) - s.root) % 12 + 12) % 12;
         suite::ChordBus::publish (prog);
+        // The song's kit rhythm (Kybalion's gate can take it)
+        if (const auto sp = currentSongPatterns(); sp.library)
+        {
+            const auto rhythm = chords::kitRhythm (sp);
+            if (rhythm.valid) suite::KitBus::publish (rhythm);
+        }
+        // Where the hook rests (Transmutation puts its phrase-end moves there): worked out again
+        // when the map or the song's settings change, shared every few seconds
+        if (suite::SectionMap map; suite::SectionBus::read (map))
+        {
+            juce::MemoryBlock stateNow;
+            if (auto xml = apvts.copyState().createXml()) stateNow.append (xml->toString().toRawUTF8(), xml->toString().getNumBytesAsUTF8());
+            auto h = (int64_t) stateNow.toBase64Encoding().hashCode64();
+            for (int i = 0; i < map.count; ++i) h = h * 31 + map.sections[(size_t) i].startBar * 7 + (int) map.sections[(size_t) i].type;
+            if (h != hookRestsHash || juce::Time::getMillisecondCounter() - hookRestsMs > 5000u)
+            {
+                if (h != hookRestsHash)
+                {
+                    hookRestsHash = h;
+                    hookRests.clear();
+                    auto lead = chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead);
+                    std::sort (lead.begin(), lead.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+                    double soundingTo = 0.0;
+                    for (const auto& n : lead)
+                    {
+                        if (n.start - soundingTo >= 1.0 - 1.0e-6) hookRests.push_back ({ (float) soundingTo, (float) n.start });
+                        soundingTo = std::max (soundingTo, n.start + n.length);
+                    }
+                }
+                hookRestsMs = juce::Time::getMillisecondCounter();
+                suite::KitBus::publishRests (hookRests);
+            }
+        }
         suite::KeyBus::publish ((int) apvts.getRawParameterValue (Params::rootNote)->load(),
                                 (int) apvts.getRawParameterValue (Params::scale)->load());
     }
@@ -402,6 +437,11 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
             notes = spire::subLayer (chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Bass), map);
             if (notes.empty()) return none();
         }
+        else if (kind == "Song Drums")
+        {
+            if (apvts.getRawParameterValue (Params::songDrums)->load() < 0.5f) return none();
+            notes = chords::drums::drumClip (map, currentSongPatterns(), chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Bass));
+        }
         else if (kind == "Song Fills")
         {
             if (apvts.getRawParameterValue (Params::songFills)->load() < 0.5f) return none();
@@ -459,14 +499,14 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
     // Autopilot (arrangement): song parts don't ring on into a chord they clash with
-    if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
+    if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && kind != "Song Drums" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
         if (suite::SectionMap map; suite::SectionBus::read (map))
             if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
     // Autopilot (stability): bass notes under D1 move up an octave
     if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
         if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
     // Writing (feel): each part's own micro-timing and the style's groove
-    if (kind.startsWith ("Song ") && kind != "Song Fills")
+    if (kind.startsWith ("Song ") && kind != "Song Fills" && kind != "Song Drums")
         if (const auto sp = currentSongPatterns(); sp.write.feel && sp.library)
         {
             const auto part = kind.endsWith ("Bass") ? patterns::Part::Bass : kind.endsWith ("Arp") ? patterns::Part::Arp : kind.endsWith ("Chords") ? patterns::Part::Chords
@@ -645,7 +685,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     folder = folder.getNonexistentSibling (false);
     folder.createDirectory();
 
-    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Piano",
+    for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Drums", "Song Piano",
                        "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer",
                        "Song Strings", "Song Brass", "Song Choir", "Song Timpani", "Song Acid", "Song Chops", "Song Candy" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
@@ -706,6 +746,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
             }
         }
         folder.getChildFile ("Song sheet.txt").replaceWithText (sheet.joinIntoString ("\n") + "\n");
+        if (const auto spNow = currentSongPatterns(); spNow.library)
+            folder.getChildFile ("Sound guide.txt").replaceWithText (chords::drums::soundGuide (spNow) + "\n");   // what each part should sound like
 
         // The style log: how you make trance, one exported song at a time.
         juce::StringArray degrees, structure;
@@ -732,10 +774,13 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
             if (auto notes = chords::songClip (s, map, patterns, part, &thinned, &turned); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
                                                                          || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });
+        if (apvts.getRawParameterValue (Params::songDrums)->load() > 0.5f)
+            for (const auto& [n, notes] : parts)
+                if (n == "Bass") { parts.push_back ({ "Drums", chords::drums::drumClip (map, patterns, notes) }); break; }   // General MIDI: FPC or a drum kit
         if (apvts.getRawParameterValue (Params::songFills)->load() > 0.5f)
             parts.push_back ({ "Fills", chords::fillsClip (map) });   // General MIDI drums: use FPC or a drum kit
         for (auto& [name, notes] : parts)
-            if (name != "Chords" && name != "Fills" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
+            if (name != "Chords" && name != "Fills" && name != "Drums" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
                 if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
         for (auto& [name, notes] : parts)
             if (name == "Bass" && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
@@ -758,7 +803,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         const auto spFeel = currentSongPatterns();
         for (auto& [name, notes] : parts)
         {
-            if (spFeel.write.feel && spFeel.library)
+            if (spFeel.write.feel && spFeel.library && name != "Drums" && name != "Fills")
             {
                 auto part = (patterns::Part) juce::jmax (0, patterns::partFiles().indexOf (name.toLowerCase()));
                 if (name == "Harmony") part = patterns::Part::Lead;

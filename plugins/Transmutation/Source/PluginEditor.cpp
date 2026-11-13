@@ -200,7 +200,7 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
 {
     setLookAndFeel (&lnf);
     for (auto* c : std::initializer_list<juce::Component*> { &spice, &builds, &drops, &amount, &output, &genre, &role, &director, &status, &nowPlaying,
-                                                             &timeline, &moveInfo, &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton,
+                                                             &timeline, &moveInfo, &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton, &exportButton,
                                                              &category, &effectList, &autopilot })
         addAndMakeVisible (c);
     for (auto* l : { &status, &nowPlaying, &moveInfo })
@@ -244,6 +244,20 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
         if (timeline.selected >= 0 && timeline.selected < (int) plan.moves.size()) processor.audition (plan.moves[(size_t) timeline.selected].effect);
     };
     rerollAllButton.onClick = [this] { processor.rerollAll(); timeline.refresh(); };
+    exportButton.setTooltip ("This track's planned moves as MIDI: a note per move (the note number is the move's number) and a marker naming it, "
+                             "to see them, edit them or turn them into automation in FL");
+    exportButton.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> ("Save the plan", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                                             .getChildFile ("Transmutation plan.mid"), "*.mid");
+        chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting, [this] (const juce::FileChooser& fc)
+        {
+            const auto f = fc.getResult();
+            if (f == juce::File()) return;
+            if (processor.exportPlan (f)) f.revealToUser();
+            else juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Export plan", "Nothing planned yet.");
+        });
+    };
 
     setResizable (true, true);
     setResizeLimits (980, 600, 1800, 1200);
@@ -356,8 +370,8 @@ void TransmutationEditor::resized()
     auto p = planArea.reduced (10, 8).withTrimmedTop (16);
     nowPlaying.setBounds (p.removeFromTop (22));
     auto buttons = p.removeFromBottom (30);
-    const auto bw = buttons.getWidth() / 5;
-    for (auto* b : { &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton })
+    const auto bw = buttons.getWidth() / 6;
+    for (auto* b : { &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton, &exportButton })
         b->setBounds (buttons.removeFromLeft (bw).reduced (2, 0));
     p.removeFromBottom (6);
     moveInfo.setBounds (p.removeFromBottom (48));

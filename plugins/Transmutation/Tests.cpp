@@ -562,6 +562,46 @@ int main (int argc, char** argv)
         }
     }
 
+
+    section ("Following the real phrases, and printing the plan");
+    {
+        // 4: a phrase-end move sits in the hook's rest nearest the phrase's end, and steps off the vocal
+        auto lead = baseInput (4); lead.spice = 2.0f;
+        const auto plain = trm::makePlan (lead);
+        lead.hookRests = { { 30 * 4.0 + 1.0, 30 * 4.0 + 3.0 } };   // a rest in bar 31, two beats long
+        const auto placed = trm::makePlan (lead);
+        bool inRest = false;
+        for (const auto& m : placed.moves)
+            if (m.slot == trm::sPhraseEnd && m.startQ >= 30 * 4.0f && m.startQ < 33 * 4.0f)
+                inRest = inRest || (m.startQ >= 30 * 4.0f + 1.0f - 1.0e-3f && m.endQ <= 30 * 4.0f + 3.0f + 1.0e-3f);
+        bool hadOne = false;
+        for (const auto& m : plain.moves) hadOne = hadOne || (m.slot == trm::sPhraseEnd && m.startQ >= 31 * 4.0f && m.startQ < 33 * 4.0f);
+        check (! hadOne || inRest, "a phrase-end move moves into the hook's rest near the phrase's end");
+        auto sung = baseInput (4); sung.spice = 2.0f;
+        for (double q = 0.0; q < 90 * 4.0; q += 1.0) sung.vocalNotes.push_back ({ q, q + 0.8 });   // the vocal on every beat
+        const auto quiet = trm::makePlan (sung);
+        float under = 0.0f, free = 0.0f; int nu = 0, nf = 0;
+        for (const auto& m : quiet.moves) if (m.slot == trm::sPhraseEnd) { under += m.amount; ++nu; }
+        for (const auto& m : trm::makePlan ([&] { auto x = sung; x.vocalNotes.clear(); return x; }()).moves) if (m.slot == trm::sPhraseEnd) { free += m.amount; ++nf; }
+        check (nu == 0 || nf == 0 || under / (float) nu < free / (float) nf, "where it can't step off the vocal, a phrase-end move stays smaller");
+        // 5: printing
+        suite::SectionBus::publish (testMap());
+        auto p = make();
+        set (*p, TParams::role, 5.0f);
+        p->replan (true);
+        const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("TransmutationPlan.mid");
+        check (p->exportPlan (file), "the plan exports as MIDI");
+        juce::MidiFile mf;
+        int notes = 0, markers = 0;
+        if (auto in = file.createInputStream(); in != nullptr && mf.readFrom (*in))
+            for (int t = 0; t < mf.getNumTracks(); ++t)
+                for (const auto* e : *mf.getTrack (t)) { notes += e->message.isNoteOn(); markers += e->message.isTextMetaEvent() && e->message.getMetaEventType() == 6; }
+        int planned = 0;
+        for (const auto& m : p->getPlan().moves) planned += (m.slot & trm::sSong) == 0;
+        check (notes == planned && markers == planned && planned > 0, "a note and a named marker per move (" + juce::String (notes) + ")");
+        file.deleteFile();
+    }
+
     if (outDir != juce::File())
     {
         suite::SectionBus::publish (testMap());

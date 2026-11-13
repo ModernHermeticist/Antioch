@@ -12,6 +12,8 @@
 #include "SectionBus.h"
 #include "TestUtils.h"
 #include "Audition.h"
+#include "Drums.h"
+#include "Identity.h"
 #include "ChordBus.h"
 #include "VocalBus.h"
 #include "WritingBus.h"
@@ -488,7 +490,7 @@ int main (int argc, char** argv)
         parent.deleteRecursively();
         const auto folder = p->exportEverything (parent);
         const auto files = folder.findChildFiles (juce::File::findFiles, false, "*.mid");
-        check (folder.isDirectory() && files.size() == 18, "a song folder with 16 clips (incl. counter-melody, drop-2 harmony, drum fills, breakdown piano and the three Spire layers), the Spire macros and one all-parts file (" + juce::String (files.size()) + " files in "
+        check (folder.isDirectory() && files.size() == 19, "a song folder with 17 clips (incl. counter-melody, drop-2 harmony, drums, drum fills, breakdown piano and the three Spire layers), the Spire macros and one all-parts file (" + juce::String (files.size()) + " files in "
                    + folder.getFileName() + ")");
 
         juce::File all;
@@ -496,7 +498,7 @@ int main (int argc, char** argv)
         juce::MidiFile midi;
         juce::FileInputStream in (all);
         const auto read = all.existsAsFile() && midi.readFrom (in);
-        check (read && midi.getNumTracks() == 8, "all parts: a section track plus Chords, Bass, Arp, Lead, Harmony, Counter and Fills (" + juce::String (midi.getNumTracks()) + " tracks)");
+        check (read && midi.getNumTracks() == 9, "all parts: a section track plus Chords, Bass, Arp, Lead, Harmony, Counter, Drums and Fills (" + juce::String (midi.getNumTracks()) + " tracks)");
         if (read && midi.getNumTracks() == 8)
         {
             juce::StringArray markers;
@@ -2048,6 +2050,41 @@ int main (int argc, char** argv)
             chords::SongPatterns sp; sp.library = true;
             check (chords::audition::renderDrop (wav, s, sp) && wav.getSize() > 100000, "a kit's drop renders to a WAV for audition");
             wav.deleteFile();
+        }
+        // Helpers 1-3: drums, the sound guide, the hook bank
+        {
+            suite::SectionMap map;
+            map.count = 5; map.totalBars = 112;
+            map.sections[0] = { 1, suite::SectionType::Intro }; map.sections[1] = { 33, suite::SectionType::Breakdown };
+            map.sections[2] = { 49, suite::SectionType::Build }; map.sections[3] = { 65, suite::SectionType::Drop }; map.sections[4] = { 97, suite::SectionType::Outro };
+            chords::SongPatterns sp; sp.library = true; sp.write = W::Options::all();
+            const auto bass = chords::songClip (s, map, sp, chords::SongPart::Bass);
+            const auto d = chords::drums::drumClip (map, sp, bass);
+            auto count = [&] (int note, double a, double b) { int k = 0; for (const auto& n : d) if (n.pitch == note && n.start >= a - 1.0e-6 && n.start < b - 1.0e-6) ++k; return k; };
+            check (count (36, 64 * 4.0, 72 * 4.0) == 32 && count (39, 64 * 4.0, 72 * 4.0) == 16, "drums: four on the floor and claps on 2 and 4 in the drop");
+            check (count (36, 32 * 4.0, 48 * 4.0) == 0 && count (38, 48 * 4.0, 64 * 4.0) > 20 && count (38, 63 * 4.0, 64 * 4.0 - 1.0) >= 16,
+                   "no drums in the breakdown; the build's snare roll ends in 32nds");
+            check (count (38, 64 * 4.0 - 1.0, 64 * 4.0) == 0 && count (39, 0.0, 64.0) == 0, "the beat before the drop is clear; the intro's first 16 bars are kick only");
+            bool gaps = true;
+            for (const auto& n : d) if (n.pitch == 75 || n.pitch == 37) for (const auto& b : bass) gaps = gaps && std::abs (b.start - n.start) > 0.02;
+            check (gaps, "the percussion sits in the bass's gaps");
+            const auto guide = chords::drums::soundGuide (sp);
+            check (guide.contains ("Bass") && guide.contains ("Patch:") && guide.contains ("Ride:") && guide.contains ("Layer:"), "a sound guide: a patch, macros to ride and a layer for each part");
+            const auto bank = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceTestsHooks");
+            bank.deleteRecursively();
+            identity::hookFolderOverride() = bank;
+            const auto& hook = chords::songFamily (chords::SongPart::Lead, 0, sp, -1);
+            check (identity::saveHook ("Library - " + juce::String (hook.name), chords::lib::render (hook, 2, false, s, 32.0)) && identity::loadHooks().size() == 1,
+                   "the song's hook goes in the hook bank (Melodia recalls it in any song)");
+            identity::hookFolderOverride() = juce::File();
+            bank.deleteRecursively();
+        }
+        // The kit's rhythm for Kybalion's gate
+        {
+            chords::SongPatterns sp; sp.library = true;
+            const auto r = chords::kitRhythm (sp);
+            int hits = 0; for (auto v : r.chords) hits += v > 0.0f;
+            check (r.valid && hits >= 2 && juce::String (r.name).isNotEmpty(), "the song's chord rhythm as 16 gate steps (" + juce::String (r.name) + ", " + juce::String (hits) + " steps)");
         }
         prefs.deleteFile();
     }

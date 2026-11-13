@@ -79,6 +79,8 @@ public:
     bool isLocked (uint32_t key) const { const juce::ScopedLock sl (planLock); return locks.count (key) > 0; }
     void rerollMoment (uint32_t key);
     void rerollAll();
+    /** Writes this track's plan as MIDI (a note and a marker per move). */
+    bool exportPlan (const juce::File& file) const;
     /** Plays a move now, for a bar, over whatever is playing. */
     void audition (int id) { auditionRequest.store (id); }
 

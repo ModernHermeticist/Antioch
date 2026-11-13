@@ -41,6 +41,9 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Vocal MIDI", result);
     };
     addAndMakeVisible (saveMidi);
+    checkVocal.setTooltip ("Lists the vocal's notes that sit more than 25 cents off the key or 30 ms off the grid (a check: nothing is moved)");
+    checkVocal.onClick = [this] { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Vocal tuning and timing", processor.checkVocal()); };
+    addAndMakeVisible (checkVocal);
     chopsStatus.setFont (juce::FontOptions (12.0f));
     chopsStatus.setJustificationType (juce::Justification::centredLeft);
     chopsStatus.setColour (juce::Label::textColourId, Colours::dimText);
@@ -149,6 +152,7 @@ void SolveEtCoagulaEditor::resized()
     {
         auto bottom = ch.removeFromBottom (24);
         saveMidi.setBounds (bottom.removeFromRight (150));
+        checkVocal.setBounds (bottom.removeFromRight (170).reduced (4, 0));
         chopsStatus.setBounds (bottom);
     }
     chopsOn.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (130, 30));

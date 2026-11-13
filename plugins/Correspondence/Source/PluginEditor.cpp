@@ -1,5 +1,7 @@
 #include "PluginEditor.h"
 #include "Audition.h"
+#include "Drums.h"
+#include "Identity.h"
 
 using namespace suite::ui;
 
@@ -630,6 +632,8 @@ namespace
             m.addItem (32, "Library report (coverage, near-duplicates, weakest)...");
             m.addItem (33, "Render this song's drop to a WAV (audition)...");
             m.addItem (34, "Check the library (validator)");
+            m.addItem (35, "Sound guide: what each part should sound like...");
+            m.addItem (36, "Save this song's hook to the hook bank");
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writingButton), [this, kitName = kit != nullptr ? kit->name : std::string(), hookKey = patterns::familyKey (hook)] (int id)
             {
                 if (id <= 0 || stateRef == nullptr) return;
@@ -640,7 +644,24 @@ namespace
                     return;
                 }
                 if (id == 20 || id == 21) { const auto k = "kit:" + kitName; patterns::setFavourite (k, patterns::favourite (k) == (id == 20 ? 1 : -1) ? 0 : (id == 20 ? 1 : -1)); showFamilies(); return; }
-                if (id == 22 || id == 23) { patterns::setFavourite (hookKey, patterns::favourite (hookKey) == (id == 22 ? 1 : -1) ? 0 : (id == 22 ? 1 : -1)); showFamilies(); return; }
+                if (id == 22 || id == 23)
+                {
+                    const auto nowFav = patterns::favourite (hookKey) == (id == 22 ? 1 : -1) ? 0 : (id == 22 ? 1 : -1);
+                    patterns::setFavourite (hookKey, nowFav);
+                    if (nowFav > 0) saveHookToBank();   // 3: a favourite hook goes in the hook bank too
+                    showFamilies();
+                    return;
+                }
+                if (id == 35)
+                {
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Sound guide", chords::drums::soundGuide (Params::readSongPatterns (st)));
+                    return;
+                }
+                if (id == 36)
+                {
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Hook bank", saveHookToBank());
+                    return;
+                }
                 if (id == 34)
                 {
                     const auto problems = patterns::validate();
@@ -719,6 +740,20 @@ namespace
                         chords::writing::learnEdit (chords::lib::libraryPart (part), original, edited));
                 });
             });
+        }
+
+        /** 3: the song's library hook (8 bars over this progression, from bar 1) into the hook bank,
+            where Melodia can recall it as a motif in any song, in any key. */
+        juce::String saveHookToBank()
+        {
+            if (stateRef == nullptr) return {};
+            const auto sp = Params::readSongPatterns (*stateRef);
+            const auto& hook = chords::songFamily (chords::SongPart::Lead, 0, sp, -1);
+            if (hook.name.empty()) return "No library hook in this song.";
+            const auto notes = chords::lib::render (hook, 2, false, Params::readSettings (*stateRef), 32.0, sp.melody.octave);
+            const auto name = "Library - " + juce::String (hook.name);
+            return identity::saveHook (name, notes) ? "Saved \"" + name + "\" to the hook bank (" + identity::hookFolder().getFullPathName() + ")."
+                                                    : juce::String ("Couldn't save the hook.");
         }
 
         /** The families this song's parts play (drop rhythms), under the library row. */

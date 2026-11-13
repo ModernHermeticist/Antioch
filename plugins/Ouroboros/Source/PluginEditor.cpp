@@ -457,8 +457,25 @@ TransmutePanel::TransmutePanel (std::function<suite::SectionMap()> map) : getMap
         suite::TransmuteBus::setSongSeed (suite::TransmuteBus::songSeed() * 1664525u + 1013904223u);
         suite::MoveLog::add ("Ouroboros", {}, "Transmutation: the song re-rolled (every track picks new moves)");
     };
+    exportAll.setTooltip ("Every track's planned moves in one MIDI file: a MIDI track per FL track, a note and a marker per move");
+    exportAll.onClick = [this]
+    {
+        chooser = std::make_unique<juce::FileChooser> ("Save every track's moves", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                                                     .getChildFile ("Transmutation moves.mid"), "*.mid");
+        chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting, [this] (const juce::FileChooser& fc)
+        {
+            const auto f = fc.getResult();
+            const auto plans = suite::TransmuteBus::read();
+            if (f == juce::File() || plans.empty()) return;
+            f.deleteFile();
+            juce::FileOutputStream out (f);
+            if (out.openedOk() && suite::TransmuteBus::planMidi (plans, getBpm ? getBpm() : 138.0, [] (int id) { return juce::String (trm::effect (id).name); }).writeTo (out))
+                f.revealToUser();
+        });
+    };
     addAndMakeVisible (spice);
     addAndMakeVisible (reroll);
+    addAndMakeVisible (exportAll);
     setSize (980, 560);
     startTimerHz (4);
 }
@@ -468,6 +485,7 @@ void TransmutePanel::resized()
     auto r = getLocalBounds().reduced (14).removeFromBottom (30);
     reroll.setBounds (r.removeFromRight (170));
     r.removeFromRight (12);
+    exportAll.setBounds (r.removeFromLeft (230));
     spice.setBounds (r.removeFromRight (320));
 }
 
@@ -1201,7 +1219,9 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         if (id == 977)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
-            juce::CallOutBox::launchAsynchronously (std::make_unique<TransmutePanel> ([this] { return processor.getMap(); }), templateBox.getScreenBounds(), nullptr);
+            auto panel = std::make_unique<TransmutePanel> ([this] { return processor.getMap(); });
+            panel->getBpm = [this] { return (double) processor.bpm.load(); };
+            juce::CallOutBox::launchAsynchronously (std::move (panel), templateBox.getScreenBounds(), nullptr);
             return;
         }
         if (id == 984)

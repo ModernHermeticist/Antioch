@@ -382,7 +382,19 @@ bus; Transmutation replaces it.
 - **Re-roll the whole track** for new dice on just this track.
 
 Ouroboros' menu has **Transmutation: every track's creative moves** with every track's plan
-on one timeline.
+on one timeline. **Export every track's moves** writes them as one MIDI file. Each track's
+**Export plan (MIDI)** does the same for that track. Each file has:
+
+- a MIDI track per FL track
+- a note per move, whose note number is the move's number
+- a marker naming the move
+
+You can then see the moves, edit them, or turn them into automation in FL. Plans depend only on
+the map and your choices, so a render plays what you heard.
+
+**It follows the real phrases.** Correspondence shares where its hook rests. A phrase-end move
+goes into the hook's rest nearest the phrase's end (within a bar), and steps off the vocal's
+notes (heard by Solve et Coagula) by up to two beats. Where it can't step off, it stays smaller.
 
 **Level-matched:** like the rest of the suite's effects, every move changes the sound, never
 the level. The output is held at the input's loudness (a 300 ms RMS; layers added to a silent
@@ -417,6 +429,9 @@ tracks instead (at least the pads, the lead and the FX). Builds then happen per 
 - **Your own patterns:** draw a pattern and choose *Save this pattern…* in the pattern
   list. It's saved as a file (in *Antioch Suite/Gate patterns*) and listed as *"Mine: …"*
   in every project.
+- **From the song's chords / arp** (in the pattern list): the gate takes the rhythm of the
+  song's own chord part or arp, which Correspondence's pattern library shares. Accents open
+  fully, hits at 80%, ghosts at 40%, and held notes keep the step open.
 - **Suite groove:** when Correspondence's *Groove* is a shuffle, the gate swings with it
   (unless its own Swing is set higher), so gated pads sit with the exported MIDI.
 - **Chord changes** (with Correspondence running): *Accent* opens the gate fully on the
@@ -1439,6 +1454,97 @@ phrase inside a section, the bass bounces octaves on beats 3 and 4 and the arp l
 octave, so long sections keep moving. The section's own last bar is left to the
 transition.
 
+### Writing: shaping the parts beyond the library
+
+The Song page's **Writing...** menu has eight groups (all on by default):
+
+- **Phrase shaping:**
+  - the hook as an 8-bar phrase: the question, a varied repeat (a new ending, or moved by an
+    8th), a climb up a step that opens with the hook's widest interval, and the answer
+  - the half-phrase ends open (on the 5th or 2nd) and the phrase ends home
+  - busy hooks thin out at the start of the phrase
+  - lines kept singable
+  - breakdowns stay under the drop's highest note, and the final drop goes past it
+- **Development:**
+  - the breakdown foreshadows the hook (its first three notes), then sings it slowed
+  - the build fragments it
+  - the final drop puts the hook in the bass's fills
+  - the hook's first three notes open each intro, breakdown and build (the song's signature)
+- **Harmony:**
+  - suspensions and leading tones
+  - 7ths and 9ths only where they fit (no b9)
+  - a passing dominant in the fills
+  - a pedal in intros and the first half of builds
+  - the bass on the third for a descending walk
+  - a borrowed IV in minor breakdowns
+  - the 7th bar of drop phrases runs the chords twice as fast
+  - the build's last bar lands on the new key's V before a key change
+  - open voicings in breakdowns and close ones in drops, with the hook's note on top
+- **Feel:**
+  - micro-timing per part (the bass a touch behind, strings laid back), plus each style's groove
+  - velocity contours in each style's accent pattern, swelling through the phrase, a
+    crescendo in builds
+  - shorter notes in quiet sections
+  - ghost notes by section
+  - triplet turns in every other fill
+- **Parts together:**
+  - a register for every part
+  - counterpoint for the counter-line (a 3rd or 6th under the hook on the beat, contrary
+    motion, no parallels)
+  - answers in the hook's rests
+  - strings in thirds under the hook in the final drop, and brass on the bass's hits
+  - at most two parts pushing ahead of the chord
+- **Arrangement:**
+  - energy curves inside sections
+  - when each layer enters (strings at bar 9, choir from the second drop; kits can say)
+  - the section's last bar by what comes next
+  - a breath before the drop
+  - a new arp in later drops (the same kit), and the arp walking the hook's notes there
+  - the breakdown's voice singing the hook
+  - fewer layers in the first drop, everything in the final one
+  - DJ-friendly intros and outros (16 bars of bass alone)
+  - the hook answering the vocal in its gaps
+- **Ornaments:** grace notes, mordents and trills. The final drop's octave double only where
+  there's room above.
+- **Your edits and favourites:**
+  - Ban or favourite the current kit or hook. Banned ones never come up; favourites come up
+    three times as often, and a favourite hook also goes in the hook bank.
+  - *Learn from my edit*: load a part you edited (the file name says which: "bass", "arp"...).
+    Later songs lean toward how many notes you kept, how loud, which octave and how long.
+
+**Tools** in the same menu:
+
+- **Sound guide:** a patch, macros to ride and a layer for each part. It is also written as
+  *Sound guide.txt* by Export all.
+- **Save this song's hook to the hook bank**.
+- **Suggest new kits** for the mood and style: matched on character and feel, ranked by
+  quality and interlock, and added to *My kits.txt* in the suite folder.
+- **Library report:** gaps per mood and style, near-duplicates, and the weakest families.
+- **Render this song's drop to a WAV** to audition it.
+- **Check the library:** the validator, which the tests also run.
+
+Kits are ranked by their families' quality, how the bass, arp and chords interlock, and a push
+budget. Kits can now say when layers enter, which layers are extra, and who sings the breakdown:
+
+```
+Sunrise anthem | ... | enter: strings@9, choir@D2 | extra: candy, chops | breakdown: piano
+```
+
+The notation gains `^` (staccato) and `_` (legato) before a step. New polymetric arps play an
+accent cycle of 3 or 5 against the bar, realigning every 3 or 5 bars.
+
+**Drums:** the *Song Drums* clip (General MIDI, for FPC or any kit) follows the map in each
+style's language:
+
+- kick, clap and hats: rolling 16ths in psy, ghosted 16ths and a ride in tech, an open hat on
+  the offbeat in uplifting
+- percussion in the bass's gaps
+- no drums in breakdowns
+- a snare roll through builds, from quarters to 32nds
+- the beat before the drop kept clear
+
+The Fills clip still adds the fills and crashes.
+
 ### Melodia: lead melodies
 
 Correspondence also writes a lead melody over the progression, shown in orange in the
@@ -1593,6 +1699,13 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
   switch each half off.
 
 ### Vocal to MIDI, harmonies and word chops (Solve et Coagula)
+
+**Check tuning & timing** lists the vocal's notes that sit more than 25 cents off the key or
+30 ms off the 16th grid (the detector's own latency is taken off), with bar, beat and note. It's
+a check only: nothing is moved. **Save vocal MIDI** now also writes:
+
+- *Vocal double (guide)*: each note 10-25 ms early or late, alternating, like a second take
+- *Vocal harmony below*: a sixth under the melody
 
 - **Vocal melody to MIDI:** while the song plays, Solve et Coagula tracks the pitch of the
   vocal on its sidechain and writes down what it sings: a steady pitch for 60 ms or more is a

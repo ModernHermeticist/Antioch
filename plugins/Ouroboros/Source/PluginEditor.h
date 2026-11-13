@@ -111,7 +111,9 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     juce::Slider spice;
-    juce::TextButton reroll { "Re-roll the song" };
+    juce::TextButton reroll { "Re-roll the song" }, exportAll { "Export every track's moves..." };
+    std::unique_ptr<juce::FileChooser> chooser;
+    std::function<double()> getBpm;
 
 private:
     void timerCallback() override { repaint(); }

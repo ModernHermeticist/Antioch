@@ -28,7 +28,7 @@ private:
     suite::ui::Choice chopsWhere, chopsPattern;
     suite::ui::Knob chopsLevel;
     juce::Label chopsStatus;
-    juce::TextButton saveMidi { "Save vocal MIDI" };
+    juce::TextButton saveMidi { "Save vocal MIDI" }, checkVocal { "Check tuning & timing" };
     juce::Rectangle<int> bandArea, controlArea, chopsArea;
     std::array<float, Unmasker::numBands> cutShown {}, keyShown {};
 

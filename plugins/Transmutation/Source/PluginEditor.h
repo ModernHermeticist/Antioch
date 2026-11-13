@@ -72,7 +72,9 @@ private:
     juce::Label status, nowPlaying, moveInfo;
     PlanTimeline timeline;
     juce::TextButton lockButton { "Lock this moment" }, rerollButton { "Re-roll this moment" }, neverButton { "Never use this move" },
-                     playButton { "Play it now" }, rerollAllButton { "Re-roll the whole track" };
+                     playButton { "Play it now" }, rerollAllButton { "Re-roll the whole track" },
+                     exportButton { "Export plan (MIDI)" };
+    std::unique_ptr<juce::FileChooser> chooser;
     juce::ComboBox category;
     EffectList effectList;
     suite::ui::AutopilotStrip autopilot;

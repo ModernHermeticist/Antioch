@@ -210,6 +210,9 @@ private:
     void timerCallback() override { publishKey(); exportDraftIfDue(); }
 
     bool wasBroadcasting = false;
+    int64_t hookRestsHash = 0;
+    juce::uint32 hookRestsMs = 0;
+    std::vector<std::pair<float, float>> hookRests;   // where the song's hook rests (shared with Transmutation)
     mutable juce::CriticalSection motifLock;
     std::vector<chords::Note> motif;
     chords::MelodyDna dna;

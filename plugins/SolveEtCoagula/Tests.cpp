@@ -399,6 +399,18 @@ int main (int argc, char** argv)
         const auto folder = juce::File::createTempFile ("vocalmidi");
         const auto result = p->saveVocalMidi (folder);
         check (folder.getChildFile ("Vocal melody.mid").existsAsFile() && folder.getChildFile ("Vocal harmony.mid").existsAsFile(), "both written as MIDI files (" + result + ")");
+        check (folder.getChildFile ("Vocal double (guide).mid").existsAsFile() && folder.getChildFile ("Vocal harmony below.mid").existsAsFile(),
+               "and a guide for a double and a harmony a sixth below");
+        const auto dbl = VocalMelody::doubles (notes, 120.0);
+        bool offset = dbl.size() == notes.size();
+        for (size_t i = 0; offset && i < dbl.size(); ++i) { const auto ms = std::abs (dbl[i].start - notes[i].start) * 500.0; offset = (ms >= 9.0 && ms <= 26.0) || notes[i].start < 0.03; }
+        check (offset && VocalMelody::harmonyBelow (notes, 9, 0).front().pitch == 48, "the double sits 10-25 ms off each note; the low harmony a sixth below (C3 under A3)");
+        // 7: the check: a sharp, late note is listed; the in-tune notes heard here are not
+        check (VocalMelody::check (notes, 120.0).empty(), "the check finds nothing wrong with an in-tune, on-time vocal");
+        std::vector<VocalMelody::Note> off { { 60, 4.0, 1.0, 100, 38.0f, 4.2 } };
+        const auto issues = VocalMelody::check (off, 120.0);
+        check (issues.size() == 1 && issues[0].text.contains ("38 cents sharp") && issues[0].text.contains ("57 ms late") && issues[0].text.contains ("bar 2"),
+               "the check lists a note 38 cents sharp and 57 ms late (" + (issues.empty() ? juce::String() : issues[0].text) + ")");
         folder.deleteRecursively();
     }
 

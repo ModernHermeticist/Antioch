@@ -1191,6 +1191,7 @@ namespace chords
     }
 
 }
+#include "KitBus.h"
 #include "Writing.h"
 #include "PatternRender.h"
 namespace chords
@@ -1410,6 +1411,44 @@ namespace chords
         // The song's character comes from its hook; the other parts lean the same way
         const auto character = part == SongPart::Lead ? 0u : songFamily (SongPart::Lead, 0, sp, -1).character;
         return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1, character);
+    }
+
+    /** The song's drop rhythm for Kybalion's gate: its chord part's and arp's 16 steps (accents 1,
+        hits 0.8, ghosts 0.4, a hold keeps the step open at 0.6). */
+    inline suite::KitBus::Rhythm kitRhythm (const SongPatterns& sp)
+    {
+        using T = suite::SectionType;
+        const auto drop = (size_t) T::Drop;
+        suite::KitBus::Rhythm r;
+        auto steps = [] (const patterns::Family& f)
+        {
+            std::array<float, 16> st {};
+            if (f.name.empty()) return st;
+            const auto v = patterns::voices (f.level[2]).front();
+            const auto& bar = v.bars.front();
+            const auto& marks = v.marks.front();
+            for (size_t k = 0; k < bar.size(); ++k)
+            {
+                const auto i = (k * 16) / bar.size();
+                const auto c = bar[k];
+                float val = c == '.' || c == '~' ? 0.0f : c == '-' ? 0.6f : c == ',' ? 0.4f : marks[k] == '!' ? 1.0f : marks[k] == '\'' ? 0.5f : 0.8f;
+                st[i] = std::max (st[i], val);
+            }
+            return st;
+        };
+        const auto ck = lib::kindFor (SongPart::Chords, sp.chords[drop] > 0 ? sp.chords[drop] : 4, T::Drop);
+        const auto ak = lib::kindFor (SongPart::Arp, sp.arp[drop] > 0 ? sp.arp[drop] : 1, T::Drop);
+        const auto& cf = songFamily (SongPart::Chords, ck >= 0 ? ck : 1, sp, -1);
+        const auto& af = songFamily (SongPart::Arp, ak >= 0 ? ak : 1, sp, -1);
+        r.chords = steps (cf);
+        r.arp = steps (af);
+        r.valid = std::any_of (r.chords.begin(), r.chords.end(), [] (float v) { return v > 0.0f; });
+        juce::String name = juce::String (cf.name);
+        if (sp.libKits)
+            if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, sp.libMood), (patterns::Style) juce::jlimit (0, 6, sp.libStyle), sp.libSeed))
+                name = juce::String (kit->name);
+        name.copyToUTF8 (r.name, sizeof (r.name) - 1);
+        return r;
     }
 
     /** 11: the push budget: at most two parts anticipate the next chord; past that, a part's

@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "KitBus.h"
 #include "KeyBus.h"
 
 using namespace suite::ui;
@@ -201,6 +202,14 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
         const auto id = patternBox.getSelectedId();
         const auto builtIn = (int) Params::Gate::patterns().size();
         if (id <= 0) return;
+        if (id == 990 || id == 991)
+        {
+            patternBox.setSelectedId (0, juce::dontSendNotification);
+            if (! processor.applyKitRhythm (id == 991))
+                juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Gate pattern",
+                                                        "No song rhythm yet: switch on Correspondence's pattern library (Song page) and its key broadcast.");
+            return;
+        }
         if (id == 999)
         {
             patternBox.setSelectedId (0, juce::dontSendNotification);
@@ -393,6 +402,11 @@ void KybalionEditor::fillPatterns()
             patternBox.addItem ("Mine: " + userPatterns[i].first, (int) (Params::Gate::patterns().size() + i + 1));
     }
     patternBox.addSeparator();
+    {
+        const auto kit = suite::KitBus::read();
+        patternBox.addItem (kit.valid ? "From the song's chords (" + juce::String (kit.name) + ")" : juce::String ("From the song's chords (Correspondence's pattern library)"), 990);
+        patternBox.addItem (kit.valid ? "From the song's arp" : juce::String ("From the song's arp"), 991);
+    }
     patternBox.addItem ("Save this pattern...", 999);
 }
 

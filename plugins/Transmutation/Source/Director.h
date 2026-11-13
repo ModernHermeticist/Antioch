@@ -39,6 +39,8 @@ namespace trm
         std::array<float, numEffects + 1> signature {};  // how often you've kept each move
         std::vector<bool> vocalBars;                     // bars the vocal sings in (index 0 = bar 1)
         std::vector<OtherTrack> others;                  // tracks that decide before this one
+        std::vector<std::pair<double, double>> hookRests;  // where the song's hook rests (Correspondence), quarters
+        std::vector<std::pair<double, double>> vocalNotes; // what the vocal sang (Solve et Coagula), quarters
     };
 
     struct Plan
@@ -197,6 +199,36 @@ namespace trm
             }
         }
 
+        /** A phrase-end move placed in the hook's rest nearest the phrase's end (within a bar), and
+            moved off the vocal's notes (within two beats) where it can be; the amount it keeps. */
+        inline float placeAround (std::pair<double, double>& w, const SlotInst& s, const DirectorInput& in, double bar)
+        {
+            const auto len = w.second - w.first;
+            if (s.kind == sPhraseEnd && ! in.hookRests.empty())
+            {
+                double best = 1.0e9;
+                std::pair<double, double> chosen = w;
+                for (const auto& [rs, re] : in.hookRests)
+                {
+                    if (re - rs < juce::jmin (len, 1.0) - 1.0e-6) continue;
+                    const auto d = std::abs (re - s.endQ);
+                    if (d <= bar + 1.0e-6 && d < best && re <= s.sectEndQ + 1.0e-6) { best = d; chosen = { juce::jmax (rs, re - len), re }; }
+                }
+                w = chosen;
+            }
+            if ((s.kind & (sPhraseEnd | sSectionEnd)) == 0 || in.vocalNotes.empty() || in.role == 6) return 1.0f;
+            auto clash = [&] (double a, double b) { for (const auto& [vs, ve] : in.vocalNotes) if (vs < b && ve > a) return true; return false; };
+            if (! clash (w.first, w.second)) return 1.0f;
+            if (s.kind == sPhraseEnd)
+                for (double shift : { -0.5, 0.5, -1.0, 1.0, -1.5, 1.5, -2.0, 2.0 })
+                    if (! clash (w.first + shift, w.second + shift) && w.second + shift <= s.sectEndQ + 1.0e-6)
+                    {
+                        w = { w.first + shift, w.second + shift };
+                        return 1.0f;
+                    }
+            return 0.6f;   // it has to stay: smaller, under the vocal
+        }
+
         inline int priority (int role) { switch (role) { case 6: return 5; case 5: return 4; case 1: case 2: return 3; case 4: return 2; case 3: case 7: return 1; default: return 0; } }
     }
 
@@ -294,7 +326,8 @@ namespace trm
             std::vector<Move> chosen;
             auto addMove = [&] (int id, uint8_t flags, float amount)
             {
-                const auto w = windowFor (id, s, in.role, bar);
+                auto w = windowFor (id, s, in.role, bar);
+                if (id != 57 && id != 102 && id != 4) amount *= placeAround (w, s, in, bar);
                 Move mv;
                 mv.startQ = (float) w.first; mv.endQ = (float) w.second; mv.effect = id; mv.amount = amount;
                 mv.seed = mix (seed, s.key ^ (uint32_t) id); mv.key = s.key; mv.slot = s.kind; mv.flags = flags;

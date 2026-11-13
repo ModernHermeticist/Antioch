@@ -24,7 +24,60 @@ class VocalMelody
 {
 public:
     struct Reading { double q = 0.0; float midi = -1.0f; float level = 0.0f; };   // midi < 0: not a sung pitch
-    struct Note { int pitch = 60; double start = 0.0, length = 0.25; int velocity = 100; };
+    struct Note
+    {
+        int pitch = 60; double start = 0.0, length = 0.25; int velocity = 100;
+        float cents = 0.0f;       // how far the sung pitch sat from the note written (+ sharp)
+        double sungStart = -1.0;  // the first pitch reading (quarters; ~43 ms after the note really started)
+    };
+    struct Issue { double q = 0.0; juce::String text; };
+
+    /** 7: the vocal's tuning and timing, note by note: more than `centsLimit` off the note in
+        key, or starting more than `msLimit` off the 16th grid. A check only: nothing is moved. */
+    static std::vector<Issue> check (const std::vector<Note>& notes, double bpm, float centsLimit = 25.0f, double msLimit = 30.0)
+    {
+        std::vector<Issue> out;
+        const auto msPerQ = 60000.0 / juce::jmax (1.0, bpm);
+        for (const auto& n : notes)
+        {
+            juce::StringArray what;
+            if (std::abs (n.cents) > centsLimit) what.add (juce::String (juce::roundToInt (std::abs (n.cents))) + " cents " + (n.cents > 0 ? "sharp" : "flat"));
+            if (n.sungStart >= 0.0)
+            {
+                const auto ms = (n.sungStart - n.start) * msPerQ - 1000.0 * window / 12000.0;   // less the analysis window (~43 ms)
+                if (std::abs (ms) > msLimit) what.add (juce::String (juce::roundToInt (std::abs (ms))) + " ms " + (ms > 0 ? "late" : "early"));
+            }
+            if (what.isEmpty()) continue;
+            const auto bar = (int) std::floor (n.start / 4.0) + 1, beat = (int) std::floor (std::fmod (n.start, 4.0)) + 1;
+            out.push_back ({ n.start, "bar " + juce::String (bar) + " beat " + juce::String (beat) + ", " + juce::MidiMessage::getMidiNoteName (n.pitch, true, true, 4)
+                                      + ": " + what.joinIntoString (", ") });
+        }
+        return out;
+    }
+
+    /** 8: a guide for doubling the vocal: the same notes a little early or late (10-25 ms,
+        alternating), a little softer, so a double sung to it sounds like a second take. */
+    static std::vector<Note> doubles (const std::vector<Note>& melody, double bpm)
+    {
+        std::vector<Note> out;
+        const auto qPerMs = juce::jmax (1.0, bpm) / 60000.0;
+        int k = 0;
+        for (auto n : melody)
+        {
+            const auto ms = (k++ % 2 == 0 ? 1.0 : -1.0) * (10.0 + 15.0 * std::fmod (k * 0.618, 1.0));
+            n.start = juce::jmax (0.0, n.start + ms * qPerMs);
+            n.velocity = juce::jmax (1, n.velocity - 10);
+            out.push_back (n);
+        }
+        return out;
+    }
+    /** 8: a harmony a diatonic sixth below (the third above, an octave down): for a low double. */
+    static std::vector<Note> harmonyBelow (const std::vector<Note>& melody, int root, int scale)
+    {
+        auto out = harmony (melody, root, scale);
+        for (auto& n : out) n.pitch -= 12;
+        return out;
+    }
 
     static constexpr int decimation = 4, window = 512, maxTau = 180, minTau = 12;   // at 12 kHz: 66 Hz-1 kHz
 
@@ -183,6 +236,8 @@ private:
             float peak = 0.0f;
             for (const auto& c : current) peak = juce::jmax (peak, c.level);
             Note n { pitch, start, juce::jmax (0.25, end - start), juce::jlimit (40, 127, (int) (60.0f + 300.0f * peak)) };
+            n.cents = 100.0f * (median() - (float) pitch);
+            n.sungStart = current.front().q;   // the first reading (the detector's latency is taken off in check())
             // Heard again: replaces what was there
             heard.erase (std::remove_if (heard.begin(), heard.end(), [&] (const Note& h) { return h.start < n.start + n.length - 1.0e-6 && h.start + h.length > n.start + 1.0e-6; }),
                          heard.end());
