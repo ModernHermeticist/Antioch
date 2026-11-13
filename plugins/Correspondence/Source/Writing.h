@@ -224,7 +224,13 @@ namespace chords::writing
         if (line.empty() || hookTop <= 0) return;
         if (breakdown)
             for (auto& n : line)
-                while (n.pitch >= hookTop) n.pitch = nearestTone (chordPcs (s, slotAt (s, n.start - sectionStart)), n.pitch - 2, false);
+                if (n.pitch >= hookTop)
+                {
+                    const auto pcs = chordPcs (s, slotAt (s, n.start - sectionStart));
+                    auto p = hookTop - 1;
+                    while (p > hookTop - 13 && ! inChord (pcs, p)) --p;   // the highest chord tone under the climax
+                    n.pitch = p;
+                }
         if (finalDrop)
         {
             std::map<int, Note*> topPerPhrase;

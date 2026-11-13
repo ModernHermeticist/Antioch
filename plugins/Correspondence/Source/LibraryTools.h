@@ -153,8 +153,9 @@ namespace patterns
         if (f.part == Part::Bass || f.part == Part::Chords || f.part == Part::Piano)
         {
             int strong = 0, chordish = 0;
-            for (const auto& b : voices (f.level[2]).front().bars)
-                for (size_t k = 0; k < b.size(); k += b.size() / 4)
+            const auto vs = voices (f.level[2]);
+            for (const auto& b : vs.front().bars)
+                for (size_t k = 0; k < b.size(); k += std::max<size_t> (1, b.size() / 4))
                     if (b[k] != '.' && b[k] != '-') { ++strong; if (std::string ("rtfsRTFSlcCopPa,z").find (b[k]) != std::string::npos) ++chordish; }
             if (strong > 0 && (float) chordish / (float) strong < 0.5f) score -= 0.15f;
         }

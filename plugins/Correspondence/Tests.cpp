@@ -1447,7 +1447,7 @@ int main (int argc, char** argv)
         // Every family is well formed: whole bars, known characters, density rising with the energy
         bool wellFormed = true, rising = true;
         juce::String bad;
-        const std::string known = "rtfsRTFSl94udknNaAbcCozpP~,-.!'";
+        const std::string known = "rtfsRTFSl94udknNaAbcCozpP~,-.!'^_";
         auto onsets = [&] (const std::string& t) { int n = 0; for (const auto& v : voices (t)) for (const auto& b : v.bars) for (auto c : b) n += (c != '.' && c != '-' && c != '~') ? 1 : 0; return n; };
         for (const auto& f : lib)
         {
@@ -1458,7 +1458,7 @@ int main (int argc, char** argv)
                     v = v.trimCharactersAtStart ("<>");
                     for (auto b : juce::StringArray::fromTokens (v, "/", ""))
                     {
-                        const auto steps = b.removeCharacters ("!'").length();
+                        const auto steps = b.removeCharacters ("!'^_").length();
                         if (steps != 16 && steps != 12 && steps != 24) { wellFormed = false; bad = juce::String (f.name) + " (" + b + ")"; }
                         for (auto c : b) if (known.find ((char) c) == std::string::npos) { wellFormed = false; bad = juce::String (f.name) + " ('" + juce::String::charToString (c) + "')"; }
                     }
