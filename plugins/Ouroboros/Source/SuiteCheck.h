@@ -247,7 +247,7 @@ namespace suitecheck
                 out.push_back ({ "Ouroboros has no song map yet: use Arrange, a template or Listen." });
 
         if (count ("Correspondence") == 0 && count ("Emerald Tablet") == 0)
-            out.push_back ({ "No key source: load Correspondence (or Emerald Tablet) so Azoth, Antioch and Cause & Effect play in key." });
+            out.push_back ({ "No key source: load Correspondence (or Emerald Tablet) so Azoth, Antioch and Transmutation play in key." });
 
         bool kickShared = false, suiteKickUsed = false;
         for (const auto& e : entries)

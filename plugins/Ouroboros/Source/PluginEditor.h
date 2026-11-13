@@ -103,6 +103,21 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
+/** Transmutation: every track's planned creative moves on one timeline, the song's spice and dice. */
+class TransmutePanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit TransmutePanel (std::function<suite::SectionMap()> map);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    juce::Slider spice;
+    juce::TextButton reroll { "Re-roll the song" };
+
+private:
+    void timerCallback() override { repaint(); }
+    std::function<suite::SectionMap()> getMap;
+};
+
 /** Autopilot: what the suite manages by itself (one switch per group), and what it has done. */
 class AutopilotPanel : public juce::Component, private juce::Timer
 {

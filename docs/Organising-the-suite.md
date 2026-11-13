@@ -25,19 +25,19 @@ A name only needs to contain one of these words:
 ## The layout
 
 ```
-Mixer track          Plugins, in order                                              Routed to
--------------------  -------------------------------------------------------------  -----------
- 1 Kick              Prima Materia, Quintessence, Kybalion (Share kick on)           Master
- 2 Bass              Prima Materia, Quintessence, Kybalion (Suite kick)              Master
- 3 Hats              Prima Materia, Quintessence                                     Music bus
- 4 Pads (Spire)      Prima Materia, Quintessence, Kybalion (gate)                    Music bus
- 5 Lead (Spire)      Prima Materia, Quintessence, Vibration, Antioch                 Music bus
- 6 Arp / Pluck       Prima Materia, Quintessence, Antioch                            Music bus
- 7 Vocal             Prima Materia, Quintessence, Antioch                            Master + sidechain to 10
- 8 FX                Azoth, Prima Materia                                            Music bus
- 9 Chords (MIDI)     Correspondence                                                  (silent)
-10 Music bus         Solve et Coagula (vocal on its sidechain), Cause & Effect,
-                     Quintessence (glue), Antioch (glue room)                        Master
+Mixer track          Plugins, in order                                                        Routed to
+-------------------  -----------------------------------------------------------------------  -----------
+ 1 Kick              Prima Materia, Quintessence, Kybalion (Share kick on), Transmutation     Master
+ 2 Bass              Prima Materia, Quintessence, Kybalion (Suite kick), Transmutation        Master
+ 3 Hats              Prima Materia, Quintessence, Transmutation                               Music bus
+ 4 Pads (Spire)      Prima Materia, Quintessence, Kybalion (gate), Transmutation              Music bus
+ 5 Lead (Spire)      Prima Materia, Quintessence, Vibration, Transmutation, Antioch           Music bus
+ 6 Arp / Pluck       Prima Materia, Quintessence, Transmutation, Antioch                      Music bus
+ 7 Vocal             Prima Materia, Quintessence, Transmutation, Antioch                      Master + sidechain to 10
+ 8 FX                Azoth, Prima Materia, Transmutation                                      Music bus
+ 9 Chords (MIDI)     Correspondence                                                           (silent)
+10 Music bus         Solve et Coagula (vocal on its sidechain),
+                     Quintessence (glue), Antioch (glue room)                                 Master
    Master            Ouroboros, Emerald Tablet, Mentalism, Lapis (last)
 ```
 
@@ -63,8 +63,8 @@ Why this order:
 - **Solve et Coagula** on the music bus, with the vocal track sent to its sidechain (in
   FL: on the vocal track, right-click the music bus's send knob, *Sidechain to this track*).
   It makes room for the vocal in everything at once, only while the vocal sings.
-- **Cause & Effect** on the music bus, so its builds (filter, reverb, noise, riser, gate,
-  width) lift all the music at once, without filtering the kick and bass.
+- **Transmutation** on each track you want to move (not the music bus): each one builds,
+  drops and plays its creative moves the way its role should, planned by its director.
 - **Master:** Ouroboros (it listens and conducts; one per project), Emerald Tablet (only
   while you want the key detected), Mentalism (measures and fixes), Lapis **last**.
 - **Correspondence** on an empty track: it holds the key and the chords and writes the MIDI.

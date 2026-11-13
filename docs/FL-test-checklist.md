@@ -11,8 +11,8 @@ Allow about an hour. Use a fresh project at 138 BPM.
 
 - [ ] **0.1** Copy all thirteen `.vst3` files into `C:\Program Files\Common Files\VST3`.
 - [ ] **0.2** FL: *Options > Manage plugins > Find plugins*. All thirteen appear (Antioch, Azoth,
-  Cause & Effect, Correspondence, Emerald Tablet, Kybalion, Lapis, Mentalism, Ouroboros,
-  Prima Materia, Quintessence, Solve et Coagula, Vibration) under the *ModernHermeticist* vendor.
+  Correspondence, Emerald Tablet, Kybalion, Lapis, Mentalism, Ouroboros,
+  Prima Materia, Quintessence, Solve et Coagula, Transmutation, Vibration) under the *ModernHermeticist* vendor.
 - [ ] **0.3** Each one opens its window without errors.
 
 ## 1. The plugins find each other
@@ -136,7 +136,7 @@ between versions.
   changed*: "wider than it is solid"). Flip one channel of the bass: the polarity flip comes by itself, judged 20 s later.
 - [ ] **6b.24** Squash the drops (Quintessence multiband hard on the bus): the dynamics ease off by themselves and
   are kept only if the drops' peaks stand further out. Mentalism's mono reading shows a loss as "-x dB vs stereo".
-- [ ] **6b.25** Turn Cause & Effect's build down to nothing: after the next drop, it builds deeper by itself; after
+- [ ] **6b.25** Turn every Transmutation's Builds and Drops down to nothing: after the next drop, they go up by themselves; after
   two drops that still don't land, Prima Materia adds half a beat of silence before the drop.
 
 ## 6c. Pattern library (new)
@@ -162,7 +162,7 @@ between versions.
 - [ ] **6d.2** Push a lead's drive hard with a bright patch and play the drop: Mentalism's log names the track in a "Harsh
   moment" line, the lead's Quintessence dips there, and *harsh moments dipped* counts up. Turn Harshness off: no dips.
 - [ ] **6d.3** Turn Antioch's echo feedback right up and stop the input: within a second it backs off ("runaway" in What
-  changed). Same with Cause & Effect's filter resonance at maximum.
+  changed). Same with a Transmutation whose echo spirals (a dub-out with the song at full spice): its tails clear.
 - [ ] **6d.4** Orchestral song with every layer on: *Export all* — the final drop doesn't have every layer at once, the
   breakdown keeps its piano, and *parts thinned* counts up. In a style with chops, they never land on the hook's notes.
 
@@ -184,7 +184,28 @@ between versions.
 - [ ] **6d.12** Ouroboros menu, *Mixer*: one row per track with Prima Materia, its fader per section. *Export all fader moves*:
   one .mid with a MIDI track per FL track. The Autopilot strip at the bottom of Quintessence, Antioch, Vibration, Prima
   Materia and Mentalism says what's happening (e.g. "making room for a more important part").
-- [ ] **6d.13** Cause & Effect on the music bus through a build: the master meter doesn't climb in the build.
+- [ ] **6d.13** Transmutation on every track through a build at Spice 200%: the master meter doesn't climb in the build.
+
+## 6e. Transmutation (new; replaces Cause & Effect)
+- [ ] **6e.1** Remove Cause & Effect from the music bus and put Transmutation on the kick, bass, pads, lead, vocal and FX
+  tracks. Each one shows its role (auto from the track's name) and, after a few seconds of playback, what it hears
+  (pitched, sustained, plucky, busy).
+- [ ] **6e.2** With an Ouroboros map, each Transmutation's timeline shows its plan under the sections. Play a build: the bass
+  steps aside, the pads open and widen, the lead's echoes grow, the hats roll, and the FX rise. The master meter doesn't climb.
+- [ ] **6e.3** The last 16th before a drop is silent on every track (*Snap to silence* on Always), and the drop lands
+  sample-accurate.
+- [ ] **6e.4** Click a move on the timeline: *Play it now* plays it over the song; *Re-roll this moment* swaps it; *Lock this
+  moment* keeps it through *Re-roll the whole track*. Save, reload: the locks and Auto/Always/Never choices are still there.
+- [ ] **6e.5** Spice at 0: nothing happens on that track. Spice at 200% (Wild): many more moves, still level-matched.
+- [ ] **6e.6** Ouroboros menu, *Transmutation*: every track's plan on one timeline. *Song spice* at 0% quiets every track;
+  *Re-roll the song* gives every track new moves.
+- [ ] **6e.7** Two drops: on some songs (re-roll the song until it says *Fake drop: drop 2*), the second drop starts with a bar
+  of breakdown texture, then the real drop lands, on every track at once.
+- [ ] **6e.8** Breakdown after the first drop: hook memories (distant fragments of the first drop) on the lead or pads; the
+  Transmutation panel says *First drop remembered: 4 bars*.
+- [ ] **6e.9** Genre: set Psy on the lead: more stutters, gates and frequency shifts; Orchestral: more harmony, space and swells.
+- [ ] **6e.10** CPU: 8 Transmutations playing a full song stay well under one core in FL's CPU meter.
+- [ ] **6e.11** Mentalism: a build that doesn't rise -> each Transmutation's *Builds* goes up (What changed says so); undo puts it back.
 
 ## 7. A song end to end
 

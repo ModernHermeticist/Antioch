@@ -125,7 +125,7 @@ namespace coach
                 if (rise < minRise)
                 {
                     r.notes.add ("Build (" + barsOf (map, i) + ") only rises " + juce::String (rise, 1) + " LU: let it grow with risers, "
-                                 "more top end or Cause & Effect's wash.");
+                                 "more top end or bigger Transmutation builds.");
                     r.fixes.push_back (suite::Fix::BuildRise);
                     ++r.problems;
                 }
@@ -221,7 +221,7 @@ namespace coach
         {
             case suite::Fix::BreakdownQuieter: return "Prima Materia: breakdowns 2 dB quieter";
             case suite::Fix::BreakdownLouder:  return "Prima Materia: breakdowns 2 dB louder";
-            case suite::Fix::BuildRise:        return "Cause & Effect: more riser, noise and wash; Azoth: more swell and roll";
+            case suite::Fix::BuildRise:        return "Transmutation: the builds work harder; Azoth: more swell and roll";
             case suite::Fix::IntroQuieter:     return "Prima Materia: intro 2 dB quieter";
             case suite::Fix::LaterDropBigger:  return "Prima Materia: Drop 2+ 1.5 dB up; Azoth: bigger later drops";
             case suite::Fix::RoughMix:         return "Prima Materia: each track's trim set for its role, relative to the kick";

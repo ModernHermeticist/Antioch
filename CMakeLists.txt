@@ -82,7 +82,7 @@ function(suite_add_plugin target)
 endfunction()
 
 add_subdirectory(plugins/Antioch)
-add_subdirectory(plugins/CauseAndEffect)
+add_subdirectory(plugins/Transmutation)
 add_subdirectory(plugins/Correspondence)
 add_subdirectory(plugins/Kybalion)
 add_subdirectory(plugins/Vibration)

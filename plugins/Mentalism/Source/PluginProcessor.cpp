@@ -1050,8 +1050,8 @@ void MentalismProcessor::ladderPass (const Report& rep, std::vector<watcher::Pro
     {
         const auto step = climb ("impact", "The drop is only " + juce::String (lastJump, 1) + " LU louder than the end of the build", jumpsHeard > 0 && lastJump < 2.0f,
                                  jumpsSinceStep > 0, 3.0f - lastJump, 0.5f, 0.0f, now,
-                                 { { "Cause & Effect builds deeper (higher filter sweep, tails cut at the drop)", [send] { return send (suite::Fix::BuildImpact, 0); } },
-                                   { "Cause & Effect builds deeper again", [send] { return send (suite::Fix::BuildImpact, 0); } },
+                                 { { "Transmutation's drops do more (and its builds work harder)", [send] { return send (suite::Fix::BuildImpact, 0); } },
+                                   { "Transmutation's drops do more again", [send] { return send (suite::Fix::BuildImpact, 0); } },
                                    { "half a beat of silence before the drop (Prima Materia)", [this] { return std::vector<uint32_t> { suite::FixBus::send (suite::Fix::BuildImpact, 1u) }; } } });
         if (step == Step::applied || step == Step::undone) jumpsSinceStep = 0;
     }

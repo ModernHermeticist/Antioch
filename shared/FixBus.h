@@ -35,7 +35,7 @@ namespace suite
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
-        retried. (Bigger later drops and build impact also act on Azoth and Cause & Effect.) */
+        retried. (Bigger later drops and build impact also act on Azoth and Transmutation.) */
     inline bool mixerOnly (Fix f) noexcept
     {
         switch (f)
@@ -47,7 +47,7 @@ namespace suite
             default:
                 return false;
         }
-    }                                  // a bigger build-to-drop jump (data 0: Cause & Effect builds deeper; 1: a gap before the drop)
+    }                                  // a bigger build-to-drop jump (data 0: Transmutation's drops do more; 1: a gap before the drop)
 
     /** A fix in words (What changed). */
     inline juce::String fixName (Fix f)

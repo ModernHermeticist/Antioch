@@ -1277,7 +1277,7 @@ int main (int argc, char** argv)
         }
         check (squash && p->plrCount[(size_t) T::Drop] == 0, "drops with peaks only 6 dB over their loudness: dynamics eased off, and the drops heard afresh");
         check (down, "Lapis holding 5 dB in the drops, 1 dB elsewhere: every track 1 dB down in the drops");
-        check (impact && p->jumpsSinceStep == 0, "the drop only 0.5 LU over the build: Cause & Effect builds deeper, judged at the next drop");
+        check (impact && p->jumpsSinceStep == 0, "the drop only 0.5 LU over the build: Transmutation's drops do more, judged at the next drop");
 
         // The jump is measured from the music: the build's end against the drop's first 4 s
         auto q = make();

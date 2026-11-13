@@ -38,13 +38,15 @@ namespace suite::Autopilot
         effectReturnsF, sectionEqF, reverbRoomF, noteRoomF, tempoSpaceF, kickBassDipF, layerSpreadF, kickTuneF, drumBusGlueF,
         fxInKeyF, subBeforeKickF, vocalPopsF, vocalBreathsF, clickGuardF, balanceF, wetMonoSafeF, humF, deessSpaceF,
         cleanEndingF, layerAlignF, equalBypassF,
+        // arrangement (added later: kept at the end so saved switches keep their places)
+        transmuteF,
         numFeatures
     };
     inline const char* featureName (int f)
     {
         static const char* n[] = {
             "Dip the tracks causing a harsh moment", "Spike tamer on bright parts", "Ease the lead's drive on high notes", "Darken tails while it's harsh", "Share resonance cuts between tracks",
-            "Catch runaway echo and shimmer (Antioch)", "Catch a ringing build filter (Cause & Effect)", "DC and rumble filter (Prima Materia)", "Fold bass notes under C1 up (exports)",
+            "Catch runaway echo and shimmer (Antioch)", "Catch a runaway effect (Transmutation)", "DC and rumble filter (Prima Materia)", "Fold bass notes under C1 up (exports)",
             "Narrow an image that cancels in mono", "Hold the space to the input's level (Antioch)", "Feed the drive a steady level (Vibration)",
             "Thin parts when too many play (exports)", "Chops and candy take turns with the hook (exports)", "Trim notes ringing into a clashing chord (exports)",
             "Dip under more important parts", "Lift a masked lead or vocal", "Leave the lows to the kick and bass", "Soften attacks landing on the kick", "Mono lows (under 120 Hz)",
@@ -52,11 +54,13 @@ namespace suite::Autopilot
             "Cuts on effect returns", "Own EQ for grooves, intro and outro", "Reverb pumps and steps back (kick, lead, vocal)", "Reverb dips at the lead's note", "Reverb timed to the tempo",
             "Bass dips at the kick's note", "Spread layers left and right", "Tune the kick to the key", "Glue on a drum bus",
             "Out-of-key FX re-pitched", "Clear the sub before each kick", "Cut vocal pops", "Lower vocal breaths", "Smooth clip starts and ends", "Re-centre a leaning track", "Keep the reverb mono-safe",
-            "Remove hum", "De-ess the space", "Fade the space after the last bar", "Line up layered parts", "Equal loudness for the A/B bypass" };
+            "Remove hum", "De-ess the space", "Fade the space after the last bar", "Line up layered parts", "Equal loudness for the A/B bypass",
+            "Creative moves at transitions (Transmutation)" };
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
     inline uint32_t featureGroup (int f)
     {
+        if (f == transmuteF) return 4u;
         return f <= sharedResonanceF ? 1u : f <= driveLevelF ? 2u : f <= hangoverTrimF ? 4u : 8u;
     }
 

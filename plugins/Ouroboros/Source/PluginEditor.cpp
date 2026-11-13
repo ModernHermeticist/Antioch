@@ -1,5 +1,7 @@
 #include "PluginEditor.h"
 #include "AutopilotBus.h"
+#include "TransmuteBus.h"
+#include "../../Transmutation/Source/Effects.h"
 #include "AutomationBus.h"
 #include "Alias.h"
 #include "SceneUI.h"
@@ -437,6 +439,96 @@ juce::File MixerPanel::exportAll (const juce::File& folder, const suite::Section
         + "\n\nMixer moves.mid has a MIDI track per FL track with its fader as CC 7 (100 = unchanged, 0 = muted). In FL, link each mixer "
           "track's fader to CC 7 on its own MIDI Out channel, play the clips, and record or convert them to automation clips.\n");
     return mid;
+}
+
+//==============================================================================
+TransmutePanel::TransmutePanel (std::function<suite::SectionMap()> map) : getMap (std::move (map))
+{
+    spice.setSliderStyle (juce::Slider::LinearHorizontal);
+    spice.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 20);
+    spice.setRange (0.0, 200.0, 1.0);
+    spice.setTextValueSuffix ("%");
+    spice.setValue (suite::TransmuteBus::songSpice() * 100.0, juce::dontSendNotification);
+    spice.setTooltip ("How much happens on every track (each track's own Spice on top): 0% = nothing, 100% = as each track is set, 200% = wild");
+    spice.onValueChange = [this] { suite::TransmuteBus::setSongSpice ((float) spice.getValue() / 100.0f); };
+    reroll.setTooltip ("New dice for the whole song: every track picks new moves (locked moments stay)");
+    reroll.onClick = [this]
+    {
+        suite::TransmuteBus::setSongSeed (suite::TransmuteBus::songSeed() * 1664525u + 1013904223u);
+        suite::MoveLog::add ("Ouroboros", {}, "Transmutation: the song re-rolled (every track picks new moves)");
+    };
+    addAndMakeVisible (spice);
+    addAndMakeVisible (reroll);
+    setSize (980, 560);
+    startTimerHz (4);
+}
+
+void TransmutePanel::resized()
+{
+    auto r = getLocalBounds().reduced (14).removeFromBottom (30);
+    reroll.setBounds (r.removeFromRight (170));
+    r.removeFromRight (12);
+    spice.setBounds (r.removeFromRight (320));
+}
+
+void TransmutePanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Colours::panel);
+    auto r = getLocalBounds().reduced (14);
+    g.setColour (Colours::text);
+    g.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    g.drawText ("Transmutation: every track's creative moves", r.removeFromTop (22), juce::Justification::centredLeft);
+    g.setFont (juce::FontOptions (12.0f));
+    g.setColour (Colours::dimText);
+    g.drawText ("Planned by each track's director from this map. Lock, re-roll or switch moves off in each track's Transmutation.",
+                r.removeFromTop (18), juce::Justification::centredLeft);
+    {
+        auto foot = getLocalBounds().reduced (14).removeFromBottom (30);
+        g.drawText ("Song spice", foot.withTrimmedRight (520), juce::Justification::centredRight);
+    }
+    r.removeFromTop (8);
+    r.removeFromBottom (40);
+    const auto map = getMap();
+    const auto plans = suite::TransmuteBus::read();
+    if (plans.empty())
+    {
+        g.drawFittedText ("No plans yet: put Transmutation on your tracks (it works out each track's role from its name).", r, juce::Justification::topLeft, 3);
+        return;
+    }
+    const auto totalQ = juce::jmax (64.0, map.totalBars * 4.0);
+    const auto nameW = 150;
+    auto strip = r.removeFromTop (20).withTrimmedLeft (nameW);
+    for (int i = 0; i < map.count; ++i)
+    {
+        const auto s = (map.sections[(size_t) i].startBar - 1) * 4.0, e = (map.endBar (i) - 1) * 4.0;
+        const auto box = juce::Rectangle<float> ((float) strip.getX() + (float) strip.getWidth() * (float) (s / totalQ), (float) strip.getY(),
+                                                 (float) strip.getWidth() * (float) ((e - s) / totalQ), (float) strip.getHeight()).reduced (1.0f, 0.0f);
+        const auto type = map.sections[(size_t) i].type;
+        g.setColour ((type == suite::SectionType::Drop ? Colours::ember : type == suite::SectionType::Build ? Colours::brass
+                      : type == suite::SectionType::Breakdown ? Colours::amethyst : Colours::outline).withAlpha (0.35f));
+        g.fillRoundedRectangle (box, 3.0f);
+        g.setColour (Colours::text);
+        g.drawText (suite::sectionName (type), box.reduced (3.0f, 0.0f).toNearestInt(), juce::Justification::centredLeft, true);
+    }
+    r.removeFromTop (4);
+    const auto rowH = juce::jlimit (12, 26, r.getHeight() / juce::jmax (1, (int) plans.size()));
+    static const juce::Colour cat[] = { Colours::ember, Colours::brass, Colours::verdigris, Colours::amethyst, Colours::moss,
+                                        juce::Colour (0xffe85aa8), Colours::dimText, juce::Colour (0xff5a9be8), juce::Colour (0xffd8c27d), juce::Colour (0xff9be85a) };
+    for (const auto& p : plans)
+    {
+        if (r.getHeight() < rowH) break;
+        auto row = r.removeFromTop (rowH);
+        g.setColour (Colours::text);
+        g.drawText (p.track + "  (" + juce::String ((int) p.moves.size()) + ")", row.removeFromLeft (nameW), juce::Justification::centredLeft, true);
+        for (const auto& m : p.moves)
+        {
+            const auto x0 = (float) row.getX() + (float) row.getWidth() * (float) (m.startQ / totalQ);
+            const auto w = juce::jmax (2.0f, (float) row.getWidth() * (float) ((m.endQ - m.startQ) / totalQ));
+            const auto& e = trm::effect (m.effect);
+            g.setColour (cat[juce::jlimit (0, 9, e.category)].withAlpha (0.8f));
+            g.fillRect (juce::Rectangle<float> (x0, (float) row.getY() + 2.0f, w, (float) rowH - 4.0f));
+        }
+    }
 }
 
 void MixerPanel::resized()
@@ -1106,6 +1198,12 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
                                                     templateBox.getScreenBounds(), nullptr);
             return;
         }
+        if (id == 977)
+        {
+            templateBox.setSelectedId (0, juce::dontSendNotification);
+            juce::CallOutBox::launchAsynchronously (std::make_unique<TransmutePanel> ([this] { return processor.getMap(); }), templateBox.getScreenBounds(), nullptr);
+            return;
+        }
         if (id == 984)
         {
             templateBox.setSelectedId (0, juce::dontSendNotification);
@@ -1256,7 +1354,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     nowLabel.setFont (juce::FontOptions (24.0f, juce::Font::bold));
     legend.setFont (juce::FontOptions (12.0f));
     legend.setJustificationType (juce::Justification::topLeft);
-    legend.setText (juce::String::fromUTF8 ("What the suite does: Cause & Effect ramps through every Build and drops on its last bar \xc2\xb7 "
+    legend.setText (juce::String::fromUTF8 ("What the suite does: Transmutation plans creative moves on every track for each build, drop and breakdown \xc2\xb7 "
                                             "Kybalion stops ducking in Breakdowns and Builds \xc2\xb7 Antioch throws at the end of every section "
                                             "(each plugin has a Follow Ouroboros switch)."),
                     juce::dontSendNotification);
@@ -1695,6 +1793,7 @@ void OuroborosEditor::fillTemplates()
     templateBox.addItem ("Stereo field: how wide each track sits...", 986);
     templateBox.addItem ("Autopilot: what the suite manages by itself...", 984);
     templateBox.addItem ("Mixer: every track's suggested moves (and export)...", 978);
+    templateBox.addItem ("Transmutation: every track's creative moves, song spice...", 977);
     templateBox.addItem ("Mood: darker (the master's tilt)", 980);
     templateBox.addItem ("Mood: brighter (the master's tilt)", 981);
     templateBox.addItem ("Mood: wider (pads, leads, FX)", 982);

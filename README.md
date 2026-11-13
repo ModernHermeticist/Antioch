@@ -7,7 +7,7 @@ in **Correspondence**, and the others follow it.
 | Plugin | What it replaces |
 |---|---|
 | **Antioch**: harmonic echo, euphoric reverb, throw delay | A delay, a reverb + EQ + sidechain chain, and the send automation for delay throws |
-| **Cause & Effect**: build-up macro | The 6+ automation clips (filter, reverb, noise, riser, gate, width) you draw for every build |
+| **Transmutation**: creative moves, directed per track | The build automation you draw for every build (filter, reverb, risers, gates), and the stutters, reverses, freezes, throws and pitch tricks you place by hand |
 | **Correspondence**: key and chord engine | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
 | **Kybalion**: trance gate + smart ducking | Drawing gate shapes in Gross Beat or Peak Controller, and sidechain/LFO Tool setups |
 | **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
@@ -28,7 +28,7 @@ With the full suite loaded, here is everything that happens without automation c
    with every plugin.
 2. **Ouroboros** listens to one play-through and proposes the song's sections (or drafts a
    map from a length and a few choices with **Arrange**), then tells the suite where it is.
-3. **Cause & Effect** builds and drops on cue, **Kybalion** stops ducking in breakdowns,
+3. **Transmutation** plans creative moves on every track for each build, drop and breakdown, **Kybalion** stops ducking in breakdowns,
    and **Antioch** throws at section ends.
 4. **Section scenes** move each plugin's key controls per section: more reverb and shimmer
    in breakdowns, more Euphoria and width in drops, and so on.
@@ -75,7 +75,7 @@ with the project), and a count of everything done. Every move is also in *What c
   during harsh moments, and a resonance that several tracks share is cut a little on each
   instead of a lot on one.
 - **Stability.** Antioch catches runaway echo or shimmer feedback (tails that grow with no
-  input) and Cause & Effect catches a filter ringing far over its input, and each backs off.
+  input) and Transmutation catches an effect running away on its own, and each backs off.
   Prima Materia removes DC and sub-18 Hz rumble, holds a one-off peak far over the part's
   normal level, rides slow level wobble on bass and pads (2 dB at most; deliberate level
   changes are left alone) and smooths section-change jumps. Quintessence narrows a track whose
@@ -123,7 +123,7 @@ with the project), and a count of everything done. Every move is also in *What c
   tracks of the same role hitting together a few ms apart (two kick layers, a layered lead)
   are lined up: the earlier one waits for the later, up to 12 ms, with no added latency.
   Antioch de-esses what it sends into its reverb and echo (the track keeps its "s"). Past the
-  map's last bar, Antioch's and Cause & Effect's tails fade out over 2 bars, so a render ends
+  map's last bar, Antioch's and Transmutation's tails fade out over 2 bars, so a render ends
   clean. Vibration's drive is fed a steady level (around -12 dBFS) whatever arrives, and
   the level is given back after, so turning the synth up doesn't make the lead dirtier (the
   drive already runs 2x oversampled). In the song exports, a note ringing on into a chord it
@@ -286,38 +286,114 @@ section scenes, which open the space on purpose.
 ![Antioch reverb tab](docs/antioch_reverb.png)
 ![Antioch throw tab](docs/antioch_throw.png)
 
-## Cause & Effect: build-up macro
+## Transmutation: creative moves, directed for each track
 
-![Cause & Effect](docs/cause_effect.png)
+![Transmutation](docs/transmutation.png)
 
-**Level-matched builds:** everything the build adds (the resonant sweep, the wash, the noise and
-tonal risers, the widening) changes the sound, never the level: Cause & Effect holds its output
-at the loudness of what comes in (a 300 ms RMS; on an empty track the risers still come through
-at up to -24 dBFS). The drop then lands by contrast, not by the build having crept up.
+Put one Transmutation on every track you want to move: the kick, the bass, the pads, the
+lead, the vocal, the FX. It works out the track's role (from the track's name, Prima
+Materia, or the Role menu) and listens to what the track is: pitched or not, held notes or
+plucks, busy or sparse. A **director** then plans creative moves across the whole song
+from the Ouroboros map, the tempo, the key and the chords. You don't draw any automation.
 
-Put it on the bus you want to build: a group, the music bus, or the master. Then drive it
-either way:
+Each role builds its own way, so a build sounds like the arrangement doing it, not a filter
+on top: the bass steps aside, the pads open and widen, the lead's echoes grow, the drums
+roll, and the FX rise from their own audio. That is the job Cause & Effect used to do on the
+bus; Transmutation replaces it.
 
-1. **Automate the Build knob** with one ramp clip from 0 to 100%. Snapping it back to 0
-   is the drop.
-2. **Or flip TRIGGER BUILD on** at the start of the build (one automation point) and pick
-   a length: 4, 8, 16 or 32 bars. It ramps itself in sync with FL's tempo, snaps to the
-   nearest bar line, and snaps back exactly at the drop. Switching Trigger off early drops
-   early.
+**The 118 moves**, in ten groups (the full list is in the plugin, each with a description):
 
-As the build rises, it applies:
+- **Builds, drops and breakdowns:** role-aware builds, layered emptying, a Shepard rise
+  from the track itself, a staggered tape-stop, the drop's first 16th, a stereo bloom, the
+  inhale before the drop, a rewind, the build squeeze, the fake drop, the snare-roll sync,
+  a riser from the chord, the drop echo, the breakdown swallow, the final-drop overdrive and
+  the outro dissolve.
+- **Rhythm and glitch:**
+  - beat-repeat rolls, reversed last beats and polyrhythmic gates
+  - a kick-aware slicer, the halftime bar, swing drift, the hook stutter and buffer shuffles
+  - off-beat crush, ghost triplets, glitch dropouts, kick-shaped tremolo and an accelerating gate
+- **Pitch and harmony:**
+  - climbing echoes, harmonic delays, octave bloom, a chord resonator and key-locked frequency shifts
+  - a chord-following harmonizer, the last-note drop, the glide to the drop and the detune bloom
+  - the key-change sweep, a root drone, the arpeggiated echo, in-key shimmer and the bass slide
+- **Space and texture:**
+  - hook memories, underwater, freeze to pad, reverse-delay lead-ins, grain clouds and vowel morphs
+  - room by energy, Doppler fly-bys, 360 rotation, tape warmth, distance and the chord-change smear
+  - an ambient bed, the room swap, echo dub-outs and the telephone moment
+  - breathing width, space that follows the vocal, air on the climax and the cassette fade
+- **Expression:**
+  - living long notes, a key-tracked filter, the scream, and pads that pulse with the roll
+  - phrase dynamics, downbeat accents, a humanised filter, energy brightness and velocity colour
+  - call-and-response pan, the chord pluck and chord-weighted width
+- **No limits:**
+  - reverse song memory, a crowd of copies, morphing into the lead and vocal-shaped pads (both opt-in)
+  - rhythm borrowing, breathing silence, granular stretch, the overtone sweep and spectral blur
+  - the reverb stutter, sidechained shimmer, the tape loop, the euphoria cascade, the inverted drop
+    and self-remix fills
+- **The director:** signature moves, the story arc, call and response, motifs, rest, vocal
+  priority, the plan preview and audition, and genre profiles.
+- **Transitions:** continuity, the drop countdown, snap to silence, the echo bridge and the
+  sweep handoff.
+- **Per role:**
+  - kick: boom and punch
+  - bass: flips and growl
+  - hats: open, roll and choke
+  - pads: swell, drift and gate
+  - plucks: stepped filter and caught echo
+  - vocals: throws and freezes
+  - FX: swells and fly-bys
+- **Physics:** gravity, elastic time, weather, the spectral chase, echoes in key,
+  contagion, song breathing and the mirror drop.
 
-- **High-pass sweep** up to a frequency you choose, with resonance.
-- **Reverb wash** that swells. **Cut tails at drop** clears it on the drop so the drop
-  lands clean.
-- **Noise riser:** band-passed white noise sweeping from 400 Hz to 12 kHz.
-- **Tonal riser:** detuned saws gliding up 1–3 octaves and landing exactly on the
-  song's root note.
-- **Stutter:** volume chops that speed up in steps (1/4 → 1/8 → 1/16 → 1/32).
-- **Widen:** the stereo image opens up, then snaps back to normal on the drop.
+**How the director chooses.**
 
-**Curve** sets the shape of the ramp. "Late" (the default) keeps most of the action for
-the last few bars.
+- **Where:** it picks per track and per moment: a build, its last bar, the drop's first bar,
+  a breakdown's start and peak, phrase ends, the outro, the key change. Big moments get more
+  moves; grooves get fewer.
+- **What suits the track:** only moves that suit the role and what it hears. Harmony and
+  pitch moves need a pitched part; freezes and blooms need held notes; slicers need a busy part.
+- **Across the song:**
+  - **Story arc:** a restrained first drop, more in the second, everything in the final.
+  - **Motifs:** three kinds of move that come back.
+  - **Rest:** a plain moment after a busy one.
+  - **Vocal priority:** small moves while the vocal sings.
+- **Across the tracks:**
+  - Tracks don't all do the same thing at once.
+  - **Call and response:** the pads answer the lead's gesture a bar later.
+  - **Contagion:** the lead's stutter spreads to the next track, and the next, into the drop.
+  - **Drop countdown:** each role takes one of the last 4 beats.
+  - **Sweep handoff:** the build's sweep travels from track to track.
+  - **Fake drop:** one song-wide choice every track agrees on.
+- **Genre:** Auto (from the tempo), Uplifting, Tech, Psy, Progressive or Orchestral. Each
+  favours its own moves.
+- **Signature moves:** moves you lock or set to Always go in your style log, and come up more
+  in later songs.
+
+**Your control.**
+
+- **Spice** per track, from Subtle to Wild, plus the song's spice in Ouroboros (and
+  **Re-roll the song** there).
+- **Builds** and **Drops**: how hard each works. Mentalism's *build rise* and *build impact*
+  fixes turn these up.
+- **Auto / Always / Never** for each of the 118 moves.
+- **The plan** on a timeline: click a move to **lock** that moment, **re-roll** it, switch the
+  move off, or **play it now**. Double-click any move in the list to hear it over what's
+  playing.
+- **Re-roll the whole track** for new dice on just this track.
+
+Ouroboros' menu has **Transmutation: every track's creative moves** with every track's plan
+on one timeline.
+
+**Level-matched:** like the rest of the suite's effects, every move changes the sound, never
+the level. The output is held at the input's loudness (a 300 ms RMS; layers added to a silent
+track come through at up to -24 dBFS).
+
+**Autopilot:** the Autopilot page has a switch for *Creative moves at transitions* and
+*Catch a runaway effect*. If an echo or shimmer runs away on its own, its tails are cleared at
+once. Past the song's last bar, the echoes, reverb and layers fade out over 2 bars.
+
+**Moving from Cause & Effect:** remove it from the music bus and put Transmutation on the
+tracks instead (at least the pads, the lead and the FX). Builds then happen per track.
 
 ## Kybalion: trance bus (Rhythm + Polarity)
 
@@ -583,7 +659,7 @@ to take a small step on their own knobs, so you can see what changed:
 |---|---|
 | Breakdown too close to the drop | Prima Materia: breakdowns 2 dB quieter (on every track whose breakdown isn't muted) |
 | Breakdown far too quiet | Prima Materia: breakdowns 2 dB louder |
-| Build doesn't rise | Cause & Effect: +10% riser, noise and wash; Azoth: +10% swell and roll |
+| Build doesn't rise | Transmutation: the builds work harder (Builds +25%); Azoth: +10% swell and roll |
 | Intro too loud | Prima Materia: intro 2 dB quieter |
 | Later drop weaker | Prima Materia: Drop 2+ column on, 1.5 dB above the drop; Azoth: *Bigger later drops* +25% |
 
@@ -644,7 +720,7 @@ tried, the problem goes to **Problems**, with what was tried.
 | The master's tone more than 1.5 dB off in a band | that band, 8 s later | shared out across the tracks by contribution (a track with no Quintessence takes its share of a cut in Prima Materia's carve band); too much 125-500 Hz: every Antioch's reverb low cut half an octave up; too much 2-8 kHz: every Vibration's drive 3 dB softer |
 | Squashed drops (peaks under 8 dB over their loudness) | the drops, heard again | every Quintessence eases its multiband and glue off (its targets follow); again |
 | Lapis holding back over 3 dB in one kind of section, 2 dB more than elsewhere | that section, heard again | every track 1 dB down there; again |
-| The drop under 2 LU louder than the end of the build | the next build into a drop | Cause & Effect builds deeper (higher sweep, tails cut); again; half a beat of silence before the drop |
+| The drop under 2 LU louder than the end of the build | the next build into a drop | Transmutation's drops do more (Drops +25%); again; half a beat of silence before the drop |
 
 Every problem and every fix shows in *What changed?*, and every fix can be undone like any
 other.
@@ -655,11 +731,11 @@ other.
 
 Map out your song once, and the rest of the suite follows it with no automation:
 
-| Section | Cause & Effect | Kybalion | Antioch |
+| Section | Transmutation | Kybalion | Antioch |
 |---|---|---|---|
-| Build | Ramps the whole build across the section and drops exactly on its last bar | Stops ducking | Throws at its end (with *At section ends*) |
-| Breakdown | Nothing | Stops ducking (no kick) | Throws at its end |
-| Intro, Groove, Drop, Outro | Nothing | Ducks as usual | Throws at its end |
+| Build | Each track builds its own way across the section, timed to its last bar | Stops ducking | Throws at its end (with *At section ends*) |
+| Breakdown | Space, freezes and memories | Stops ducking (no kick) | Throws at its end |
+| Intro, Groove, Drop, Outro | Drop hits, phrase-end moves, the outro dissolve | Ducks as usual | Throws at its end |
 
 - **New song…** sets up the whole suite for a fresh track in one go. Pick a style
   (Uplifting anthem, Uplifting radio edit, Tech trance, Progressive / melodic, Emotional /
@@ -915,7 +991,7 @@ last drop to the end (the timeline marks it **KEY +n**). The whole suite follows
 - Azoth's impact into that drop lands on the new root, and the build risers before it aim
   for the new key.
 - Antioch's harmonic echo moves its harmonies up.
-- Cause & Effect's tonal riser in the build rises to the new root.
+- Transmutation's key-change sweep takes every pitched track up into the new key.
 
 Everything keeps working from the same song key; only the last drop onwards is shifted.
 
@@ -1531,7 +1607,7 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
 ## How the key sharing works
 
 Correspondence writes the key into a tiny block of shared memory several times a second.
-Antioch and Cause & Effect read it each audio block, and their **Follow Key** switch
+Antioch and Transmutation read it each audio block, and their **Follow Key** switch
 (on by default) decides whether they use it.
 
 - If no Correspondence is running, or you turn Follow Key off, each plugin uses its own
@@ -1545,7 +1621,7 @@ Antioch and Cause & Effect read it each audio block, and their **Follow Key** sw
    the zip to a GitHub Release.
 2. Unzip it and copy the thirteen `.vst3` folders to `C:\Program Files\Common Files\VST3\`.
 3. In FL Studio, go to **Options → Manage plugins → Find installed plugins**.
-4. Load Antioch, Cause & Effect, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
+4. Load Antioch, Transmutation, Kybalion and Vibration on mixer inserts, Correspondence on any insert,
    and Mentalism last on the master,
    Ouroboros on any insert, Lapis on the master before Mentalism, Emerald Tablet wherever
    you want the key detected, Azoth on its own track, and Prima Materia on individual tracks, and Solve et Coagula on the music under a vocal.
@@ -1573,7 +1649,7 @@ macOS). JUCE 8 is downloaded automatically at configure time.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --target Antioch_VST3 CauseAndEffect_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3 Azoth_VST3 PrimaMateria_VST3 SolveEtCoagula_VST3
+cmake --build build --config Release --target Antioch_VST3 Transmutation_VST3 Correspondence_VST3 Kybalion_VST3 Vibration_VST3 Mentalism_VST3 Ouroboros_VST3 Lapis_VST3 EmeraldTablet_VST3 Azoth_VST3 PrimaMateria_VST3 SolveEtCoagula_VST3
 # Results: build/plugins/<Plugin>/<Plugin>_artefacts/Release/VST3/
 ```
 
@@ -1583,7 +1659,7 @@ Each plugin also has a `<Plugin>_Standalone` target for testing without a DAW.
 
 ```bash
 cmake -B build -DSUITE_BUILD_TESTS=ON
-cmake --build build --target AntiochTests CauseAndEffectTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests AzothTests PrimaMateriaTests SolveEtCoagulaTests
+cmake --build build --target AntiochTests TransmutationTests CorrespondenceTests KybalionTests VibrationTests MentalismTests OuroborosTests LapisTests EmeraldTabletTests AzothTests PrimaMateriaTests SolveEtCoagulaTests
 ./build/plugins/Antioch/AntiochTests_artefacts/Release/AntiochTests test-output   # xvfb-run on headless Linux
 ```
 
@@ -1592,9 +1668,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
 - **Antioch:** echo timing, reverb decay time, how much ducking reduces the reverb, that
   shimmer can't self-oscillate, that nothing enters the throw delay until thrown,
   auto-throw only at phrase ends, and key following.
-- **Cause & Effect:** bar-accurate timed builds, exactly one drop, the bass removed late in
-  the build and back after the drop, the tonal riser landing on the key's root, and that
-  it's bit-transparent at 0.
+- **Transmutation:**
+  - All 118 moves are in the catalogue. Every playable move stays finite and changes the sound.
+  - Beat-repeats repeat exactly, reverses play backwards exactly, and snap-to-silence is
+    sample-accurate.
+  - The director plans the same way every time. It honours Never, Always, locks and re-rolls,
+    and spice. It gives roles and audio types only the moves that suit them.
+  - It also covers the story arc, vocal priority, genres, motifs, the fake drop, the countdown,
+    contagion, call and response and signature moves.
+  - Builds and drops at full spice stay level-matched.
 - **Correspondence:** chord spelling, that Auto chords stay in the scale for every scale,
   that voice leading reduces movement, every rhythm pattern, MIDI files read back
   correctly, and key broadcast.
@@ -1647,7 +1729,7 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   edit works, and a song too short for three drops gets fewer.
 - **Fix buttons:** each coach problem carries its fix; Prima Materia lowers an unmuted
   breakdown by 2 dB, leaves a muted one alone, applies each fix once, and undoes it; the
-  Drop 2+ column starts from the drop's settings; Cause & Effect and Azoth step their
+  Drop 2+ column starts from the drop's settings; Transmutation and Azoth step their
   build and later-drop controls; a plugin loaded later doesn't replay old fixes; the
   fixed sections are re-measured.
 - **Snapshots:** Save stores each plugin's own settings, Recall restores them, an empty
@@ -1668,8 +1750,8 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   sections as markers (Groove, Drop, Breakdown, Drop 2).
 - **Final-drop key change:** Ouroboros shares the lift, which starts at the last drop and
   runs to the end; song chords move a semitone up there and nowhere else; Azoth's impact
-  lands on B1 instead of A1 with +2; Antioch's harmonies go from A to B; Cause & Effect's
-  build riser aims for the new root.
+  lands on B1 instead of A1 with +2; Antioch's harmonies go from A to B; Transmutation's
+  key-change sweep aims for the new key.
 - **Gate fills:** Gap silences the last beat before a drop; Stutter chops at 1/32 only in
   the fill bar; Auto plays half-time into a breakdown and a roll into the first drop;
   Off plays the pattern through.
@@ -1888,7 +1970,7 @@ shared/                  code used by every plugin
   SuiteUI.*              shared look-and-feel, knobs, toggles, tabs
   TestUtils.h            offline render helpers for the tests
 plugins/Antioch/         Engines.h (echo, reverb, throw), processor, tabbed UI, tests
-plugins/CauseAndEffect/  BuildClock.h (timed build logic), processor, UI, tests
+plugins/Transmutation/   Effects.h (the 118 moves), Engine.h (the stages), Recipes.h (each move), Director.h (the planning), processor, UI, tests
 plugins/Correspondence/  ChordEngine.h (theory, voicing, patterns, MIDI), preview synth, UI, tests
 plugins/Kybalion/        Engines.h (gate, ducker, sidechain trigger), step grid, curve view, tests
 plugins/Vibration/       EQ, oversampled saturation, 3-band multiband, width, auto gain, tests

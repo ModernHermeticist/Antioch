@@ -9,7 +9,7 @@
 # CMake 3.22 or newer, Git, and an internet connection the first time (CMake fetches JUCE).
 
 param(
-    [string[]] $Plugins = @("Antioch", "CauseAndEffect", "Correspondence", "Kybalion", "Vibration", "Mentalism",
+    [string[]] $Plugins = @("Antioch", "Transmutation", "Correspondence", "Kybalion", "Vibration", "Mentalism",
                             "Ouroboros", "Lapis", "EmeraldTablet", "Azoth", "PrimaMateria", "SolveEtCoagula", "Quintessence"),
     [string] $BuildDir = "build-win",
     [switch] $NoInstall
