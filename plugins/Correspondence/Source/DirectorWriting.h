@@ -75,7 +75,8 @@ namespace chords::directed
             if (m.acts (dr::pCorrespondence) && m.gesture[dr::pCorrespondence] == dr::gCoBassOut && part == Part::Bass)
                 changed += detail::clear (notes, m.atQ - barQ, m.atQ);
             // harmony into the drop
-            if (m.kind == dr::kIntoDrop && (part == Part::Chords || part == Part::Bass))
+            const auto bassOut = m.edit == dr::eBassOut || (m.acts (dr::pCorrespondence) && m.gesture[dr::pCorrespondence] == dr::gCoBassOut);
+            if (m.kind == dr::kIntoDrop && (part == Part::Chords || (part == Part::Bass && ! bassOut)))   // (a bass that rests stays resting)
             {
                 const auto a = (double) m.atQ - barQ, b = (double) m.atQ;
                 const auto around = (int) std::round (detail::meanPitch (notes, a - barQ, b, part == Part::Bass ? 40.0 : 64.0));

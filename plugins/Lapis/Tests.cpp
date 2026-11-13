@@ -284,7 +284,10 @@ int main (int argc, char** argv)
         p->fixes->poll();
         check (std::abs (p->apvts.getRawParameterValue (LapisProcessor::tiltId)->load()) < 0.01f, "'brighter' tilts it back");
         p->maxReductionDb.store (7.5f);
-        check (std::abs (p->suiteStatus().metrics[0] - 7.5f) < 0.01f, "it tells the suite how hard the limiter is working");
+        p->hearingMaster.store (true);
+        check (std::abs (p->suiteStatus().metrics[0] - 7.5f) < 0.01f, "with the master preview on, it tells the suite how hard the limiter is working");
+        p->hearingMaster.store (false);
+        check (p->suiteStatus().metrics[0] == 0.0f, "the premaster (preview off) has no limiting in it");
     }
 
     section ("Follows Mentalism's target");
@@ -328,13 +331,16 @@ int main (int argc, char** argv)
                 for (int c = 0; c < 2; ++c) in.copyFrom (c, (int) pos, b, c, 0, n);
             }
         }
-        render (*p, 4.0, src, &out);
+        render (*p, 4.0, [&in] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int c = 0; c < 2; ++c) b.copyFrom (c, 0, in, c, (int) pos, b.getNumSamples());   // the same audio, sample for sample
+        }, &out);
         const auto lat = p->getLatencySamples();
         float worst = 0.0f;
         for (int i = lat; i < out.getNumSamples(); ++i) worst = juce::jmax (worst, std::abs (out.getSample (0, i) - in.getSample (0, i - lat)));
         check (worst < 1.0e-6f, "the output is the input, sample for sample (delayed by the reported latency): off by " + juce::String (worst, 8));
-        const auto inPeak = in.getMagnitude (0, 0, in.getNumSamples());
-        check (inPeak > 1.0f && out.getMagnitude (0, 0, out.getNumSamples()) > 1.0f, "over full scale stays over full scale: nothing clamps it");
+        const auto inPeak = in.getMagnitude (0, 0, in.getNumSamples() - lat), outPeak = out.getMagnitude (0, lat, out.getNumSamples() - lat);
+        check (std::abs (inPeak - outPeak) < 1.0e-6f, "the peaks come out exactly as they went in (" + juce::String (inPeak, 3) + "): nothing clamps or turns them up");
         check (p->premasterPeakDb.load() > -6.0f, "and the premaster check sees peaks over -6 dBFS: " + juce::String (p->premasterPeakDb.load(), 1) + " dBTP");
         check (p->gainDb.load() != 0.0f || p->outShortTerm.load() > -70.0f, "the master preview keeps learning alongside (for the A/B)");
 

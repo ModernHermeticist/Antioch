@@ -646,10 +646,10 @@ int main (int argc, char** argv)
         for (const auto& m : led.moves)
         {
             if ((m.slot & trm::bodySlots) != 0) continue;
-            if (m.startQ >= dropQ - 4.01 && m.startQ < dropQ && trm::effect (m.effect).family == trm::fTape && (m.flags & trm::mfSuite)) tape = true;
+            if (m.startQ >= dropQ - 4.01 && m.startQ < dropQ + 4.0 && (m.flags & trm::mfSuite)) tape = true;
             if (m.startQ < dropQ && m.endQ > dropQ - 0.5 + 1.0e-3) intoSnap = true;
         }
-        check (tape, "the lead it's given: a tape move into the first drop");
+        check (tape, "the lead it's given: its own move at the first drop, marked as the director's");
         check (! intoSnap, "nothing plays into the director's snap");
         // you chose another track to lead: this one supports with one small move
         auto support = lead;

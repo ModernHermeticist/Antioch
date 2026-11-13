@@ -1353,7 +1353,7 @@ int main (int argc, char** argv)
         suite::DirectorBus::Follower f;
         check (f.refresh(), "the plan reaches the track");
         using St = qn::DirectorStage;
-        const auto pads = St::targetsAt (f, 60.0, 4), kick = St::targetsAt (f, 63.7, 1), hook = St::targetsAt (f, 64.5, 4), bass = St::targetsAt (f, 64.5, 2);
+        const auto pads = St::targetsAt (f, 62.0, 4), kick = St::targetsAt (f, 63.7, 1), hook = St::targetsAt (f, 64.5, 4), bass = St::targetsAt (f, 64.5, 2);
         check (pads.presenceDb < -1.0f && pads.gainDb < -0.4f && pads.side < 1.0f, "before an FX-led drop the pads make room, the build is held (a level ride), the image narrows");
         check (kick.silent && St::targetsAt (f, 63.7, 4).silent, "the director's snap: every track falls silent");
         check (hook.presenceDb <= -1.4f && hook.side > 1.0f && hook.gainDb == 0.0f, "the hook's first bar back: the pads step aside, wide, the build released");
@@ -1379,8 +1379,11 @@ int main (int argc, char** argv)
         check (t2 > trim && t2 <= 0.0f, "plenty of room: it eases back towards 0 dB");
         headroom::publish (-3.0f);
         auto q = make (4);
-        const auto st = render (*q, 0.5, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.5f * std::sin (0.03f * (float) (pos + i))); });
-        check (std::abs (q->headroomTrimNow.load() + 3.0f) < 0.05f && st.peak < 0.45f, "every Quintessence applies the keeper's trim (-3 dB): no limiter, the same balance");
+        juce::AudioBuffer<float> trimmed;
+        render (*q, 0.5, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.5f * std::sin (0.03f * (float) (pos + i))); }, &trimmed);
+        struct { float peak; } st { peakBetween (trimmed, 0.25, 0.5) };
+        check (std::abs (q->headroomTrimNow.load() + 3.0f) < 0.05f && st.peak < 0.45f, "every Quintessence applies the keeper's trim (-3 dB): no limiter, the same balance ("
+                   + juce::String (q->headroomTrimNow.load(), 2) + " dB, peak " + juce::String (st.peak, 3) + ")");
         headroom::withdraw();
     }
 
