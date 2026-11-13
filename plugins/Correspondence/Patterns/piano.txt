@@ -116,3 +116,10 @@ Soaring piano anthem | 1 | EH | UC | 0.85 | - | c--- ---- c--- ---- | c--- c--- 
 Hypnotic piano loop | 2 | KD | TY | 0.75 | - | r... t... r... t... | r.t. f.t. r.t. f.t. | rtfr tfrt rtfr tfrt | rtfr tfrt dddd uuuu | uuuu dddd rtfr tfrt | rtfR rtfr rtfR rtfr | s | - |
 Playful two hands | 1 | HE | UV | 0.55 | - | <r... .... r... .... + ..c. .... ..c. .... | <r... ..r. r... ..r. + ..c. ..c. ..c. ..c. | <r... ..r. r... ..r. + ..cc ..c. ..cc ..c. | <r... ..r. n... N... + ..cc ..cc ..cc cccc | <r... ..r. u... N... + .ccc ..cc .ccc cccc | <r... ..r. r... ..r. + .cc. ..c. .cc. ..c. | - | - |
 Heroic octave march | 1 | P | OU | 0.6 | - | <l... .... l... .... + c... .... c... .... | <l... l... l... l... + c... c... c... c... | <l... l... l... l... + c.c. c.c. c.c. c.c. | <l... l... N... N... + c.cc c.cc CCCC CCCC | <N... l... N... l... + CCCC c.cc CCCC c.cc | <l... l... l... l... + cc.c c.c. cc.c c.c. | - | - |
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful ballad lift | 0 | H | UPV | 1.0 | - | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- c--- C--- ---- | <r--- ---- r--- ---- + C--- c--- c--- ---- | <r--- ---- f--- ---- + c--- ---- C--- ----
+Dark sparse ballad | 0 | K | TYO | 1.0 | - | <l--- ---- ---- ---- | <l--- ---- ---- ---- + c--- ---- ---- ---- | <l--- ---- ---- ---- + c--- ---- c--- ---- | <l--- ---- l--- ---- + c--- ---- C--- ---- | <l--- ---- l--- ---- + C--- ---- c--- ---- | <l--- ---- ---- ---- + c--- ---- c--- ----
+Euphoric house stabs | 1 | E | UC | 0.4 | - | ..c. .... .... .... | ..c. .... ..c. .... | ..c. ..c. ..c. ..c. | ..cc ..cc ..cc cccc | .ccc ..cc ..cc cccc | ..c. ..cc ..c. ..cc
+Melancholic broken ninths | 2 | M | VP | 0.8 | - | r... .... .... .... | r... t... .... .... | r... t... f... 9... | r... t... f... 9.R. | 9... f... t... r.R. | r... t... 9... f... | - | 9 |
+Dreamy rippling intro | 2 | R | PV | 0.7 | - | r... .... .... .... | r... f... .... .... | r.f. R.f. r.f. R.f. | r.f. R.t. R.f. RRTT | R.t. R.f. r.f. TTRR | r.f. R.f. r.t. R.f. | - | - | IO

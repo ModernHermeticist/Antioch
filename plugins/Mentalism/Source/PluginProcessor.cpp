@@ -895,7 +895,7 @@ MentalismProcessor::Step MentalismProcessor::climb (const juce::String& key, con
 
 bool MentalismProcessor::harshPass (const Report& rep)
 {
-    if (! suite::Autopilot::on (suite::Autopilot::harshness) || rep.momentary < -40.0f || ! rep.tonalAvailable) { inHarsh = false; return false; }
+    if (! suite::Autopilot::on (suite::Autopilot::harshDipF) || rep.momentary < -40.0f || ! rep.tonalAvailable) { inHarsh = false; return false; }
     static const char* hz[] = { "31 Hz", "63 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz" };
     int worst = -1;
     float spike = 0.0f;

@@ -209,7 +209,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         // Autopilot (mixing): the space in time with the song - the pre-delay on the nearest note
         // value (1/128 to 1/16), the decay down to whole beats (the section scenes still lengthen it in
         // breakdowns and tighten it in drops)
-        if (suite::Autopilot::on (suite::Autopilot::mixing) && host.bpm > 1.0)
+        if (suite::Autopilot::on (suite::Autopilot::tempoSpaceF) && host.bpm > 1.0)
         {
             const auto beat = (float) (60.0 / host.bpm);
             if (s.predelayMs > 1.0f)
@@ -227,7 +227,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         }
         else timedNow.store (false);
         // Autopilot (harshness): while the master is harsh, the tails darken (damping down an octave at most)
-        const auto harsh = suite::Autopilot::on (suite::Autopilot::harshness) ? suite::Autopilot::harshNow() : 0.0f;
+        const auto harsh = suite::Autopilot::on (suite::Autopilot::tailDarkenF) ? suite::Autopilot::harshNow() : 0.0f;
         darkening += 0.2f * (harsh - darkening);
         if (! darkened && darkening > 0.3f) { darkened = true; suite::Autopilot::count (suite::Autopilot::tailsDamped); }
         if (darkening < 0.05f) darkened = false;
@@ -280,7 +280,9 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     // Reverb pump: the tail ducks to the kick pattern a Kybalion shares (no routing).
     // Autopilot (mixing): the space always makes room - it pumps with the kick (at least 35%) and
     // steps back for the vocal as well as the lead
-    const auto mixingRoom = suite::Autopilot::on (suite::Autopilot::mixing);
+    const auto mixingRoom = suite::Autopilot::on (suite::Autopilot::reverbRoomF);
+    const auto noteRoomOn = suite::Autopilot::on (suite::Autopilot::noteRoomF), wetSafeOn = suite::Autopilot::on (suite::Autopilot::wetMonoSafeF),
+               deessOn = suite::Autopilot::on (suite::Autopilot::deessSpaceF);
     const auto pumpDepth = mixingRoom ? juce::jmax (0.35f, value (Verb::pump)) : value (Verb::pump);
     const auto kickPattern = pumpDepth > 0.0f && host.playing && host.hasPpq ? suite::KickBus::read() : suite::KickPatternSet {};
     const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
@@ -289,7 +291,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     // The song's end (the map's last bar): the space fades to silence over the next 2 bars
     {
         float target = 1.0f;
-        if (suite::Autopilot::on (suite::Autopilot::mixing) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
+        if (suite::Autopilot::on (suite::Autopilot::cleanEndingF) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
         {
             const auto over = (host.ppq - sections.getMap().totalBars * host.barQuarters()) / (2.0 * host.barQuarters());
             if (over > 0.0) target = (float) juce::jlimit (0.0, 1.0, 1.0 - over);
@@ -297,11 +299,11 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         if (target < 0.99f && endFade >= 0.99f) suite::Autopilot::count (suite::Autopilot::endingsFaded);
         endFade = target;
     }
-    const auto holdLevel = suite::Autopilot::on (suite::Autopilot::stability);
+    const auto holdLevel = suite::Autopilot::on (suite::Autopilot::levelMatchF);
     // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
     const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
     {
-        const auto hz = mixingRoom && ! onLeadTrack.load() ? suite::Autopilot::leadPitch() : 0.0f;
+        const auto hz = noteRoomOn && ! onLeadTrack.load() ? suite::Autopilot::leadPitch() : 0.0f;
         const auto act = hz > 100.0f ? juce::jlimit (0.0f, 1.0f, suite::ActivityBus::read (suite::ActivityBus::lead)) : 0.0f;
         if (hz > 100.0f && std::abs (hz - noteDipHz) > 0.01f * hz)
         {
@@ -373,7 +375,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         auto sendL = inL, sendR = inR;   // what feeds the echo, reverb and throws
         // Autopilot (mixing): the space is de-essed - an "s" that spikes 6 dB over the recent 7 kHz
         // level comes down in what's sent in (the track itself keeps it)
-        if (mixingRoom)
+        if (deessOn)
         {
             const auto bl = sibSend[0].bandpass (inL) / 1.5f, br = sibSend[1].bandpass (inR) / 1.5f;
             const auto e = sibEnv.process (0.5f * (std::abs (bl) + std::abs (br)));
@@ -496,7 +498,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             wetLL += wetCoeff * ((double) spaceL * spaceL - wetLL);
             wetRR += wetCoeff * ((double) spaceR * spaceR - wetRR);
             const auto corr = wetLL * wetRR > 1.0e-14 ? wetLR / std::sqrt (wetLL * wetRR) : 1.0;
-            const auto target = mixingRoom && corr < -0.2 ? 0.5f : 1.0f;
+            const auto target = wetSafeOn && corr < -0.2 ? 0.5f : 1.0f;
             wetWidth += (target < wetWidth ? 0.002f : 0.0002f) * (target - wetWidth);
             if (wetWidth < 0.999f)
             {
@@ -679,7 +681,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
 bool AntiochProcessor::runawayTick()
 {
-    if (! runawayNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::stability)) return false;
+    if (! runawayNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::runawayGuardF)) return false;
     using namespace Params;
     juce::StringArray moved;
     for (int t = 0; t < numTaps; ++t)

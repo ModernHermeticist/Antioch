@@ -1131,5 +1131,26 @@ int main (int argc, char** argv)
         suite::PlanBus::reset();
     }
 
+
+    section ("Autopilot: each fix has its own switch, saved with the project");
+    {
+        suite::Autopilot::reset();
+        AutopilotPanel panel;
+        check ((int) panel.fixes.size() == suite::Autopilot::numFeatures && panel.fixes[(size_t) suite::Autopilot::humF]->getToggleState(), "every fix is listed, on");
+        panel.fixes[(size_t) suite::Autopilot::humF]->setToggleState (false, juce::sendNotificationSync);
+        check (! suite::Autopilot::on (suite::Autopilot::humF) && suite::Autopilot::on (suite::Autopilot::maskingF), "switching one fix off leaves the rest of its group on");
+        suite::Autopilot::set (suite::Autopilot::harshness, false);
+        check (! suite::Autopilot::on (suite::Autopilot::spikeTamerF) && suite::Autopilot::switchedOn (suite::Autopilot::spikeTamerF), "a fix runs only when its group is on too");
+        auto p = std::make_unique<OuroborosProcessor>();
+        juce::MemoryBlock state;
+        p->getStateInformation (state);
+        suite::Autopilot::reset();
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (! suite::Autopilot::switchedOn (suite::Autopilot::humF) && suite::Autopilot::switchedOn (suite::Autopilot::maskingF) && ! suite::Autopilot::on (suite::Autopilot::harshness),
+               "a saved project brings back each fix's switch");
+        suite::Autopilot::reset();
+    }
+
     return finish();
 }

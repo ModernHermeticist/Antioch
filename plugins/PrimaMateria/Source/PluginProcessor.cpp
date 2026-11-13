@@ -712,7 +712,7 @@ void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     // as it came in, with only the autopilot's DC / rumble filter
     if (! preview)
     {
-        const auto cleanup = suite::Autopilot::on (suite::Autopilot::stability);
+        const auto cleanup = suite::Autopilot::on (suite::Autopilot::dcFilterF);
         for (int c = 0; c < buffer.getNumChannels(); ++c)
         {
             auto* out = buffer.getWritePointer (c);

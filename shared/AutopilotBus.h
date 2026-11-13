@@ -24,6 +24,42 @@ namespace suite::Autopilot
 {
     enum Group : uint32_t { harshness = 1u, stability = 2u, arrangement = 4u, mixing = 8u };
 
+    /** Each automatic fix, with its own switch inside its group (it runs when both are on). */
+    enum Feature
+    {
+        // harshness
+        harshDipF, spikeTamerF, driveEaseF, tailDarkenF, sharedResonanceF,
+        // stability
+        runawayGuardF, filterRingingF, dcFilterF, lowBassFoldF, stereoRideF, levelMatchF, driveLevelF,
+        // arrangement
+        densityF, turnTakingF, hangoverTrimF,
+        // mixing
+        maskingF, liftF, lowOwnerF, kickTransientsF, monoLowsF, bassNotesF, harmonicsF, sootheF, drumHitsF, noiseFloorF,
+        effectReturnsF, sectionEqF, reverbRoomF, noteRoomF, tempoSpaceF, kickBassDipF, layerSpreadF, kickTuneF, drumBusGlueF,
+        fxInKeyF, subBeforeKickF, vocalPopsF, vocalBreathsF, clickGuardF, balanceF, wetMonoSafeF, humF, deessSpaceF,
+        cleanEndingF, layerAlignF, equalBypassF,
+        numFeatures
+    };
+    inline const char* featureName (int f)
+    {
+        static const char* n[] = {
+            "Dip the tracks causing a harsh moment", "Spike tamer on bright parts", "Ease the lead's drive on high notes", "Darken tails while it's harsh", "Share resonance cuts between tracks",
+            "Catch runaway echo and shimmer (Antioch)", "Catch a ringing build filter (Cause & Effect)", "DC and rumble filter (Prima Materia)", "Fold bass notes under C1 up (exports)",
+            "Narrow an image that cancels in mono", "Hold the space to the input's level (Antioch)", "Feed the drive a steady level (Vibration)",
+            "Thin parts when too many play (exports)", "Chops and candy take turns with the hook (exports)", "Trim notes ringing into a clashing chord (exports)",
+            "Dip under more important parts", "Lift a masked lead or vocal", "Leave the lows to the kick and bass", "Soften attacks landing on the kick", "Mono lows (under 120 Hz)",
+            "Even out bass notes", "Harmonics for small speakers (bass)", "Soothe ringing bands", "Even out drum hits", "Pull down the noise floor",
+            "Cuts on effect returns", "Own EQ for grooves, intro and outro", "Reverb pumps and steps back (kick, lead, vocal)", "Reverb dips at the lead's note", "Reverb timed to the tempo",
+            "Bass dips at the kick's note", "Spread layers left and right", "Tune the kick to the key", "Glue on a drum bus",
+            "Out-of-key FX re-pitched", "Clear the sub before each kick", "Cut vocal pops", "Lower vocal breaths", "Smooth clip starts and ends", "Re-centre a leaning track", "Keep the reverb mono-safe",
+            "Remove hum", "De-ess the space", "Fade the space after the last bar", "Line up layered parts", "Equal loudness for the A/B bypass" };
+        return f >= 0 && f < numFeatures ? n[f] : "";
+    }
+    inline uint32_t featureGroup (int f)
+    {
+        return f <= sharedResonanceF ? 1u : f <= driveLevelF ? 2u : f <= hangoverTrimF ? 4u : 8u;
+    }
+
     enum Counter
     {
         harshDips, spikesTamed, driveEased, tailsDamped, sharedResonances,
@@ -60,6 +96,7 @@ namespace suite::Autopilot
         struct Shared
         {
             std::atomic<uint32_t> disabled;                 // groups switched off
+            std::atomic<uint32_t> featuresOff[2];           // single fixes switched off (bit per Feature)
             std::atomic<float> harshAmount;                 // 0..1: how harsh the master is right now
             std::atomic<int32_t> harshBand;                 // octave band of the harshness (6 = 2 kHz, 7 = 4 kHz, 8 = 8 kHz)
             std::atomic<uint32_t> harshIds[maxHarshIds];    // the tracks causing it (low 12 bits of their Quintessence's id)
@@ -81,7 +118,7 @@ namespace suite::Autopilot
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v3", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v4", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -100,6 +137,21 @@ namespace suite::Autopilot
         auto& d = detail::shared().disabled;
         if (enabled) d.fetch_and (~(uint32_t) g); else d.fetch_or ((uint32_t) g);
     }
+
+    /** One fix: on when its group is on and it hasn't been switched off itself. */
+    inline bool on (Feature f) noexcept
+    {
+        auto& s = detail::shared();
+        return (s.disabled.load() & featureGroup (f)) == 0 && (s.featuresOff[f / 32].load() & (1u << (f % 32))) == 0;
+    }
+    inline bool switchedOn (Feature f) noexcept { return (detail::shared().featuresOff[f / 32].load() & (1u << (f % 32))) == 0; }
+    inline void set (Feature f, bool enabled) noexcept
+    {
+        auto& w = detail::shared().featuresOff[f / 32];
+        if (enabled) w.fetch_and (~(1u << (f % 32))); else w.fetch_or (1u << (f % 32));
+    }
+    inline uint64_t disabledFeatures() noexcept { auto& s = detail::shared(); return (uint64_t) s.featuresOff[0].load() | ((uint64_t) s.featuresOff[1].load() << 32); }
+    inline void setDisabledFeatures (uint64_t m) noexcept { auto& s = detail::shared(); s.featuresOff[0].store ((uint32_t) m); s.featuresOff[1].store ((uint32_t) (m >> 32)); }
 
     inline uint32_t disabledGroups() noexcept { return detail::shared().disabled.load(); }   // saved with Ouroboros
     inline void setDisabledGroups (uint32_t mask) noexcept { detail::shared().disabled.store (mask & 15u); }
@@ -246,7 +298,7 @@ namespace suite::Autopilot
     inline void reset() noexcept   // tests
     {
         auto& s = detail::shared();
-        s.disabled.store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
+        s.disabled.store (0); s.featuresOff[0].store (0); s.featuresOff[1].store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
         for (auto& h : s.harshIds) h.store (0);
         for (auto& c : s.counters) c.store (0);
         for (int i = 0; i < maxResonances; ++i) { s.resonanceId[i].store (0); s.resonanceHz[i].store (0.0f); s.resonanceMs[i].store (0); }

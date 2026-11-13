@@ -89,7 +89,7 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     double sectionProgress = -1.0, sectionBars = 0.0;
     // A clean ending: past the map's last bar, the wash and risers fade out over 2 bars
     endFade = 1.0f;
-    if (suite::Autopilot::on (suite::Autopilot::mixing) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
+    if (suite::Autopilot::on (suite::Autopilot::cleanEndingF) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
     {
         const auto over = (host.ppq - sections.getMap().totalBars * barQ) / (2.0 * barQ);
         if (over > 0.0) endFade = (float) juce::jlimit (0.0, 1.0, 1.0 - over);
@@ -353,7 +353,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
 bool CauseEffectProcessor::ringingTick()
 {
-    if (! ringingNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::stability)) return false;
+    if (! ringingNow.exchange (false) || ! suite::Autopilot::on (suite::Autopilot::filterRingingF)) return false;
     const auto res = apvts.getRawParameterValue (Params::filterRes)->load();
     if (res <= 0.05f) return false;
     setParameterPlain (apvts, Params::filterRes, juce::jmax (0.0f, res - 0.15f));

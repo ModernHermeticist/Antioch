@@ -99,3 +99,11 @@ Soaring violins | 0 | EH | UO | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- -
 Triplet string ostinato | 1 | EP | UO | 0.4 | - | r.....r..... | r..r..r..r.. | r.rr.rr.rr.r | rrrrrrffffff | ffffffrrrrrr | r.rr.rf.ff.f | - | - |
 Swung string pulse | 1 | RM | P | 0.45 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c. | s | 7 |
 Dark pushed legato | 0 | K | TYC | 1.0 | - | o--- ---- ---- ---- | o--- ---- ---- --p- | o--- ---- o--- --p- + <r--- ---- ---- ---- | o--- ---- c--- --P- + <r--- ---- N--- ---- | c--- ---- o--- --P- + <r--- ---- N--- ---- | o--- o--- ---- --p- + <r--- r--- ---- ----
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful high legato | 0 | H | UPV | 1.0 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- ---- c--- ---- + >t--- ---- u--- ---- | c--- ---- C--- ---- + >t--- ---- u--- ---- | C--- ---- c--- ---- + >u--- ---- t--- ---- | c--- ---- C--- ---- + >t--- ---- f--- ----
+Dark cello drone | 0 | K | OYT | 1.0 | - | <r--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- c--- ---- | <r--- ---- r--- ---- + c--- ---- C--- ---- | <r--- ---- r--- ---- + C--- ---- c--- ---- | <r--- ---- ---- ---- + c--- ---- c--- ----
+Melancholic violin line | 0 | M | VPO | 1.0 | - | >t--- ---- ---- ---- | >t--- ---- d--- ---- | >t--- d--- d--- ---- | >t--- d--- u--- d--- | >f--- d--- d--- r--- | >t--- ---- d--- d---
+Euphoric spiccato | 1 | E | UC | 0.4 | - | c... c... .... .... | c.c. c.c. c.c. c.c. | cccc c.cc cccc c.cc | cccc cccc CCCC CCCC | CCCC cccc CCCC cccc | cc.c cccc cc.c cccc
+Driving tremolo build | 1 | D | TUC | 0.8 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c-c- c-c- c-c- c-c- | cccc cccc CCCC CCCC | CCCC cccc CCCC CCCC | c-c- c-cc c-c- c-cc | - | - | B
+Pizzicato walk down | 1 | MH | PVO | 0.4 | - | r... .... .... .... | r... ..d. .... d... | r... d... d... d... | r.d. d.d. d.d. u.u. | u.u. d.d. d.d. r.r. | r... d... d.d. d...

@@ -70,3 +70,11 @@ Dreamy echo counter | 0 | R | PV | 0.9 | - | .... f--- ---- ---- | .... f--- ...
 Uplifting run counter | 0 | E | UC | 0.7 | - | r... .... .... .... | r... .... t... .... | r... t... f... R... | r.t. f.R. u.d. d.d. | R.f. t.r. u.u. u.u. | r... t... f... t...
 Classic offbeat counter | 0 | ED | C | 0.6 | - | ..f. .... .... .... | ..f. .... ..f. .... | ..f. ..t. ..f. ..R. | ..f. ..t. ..f. .ftR | ..R. ..f. ..t. .tfR | ..f. ..t. ..f. ..t.
 Vocal gap counter | 0 | MRH | V | 0.9 | - | .... .... .... t--- | .... .... f--- t--- | .... .... f--- t--- | .... .... f--- d--d | .... .... t--- u--u | .... .... f--- r---
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful sixths counter | 0 | H | UPV | 0.9 | - | t--- ---- ---- ---- | t--- ---- f--- ---- | t--- f--- u--- ---- | t--- f--- u--- d--- | f--- t--- d--- u--- | t--- ---- f--- u---
+Driving answer stabs | 0 | D | UCT | 0.5 | - | .... ..f. .... .... | .... ..f. .... ..t. | ..r. ..f. ..t. ..f. | ..r. ..f. ..t. fffR | ..f. ..t. ..r. RRff | ..r. ..f. ..t. ..R.
+Dreamy high drift | 0 | R | PV | 1.0 | - | .... .... R--- ---- | .... .... R--- T--- | R--- ---- T--- d--- | R--- T--- d--- d--- | T--- R--- u--- u--- | .... R--- T--- ----
+Melancholic falling line | 0 | M | VPO | 0.9 | - | f--- ---- ---- ---- | f--- ---- d--- ---- | f--- d--- d--- ---- | f--- d--- d--- d--- | t--- d--- d--- r--- | f--- ---- d--- d---
+Epic rising counter | 0 | PE | OU | 0.9 | - | r--- ---- ---- ---- | r--- ---- u--- ---- | r--- u--- u--- ---- | r--- u--- u--- u--- | f--- u--- u--- R--- | r--- ---- u--- u---
+Psy offbeat counter | 0 | K | Y | 0.45 | - | ..r. .... .... .... | ..r. .... ..r. .... | ..r. ..t. ..r. ..f. | ..r. ..t. rrtt ..f. | ..t. ..r. ttrr ..f. | ..r. ..t. ..r. ..t.

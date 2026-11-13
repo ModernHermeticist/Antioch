@@ -139,6 +139,7 @@ namespace qn
         void beginBlock (const Context& c, int numSamples)
         {
             ctx = c;
+            for (int f = 0; f < suite::Autopilot::numFeatures; ++f) useF[(size_t) f] = c.mixing && suite::Autopilot::on ((suite::Autopilot::Feature) f);
             const auto mine = suite::Autopilot::priorityOf (c.role);
             const auto blockA = [&] (float tau) { return 1.0f - std::exp (-(float) numSamples / (tau * fs)); };
 
@@ -183,6 +184,9 @@ namespace qn
                 if (masked) lift = 1.5f;
                 if (lowOwned && c.role != 1 && c.role != 2 && c.role != 8 && juce::jmax (bandsDb[0], bandsDb[1]) > -55.0f) owner = 1.0f;
             }
+            if (! use (suite::Autopilot::maskingF)) want = { { { 0, 0, 0 }, { 0, 0, 0 } } };
+            if (! use (suite::Autopilot::liftF)) lift = 0.0f;
+            if (! use (suite::Autopilot::lowOwnerF)) owner = 0.0f;
             for (int k = 0; k < 2; ++k)
             {
                 auto& g = maskGain[(size_t) k];
@@ -206,14 +210,14 @@ namespace qn
             once (lowMix > 0.5f, 2, suite::Autopilot::lowEndCleared);
 
             // Bass on small speakers: the fundamentals' band against 250-500 Hz, over seconds
-            if (c.mixing && c.role == 2 && juce::jmax (bandsDb[0], bandsDb[1], bandsDb[2]) > -50.0f)
+            if (use (suite::Autopilot::harmonicsF) && c.role == 2 && juce::jmax (bandsDb[0], bandsDb[1], bandsDb[2]) > -50.0f)
             {
                 fundSlow += blockA (2.0f) * (juce::jmax (bandsDb[1], bandsDb[2]) - fundSlow);
                 upperSlow += blockA (2.0f) * (juce::jmax (bandsDb[3], bandsDb[4]) - upperSlow);
             }
             // (with a margin: the harmonics it adds raise the upper band themselves)
-            if (c.mixing && c.role == 2 && fundSlow > -50.0f && upperSlow < fundSlow - 12.0f) harmOn = true;
-            if (! c.mixing || c.role != 2 || fundSlow < -55.0f || upperSlow > fundSlow - 6.0f) harmOn = false;
+            if (use (suite::Autopilot::harmonicsF) && c.role == 2 && fundSlow > -50.0f && upperSlow < fundSlow - 12.0f) harmOn = true;
+            if (! use (suite::Autopilot::harmonicsF) || c.role != 2 || fundSlow < -55.0f || upperSlow > fundSlow - 6.0f) harmOn = false;
             const auto harmTarget = harmOn ? 1.0f : 0.0f;
             harmAmt += blockA (1.0f) * (harmTarget - harmAmt);
             harmonicsNow.store (harmAmt);
@@ -229,7 +233,7 @@ namespace qn
                 humSet = humHz;
             }
             // Layered parts: every half second, compare this track's attacks with the same role's others
-            if (c.mixing && c.ppq >= 0.0 && c.samplesPerQ > 0.0 && ++alignCheck % juce::jmax (1, (int) (0.5 * fs / juce::jmax (1, numSamples))) == 0)
+            if (use (suite::Autopilot::layerAlignF) && c.ppq >= 0.0 && c.samplesPerQ > 0.0 && ++alignCheck % juce::jmax (1, (int) (0.5 * fs / juce::jmax (1, numSamples))) == 0)
             {
                 const auto msPerQ = c.samplesPerQ / fs * 1000.0;
                 std::array<double, 16> mine {};
@@ -259,19 +263,19 @@ namespace qn
                 });
                 alignTarget = best * (float) fs / 1000.0f;
             }
-            if (! c.mixing) alignTarget = 0.0f;
+            if (! use (suite::Autopilot::layerAlignF)) alignTarget = 0.0f;
 
             // Kick and bass by note
-            if (c.mixing && c.role == 2 && c.kickBodyHz > 25.0f && std::abs (c.kickBodyHz - kickDipHz) > 0.5f)
+            if (use (suite::Autopilot::kickBassDipF) && c.role == 2 && c.kickBodyHz > 25.0f && std::abs (c.kickBodyHz - kickDipHz) > 0.5f)
             {
                 for (auto& f : kickDip) f.set (c.kickBodyHz, 4.0f, fs);
                 kickDipHz = c.kickBodyHz;
             }
-            if (c.role != 2 || c.kickBodyHz <= 25.0f) kickDipHz = 0.0f;
+            if (c.role != 2 || c.kickBodyHz <= 25.0f || ! use (suite::Autopilot::kickBassDipF)) kickDipHz = 0.0f;
 
             // Layers spread: another part with this role playing now
             float panTarget = 0.0f;
-            if (c.mixing && (c.role == 4 || c.role == 5))
+            if (use (suite::Autopilot::layerSpreadF) && (c.role == 4 || c.role == 5))
             {
                 int same = 0;
                 suite::Autopilot::forEachLive (c.id, [&] (int role, const float* other)
@@ -287,7 +291,7 @@ namespace qn
 
             // The kick in key: from the body's measured pitch, the nearest key note below it
             tuneRatio = 1.0;
-            if (c.mixing && c.role == 1 && c.keyValid && tuneBodyHz > 30.0f)
+            if (use (suite::Autopilot::kickTuneF) && c.role == 1 && c.keyValid && tuneBodyHz > 30.0f)
             {
                 const auto& steps = suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, c.keyScale)].steps;
                 const auto midi = 69.0 + 12.0 * std::log2 (tuneBodyHz / 440.0);
@@ -346,15 +350,15 @@ namespace qn
                 alignNowMs.store (alignSamples / fs * 1000.0f);
                 once (alignSamples / fs * 1000.0f > 0.4f, 14, suite::Autopilot::layersAligned);
             }
-            if (mix) hum (x);
-            if (mix && ctx.role != 1 && ctx.role != 3) clickGuard (x);
-            if (mix && ctx.role > 0 && stereo) balance (x);
+            if (use (suite::Autopilot::humF)) hum (x);
+            if (use (suite::Autopilot::clickGuardF) && ctx.role != 1 && ctx.role != 3) clickGuard (x);
+            if (use (suite::Autopilot::balanceF) && ctx.role > 0 && stereo) balance (x);
             if (mix)
             {
                 // Layers spread (before the mono lows, so the low end stays centred)
                 if (std::abs (panNow) > 0.001f && stereo) { x[0] *= 1.0f - panNow; x[1] *= 1.0f + panNow; }
                 // Mono lows
-                if (stereo)
+                if (stereo && use (suite::Autopilot::monoLowsF))
                 {
                     const auto mid = 0.5f * (x[0] + x[1]);
                     auto side = 0.5f * (x[0] - x[1]);
@@ -366,7 +370,7 @@ namespace qn
                     auto v = x[c];
                     if (lowMix > 0.001f) { const auto hp = lowSplit[(size_t) c].highpass (v); v += (hp - v) * lowMix; }
                     else lowSplit[(size_t) c].highpass (v);
-                    if (ctx.role == 2)
+                    if (ctx.role == 2 && use (suite::Autopilot::bassNotesF))
                     {
                         if (std::abs (noteGain - 1.0f) > 0.002f) v += bassLp[(size_t) c].lowpass (v) * (noteGain - 1.0f);
                         else bassLp[(size_t) c].lowpass (v);
@@ -375,7 +379,7 @@ namespace qn
                     if (liftGain > 0.05f) v = liftEq[(size_t) c].process (v);
                     x[c] = v;
                 }
-                if (ctx.role == 2) bassNotes (0.5f * (l + r));
+                if (ctx.role == 2 && use (suite::Autopilot::bassNotesF)) bassNotes (0.5f * (l + r));
                 if (ctx.role == 2 && kickDipHz > 0.0f)
                 {
                     const auto depth = kickMsNow < 200.0f ? 0.5f * std::exp (-kickMsNow / 60.0f) : 0.0f;   // up to 6 dB, gone in ~150 ms
@@ -386,8 +390,8 @@ namespace qn
                     }
                     once (depth > 0.25f, 10, suite::Autopilot::kickBassDips);
                 }
-                if (ctx.role == 1) tuneKick (x);
-                if (ctx.role == 2)
+                if (ctx.role == 1 && use (suite::Autopilot::kickTuneF)) tuneKick (x);
+                if (ctx.role == 2 && use (suite::Autopilot::subBeforeKickF))
                 {
                     // The sub clears just before each kick (and its first few ms)
                     kickNextNow -= ctx.msPerSample;
@@ -407,7 +411,7 @@ namespace qn
                     const auto h = harmBp.bandpass (std::tanh (4.0f * harmLp.lowpass (0.5f * (x[0] + x[1])))) * 0.2f * harmAmt;
                     x[0] += h; x[1] += h;
                 }
-                if (ctx.role == 4 || ctx.role == 5 || ctx.role == 7) soothe (x);
+                if ((ctx.role == 4 || ctx.role == 5 || ctx.role == 7) && use (suite::Autopilot::sootheF)) soothe (x);
             }
 
             // Envelopes for attacks, hits and the noise floor
@@ -420,13 +424,13 @@ namespace qn
             {
                 // Transients landing on the kick
                 kickMsNow += ctx.msPerSample;
-                const auto clashTarget = (ctx.role == 3 || ctx.role == 4 || ctx.role == 5 || ctx.role == 7) && kickMsNow < 25.0f && attack ? 0.708f : 1.0f;
+                const auto clashTarget = use (suite::Autopilot::kickTransientsF) && (ctx.role == 3 || ctx.role == 4 || ctx.role == 5 || ctx.role == 7) && kickMsNow < 25.0f && attack ? 0.708f : 1.0f;
                 clashGain += (clashTarget < clashGain ? a1ms : a40ms) * (clashTarget - clashGain);
                 if (clashTarget >= 1.0f && clashGain > 0.9999f) clashGain = 1.0f;
                 once (clashGain < 0.85f, 4, suite::Autopilot::transientsSoftened);
                 gain *= clashGain;
-                if (ctx.role == 1 || ctx.role == 3) gain *= hits (attack, a);
-                if (ctx.role != 8) gain *= floorGain (x);
+                if ((ctx.role == 1 || ctx.role == 3) && use (suite::Autopilot::drumHitsF)) gain *= hits (attack, a);
+                if (ctx.role != 8 && use (suite::Autopilot::noiseFloorF)) gain *= floorGain (x);
             }
             l = x[0] * gain;
             r = x[1] * gain;
@@ -675,7 +679,7 @@ namespace qn
             const auto low = popDet.lowpass (mono);
             const auto lf = popFast.process (std::abs (low)), ls = popSlow.process (std::abs (low));
             const auto broad = std::abs (mono);
-            if (lf > 3.0f * ls && lf > 0.05f && std::abs (low) > 0.6f * broad + 1.0e-4f && popHold == 0)
+            if (use (suite::Autopilot::vocalPopsF) && lf > 3.0f * ls && lf > 0.05f && std::abs (low) > 0.6f * broad + 1.0e-4f && popHold == 0)
             {
                 popHold = (int) (0.03f * fs);
                 suite::Autopilot::count (suite::Autopilot::plosivesCut);
@@ -695,7 +699,7 @@ namespace qn
             vocPeak = vocFast > vocPeak ? vocFast : vocPeak + peakRelease * (vocFast - vocPeak);
             const auto hf = breathHp.highpass (mono);
             vocHf += fastCoeff * ((double) hf * hf - vocHf);
-            const auto breath = vocPeak > 1.0e-5 && vocFast < vocPeak * 0.01 && vocFast > vocPeak * 1.0e-5 && vocHf > 0.4 * vocFast;
+            const auto breath = use (suite::Autopilot::vocalBreathsF) && vocPeak > 1.0e-5 && vocFast < vocPeak * 0.01 && vocFast > vocPeak * 1.0e-5 && vocHf > 0.4 * vocFast;
             const auto bTarget = breath ? 0.5f : 1.0f;
             breathGain += (bTarget < breathGain ? a20ms : a40ms) * (bTarget - breathGain);
             x[0] *= breathGain; x[1] *= breathGain;
@@ -795,6 +799,8 @@ namespace qn
         bool wasLoud = false;
         float a1ms = 0.0f, a5ms = 0.0f, a20ms = 0.0f, a40ms = 0.0f, a80ms = 0.0f, a200ms = 0.0f;
         std::array<bool, 16> counted {};
+        std::array<bool, suite::Autopilot::numFeatures> useF {};
+        bool use (suite::Autopilot::Feature f) const noexcept { return useF[(size_t) f]; }
         std::array<suite::Svf, 2> subSplit, popSplit;
         float subGain = 1.0f, kickNextNow = 1.0e9f;
         suite::Svf popDet, breathHp;

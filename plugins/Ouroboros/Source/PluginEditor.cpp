@@ -519,7 +519,34 @@ AutopilotPanel::AutopilotPanel()
         };
         addAndMakeVisible (b);
     }
-    setSize (640, 120 + 4 * 28 + suite::Autopilot::numCounters * 18);
+    // Each fix on its own (inside its group): a scrolling list on the right
+    for (int f = 0; f < suite::Autopilot::numFeatures; ++f)
+    {
+        auto t = std::make_unique<juce::ToggleButton> (suite::Autopilot::featureName (f));
+        t->setToggleState (suite::Autopilot::switchedOn ((suite::Autopilot::Feature) f), juce::dontSendNotification);
+        t->setColour (juce::ToggleButton::textColourId, Colours::text);
+        t->setColour (juce::ToggleButton::tickColourId, Colours::verdigris);
+        auto* raw = t.get();
+        t->onClick = [raw, f]
+        {
+            suite::Autopilot::set ((suite::Autopilot::Feature) f, raw->getToggleState());
+            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot: ") + suite::Autopilot::featureName (f) + (raw->getToggleState() ? " on" : " off"));
+        };
+        fixList.addAndMakeVisible (*t);
+        fixes.push_back (std::move (t));
+    }
+    for (size_t h = 0; h < headings.size(); ++h)
+    {
+        static const char* names[] { "HARSHNESS", "STABILITY", "ARRANGEMENT", "MIXING" };
+        headings[h].setText (names[h], juce::dontSendNotification);
+        headings[h].setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        headings[h].setColour (juce::Label::textColourId, Colours::dimText);
+        fixList.addAndMakeVisible (headings[h]);
+    }
+    fixView.setViewedComponent (&fixList, false);
+    fixView.setScrollBarsShown (true, false);
+    addAndMakeVisible (fixView);
+    setSize (1040, 140 + 4 * 28 + suite::Autopilot::numCounters * 18);
     startTimerHz (2);
 }
 
@@ -527,7 +554,27 @@ void AutopilotPanel::resized()
 {
     auto r = getLocalBounds().reduced (14);
     r.removeFromTop (48);
+    auto right = r.removeFromRight (400);
     for (auto& b : switches) b.setBounds (r.removeFromTop (28));
+    // The fixes, under a heading per group
+    right.removeFromTop (22);
+    fixView.setBounds (right);
+    int y = 0;
+    uint32_t lastGroup = 0;
+    for (int f = 0; f < (int) fixes.size(); ++f)
+    {
+        if (suite::Autopilot::featureGroup (f) != lastGroup)
+        {
+            lastGroup = suite::Autopilot::featureGroup (f);
+            const auto h = lastGroup == 1u ? 0 : lastGroup == 2u ? 1 : lastGroup == 4u ? 2 : 3;
+            headings[(size_t) h].setBounds (4, y + 2, 200, 18);
+            y += 22;
+        }
+        fixes[(size_t) f]->setBounds (8, y, right.getWidth() - 24, 22);
+        y += 22;
+    }
+    fixList.setSize (right.getWidth() - 12, y + 6);
+    fixList.repaint();
 }
 
 void AutopilotPanel::paint (juce::Graphics& g)
@@ -540,6 +587,14 @@ void AutopilotPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.setColour (Colours::dimText);
     g.drawText ("What the suite manages by itself while you choose sounds and effects. Each move is in What changed.", r.removeFromTop (18), juce::Justification::centredLeft);
+    {
+        // The fixes' list: its title and group headings
+        auto right = getLocalBounds().reduced (14).withTrimmedTop (48).removeFromRight (400);
+        g.setColour (Colours::text);
+        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        g.drawText ("Each fix on its own (it runs when its group is on too)", right.removeFromTop (20), juce::Justification::centredLeft);
+    }
+    r.removeFromRight (400);
     r.removeFromTop (8 + 4 * 28 + 10);
     g.setColour (Colours::text);
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));

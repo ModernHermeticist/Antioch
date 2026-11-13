@@ -92,3 +92,11 @@ Intimate muted brass | 0 | MR | VP | 1.0 | - | c--- ---- ---- ---- | c--- ---- c
 Hypnotic brass pulse | 1 | KD | TC | 0.4 | - | c... .... c... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc cccc cccc | cccc c.cc cccc c.cc | cc.c c.c. cc.c c.c. | s | - |
 Playful brass skips | 1 | HE | UV | 0.5 | - | ..c. .... ..c. .... | ..c. ..c. .c.. .... | ..c. ..cc .c.. ..c. | ..cc ..cc .c.c cccc | .c.c ..cc ..cc cccc | ..cc .c.. ..cc .c.. | - | - |
 Triplet horn hits | 1 | PE | OU | 0.5 | - | C........... | C.....C..... | C..C..C..... | C.CC.CC.CCCC | CCCC..C..C.C | C..C..C..C.C | - | - |
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful brass dawn | 0 | H | UOV | 1.0 | - | c--- ---- ---- ---- | c--- ---- ---- ---- + <r--- ---- ---- ---- | c--- ---- c--- ---- + <r--- ---- f--- ---- | c--- ---- C--- ---- + <r--- ---- u--- ---- | C--- ---- c--- ---- + <r--- ---- d--- ---- | c--- ---- C--- ---- + <r--- ---- f--- ----
+Dark low chorale | 0 | K | OTC | 1.0 | - | <r--- ---- ---- ---- | <r--- ---- ---- ---- + c--- ---- ---- ---- | <r--- ---- f--- ---- + c--- ---- c--- ---- | <r--- ---- f--- ---- + c--- ---- C--- ---- | <r--- ---- r--- ---- + c--- ---- C--- ---- | <r--- ---- f--- ---- + c--- ---- c--- ----
+Melancholic horn sigh | 0 | M | PVO | 1.0 | - | t--- ---- ---- ---- | t--- ---- d--- ---- | t--- d--- d--- ---- | t--- d--- d--- d--- | f--- d--- d--- r--- | t--- ---- d--- ----
+Euphoric brass stabs | 1 | E | UC | 0.5 | - | c... .... .... .... | c... .... c... .... | c... ..c. c... ..c. | c..c ..c. cccc CCCC | c..c ..c. c..c CCCC | c... ..c. c..c ..c.
+Driving brass sixteenths | 1 | D | TUC | 0.4 | - | c... c... .... .... | c... c... c... c... | c.c. c.c. c.c. c.c. | c.cc c.cc c.cc CCCC | CCCC c.cc c.cc c.cc | c.c. c.cc c.c. c.cc
+Fanfare answer | 1 | PE | OU | 0.6 | - | .... .... C... .... | .... .... C..C .... | .... C... C..C .... | .... C..C CCCC CCCC | C..C .... CCCC CCCC | .... C... C..C C...

@@ -73,3 +73,11 @@ Melancholic echo chops | 0 | M | VP | 0.7 | - | r--- .... .... .... | r--- .... 
 Classic vocal gate | 0 | ED | CU | 0.4 | - | r.r. .... .... .... | r.r. .... r.r. .... | r.r. r.r. r.r. r.r. | rrrr r.r. rrrr rrrr | r.r. rrrr r.r. rrrr | r.r. r.r. r.rr r.r.
 Orchestral chant chops | 0 | PK | O | 0.8 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- f--- r--- | r--- r--- rrrr f--- | r--- f--- RRRR r--- | r--- f--- r--- t---
 Build stutter climb | 0 | DE | UTC | 0.4 | - | r... .... .... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr uuuu uuuu | rrrr uuuu uuuu uuuu | r.r. r.r. rrrr rrrr | - | - | B
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful vowel skips | 0 | H | UV | 0.5 | - | r... .... .... .... | r... ..r. .... .... | r... ..r. ..f. .... | r... ..r. ..f. .t.t | r... ..f. ..t. .r.r | r... ..r. ..f. ..t.
+Driving chop pulse | 0 | D | TCU | 0.4 | - | r... r... .... .... | r... r... r... r... | r.r. r.r. r.r. r.r. | r.rr r.rr r.rr rrrr | rrrr r.rr r.rr r.rr | r.r. r.rr r.r. r.rr
+Dark reversed whispers | 0 | K | TY | 0.8 | - | .... .... ..r- ---- | .... ..r- .... ..r- | ..r- ..r- ..r- ..r- | ..r- ..r- rrrr rrrr | rrrr ..r- ..r- ..r- | ..r- .r-- ..r- .r--
+Epic choir chop hits | 0 | P | OU | 0.6 | - | R... .... .... .... | R... .... R... .... | R... ..R. R... ..R. | R..R ..R. RRRR RRRR | RRRR ..R. R..R ..R. | R... ..R. R..R ..R.
+Melancholic stutter vowel | 0 | M | VP | 0.5 | - | r... .... .... .... | r.r. .... .... .... | r.r. .... d.d. .... | r.r. ..d. d.d. ..dd | d.d. ..r. r.r. ..rr | r.r. ..d. d... ....
+Psy vowel spiral | 0 | K | Y | 0.35 | - | r... .... .... .... | r..u .... r..u .... | r.u. r.u. r.u. r.u. | ruru ruru udud udud | udud ruru udud ruru | r.u. r.d. r.u. r.d.

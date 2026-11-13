@@ -132,7 +132,7 @@ float VibrationProcessor::driveEaseDb() const
 {
     // Autopilot (harshness): high notes through heavy drive turn grainy - above the lead's usual
     // pitch (a quarter of an octave up and more), the drive eases off, up to 6 dB an octave up
-    if (! suite::Autopilot::on (suite::Autopilot::harshness)) return 0.0f;
+    if (! suite::Autopilot::on (suite::Autopilot::driveEaseF)) return 0.0f;
     const auto ease = 6.0f * juce::jlimit (0.0f, 1.0f, (pitchOffset.load() - 0.25f) / 0.75f);
     if (! easing && ease > 2.0f) { easing = true; suite::Autopilot::count (suite::Autopilot::driveEased); }
     if (ease < 0.5f) easing = false;
@@ -310,7 +310,7 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
         // Autopilot (stability): the drive sees a steady level (around -12 dBFS RMS, where it was voiced)
         // whatever arrives, and the level is given back after - so turning the synth up doesn't make it dirtier
         float levelIn = 1.0f;
-        if (suite::Autopilot::on (suite::Autopilot::stability))
+        if (suite::Autopilot::on (suite::Autopilot::driveLevelF))
         {
             const auto p = suite::SceneEngine::blockPower (buffer, n);
             if (p > 1.0e-8f) driveLevelPow += (1.0f - std::exp (-(float) n / (0.3f * sr))) * (p - driveLevelPow);

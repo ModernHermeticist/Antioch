@@ -71,3 +71,10 @@ Breakdown heartbeat | 0 | MR | OVP | 0.7 | - | r... .... .... .... | r..r .... .
 Euphoric gallop hits | 0 | E | UC | 0.7 | - | r... .... .... .... | r... .... r.rr .... | r.rr .... r.rr .... | r.rr r.rr r.rr rrrr | r.rr rrrr rrrr rrrr | r.rr .... r.rr r...
 Dreamy tide roll | 1 | RM | PVO | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- ---- ---- | z--- ---- ---- r--- | z--- ---- z--- rrrr | .... z--- ---- ----
 Driving thunder roll | 1 | DK | TYC | 1.0 | - | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- z--- z--- z--- | z--- z--- rrrr rrrr | z--- rrrr rrrr rrrr | z--- z--- z--- r.r.
+
+# --- batch 18 (... | fill 2 | high 2 | feel | colour | where)
+Hopeful pulse hits | 0 | H | UPV | 0.8 | - | r--- ---- ---- ---- | r--- ---- r--- ---- | r--- r--- r--- ---- | r--- r--- rrrr ---- | r--- rrrr r--- ---- | r--- r--- r--- r---
+Dark war drums | 0 | K | TYO | 0.8 | - | l... .... .... .... | l..l .... l... .... | l..l ..l. l..l .... | l..l ..l. llll llll | llll ..l. l..l llll | l..l ..l. l..l ..l.
+Epic triplet strikes | 0 | P | OU | 0.8 | - | r........... | r.....r..... | r..r..r..... | r.rr.rr.rrrr | rrrr..r..r.r | r..r..r..r..
+Melancholic slow roll | 1 | M | PVO | 1.0 | - | .... .... .... z--- | .... .... z--- ---- | z--- ---- ---- ---- | z--- ---- z--- ---- | z--- z--- ---- r--- | .... z--- ---- ----
+Driving sixteenth roll | 1 | D | UCT | 1.0 | - | r... r... r... r... | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | rrrr rrrr z--- ---- | z--- ---- rrrr rrrr | r.rr r.rr rrrr rrrr

@@ -556,6 +556,7 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     state.removeChild (state.getChildWithName ("Autopilot"), nullptr);
     juce::ValueTree autopilotTree ("Autopilot");
     autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
+    autopilotTree.setProperty ("fixesOff", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeatures()), nullptr);
     state.appendChild (autopilotTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -601,6 +602,7 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
     if (const auto ap = state.getChildWithName ("Autopilot"); ap.isValid())
     {
         suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
+        suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
         state.removeChild (ap, nullptr);
     }
     if (const auto mt = state.getChildWithName ("Moments"); mt.isValid())

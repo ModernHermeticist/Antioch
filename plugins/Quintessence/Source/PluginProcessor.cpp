@@ -165,7 +165,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         // "Hear without the automation": the track as it comes in - at the loudness it had with it,
         // so the comparison is about the sound, not the level
         bypassedNow.store (true);
-        if (abInPow > 1.0e-9 && abOutPow > 1.0e-9)
+        if (abInPow > 1.0e-9 && abOutPow > 1.0e-9 && suite::Autopilot::on (suite::Autopilot::equalBypassF))
             buffer.applyGain (juce::jlimit (0.25f, 4.0f, (float) std::sqrt (abOutPow / abInPow)));
         return;
     }
@@ -190,7 +190,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (pos.valid && pos.type == suite::SectionType::Breakdown) group = 1;
         // The drops are the main correction; grooves, intro and outro get their own on top (with the autopilot)
         if (pos.valid && (pos.type == suite::SectionType::Groove || pos.type == suite::SectionType::Intro || pos.type == suite::SectionType::Outro)
-            && suite::Autopilot::on (suite::Autopilot::mixing)) group = 3;
+            && suite::Autopilot::on (suite::Autopilot::sectionEqF)) group = 3;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
         if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; }
     }
@@ -247,7 +247,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     // Autopilot: Mentalism hears a harsh moment on the master and names this track as a cause:
     // its harsh band dips (up to 4 dB) only while the moment lasts
     int harshBandIdx = -1;
-    const auto harsh = suite::Autopilot::on (suite::Autopilot::harshness) && suite::Autopilot::harshCulprit (getInstanceId())
+    const auto harsh = suite::Autopilot::on (suite::Autopilot::harshDipF) && suite::Autopilot::harshCulprit (getInstanceId())
                            ? suite::Autopilot::harshNow (&harshBandIdx) : 0.0f;
     if (harsh > 0.0f && harshBandIdx >= 0 && harshBandIdx != harshBandNow)
     {
@@ -255,7 +255,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         harshBandNow = harshBandIdx;
     }
     const auto harshTargetDb = -4.0f * juce::jlimit (0.0f, 1.0f, harsh);
-    const auto rideOn = suite::Autopilot::on (suite::Autopilot::stability) && roleNow != 1 && roleNow != 2;   // (kick and bass are mono already)
+    const auto rideOn = suite::Autopilot::on (suite::Autopilot::stereoRideF) && roleNow != 1 && roleNow != 2;   // (kick and bass are mono already)
     // The energy curve (Ouroboros) sets how hard the glue holds: up to 2 dB tighter where the energy's drawn up
     const auto glueThr = value (qn::glueThrId) - (transitions ? 3.0f * buildProgress : 0.0f) - juce::jlimit (-2.0f, 2.0f, 2.0f * (energyRatio - 1.0f));
     // Kick-keyed glue: on the music bus, the shared kick (Kybalion) adds up to 1.5 dB just after each hit
@@ -340,10 +340,11 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (const auto key = suite::KeyBus::read(); key.valid) { lc.keyValid = true; lc.keyRoot = key.root; lc.keyScale = key.scale; }
         if (info.hasPpq && info.playing && info.bpm > 1.0) { lc.ppq = info.ppq; lc.samplesPerQ = sr * 60.0 / info.bpm; }
         live.beginBlock (lc, n);
-        if (mixing && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
+        if (mixing && suite::Autopilot::on (suite::Autopilot::monoLowsF) && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
     }
-    const auto shiftNow = mixing && roleNow == 7 ? fxShiftSemis.load() : 0.0f;
-    const auto notchHz = mixing && std::abs (shiftNow) < 0.05f ? keyNotchHz.load() : 0.0f;   // re-pitched, it needs no notch
+    const auto fxKey = suite::Autopilot::on (suite::Autopilot::fxInKeyF);
+    const auto shiftNow = fxKey && roleNow == 7 ? fxShiftSemis.load() : 0.0f;
+    const auto notchHz = fxKey && std::abs (shiftNow) < 0.05f ? keyNotchHz.load() : 0.0f;   // re-pitched, it needs no notch
     if (std::abs (shiftNow - fxShiftSet) > 0.01f) { for (auto& ps : fxShift) ps.setSemitones (shiftNow); fxShiftSet = shiftNow; }
     if (std::abs (notchHz - keyNotchSet) > 0.5f)
     {
@@ -936,7 +937,8 @@ bool QuintessenceProcessor::autoPass()
     }
 
     // The autopilot's quick, unjudged moves: an out-of-key FX note, an effect return's cuts
-    if (suite::Autopilot::on (suite::Autopilot::mixing)) { keyMove (role); returnsMove(); }
+    if (suite::Autopilot::on (suite::Autopilot::fxInKeyF)) keyMove (role);
+    if (suite::Autopilot::on (suite::Autopilot::effectReturnsF)) returnsMove();
 
     // At most one new move a pass, so the next pass can tell whether it helped. The kinds of
     // move (EQ, dynamics, width, resonances) take turns going first.
@@ -1197,7 +1199,7 @@ bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
 {
     // The music bus, and (with the autopilot's mixing) a drum bus: a track named drums, perc or beats
     const auto track = getTrackName().toLowerCase();
-    const auto drumBus = suite::Autopilot::on (suite::Autopilot::mixing) && (track.contains ("drum") || track.contains ("perc") || track.contains ("beat"));
+    const auto drumBus = suite::Autopilot::on (suite::Autopilot::drumBusGlueF) && (track.contains ("drum") || track.contains ("perc") || track.contains ("beat"));
     if ((role != qn::targets::musicBus && ! drumBus) || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
     if (drumBus && ! drumBusCounted) { drumBusCounted = true; suite::Autopilot::count (suite::Autopilot::drumBusGlued); }
     const auto thr = value (qn::glueThrId);
@@ -1220,7 +1222,7 @@ bool QuintessenceProcessor::deessMove (const Measurement& m, int role)
     // The vocal's de-esser; with the autopilot's harshness group on, the same spike tamer for hats,
     // leads, plucks and FX (stricter: their spikes must stand further out, and it holds less)
     const auto tamer = role != 6;
-    if ((tamer && ! (suite::Autopilot::on (suite::Autopilot::harshness) && (role == 3 || role == 5 || role == 7)))
+    if ((tamer && ! (suite::Autopilot::on (suite::Autopilot::spikeTamerF) && (role == 3 || role == 5 || role == 7)))
         || value (qn::autoMbId) < 0.5f || m.group == 1 || deessCooldown > 0) return false;
     const auto extra = tamer ? 2.0f : 0.0f;
     const auto depth = value (qn::deessDepthId);
@@ -1294,7 +1296,7 @@ bool QuintessenceProcessor::resonanceMove (const Measurement& m, int role)
     if (value (qn::autoEqId) < 0.5f || m.group == 1) return false;
     // Autopilot: tell the suite the resonance this track hears most, so tracks ringing at the same
     // frequency share the cut (they join in sooner, and each cuts less)
-    const auto sharing = suite::Autopilot::on (suite::Autopilot::harshness);
+    const auto sharing = suite::Autopilot::on (suite::Autopilot::sharedResonanceF);
     {
         float strongest = 0.0f, prom = 0.0f;
         for (const auto& c : candidates) if (c.passes >= 2 && c.prominence > prom) { prom = c.prominence; strongest = c.hz; }

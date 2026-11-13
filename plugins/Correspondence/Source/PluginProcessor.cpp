@@ -459,11 +459,11 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
     // Autopilot (arrangement): song parts don't ring on into a chord they clash with
-    if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && suite::Autopilot::on (suite::Autopilot::arrangement))
+    if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
         if (suite::SectionMap map; suite::SectionBus::read (map))
             if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
     // Autopilot (stability): bass notes under D1 move up an octave
-    if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::stability))
+    if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
         if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
     return chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
                              apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
@@ -559,7 +559,8 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     auto patterns = Params::readSongPatterns (apvts);
     patterns.melody = melodySettings();
     patterns.vocalBars = suite::VocalBus::read();
-    patterns.manageDensity = patterns.takeTurns = suite::Autopilot::on (suite::Autopilot::arrangement);
+    patterns.manageDensity = suite::Autopilot::on (suite::Autopilot::densityF);
+    patterns.takeTurns = suite::Autopilot::on (suite::Autopilot::turnTakingF);
     return patterns;
 }
 
@@ -725,10 +726,10 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         if (apvts.getRawParameterValue (Params::songFills)->load() > 0.5f)
             parts.push_back ({ "Fills", chords::fillsClip (map) });   // General MIDI drums: use FPC or a drum kit
         for (auto& [name, notes] : parts)
-            if (name != "Chords" && name != "Fills" && suite::Autopilot::on (suite::Autopilot::arrangement))
+            if (name != "Chords" && name != "Fills" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
                 if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
         for (auto& [name, notes] : parts)
-            if (name == "Bass" && suite::Autopilot::on (suite::Autopilot::stability))
+            if (name == "Bass" && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
                 if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
         if (thinned > 0) suite::Autopilot::count (suite::Autopilot::partsThinned, (uint32_t) thinned);
         if (turned > 0) suite::Autopilot::count (suite::Autopilot::turnsTaken, (uint32_t) turned);
