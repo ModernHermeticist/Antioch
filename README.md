@@ -53,7 +53,7 @@ Ouroboros isn't running, every plugin plays its own transitions as before.
 - Each moment (a section change, a breakdown's hint and peak, a phrase end, a bar you pin)
   gets one **hero**: the plugin that leads it, with its gesture. The others **support**
   quietly or rest.
-- Into a drop, the moment can be a **handoff**: Azoth's riser ends into the director's snap,
+- Into a drop, the moment can be a **handoff**: Azoth's riser ends into Transmutation's tape stop,
   then Kybalion's gate re-enters on the one. It plays as one sentence, not three noises.
 - The players and their gestures:
   - **Transmutation**: repeat, reverse, pitch, filter, space, grain, stereo or tape stop, on
@@ -65,8 +65,10 @@ Ouroboros isn't running, every plugin plays its own transitions as before.
     hook's first notes alone in the breakdown.
   - **Scenes**: how a drop arrives: a slam, staggered (kick, bass, then the rest), or through
     a filter that opens over a bar.
-  - **Silence**, owned by the director: a half-beat snap, a whole-beat breath, a kick-only
-    bar, or one fake drop per song.
+  - **Silence**, owned by the director: a kick-only bar, or one fake drop per song. A full
+    silence before a drop (a half-beat snap or a whole-beat breath) is off by default: switch
+    on *Silences before drops* on the Director page (or tell the chat "allow silence before
+    drops") for a song that wants it.
 
 **How it plans.**
 - **An energy budget per moment**, from the tension curve, the story, your painted intent and
@@ -152,7 +154,7 @@ Ouroboros isn't running, every plugin plays its own transitions as before.
   each moment, and anything it played outside the plan.
 - **Version lock:** keeps this exact plan, so a render can be redone later.
 - **The ticker:** Ouroboros shows what's next ("Next: bar 89 (in 6 beats), into the drop:
-  Azoth impact, snap"). Every plugin's window has a director strip: "bar 89: you lead, gate
+  Azoth impact"). Every plugin's window has a director strip: "bar 89: you lead, gate
   roll", or what it does around the moment.
 
 ## How much runs on its own

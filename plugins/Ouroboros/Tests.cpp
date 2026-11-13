@@ -1190,6 +1190,22 @@ int main (int argc, char** argv)
         check (firstDrop != plan.moments.end() && firstDrop->buildHoldDb > 0.0f && firstDrop->cutTails && firstDrop->wideOnHit > 0.0f && firstDrop->evenDb == 0.0f,
                "into a drop: the build held back (a level ride, no limiter), the tails cut, wide on the hit");
 
+        // no full silence before a drop unless you allow it (the Snap and the Breath)
+        auto noSnaps = [] (const dr::Plan& p) { for (const auto& m : p.moments) if (m.silence == dr::gSiSnap || m.silence == dr::gSiBreath) return false; return true; };
+        bool allOff = true, anyOn = false;
+        for (uint32_t sd = 1; sd <= 20; ++sd)
+        {
+            auto off = in; off.seed = sd; off.story = dr::storyFestival;
+            allOff = allOff && noSnaps (dr::makePlan (off));
+            auto on = off; on.silencesBeforeDrops = true;
+            anyOn = anyOn || ! noSnaps (dr::makePlan (on));
+        }
+        check (allOff && anyOn, "by default no Snap or Breath before any drop (20 Festival plans); switched on, they come back");
+        ouro::DirectorHost silenceHost;
+        check (! silenceHost.settings.silencesBeforeDrops && silenceHost.chat ("allow silence before drops").startsWith ("Silences before drops on")
+                   && silenceHost.settings.silencesBeforeDrops && silenceHost.chat ("no silence before drops").startsWith ("No full silence") && ! silenceHost.settings.silencesBeforeDrops,
+               "the switch: off by default, on and off from the chat too");
+
         // stories, safe mode, the plugins in the session
         auto restrained = in; restrained.story = dr::storyRestrained;
         auto festival = in; festival.story = dr::storyFestival;

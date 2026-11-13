@@ -326,6 +326,7 @@ namespace suite::director
         double bpm = 138.0, barQ = 4.0;
         int story = storyClassic, genre = genreAuto;
         bool safe = false;
+        bool silencesBeforeDrops = false;            // the Snap and the Breath (full silence before a drop): off unless you switch them on
         float bigger = 0.0f;                         // -2..2: the "bigger / smaller" knob
         uint32_t seed = 0;
         int candidates = 6;
@@ -764,6 +765,7 @@ namespace suite::director
                     if (in.safe && ! g.safe) return 0.0f;
                     if ((float) g.size > budget + 0.01f) return 0.0f;
                     if (silenceGesture (g.id) && g.id != gSiFakeDrop && (words & wLessSilence)) return 0.0f;
+                    if ((g.id == gSiSnap || g.id == gSiBreath) && ! in.silencesBeforeDrops) return 0.0f;   // no full silence before a drop unless you allow it
                     auto w = g.weight * genreWeight (cx.genre, g);
                     if (g.moods & (1u << mo.mood)) w *= 1.6f;
                     if ((s.kind & (kIntoDrop | kPhrase)) && sectionType == T::Drop && (g.characters & (1u << mo.character))) w *= 1.5f;

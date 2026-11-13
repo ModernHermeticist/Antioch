@@ -215,6 +215,10 @@ namespace ouro
             safe.setToggleState (d.settings.safe, juce::dontSendNotification);
             safe.setTooltip ("Only low-risk moves (filters, levels, space): for a radio edit or a client mix");
             safe.onClick = [this] { edit ("Safe mode", [this] { processor.director.settings.safe = safe.getToggleState(); }); };
+            silences.setButtonText ("Silences before drops");
+            silences.setToggleState (d.settings.silencesBeforeDrops, juce::dontSendNotification);
+            silences.setTooltip ("Off (the default): never a full silence before a drop (no Snap, no Breath). The kick-only bar and the rare fake drop are unaffected.");
+            silences.onClick = [this] { edit ("Silences before drops", [this] { processor.director.settings.silencesBeforeDrops = silences.getToggleState(); }); };
             bigger.setSliderStyle (juce::Slider::LinearHorizontal);
             bigger.setTextBoxStyle (juce::Slider::TextBoxRight, false, 44, 20);
             bigger.setRange (-2.0, 2.0, 0.5);
@@ -230,7 +234,7 @@ namespace ouro
             ab.setButtonText ("Hear the previous plan (A/B)");
             ab.setToggleState (d.abPrevious, juce::dontSendNotification);
             ab.onClick = [this] { processor.director.abPrevious = ab.getToggleState(); changed(); };
-            for (auto* c : std::initializer_list<juce::Component*> { &enabled, &story, &genre, &safe, &bigger, &reroll, &versionLock, &ab }) addAndMakeVisible (c);
+            for (auto* c : std::initializer_list<juce::Component*> { &enabled, &story, &genre, &safe, &silences, &bigger, &reroll, &versionLock, &ab }) addAndMakeVisible (c);
 
             addAndMakeVisible (timeline);
             timeline.onSelect = [this] (int i) { selectMoment (i); };
@@ -328,10 +332,11 @@ namespace ouro
             r.removeFromTop (42);
             auto top = r.removeFromTop (28);
             enabled.setBounds (top.removeFromLeft (110)); top.removeFromLeft (6);
-            story.setBounds (top.removeFromLeft (190)); top.removeFromLeft (6);
-            genre.setBounds (top.removeFromLeft (220)); top.removeFromLeft (6);
+            story.setBounds (top.removeFromLeft (170)); top.removeFromLeft (6);
+            genre.setBounds (top.removeFromLeft (180)); top.removeFromLeft (6);
             safe.setBounds (top.removeFromLeft (100)); top.removeFromLeft (6);
-            bigger.setBounds (top.removeFromLeft (170)); top.removeFromLeft (6);
+            silences.setBounds (top.removeFromLeft (170)); top.removeFromLeft (6);
+            bigger.setBounds (top.removeFromLeft (150)); top.removeFromLeft (6);
             reroll.setBounds (top.removeFromLeft (130)); top.removeFromLeft (6);
             versionLock.setBounds (top.removeFromLeft (120)); top.removeFromLeft (6);
             ab.setBounds (top);
@@ -369,7 +374,7 @@ namespace ouro
         enum Page { pSummary, pLint, pDiff, pExplain, pHistory, pTaste, pLegend, pFidelity, pStructure, pRender, numPages };
         OuroborosProcessor& processor;
         DirectorTimeline timeline;
-        juce::ToggleButton enabled, safe, versionLock, ab;
+        juce::ToggleButton enabled, safe, versionLock, ab, silences;
         juce::ComboBox story, genre, profiles;
         juce::Slider bigger;
         juce::TextButton reroll { "Re-roll the song" };
@@ -578,6 +583,7 @@ namespace ouro
             reply.setText (processor.director.chat (text), juce::dontSendNotification);
             chat.clear();
             safe.setToggleState (processor.director.settings.safe, juce::dontSendNotification);
+            silences.setToggleState (processor.director.settings.silencesBeforeDrops, juce::dontSendNotification);
             story.setSelectedId (processor.director.settings.story + 1, juce::dontSendNotification);
             changed();
         }

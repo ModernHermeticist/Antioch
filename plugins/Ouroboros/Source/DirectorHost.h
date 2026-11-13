@@ -29,6 +29,7 @@ namespace ouro
         struct Settings
         {
             bool enabled = true, safe = false, versionLock = false;
+            bool silencesBeforeDrops = false;   // the Snap and the Breath: off by default
             int story = dr::storyClassic, genre = dr::genreAuto;
             float bigger = 0.0f;
             uint32_t seed = 1;
@@ -67,6 +68,7 @@ namespace ouro
             in.map = map;
             in.bpm = bpm; in.barQ = barQ;
             in.story = settings.story; in.genre = settings.genre; in.safe = settings.safe; in.bigger = settings.bigger;
+            in.silencesBeforeDrops = settings.silencesBeforeDrops;
             in.seed = settings.seed;
             in.present = presentOverride != 0 ? presentOverride : presentPlayers();
             in.rerolls = settings.rerolls; in.locks = settings.locks; in.frozen = settings.frozen;
@@ -252,6 +254,12 @@ namespace ouro
                 rerollSong();
                 return "New dice for the whole song (locked and frozen moments stay).";
             }
+            if (t.contains ("silence before") || t.contains ("silences before") || t.contains ("allow silence") || t.contains ("no silence"))
+            {
+                pushHistory ("Chat: silences before drops");
+                settings.silencesBeforeDrops = ! (t.contains ("no ") || t.contains (" off") || t.contains ("without"));
+                return settings.silencesBeforeDrops ? "Silences before drops on: the Snap and the Breath can be used again." : "No full silence before any drop (Snap and Breath off).";
+            }
             if (t.contains ("safe mode")) { pushHistory ("Chat: safe mode"); settings.safe = ! t.contains ("off"); return settings.safe ? "Safe mode: only filters, levels and space." : "Safe mode off."; }
             for (int s = 0; s < dr::numStories; ++s)
                 if (t.contains (juce::String (dr::storyName (s)).toLowerCase()))
@@ -346,6 +354,7 @@ namespace ouro
             t.setProperty ("story", settings.story, nullptr);
             t.setProperty ("genre", settings.genre, nullptr);
             t.setProperty ("safe", settings.safe, nullptr);
+            t.setProperty ("silences", settings.silencesBeforeDrops, nullptr);
             t.setProperty ("bigger", settings.bigger, nullptr);
             juce::StringArray taste;
             for (auto v : settings.taste) taste.add (juce::String (v, 2));
@@ -392,6 +401,7 @@ namespace ouro
             settings.story = juce::jlimit (0, (int) dr::numStories - 1, (int) t.getProperty ("story", settings.story));
             settings.genre = juce::jlimit (0, (int) dr::numGenres - 1, (int) t.getProperty ("genre", settings.genre));
             settings.safe = (bool) t.getProperty ("safe", settings.safe);
+            settings.silencesBeforeDrops = (bool) t.getProperty ("silences", false);
             settings.bigger = (float) t.getProperty ("bigger", settings.bigger);
             const auto taste = juce::StringArray::fromTokens (t["taste"].toString(), ",", "");
             for (int i = 0; i < dr::numGestures && i < taste.size(); ++i) settings.taste[(size_t) i] = taste[i].getFloatValue();
