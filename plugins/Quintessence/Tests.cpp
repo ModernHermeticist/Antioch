@@ -115,6 +115,8 @@ int main (int argc, char** argv)
     suite::StyleLog::setFileForTests (logFile);
     suite::MoveLog::clear();
 
+
+
     section ("Untouched, it's transparent");
     {
         auto p = make (4);
@@ -588,25 +590,25 @@ int main (int argc, char** argv)
     {
         auto p = make (6);   // vocal
         set (*p, qn::autoEqId, 0.0f);
-        // A 1 kHz line, loud 30% of the time (18 dB over the rest)
+        // A 700 Hz line (the mid band), loud 30% of the time (18 dB over the rest)
         Player player { [] (juce::AudioBuffer<float>& b, int64_t pos)
         {
             for (int i = 0; i < b.getNumSamples(); ++i)
             {
                 const auto t = (double) (pos + i) / sampleRate;
                 const auto loud = std::fmod (t, 0.5) < 0.15;
-                const auto x = (loud ? 0.4f : 0.05f) * (float) std::sin (juce::MathConstants<double>::twoPi * 1000.0 * t);
+                const auto x = (loud ? 0.4f : 0.05f) * (float) std::sin (juce::MathConstants<double>::twoPi * 700.0 * t);
                 b.setSample (0, i, x); b.setSample (1, i, x);
             }
         } };
         player.play (*p, QuintessenceProcessor::passSeconds + 0.3);
         const auto first = p->measurement();
-        const auto swingBefore = first.swingPost (1);
+        const auto swingBefore = first.swingPost (3);
         p->autoPass();
-        check (v (*p, qn::ratioId (1)) > 1.5f, "the mid band comes in at the vocal's ratio (" + juce::String (v (*p, qn::ratioId (1)), 1) + ":1)");
+        check (v (*p, qn::ratioId (3)) > 1.5f, "the mid band comes in at the vocal's ratio (" + juce::String (v (*p, qn::ratioId (3)), 1) + ":1)");
         passes (*p, player, 8);
         player.play (*p, QuintessenceProcessor::passSeconds + 0.3);
-        const auto swingAfter = p->measurement().swingPost (1);
+        const auto swingAfter = p->measurement().swingPost (3);
         if (std::getenv ("QDEBUG")) std::cout << p->moveLog().joinIntoString ("\n") << std::endl;
         check (swingAfter < swingBefore - 4.0f, "the loud moments stand out less (" + juce::String (swingBefore, 1) + " -> " + juce::String (swingAfter, 1) + " dB)");
         check (p->kept.load() >= 1, "and the moves were checked and kept (" + juce::String (p->kept.load()) + ")");
@@ -1251,6 +1253,87 @@ int main (int argc, char** argv)
                        + " ms, the later stays put");
         }
         suite::Autopilot::reset();
+    }
+
+
+    section ("12 EQ bands, 7 compressor bands; the dynamics get their turn");
+    {
+        {
+            suite::Autopilot::reset();
+            auto hi = make (4);
+            set (*hi, qn::autoEqId, 0.0f); set (*hi, qn::autoMbId, 0.0f);
+            juce::AudioBuffer<float> a;
+            Player player { sine (8000.0f, 0.3f) };
+            player.play (*hi, 0.4, &a);
+            const auto db = juce::Decibels::gainToDecibels (rmsBetween (a, 0.3, 0.4) / (0.3f / std::sqrt (2.0f)));
+            check (std::abs (db) < 0.05f, "the click guard leaves a high note's zero crossings alone (8 kHz: " + juce::String (db, 2) + " dB)");
+        }
+        auto p = make (4);
+        int eq = 0, mb = 0;
+        for (auto* prm : p->getParameters())
+            if (auto* r = dynamic_cast<juce::RangedAudioParameter*> (prm))
+            {
+                if (r->getParameterID().startsWith ("b") && r->getParameterID().endsWith ("_freq")) ++eq;
+                if (r->getParameterID().startsWith ("mb") && r->getParameterID().endsWith ("_thr")) ++mb;
+            }
+        check (eq == 12 && mb == 7, "12 EQ bands and 7 compressor bands (" + juce::String (eq) + ", " + juce::String (mb) + ")");
+
+        // With nothing compressing the tree isn't in the path (and costs nothing)
+        set (*p, qn::autoEqId, 0.0f); set (*p, qn::autoMbId, 0.0f);
+        juce::Random rng (3);
+        std::vector<float> noise ((size_t) (4 * sampleRate));
+        for (auto& x : noise) x = 0.2f * (rng.nextFloat() * 2.0f - 1.0f);
+        Player np { [&noise] (juce::AudioBuffer<float>& b, int64_t pos) { for (int i = 0; i < b.getNumSamples(); ++i) { b.setSample (0, i, noise[(size_t) (pos + i) % noise.size()]); b.setSample (1, i, noise[(size_t) (pos + i) % noise.size()]); } } };
+        np.play (*p, 0.5);
+        check (! p->multibandRunning.load(), "with no band compressing, the multiband is out of the path");
+
+        // A band compressing with nothing over its threshold: the seven bands add back up flat
+        set (*p, qn::thrId (6), 0.0f); set (*p, qn::ratioId (6), 2.0f);
+        auto flatAt = [&] (double hz)
+        {
+            Player sp { [hz] (juce::AudioBuffer<float>& b, int64_t pos) { for (int i = 0; i < b.getNumSamples(); ++i) { const auto x = 0.1f * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) (pos + i) / sampleRate); b.setSample (0, i, x); b.setSample (1, i, x); } } };
+            juce::AudioBuffer<float> out;
+            sp.play (*p, 0.6, &out);
+            return juce::Decibels::gainToDecibels (rmsBetween (out, 0.3, 0.6) / (0.1f / std::sqrt (2.0f)));
+        };
+        float worst = 0.0f;
+        for (const auto hz : { 40.0, 60.0, 100.0, 150.0, 250.0, 400.0, 700.0, 1000.0, 1700.0, 2500.0, 4000.0, 6000.0, 10000.0 })
+            worst = juce::jmax (worst, std::abs (flatAt (hz)));
+        check (p->multibandRunning.load() && worst < 0.3f, "with a band compressing, the multiband is in, and its bands add up flat from 40 Hz to 10 kHz (within "
+               + juce::String (worst, 2) + " dB)");
+
+        // A track whose only problem is its dynamics still gets the conductor's turn
+        suite::Conductor::reset();
+        auto voc = make (6);
+        set (*voc, qn::autoEqId, 0.0f);
+        Player loud { [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto x = (std::fmod (t, 0.5) < 0.15 ? 0.4f : 0.05f) * (float) std::sin (juce::MathConstants<double>::twoPi * 700.0 * t);
+                b.setSample (0, i, x); b.setSample (1, i, x);
+            }
+        } };
+        loud.play (*voc, QuintessenceProcessor::passSeconds + 0.3);
+        suite::Conductor::request (0x1111u, 0.0f);   // one track has the turn...
+        suite::Conductor::request (0xabcdu, 1.0f);   // ...another waits for it with a little need (1 dB of tone)
+        suite::Conductor::release (0x1111u);
+        voc->autoPass();
+        check (v (*voc, qn::ratioId (3)) > 1.5f, "a vocal whose only problem is its dynamics goes ahead of a track with a 1 dB tone need");
+        suite::Conductor::reset();
+
+        // Projects saved with three compressor bands keep their settings, spread over the seven
+        juce::ValueTree old ("QuintessenceState");
+        auto param = [&old] (const juce::String& id, float val) { juce::ValueTree c ("PARAM"); c.setProperty ("id", id, nullptr); c.setProperty ("value", val, nullptr); old.appendChild (c, nullptr); };
+        param (qn::thrId (0), -20.0f); param (qn::ratioId (0), 4.0f);
+        param (qn::thrId (1), -15.0f); param (qn::ratioId (1), 2.0f); param (qn::mbLockId (1), 1.0f);
+        param (qn::thrId (2), -10.0f); param (qn::ratioId (2), 3.0f);
+        QuintessenceProcessor::migrateBands (old);
+        auto get = [&old] (const juce::String& id) { for (int i = 0; i < old.getNumChildren(); ++i) if (old.getChild (i)["id"].toString() == id) return (float) (double) old.getChild (i)["value"]; return -999.0f; };
+        check (get (qn::thrId (2)) == -20.0f && get (qn::ratioId (0)) == 4.0f && get (qn::thrId (4)) == -15.0f && get (qn::mbLockId (3)) == 1.0f
+                   && get (qn::thrId (5)) == -10.0f && get (qn::ratioId (6)) == 3.0f,
+               "an old project's low / mid / high settings move to sub-low-mid / mid-upper-mid / presence-air");
     }
 
     return finish();

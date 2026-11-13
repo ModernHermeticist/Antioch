@@ -103,7 +103,9 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         return m;
     };
     addAndMakeVisible (autopilotStrip);
-    setSize (1100, 730);
+    setResizable (true, true);
+    setResizeLimits (1180, 860, 2000, 1400);
+    setSize (1240, 880);
     startTimerHz (10);
 }
 
@@ -238,8 +240,8 @@ void QuintessenceEditor::paint (juce::Graphics& g)
         g.setColour (Colours::verdigris);
         g.fillRoundedRectangle (m.toFloat().withHeight ((float) m.getHeight() * gr / 12.0f), 3.0f);
         g.setColour (Colours::dimText);
-        g.setFont (juce::FontOptions (11.0f));
-        g.drawText (qn::mbBandNames()[b], m.withY (m.getBottom() + 2).withHeight (14).expanded (10, 0), juce::Justification::centred);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (qn::mbBandNames()[b], m.withY (m.getBottom() + 2).withHeight (14).expanded (30, 0), juce::Justification::centred);
     }
 
     auto l = logArea.reduced (14, 10).withTrimmedTop (18);
@@ -271,11 +273,16 @@ void QuintessenceEditor::resized()
     curveArea = top;
     bounds.removeFromTop (12);
 
-    auto slots = bounds.removeFromTop (150);
-    const auto w = slots.getWidth() / qn::numSlots;
+    // twelve EQ bands in two rows of six
+    constexpr int perRow = qn::numSlots / 2;
+    auto slots = bounds.removeFromTop (296);
+    const auto rowH = (slots.getHeight() - 8) / 2;
+    std::array<juce::Rectangle<int>, 2> rows { slots.removeFromTop (rowH), slots.withTrimmedTop (8) };
+    const auto w = rows[0].getWidth() / perRow;
     for (int s = 0; s < qn::numSlots; ++s)
     {
-        slotAreas[(size_t) s] = slots.removeFromLeft (w).reduced (s == 0 ? 0 : 4, 0).withTrimmedRight (s == qn::numSlots - 1 ? 0 : 0);
+        auto& row = rows[(size_t) (s / perRow)];
+        slotAreas[(size_t) s] = row.removeFromLeft (w).reduced (s % perRow == 0 ? 0 : 4, 0);
         auto r = slotAreas[(size_t) s].reduced (6, 8).withTrimmedTop (16);
         bandLocks[(size_t) s]->setBounds (r.removeFromBottom (24));
         const auto kw = r.getWidth() / 3;
@@ -286,7 +293,7 @@ void QuintessenceEditor::resized()
     auto bottom = bounds;
     cutArea = bottom.removeFromLeft (280);
     bottom.removeFromLeft (12);
-    mbArea = bottom.removeFromLeft (390);
+    mbArea = bottom.removeFromLeft (juce::jmax (560, bottom.getWidth() - 320));
     bottom.removeFromLeft (12);
     logArea = bottom;
 
@@ -315,9 +322,9 @@ void QuintessenceEditor::resized()
     const auto bw = mb.getWidth() / qn::numMbBands;
     for (int b = 0; b < qn::numMbBands; ++b)
     {
-        auto r = mb.removeFromLeft (bw).reduced (3, 0);
+        auto r = mb.removeFromLeft (bw).reduced (2, 0);
         mbLocks[(size_t) b]->setBounds (r.removeFromBottom (24));
-        meterAreas[(size_t) b] = r.removeFromRight (12).withTrimmedBottom (18).withTrimmedTop (6);
+        meterAreas[(size_t) b] = r.removeFromRight (8).withTrimmedBottom (18).withTrimmedTop (6);
         const auto kh = r.getHeight() / 2;
         mbKnobs[(size_t) (b * 2)]->setBounds (r.removeFromTop (kh));
         mbKnobs[(size_t) (b * 2 + 1)]->setBounds (r);

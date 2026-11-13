@@ -4,7 +4,7 @@
 
 namespace qn
 {
-    constexpr int numSlots = 6, numMbBands = 3;
+    constexpr int numSlots = 12, numMbBands = 7, numCross = numMbBands - 1;
 
     inline const juce::String autoEqId { "autoeq" }, autoMbId { "automb" }, roleId { "role" };
     inline const juce::String widthId { "width" }, widthLockId { "width_lock" };
@@ -39,12 +39,15 @@ namespace qn
 
     constexpr float lowCutOff = 20.5f, highCutOff = 19900.0f;   // at or past these the cuts are off
     constexpr float maxToneDb = 4.0f;                           // role-tone moves stay within +-4 dB
-    constexpr float crossLow = 200.0f, crossHigh = 3000.0f;     // multiband split
-    inline const juce::StringArray& mbBandNames() { static const juce::StringArray n { "Low", "Mid", "High" }; return n; }
+    /** The multiband's six splits (4th-order Linkwitz-Riley; the seven bands add back up flat). */
+    inline const std::array<float, numCross>& crossovers() { static const std::array<float, numCross> c { 60.0f, 150.0f, 400.0f, 1000.0f, 2500.0f, 6000.0f }; return c; }
+    inline const juce::StringArray& mbBandNames() { static const juce::StringArray n { "Sub", "Low", "Low-mid", "Mid", "Upper-mid", "Presence", "Air" }; return n; }
+    /** Old projects had three compressor bands (low < 200 Hz, mid, high > 3 kHz): which of those each new band takes its settings from. */
+    inline int legacyBandFor (int band) { return band <= 2 ? 0 : band <= 4 ? 1 : 2; }
 
     inline const std::array<float, numSlots>& defaultFreqs()
     {
-        static const std::array<float, numSlots> f { 80.0f, 200.0f, 500.0f, 1200.0f, 3000.0f, 8000.0f };
+        static const std::array<float, numSlots> f { 40.0f, 80.0f, 140.0f, 250.0f, 400.0f, 650.0f, 1000.0f, 1600.0f, 2500.0f, 4000.0f, 6500.0f, 11000.0f };
         return f;
     }
 

@@ -9,21 +9,31 @@
 
 namespace
 {
+    constexpr int lowCutBit = qn::numSlots, highCutBit = qn::numSlots + 1, mbBit0 = qn::numSlots + 2, widthBit = mbBit0 + qn::numMbBands;
+    static_assert (widthBit < 32, "the lock bits fit one word");
     const std::map<juce::String, int>& lockBits()
     {
-        // Which lock a manual edit sets: bits 0-5 the bands, 6 low cut, 7 high cut, 8-10 the compressor bands.
+        // Which lock a manual edit sets: bits 0-11 the bands, 12 low cut, 13 high cut, 14-20 the compressor bands, 21 width.
         static const std::map<juce::String, int> m = []
         {
             std::map<juce::String, int> out;
             for (int s = 0; s < qn::numSlots; ++s)
                 for (const auto& id : { qn::freqId (s), qn::gainId (s), qn::qId (s), qn::bdId (s), qn::grId (s) }) out[id] = s;
-            out[qn::lowCutId] = 6;
-            out[qn::highCutId] = 7;
-            out[qn::widthId] = 11;
-            for (int b = 0; b < qn::numMbBands; ++b) { out[qn::thrId (b)] = 8 + b; out[qn::ratioId (b)] = 8 + b; }
+            out[qn::lowCutId] = lowCutBit;
+            out[qn::highCutId] = highCutBit;
+            out[qn::widthId] = widthBit;
+            for (int b = 0; b < qn::numMbBands; ++b) { out[qn::thrId (b)] = mbBit0 + b; out[qn::ratioId (b)] = mbBit0 + b; }
             return out;
         }();
         return m;
+    }
+
+    /** Attack and release (ms) per compressor band: slower in the lows, faster up top. */
+    const std::array<std::pair<float, float>, qn::numMbBands>& mbTimes()
+    {
+        static const std::array<std::pair<float, float>, qn::numMbBands> t { { { 40.0f, 300.0f }, { 30.0f, 250.0f }, { 20.0f, 200.0f }, { 10.0f, 150.0f },
+                                                                               { 6.0f, 120.0f }, { 4.0f, 100.0f }, { 3.0f, 80.0f } } };
+        return t;
     }
 
     int nearestBand (float hz)
@@ -102,12 +112,17 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     for (auto& p : peakNow) p = { -1.0f, 0.0f, 0.0f };
     for (int c = 0; c < 2; ++c)
     {
-        xLow[(size_t) c].set (qn::crossLow, fs);   xLow[(size_t) c].reset();
-        xHigh[(size_t) c].set (qn::crossHigh, fs); xHigh[(size_t) c].reset();
-        apLow[(size_t) c].set (qn::crossHigh, fs); apLow[(size_t) c].reset();
+        int ci = 0;
+        for (int k = 0; k < qn::numCross; ++k)
+        {
+            splits[(size_t) c][(size_t) k].set (qn::crossovers()[(size_t) k], fs); splits[(size_t) c][(size_t) k].reset();
+            for (int j = k + 1; j < qn::numCross; ++j) { comps[(size_t) c][(size_t) ci].set (qn::crossovers()[(size_t) j], fs); comps[(size_t) c][(size_t) ci].reset(); ++ci; }
+        }
     }
-    const std::array<std::pair<float, float>, qn::numMbBands> times { { { 30.0f, 250.0f }, { 10.0f, 150.0f }, { 3.0f, 80.0f } } };
-    for (int b = 0; b < qn::numMbBands; ++b) { env[(size_t) b].set (times[(size_t) b].first, times[(size_t) b].second, fs); env[(size_t) b].reset(); }
+    for (int k = 0; k < qn::numCross; ++k) { measureSplits[(size_t) k].set (qn::crossovers()[(size_t) k], fs); measureSplits[(size_t) k].reset(); }
+    mbState = mbOff; mbWarm = 0; mbFade = 0.0f; mbFadeStep = 1.0f / (0.02f * fs);
+    multibandRunning.store (false);
+    for (int b = 0; b < qn::numMbBands; ++b) { env[(size_t) b].set (mbTimes()[(size_t) b].first, mbTimes()[(size_t) b].second, fs); env[(size_t) b].reset(); }
     makeupDb.fill (0.0f);
     makeupCoeff = 1.0f / (3.0f * fs);   // level-neutral: the make-up follows the average reduction over ~3 s
     for (int b = 0; b < analysis::numBands; ++b) { analysers[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs); analysers[(size_t) b].reset(); }
@@ -278,8 +293,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     {
         tempoNow = info.bpm;
         const auto scale = (float) juce::jlimit (0.7, 1.4, 128.0 / info.bpm);
-        const std::array<std::pair<float, float>, qn::numMbBands> t { { { 30.0f, 250.0f }, { 10.0f, 150.0f }, { 3.0f, 80.0f } } };
-        for (int b = 0; b < qn::numMbBands; ++b) env[(size_t) b].set (t[(size_t) b].first, t[(size_t) b].second * scale, fs);
+        for (int b = 0; b < qn::numMbBands; ++b) env[(size_t) b].set (mbTimes()[(size_t) b].first, mbTimes()[(size_t) b].second * scale, fs);
     }
     // Chord-aware: pads and leads leave a little room at the current chord's root, down where the bass plays it
     const auto chordAware = (roleNow == 4 || roleNow == 5) && value (qn::chordAwareId) > 0.5f;
@@ -319,6 +333,21 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         const auto ratio = value (qn::ratioId (b));
         comp[(size_t) b] = ratio > 1.01f;
         slope[(size_t) b] = 1.0f - 1.0f / juce::jmax (1.0f, ratio);
+    }
+    // The tree runs only while a band compresses: warmed up for 50 ms (its filters and envelopes
+    // settle while the dry signal still plays), then crossfaded in over 20 ms; out the same way
+    {
+        const auto anyComp = std::any_of (comp.begin(), comp.end(), [] (bool c) { return c; });
+        if (anyComp && (mbState == mbOff))
+        {
+            for (auto& ch : splits) for (auto& f : ch) f.reset();
+            for (auto& ch : comps) for (auto& f : ch) f.reset();
+            mbState = mbWarming; mbWarm = 0; mbFade = 0.0f;
+        }
+        else if (anyComp && mbState == mbFadingOut) mbState = mbOn;
+        else if (! anyComp && (mbState == mbOn || mbState == mbWarming)) mbState = mbState == mbWarming ? mbOff : mbFadingOut;
+        if (mbState == mbWarming && (mbWarm += n) >= (int) (0.05 * sr)) mbState = mbOn;
+        multibandRunning.store (mbState != mbOff);
     }
 
     // Autopilot (mixing): the live moves, with the shared kick's position for every role
@@ -412,36 +441,66 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             }
         }
 
-        // Three bands (Linkwitz-Riley: they add back up flat)
-        float band[qn::numMbBands][2];
-        for (int c = 0; c < 2; ++c)
+        // Seven bands. The mono split measures them all the time (for the automatic dynamics);
+        // the stereo tree (Linkwitz-Riley, phase-matched: the bands add back up flat) runs while a
+        // band compresses
+        float measured[qn::numMbBands];
         {
-            float lo, rest, mid, hi;
-            xLow[(size_t) c].process (x[c], lo, rest);
-            xHigh[(size_t) c].process (rest, mid, hi);
-            band[0][c] = apLow[(size_t) c].allpass (lo);
-            band[1][c] = mid;
-            band[2][c] = hi;
+            auto rest = 0.5f * (x[0] + x[1]);
+            for (int k = 0; k < qn::numCross; ++k) { float lo, hi; measureSplits[(size_t) k].process (rest, lo, hi); measured[k] = lo; rest = hi; }
+            measured[qn::numCross] = rest;
         }
-
-        float out[2] = { 0.0f, 0.0f };
-        for (int b = 0; b < qn::numMbBands; ++b)
+        float out[2] = { x[0], x[1] };
+        if (mbState == mbOff)
         {
-            auto& l = band[b][0]; auto& r = band[b][1];
-            mbWinPre[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
-            const auto e = env[(size_t) b].process (juce::jmax (std::abs (l), std::abs (r)));
-            float gr = 0.0f;
-            if (comp[(size_t) b])
+            for (int b = 0; b < qn::numMbBands; ++b)
             {
-                const auto over = 20.0f * std::log10 (e + 1.0e-9f) - thr[(size_t) b];   // 6 dB soft knee
-                gr = over > 3.0f ? over * slope[(size_t) b] : over > -3.0f ? slope[(size_t) b] * (over + 3.0f) * (over + 3.0f) / 12.0f : 0.0f;
+                const auto pw = (double) measured[b] * measured[b];
+                mbWinPre[(size_t) b] += pw;
+                mbWinPost[(size_t) b] += pw;
             }
-            if (e > 1.0e-4f) makeupDb[(size_t) b] += makeupCoeff * (gr - makeupDb[(size_t) b]);
-            const auto g = juce::Decibels::decibelsToGain (makeupDb[(size_t) b] - gr);
-            l *= g; r *= g;
-            grMax[(size_t) b] = juce::jmax (grMax[(size_t) b], gr - makeupDb[(size_t) b]);
-            mbWinPost[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
-            out[0] += l; out[1] += r;
+        }
+        else
+        {
+            float band[qn::numMbBands][2];
+            for (int c = 0; c < 2; ++c)
+            {
+                auto rest = x[c];
+                int ci = 0;
+                for (int k = 0; k < qn::numCross; ++k)
+                {
+                    float lo, hi;
+                    splits[(size_t) c][(size_t) k].process (rest, lo, hi);
+                    for (int j = k + 1; j < qn::numCross; ++j) lo = comps[(size_t) c][(size_t) ci++].allpass (lo);
+                    band[k][c] = lo;
+                    rest = hi;
+                }
+                band[qn::numCross][c] = rest;
+            }
+            float wet[2] = { 0.0f, 0.0f };
+            for (int b = 0; b < qn::numMbBands; ++b)
+            {
+                auto& l = band[b][0]; auto& r = band[b][1];
+                mbWinPre[(size_t) b] += (double) measured[b] * measured[b];
+                const auto e = env[(size_t) b].process (juce::jmax (std::abs (l), std::abs (r)));
+                float gr = 0.0f;
+                if (comp[(size_t) b])
+                {
+                    const auto over = 20.0f * std::log10 (e + 1.0e-9f) - thr[(size_t) b];   // 6 dB soft knee
+                    gr = over > 3.0f ? over * slope[(size_t) b] : over > -3.0f ? slope[(size_t) b] * (over + 3.0f) * (over + 3.0f) / 12.0f : 0.0f;
+                }
+                if (e > 1.0e-4f) makeupDb[(size_t) b] += makeupCoeff * (gr - makeupDb[(size_t) b]);
+                const auto g = juce::Decibels::decibelsToGain (makeupDb[(size_t) b] - gr);
+                l *= g; r *= g;
+                grMax[(size_t) b] = juce::jmax (grMax[(size_t) b], gr - makeupDb[(size_t) b]);
+                mbWinPost[(size_t) b] += 0.5 * ((double) l * l + (double) r * r);
+                wet[0] += l; wet[1] += r;
+            }
+            // warming: the dry signal still plays; then the tree crossfades in (and out)
+            if (mbState == mbOn) mbFade = juce::jmin (1.0f, mbFade + mbFadeStep);
+            else if (mbState == mbFadingOut) { mbFade -= mbFadeStep; if (mbFade <= 0.0f) { mbFade = 0.0f; mbState = mbOff; } }
+            out[0] += mbFade * (wet[0] - out[0]);
+            out[1] += mbFade * (wet[1] - out[1]);
         }
         // Glue (the music bus): 2:1, 30 ms attack, release an 8th note, level-neutral make-up
         {
@@ -707,11 +766,11 @@ void QuintessenceProcessor::applyLocks()
             write (qn::reasonId (s), (float) qn::yours);
             if (pending.kind == Pending::eqSlot && pending.index == s) pending.kind = Pending::none;
         }
-    if (bits & (1u << 6)) { write (qn::lowCutLockId, 1.0f);  if (pending.kind == Pending::lowCut) pending.kind = Pending::none; }
-    if (bits & (1u << 7)) write (qn::highCutLockId, 1.0f);
-    if (bits & (1u << 11)) { write (qn::widthLockId, 1.0f); if (pending.kind == Pending::width) pending.kind = Pending::none; }
+    if (bits & (1u << lowCutBit)) { write (qn::lowCutLockId, 1.0f);  if (pending.kind == Pending::lowCut) pending.kind = Pending::none; }
+    if (bits & (1u << highCutBit)) write (qn::highCutLockId, 1.0f);
+    if (bits & (1u << widthBit)) { write (qn::widthLockId, 1.0f); if (pending.kind == Pending::width) pending.kind = Pending::none; }
     for (int b = 0; b < qn::numMbBands; ++b)
-        if (bits & (1u << (8 + b)))
+        if (bits & (1u << (mbBit0 + b)))
         {
             write (qn::mbLockId (b), 1.0f);
             if (pending.kind == Pending::mb && pending.index == b) pending.kind = Pending::none;
@@ -836,8 +895,8 @@ bool QuintessenceProcessor::autoPass()
         reading.toneDiff = diff;
         reading.sideMinusMidDb = m.sideMinusMid();
         reading.sideTargetDb = t.sideDb;
-        reading.midSwingDb = m.windowsPost[1] >= 20 ? m.swingPost (1) : 0.0f;
-        reading.midSwingTargetDb = t.swing[1];
+        reading.midSwingDb = m.windowsPost[3] >= 20 ? m.swingPost (3) : 0.0f;
+        reading.midSwingTargetDb = t.swing[3];
         reading.breakdown = m.group == 1;
         for (const auto& c : candidates) if (c.passes >= 2) reading.resonancesHz.push_back (c.hz);
         const juce::ScopedLock sl (logLock);
@@ -1018,10 +1077,29 @@ void QuintessenceProcessor::returnsMove()
     addLog ("Effect return: " + did.joinIntoString (" and ") + ", so the space stays out of the low end and off the top");
 }
 
+float QuintessenceProcessor::dynamicsError (const Measurement& m, int role) const
+{
+    if (value (qn::autoMbId) < 0.5f || m.group != 0 || role < 0 || role >= (int) qn::targets::roles().size()) return 0.0f;
+    const auto& t = qn::targets::roles()[(size_t) role];
+    float loudest = -200.0f, worst = 0.0f;
+    for (int b = 0; b < qn::numMbBands; ++b) loudest = juce::jmax (loudest, m.p95Pre[(size_t) b]);
+    for (int b = 0; b < qn::numMbBands; ++b)
+    {
+        if (t.swing[(size_t) b] <= 0.0f || m.windowsPost[(size_t) b] < 20 || m.p95Pre[(size_t) b] < loudest - 30.0f || value (qn::mbLockId (b)) > 0.5f) continue;
+        const auto target = t.swing[(size_t) b] + swingOffset();
+        const auto swing = m.swingPost (b);
+        auto err = juce::jmax (0.0f, swing - target - 1.0f);
+        if (value (qn::ratioId (b)) > 1.01f) err = juce::jmax (err, target - 2.0f - swing);   // held more than it needs
+        worst = juce::jmax (worst, err);
+    }
+    return 0.5f * worst;
+}
+
 float QuintessenceProcessor::needNow (const Measurement& m, int role) const
 {
-    // How far this track is from its own target, plus its share of the master's worst problem
-    auto need = juce::jmax (0.0f, toneError (m, role));
+    // How far this track is from its own target (tone and dynamics), plus its share of the master's
+    // worst problem. (Dynamics count too: a track whose only problem is its dynamics still gets a turn.)
+    auto need = juce::jmax (0.0f, toneError (m, role)) + dynamicsError (m, role);
     int band = -1;
     float diff = 0.0f;
     if (suite::Conductor::masterProblem (band, diff) && std::abs (diff) > 1.5f && band >= 0 && band < 10 && haveBands)
@@ -1613,6 +1691,40 @@ void QuintessenceProcessor::getPluginState (juce::MemoryBlock& destData)
     }
 }
 
+void QuintessenceProcessor::migrateBands (juce::ValueTree& state)
+{
+    // Projects saved with three compressor bands (mb1 low < 200 Hz, mb2 mid, mb3 high > 3 kHz):
+    // each of the seven new bands takes the settings of the old band it sits in
+    auto find = [&state] (const juce::String& id) -> juce::ValueTree
+    {
+        for (int i = 0; i < state.getNumChildren(); ++i)
+            if (auto c = state.getChild (i); c.hasType ("PARAM") && c["id"].toString() == id) return c;
+        return {};
+    };
+    if (find (qn::thrId (3)).isValid() || ! find (qn::thrId (0)).isValid()) return;   // already seven bands, or nothing saved
+    struct Old { float thr = 0.0f, ratio = 1.0f, lock = 0.0f; };
+    std::array<Old, 3> old;
+    for (int b = 0; b < 3; ++b)
+    {
+        if (auto t = find (qn::thrId (b)); t.isValid()) old[(size_t) b].thr = (float) (double) t["value"];
+        if (auto r = find (qn::ratioId (b)); r.isValid()) old[(size_t) b].ratio = (float) (double) r["value"];
+        if (auto l = find (qn::mbLockId (b)); l.isValid()) old[(size_t) b].lock = (float) (double) l["value"];
+    }
+    auto put = [&] (const juce::String& id, float v)
+    {
+        auto c = find (id);
+        if (! c.isValid()) { c = juce::ValueTree ("PARAM"); c.setProperty ("id", id, nullptr); state.appendChild (c, nullptr); }
+        c.setProperty ("value", v, nullptr);
+    };
+    for (int b = 0; b < qn::numMbBands; ++b)
+    {
+        const auto& o = old[(size_t) qn::legacyBandFor (b)];
+        put (qn::thrId (b), o.thr);
+        put (qn::ratioId (b), o.ratio);
+        put (qn::mbLockId (b), o.lock);
+    }
+}
+
 void QuintessenceProcessor::setPluginState (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
@@ -1625,8 +1737,10 @@ void QuintessenceProcessor::setPluginState (const void* data, int sizeInBytes)
                 log.removeEmptyStrings();
                 xml->removeChildElement (l, true);
             }
+            auto state = juce::ValueTree::fromXml (*xml);
+            migrateBands (state);
             autoWriting.store (true);   // a project loading isn't a manual edit
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            apvts.replaceState (state);
             autoWriting.store (false);
             pendingLocks.store (0);
         }

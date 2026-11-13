@@ -1637,8 +1637,8 @@ wrapper's settings, as for Kybalion's sidechain.
 
 ![Quintessence](docs/quintessence.png)
 
-An EQ (low cut, high cut, six bands) and a three-band compressor (split at 200 Hz and 3 kHz)
-that set themselves. Put it on a track and play. Every three seconds of music it measures the
+An EQ (low cut, high cut, twelve bands) and a seven-band compressor (Sub, Low, Low-mid, Mid,
+Upper-mid, Presence, Air: split at 60, 150, 400 Hz, 1, 2.5 and 6 kHz) that set themselves. Put it on a track and play. Every three seconds of music it measures the
 track, makes **one** move, and on the next pass checks whether that move brought the sound
 closer to its target. If it didn't, the move is undone and that spot is left alone for a while.
 
@@ -1652,7 +1652,12 @@ closer to its target. If it didn't, the move is undone and that spot is left alo
 - **Dynamics:** each band's loud moments are held towards how far they usually stand out
   for that role (a vocal's mids within about 5 dB, a bass's lows about 5 dB, kicks never
   touched). Make-up follows the average reduction, so it's level-neutral: it evens out the
-  part without making it louder.
+  part without making it louder. Every role has a target for each of the seven bands (pads,
+  leads, vocals, hats and whole tracks included), and a track whose only problem is its
+  dynamics now counts as needing a turn, so the compressor actually gets used. The band
+  split is only in the signal path while a band compresses (it fades in and out over 20 ms),
+  so a track that needs no dynamics costs almost nothing. Projects saved with the old
+  three-band compressor open with those settings spread over the seven bands.
 - **Every band has a reason**, shown on the band and in the graph: *Role tone*, *Masking*,
   *Mud*, *Harshness* or *Your setting*. **What it did** lists each move and whether it
   was kept or undone, and why.

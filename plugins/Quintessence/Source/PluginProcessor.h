@@ -171,7 +171,19 @@ private:
     float lowCutNow = -1.0f, highCutNow = -1.0f;
     std::array<std::array<suite::Biquad, 2>, qn::numSlots> peaks;
     std::array<std::array<float, 3>, qn::numSlots> peakNow {};   // freq, gain, q in use
-    std::array<suite::Crossover, 2> xLow, xHigh, apLow;
+    // The multiband: a stereo Linkwitz-Riley tree (6 splits, and each lower band phase-matched to
+    // the splits above it so the bands add back up flat), run only while a band compresses; and a
+    // cheap mono split that measures the bands all the time (for the automatic dynamics)
+    static constexpr int numComps = qn::numCross * (qn::numCross - 1) / 2;
+    std::array<std::array<suite::Crossover, qn::numCross>, 2> splits;
+    std::array<std::array<suite::Crossover, numComps>, 2> comps;
+    std::array<suite::Crossover, qn::numCross> measureSplits;
+    enum MbState { mbOff, mbWarming, mbOn, mbFadingOut };
+    int mbState = mbOff, mbWarm = 0;
+    float mbFade = 0.0f, mbFadeStep = 0.001f;
+public:
+    std::atomic<bool> multibandRunning { false };   // tests and the UI: the tree is in the signal path
+private:
     std::array<suite::EnvelopeFollower, qn::numMbBands> env;
     std::array<float, qn::numMbBands> makeupDb {};
     float makeupCoeff = 0.0f;
@@ -230,6 +242,8 @@ public:
     /** The problem watcher's lasting changes to the targets: the side this many dB lower (narrower),
         the multiband letting this many dB more swing through (the drops breathe). */
     float sideOffset() const { return (float) apvts.state.getProperty (sideOffsetKey, 0.0f); }
+    float dynamicsError (const Measurement&, int role) const;
+    static void migrateBands (juce::ValueTree& state);
     float swingOffset() const { return (float) apvts.state.getProperty (swingOffsetKey, 0.0f); }
     float glueTarget() const { return juce::jmax (0.5f, qn::targets::glueTargetDb - 0.25f * swingOffset()); }
     mutable std::atomic<float> needShown { 0.0f };   // what it asked the conductor with (dB)

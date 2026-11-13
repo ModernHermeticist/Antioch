@@ -590,8 +590,10 @@ namespace qn
         void clickGuard (float* x) noexcept
         {
             const auto level = juce::jmax (std::abs (x[0]), std::abs (x[1]));
-            // A clip that stops dead: instead of the step to silence, a 1 ms tail from where it was
-            if (level < 1.0e-6f)
+            // A clip that stops dead: instead of the step to silence, a 1 ms tail from where it was.
+            // Only true digital silence counts: a high note passes close to zero every few samples
+            // (an 8 kHz sine every 3 at 48 kHz), and those near-zeros aren't a clip ending.
+            if (level == 0.0f)
             {
                 if (tailLeft == 0 && juce::jmax (std::abs (lastOut[0]), std::abs (lastOut[1])) > 0.05f)
                 {
