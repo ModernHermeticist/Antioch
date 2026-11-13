@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "Audition.h"
 
 using namespace suite::ui;
 
@@ -582,9 +583,142 @@ namespace
                 addAndMakeVisible (*t);
                 layerToggles.push_back (std::move (t));
             }
+            writingButton.setTooltip ("Writing: how the parts are shaped beyond the library's patterns (phrases, development, harmony, feel, "
+                                      "parts together, arrangement, ornaments, your edits), your favourite and banned kits and hooks, and the library's tools");
+            writingButton.onClick = [this] { showWritingMenu(); };
+            addAndMakeVisible (writingButton);
             stateRef = &state;
             showFamilies();
             setSize (1200, 492);
+        }
+
+        /** The Writing menu: the groups on or off, favourites and bans, and the library's tools. */
+        void showWritingMenu()
+        {
+            if (stateRef == nullptr) return;
+            auto& state = *stateRef;
+            juce::PopupMenu m;
+            m.addSectionHeader ("Writing");
+            for (int i = 0; i < Params::writingNames().size(); ++i)
+            {
+                const auto on = state.getRawParameterValue (Params::writingId (i))->load() > 0.5f;
+                m.addItem (1 + i, Params::writingNames()[i], true, on);
+            }
+            const auto sp = Params::readSongPatterns (state);
+            const auto mood = (patterns::Mood) juce::jlimit (0, 6, sp.libMood);
+            const auto style = (patterns::Style) juce::jlimit (0, 6, sp.libStyle);
+            const auto* kit = sp.libKits ? patterns::pickKit (mood, style, sp.libSeed) : nullptr;
+            const auto& hook = chords::songFamily (chords::SongPart::Lead, 0, sp, -1);
+            m.addSeparator();
+            m.addSectionHeader ("Favourites (later songs lean on them; banned ones never come up)");
+            if (kit != nullptr)
+            {
+                const auto f = patterns::favourite (patterns::kitKey (*kit));
+                m.addItem (20, "Favourite this kit (" + juce::String (kit->name) + ")", true, f > 0);
+                m.addItem (21, "Ban this kit", true, f < 0);
+            }
+            if (! hook.name.empty())
+            {
+                const auto f = patterns::favourite (patterns::familyKey (hook));
+                m.addItem (22, "Favourite this hook (" + juce::String (hook.name) + ")", true, f > 0);
+                m.addItem (23, "Ban this hook", true, f < 0);
+            }
+            m.addSeparator();
+            m.addSectionHeader ("Tools");
+            m.addItem (30, "Learn from my edit of a part (a MIDI file)...");
+            m.addItem (31, "Suggest new kits for this mood and style (adds to My kits)");
+            m.addItem (32, "Library report (coverage, near-duplicates, weakest)...");
+            m.addItem (33, "Render this song's drop to a WAV (audition)...");
+            m.addItem (34, "Check the library (validator)");
+            m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writingButton), [this, kitName = kit != nullptr ? kit->name : std::string(), hookKey = patterns::familyKey (hook)] (int id)
+            {
+                if (id <= 0 || stateRef == nullptr) return;
+                auto& st = *stateRef;
+                if (id >= 1 && id <= 8)
+                {
+                    if (auto* prm = st.getParameter (Params::writingId (id - 1))) prm->setValueNotifyingHost (prm->getValue() > 0.5f ? 0.0f : 1.0f);
+                    return;
+                }
+                if (id == 20 || id == 21) { const auto k = "kit:" + kitName; patterns::setFavourite (k, patterns::favourite (k) == (id == 20 ? 1 : -1) ? 0 : (id == 20 ? 1 : -1)); showFamilies(); return; }
+                if (id == 22 || id == 23) { patterns::setFavourite (hookKey, patterns::favourite (hookKey) == (id == 22 ? 1 : -1) ? 0 : (id == 22 ? 1 : -1)); showFamilies(); return; }
+                if (id == 34)
+                {
+                    const auto problems = patterns::validate();
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Library check",
+                        problems.isEmpty() ? juce::String ("Every family and kit is fine.") : problems.joinIntoString ("\n"));
+                    return;
+                }
+                if (id == 31)
+                {
+                    const auto spNow = Params::readSongPatterns (st);
+                    const auto made = patterns::generateKits ((patterns::Mood) juce::jlimit (0, 6, spNow.libMood), (patterns::Style) juce::jlimit (0, 6, spNow.libStyle), 3,
+                                                              (uint32_t) juce::Random::getSystemRandom().nextInt());
+                    juce::StringArray lines;
+                    for (const auto& k : made) lines.add (patterns::kitLine (k));
+                    const auto f = patterns::userKitsFile();
+                    f.getParentDirectory().createDirectory();
+                    if (! f.existsAsFile()) f.replaceWithText ("# Your kits (Correspondence's kit generator adds here; edit freely, same format as kits.txt)\n");
+                    f.appendText (lines.joinIntoString ("\n") + "\n");
+                    patterns::reloadKits();
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "New kits",
+                        juce::String ((int) made.size()) + " kit(s) added to My kits (" + f.getFullPathName() + "):\n\n" + lines.joinIntoString ("\n\n"));
+                    showFamilies();
+                    return;
+                }
+                const auto save = id == 32 || id == 33;
+                chooser = std::make_unique<juce::FileChooser> (id == 30 ? "Your edited part (MIDI)" : id == 32 ? "Save the library report" : "Save the audition",
+                                                               juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                                   .getChildFile (id == 32 ? "Library report.txt" : id == 33 ? "Drop audition.wav" : ""),
+                                                               id == 30 ? "*.mid" : id == 32 ? "*.txt" : "*.wav");
+                chooser->launchAsync (save ? juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting : juce::FileBrowserComponent::openMode,
+                                      [this, id] (const juce::FileChooser& fc)
+                {
+                    const auto file = fc.getResult();
+                    if (file == juce::File() || stateRef == nullptr) return;
+                    auto& st2 = *stateRef;
+                    if (id == 32) { file.replaceWithText (patterns::coverageReport()); file.revealToUser(); return; }
+                    if (id == 33)
+                    {
+                        const auto ok = chords::audition::renderDrop (file, Params::readSettings (st2), Params::readSongPatterns (st2));
+                        if (ok) file.revealToUser();
+                        else juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Audition", "Nothing to render: switch the pattern library on.");
+                        return;
+                    }
+                    // 30: which part, from the file's name (bass, arp, chords, lead, counter, piano...)
+                    const auto name = file.getFileNameWithoutExtension().toLowerCase();
+                    auto part = chords::SongPart::Lead;
+                    for (auto [word, p] : { std::pair { "bass", chords::SongPart::Bass }, std::pair { "arp", chords::SongPart::Arp }, std::pair { "chord", chords::SongPart::Chords },
+                                            std::pair { "counter", chords::SongPart::Counter }, std::pair { "piano", chords::SongPart::Piano }, std::pair { "string", chords::SongPart::Strings },
+                                            std::pair { "brass", chords::SongPart::Brass }, std::pair { "choir", chords::SongPart::Choir }, std::pair { "acid", chords::SongPart::Acid },
+                                            std::pair { "candy", chords::SongPart::Candy }, std::pair { "chop", chords::SongPart::Chops } })
+                        if (name.contains (word)) { part = p; break; }
+                    std::vector<chords::Note> edited;
+                    juce::MidiFile mf;
+                    if (auto in = file.createInputStream(); in != nullptr && mf.readFrom (*in))
+                    {
+                        const auto tpq = juce::jmax (1, (int) mf.getTimeFormat());
+                        for (int t = 0; t < mf.getNumTracks(); ++t)
+                        {
+                            juce::MidiMessageSequence seq (*mf.getTrack (t));
+                            seq.updateMatchedPairs();
+                            for (int e = 0; e < seq.getNumEvents(); ++e)
+                                if (const auto* ev = seq.getEventPointer (e); ev->message.isNoteOn())
+                                {
+                                    const auto start = ev->message.getTimeStamp() / tpq;
+                                    const auto end = ev->noteOffObject != nullptr ? ev->noteOffObject->message.getTimeStamp() / tpq : start + 0.25;
+                                    edited.push_back ({ ev->message.getNoteNumber(), start, end - start, ev->message.getVelocity() });
+                                }
+                        }
+                    }
+                    suite::SectionMap map;
+                    if (! suite::SectionBus::read (map)) { map.count = 1; map.sections[0] = { 1, suite::SectionType::Drop }; map.totalBars = 32; }
+                    auto spNoLearn = Params::readSongPatterns (st2);
+                    spNoLearn.write.learned = false;
+                    const auto original = chords::songClip (Params::readSettings (st2), map, spNoLearn, part);
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Learned from your edit",
+                        chords::writing::learnEdit (chords::lib::libraryPart (part), original, edited));
+                });
+            });
         }
 
         /** The families this song's parts play (drop rhythms), under the library row. */
@@ -595,7 +729,7 @@ namespace
             juce::StringArray names;
             if (sp.libKits)
                 if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, sp.libMood), (patterns::Style) juce::jlimit (0, 6, sp.libStyle), sp.libSeed))
-                    names.add ("Kit: " + juce::String (kit->name));
+                    names.add ("Kit: " + juce::String (kit->name) + (patterns::favourite (patterns::kitKey (*kit)) > 0 ? " (favourite)" : "") + (kit->user ? " (yours)" : ""));
             using T = suite::SectionType;
             const auto drop = (size_t) T::Drop;
             for (auto [part, choice, label] : { std::tuple { chords::SongPart::Bass, sp.bass[drop], "bass" }, std::tuple { chords::SongPart::Arp, sp.arp[drop], "arp" },
@@ -633,6 +767,7 @@ namespace
                 rollButton.setBounds (row.removeFromLeft (120).reduced (2));
                 libLead->setBounds (row.removeFromLeft (130));
                 kitsToggle->setBounds (row.removeFromLeft (70));
+                writingButton.setBounds (row.removeFromLeft (90).reduced (2));
                 families.setBounds (row);
             }
             {
@@ -697,6 +832,8 @@ namespace
         std::unique_ptr<juce::ComboBox> moodBox, styleBox;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> moodAttachment, styleAttachment;
         juce::TextButton rollButton { "New patterns" };
+        juce::TextButton writingButton { "Writing..." };
+        std::unique_ptr<juce::FileChooser> chooser;
         juce::Label families;
         juce::AudioProcessorValueTreeState* stateRef = nullptr;
         std::vector<std::unique_ptr<juce::ToggleButton>> layerToggles;

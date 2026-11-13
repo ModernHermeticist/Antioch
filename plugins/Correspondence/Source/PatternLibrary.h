@@ -24,6 +24,7 @@
 //   z         a roll on the root to the end of the hold (timpani)
 //   ~         slide: the last note runs into the next (a 303 glide)
 //   -         hold the last note                .    rest
+//   ^ _       before a step: staccato (short) / legato (to the next note); ! accent, ' soft
 // Spaces are ignored; '/' separates bars, '+' separates voices (a piano's two hands, cellos
 // under violins). A voice starting with '<' or '>' sits an octave lower or higher.
 //
@@ -187,48 +188,91 @@ namespace patterns
         std::string name;
         uint32_t moods = 0, styles = 0;
         std::array<std::vector<std::string>, (size_t) Part::count> parts;
+        // 18: when layers come in: from this bar of their sections (1-based), or only from the Nth drop on
+        std::array<int, (size_t) Part::count> enterBar {}, fromDrop {};
+        uint32_t extras = 0;               // 45: the extra layers (bit per Part): the first to sit out, kept for the final drop
+        int breakdownVoice = -1;           // 22: the layer that sings the hook in breakdowns (a Part), -1 = none
+        bool user = false;                 // from My kits.txt
     };
+    namespace detail
+    {
+        /** Kit lines: name | moods | styles | role: family, ... | enter: strings@9, choir@D2 | extra: candy, chops | breakdown: piano */
+        inline void parseKits (const juce::String& text, std::vector<Kit>& out, bool user)
+        {
+            for (auto line : juce::StringArray::fromLines (text))
+            {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWithChar ('#')) continue;
+                auto f = juce::StringArray::fromTokens (line, "|", "");
+                if (f.size() < 3) continue;
+                Kit k;
+                k.user = user;
+                k.name = f[0].trim().toStdString();
+                k.moods = tagBits (f[1].trim(), "EHMKDRP");
+                k.styles = tagBits (f[2].trim(), "UCPTYVO");
+                for (int j = 3; j < f.size(); ++j)   // role: family, family, ...
+                {
+                    const auto head = f[j].upToFirstOccurrenceOf (":", false, false).trim();
+                    const auto body = f[j].fromFirstOccurrenceOf (":", false, false);
+                    if (head == "enter")
+                    {
+                        for (auto e : juce::StringArray::fromTokens (body, ",", ""))
+                        {
+                            const auto r = partFiles().indexOf (e.upToFirstOccurrenceOf ("@", false, false).trim());
+                            const auto at = e.fromFirstOccurrenceOf ("@", false, false).trim();
+                            if (r < 0) continue;
+                            if (at.startsWithChar ('D')) k.fromDrop[(size_t) r] = at.substring (1).getIntValue();
+                            else k.enterBar[(size_t) r] = at.getIntValue();
+                        }
+                        continue;
+                    }
+                    if (head == "extra")
+                    {
+                        for (auto e : juce::StringArray::fromTokens (body, ",", ""))
+                            if (const auto r = partFiles().indexOf (e.trim()); r >= 0) k.extras |= 1u << r;
+                        continue;
+                    }
+                    if (head == "breakdown") { k.breakdownVoice = partFiles().indexOf (body.trim()); continue; }
+                    const auto role = partFiles().indexOf (head);
+                    if (role < 0) continue;
+                    for (auto n : juce::StringArray::fromTokens (body, ",", ""))
+                        if (n.trim().isNotEmpty()) k.parts[(size_t) role].push_back (n.trim().toStdString());
+                }
+                out.push_back (std::move (k));
+            }
+        }
+    }
+    inline juce::File userKitsPath();
+    inline std::vector<Kit>& kitStore() { static std::vector<Kit> all; return all; }
+    inline bool& kitsLoaded() { static bool b = false; return b; }
+    /** The built-in kits and yours (My kits.txt in the suite folder). */
     inline const std::vector<Kit>& kits()
     {
-        static const std::vector<Kit> all = []
+        if (! kitsLoaded())
         {
-            std::vector<Kit> out;
+            kitsLoaded() = true;
+            auto& out = kitStore();
+            out.clear();
             for (int i = 0; i < PatternData::namedResourceListSize; ++i)
             {
                 if (juce::String (PatternData::originalFilenames[i]) != "kits.txt") continue;
                 int size = 0;
                 const auto* data = PatternData::getNamedResource (PatternData::namedResourceList[i], size);
-                if (data == nullptr) continue;
-                for (auto line : juce::StringArray::fromLines (juce::String::fromUTF8 (data, size)))
-                {
-                    line = line.trim();
-                    if (line.isEmpty() || line.startsWithChar ('#')) continue;
-                    auto f = juce::StringArray::fromTokens (line, "|", "");
-                    if (f.size() < 3) continue;
-                    Kit k;
-                    k.name = f[0].trim().toStdString();
-                    k.moods = detail::tagBits (f[1].trim(), "EHMKDRP");
-                    k.styles = detail::tagBits (f[2].trim(), "UCPTYVO");
-                    for (int j = 3; j < f.size(); ++j)   // role: family, family, ...
-                    {
-                        const auto role = partFiles().indexOf (f[j].upToFirstOccurrenceOf (":", false, false).trim());
-                        if (role < 0) continue;
-                        for (auto n : juce::StringArray::fromTokens (f[j].fromFirstOccurrenceOf (":", false, false), ",", ""))
-                            if (n.trim().isNotEmpty()) k.parts[(size_t) role].push_back (n.trim().toStdString());
-                    }
-                    out.push_back (std::move (k));
-                }
+                if (data != nullptr) detail::parseKits (juce::String::fromUTF8 (data, size), out, false);
             }
-            return out;
-        }();
-        return all;
+            detail::parseKits (userKitsPath().loadFileAsString(), out, true);
+        }
+        return kitStore();
     }
+    /** Reads My kits.txt again (after the kit generator adds to it). */
+    inline void reloadKits() { kitsLoaded() = false; }
 
     /** A voice's bars and its octave shift. A bar is 16 steps (16ths), 12 (8th-note triplets) or
         24 (16th triplets); '!' before a step accents it, an apostrophe softens it (neither takes a step). */
     struct Voice
     {
         std::vector<std::string> bars, marks;   // marks: per step ' ', '!' or '\''
+        std::vector<std::string> artic;         // per step ' ', '^' (staccato) or '_' (legato)
         int octave = 0;
     };
     inline std::vector<Voice> voices (const std::string& text)
@@ -241,32 +285,39 @@ namespace patterns
             while (v.startsWithChar ('<') || v.startsWithChar ('>')) { voice.octave += v[0] == '>' ? 1 : -1; v = v.substring (1); }
             for (auto b : juce::StringArray::fromTokens (v, "/", ""))
             {
-                std::string bar, mark;
-                char pending = ' ';
+                std::string bar, mark, art;
+                char pending = ' ', pendingArt = ' ';
                 for (auto c : b)
                 {
                     if (c == '!' || c == '\'') { pending = (char) c; continue; }
+                    if (c == '^' || c == '_') { pendingArt = (char) c; continue; }
                     bar.push_back ((char) c);
                     mark.push_back (pending);
-                    pending = ' ';
+                    art.push_back (pendingArt);
+                    pending = pendingArt = ' ';
                 }
                 if (bar.size() != 12 && bar.size() != 24)
                 {
-                    if (bar.size() > 16) { bar.resize (16); mark.resize (16); }
-                    while (bar.size() < 16) { bar.push_back ('.'); mark.push_back (' '); }
+                    if (bar.size() > 16) { bar.resize (16); mark.resize (16); art.resize (16); }
+                    while (bar.size() < 16) { bar.push_back ('.'); mark.push_back (' '); art.push_back (' '); }
                 }
                 voice.bars.push_back (bar);
                 voice.marks.push_back (mark);
+                voice.artic.push_back (art);
             }
-            if (voice.bars.empty()) { voice.bars.push_back (std::string (16, '.')); voice.marks.push_back (std::string (16, ' ')); }
+            if (voice.bars.empty()) { voice.bars.push_back (std::string (16, '.')); voice.marks.push_back (std::string (16, ' ')); voice.artic.push_back (std::string (16, ' ')); }
             out.push_back (std::move (voice));
         }
-        if (out.empty()) out.push_back ({ { std::string (16, '.') }, { std::string (16, ' ') }, 0 });
+        if (out.empty()) out.push_back ({ { std::string (16, '.') }, { std::string (16, ' ') }, { std::string (16, ' ') }, 0 });
         return out;
     }
 
     /** The first voice's bars (single-voice roles). */
     inline std::vector<std::string> bars (const std::string& text) { return voices (text).front().bars; }
+
+    int favouriteOf (const Family&);
+    int kitFavourite (const Kit&);
+    float kitQuality (const Kit&);
 
     inline uint32_t hash (uint32_t x)
     {
@@ -286,10 +337,18 @@ namespace patterns
             const auto& f = lib[(size_t) i];
             if (f.part != part || f.kind != kind) continue;
             if (section < 0 ? f.where != 0 : ((f.where >> section) & 1u) == 0) continue;   // section figures only where they belong
+            const auto fav = favouriteOf (f);
+            if (fav < 0) continue;   // 25: banned
             const auto score = ((f.styles >> (int) style) & 1u) * 3 + ((f.moods >> (int) mood) & 1u) * 2;
             if ((int) score > bestScore) { bestScore = (int) score; best.clear(); }
-            if ((int) score == bestScore) best.push_back (i);
+            if ((int) score == bestScore) { best.push_back (i); if (fav > 0) { best.push_back (i); best.push_back (i); } }   // favourites: three times the chance
         }
+        if (best.empty())   // everything banned: fall back to the plain best fits
+            for (int i = 0; i < (int) lib.size(); ++i)
+            {
+                const auto& f = lib[(size_t) i];
+                if (f.part == part && f.kind == kind && (section < 0 ? f.where == 0 : ((f.where >> section) & 1u) != 0)) best.push_back (i);
+            }
         return best;
     }
 
@@ -312,11 +371,24 @@ namespace patterns
         for (const auto& k : kits())
         {
             if (((k.styles >> (int) style) & 1u) == 0) continue;
+            const auto fav = kitFavourite (k);
+            if (fav < 0) continue;   // 25: banned
             const auto score = (int) ((k.moods >> (int) mood) & 1u);
             if (score > bestScore) { bestScore = score; best.clear(); }
-            if (score == bestScore) best.push_back (&k);
+            if (score == bestScore) { best.push_back (&k); if (fav > 0) { best.push_back (&k); best.push_back (&k); } }
         }
-        return best.empty() ? nullptr : best[hash (seed * 40503u + 17u) % best.size()];
+        if (best.empty()) return nullptr;
+        // 10, 11, 23: of those, the better-scored half (their families' quality, how the bass, arp and
+        // chords interlock, at most two parts pushing), still by the seed
+        if (best.size() > 3)
+        {
+            std::vector<std::pair<float, const Kit*>> scored;
+            for (const auto* k : best) scored.push_back ({ kitQuality (*k), k });
+            std::stable_sort (scored.begin(), scored.end(), [] (const auto& a, const auto& b) { return a.first > b.first; });
+            best.clear();
+            for (size_t i = 0; i < (scored.size() + 1) / 2; ++i) best.push_back (scored[i].second);
+        }
+        return best[hash (seed * 40503u + 17u) % best.size()];
     }
     /** The kit's family for a role and kind (a section figure first, where one is listed for the section). */
     inline const Family* kitFamily (const Kit& kit, Part part, int kind, int section)
@@ -409,4 +481,14 @@ namespace patterns
         }
         return lib[(size_t) c[hash (seed * 2654435761u + (uint32_t) part * 977u + (uint32_t) kind * 131u + (uint32_t) (section + 1) * 7919u) % c.size()]];
     }
+}
+
+#include "LibraryTools.h"
+
+namespace patterns
+{
+    inline juce::File userKitsPath() { return suite::Alias::file ("My kits.txt"); }
+    inline int favouriteOf (const Family& f) { return favourite (familyKey (f)); }
+    inline int kitFavourite (const Kit& k) { return favourite (kitKey (k)); }
+    inline float kitQuality (const Kit& k) { return kitScore (k); }
 }

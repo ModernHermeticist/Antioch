@@ -179,7 +179,8 @@ void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     }
 
     const auto director = value (TParams::direct) > 0.5f && suite::Autopilot::on (suite::Autopilot::transmuteF);
-    const auto role = effectiveRole();
+    const auto chosenRole = (int) value (TParams::role);
+    const auto role = chosenRole > 0 ? chosenRole : autoRole.load();
     const auto kicks = suite::KickBus::read();
     suite::Progression prog;
     const auto haveChords = suite::ChordBus::read (prog);
@@ -383,6 +384,7 @@ void TransmutationProcessor::updateProfile()
 void TransmutationProcessor::pollTick()
 {
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
+    autoRole.store (juce::jmax (0, roleForTrack()));
     if (nowMs - lastProfileMs > 2000.0) { lastProfileMs = nowMs; updateProfile(); }
 
     // the lead's rhythm, for rhythm borrowing (Quintessence shares every track's attacks)
@@ -417,6 +419,7 @@ bool TransmutationProcessor::replan (bool force)
     in.barQ = 4.0;
     in.bpm = bpmNow.load();
     in.role = effectiveRole();
+    autoRole.store (juce::jmax (0, roleForTrack()));
     const auto track = getTrackName();
     in.pluckName = suite::isPluckName (track); in.arpName = suite::isArpName (track);
     in.songSpice = suite::TransmuteBus::songSpice();

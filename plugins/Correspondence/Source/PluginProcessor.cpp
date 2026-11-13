@@ -465,6 +465,15 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
     // Autopilot (stability): bass notes under D1 move up an octave
     if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
         if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
+    // Writing (feel): each part's own micro-timing and the style's groove
+    if (kind.startsWith ("Song ") && kind != "Song Fills")
+        if (const auto sp = currentSongPatterns(); sp.write.feel && sp.library)
+        {
+            const auto part = kind.endsWith ("Bass") ? patterns::Part::Bass : kind.endsWith ("Arp") ? patterns::Part::Arp : kind.endsWith ("Chords") ? patterns::Part::Chords
+                            : kind.endsWith ("Lead") || kind.endsWith ("Harmony") ? patterns::Part::Lead : kind.endsWith ("Counter") ? patterns::Part::Counter
+                            : (patterns::Part) juce::jmax (0, patterns::partFiles().indexOf (kind.fromFirstOccurrenceOf ("Song ", false, false).toLowerCase()));
+            notes = chords::writing::microTiming (notes, part, (patterns::Style) juce::jlimit (0, 6, sp.libStyle));
+        }
     return chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
                              apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
 }
@@ -746,8 +755,15 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         }
         const auto amount = apvts.getRawParameterValue (Params::humanise)->load();
         const auto swing = Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load());
+        const auto spFeel = currentSongPatterns();
         for (auto& [name, notes] : parts)
         {
+            if (spFeel.write.feel && spFeel.library)
+            {
+                auto part = (patterns::Part) juce::jmax (0, patterns::partFiles().indexOf (name.toLowerCase()));
+                if (name == "Harmony") part = patterns::Part::Lead;
+                notes = chords::writing::microTiming (notes, part, (patterns::Style) juce::jlimit (0, 6, spFeel.libStyle));
+            }
             notes = chords::humanise (chords::applyGroove (notes, swing), amount, ("Song " + name).hashCode());
             if (name == "Lead") notes = chords::expressLead (notes, leadExpression()).notes;   // glides (scoops are in the Song Lead clip)
         }

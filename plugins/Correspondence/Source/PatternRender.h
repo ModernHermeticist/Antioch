@@ -9,6 +9,13 @@ namespace chords::lib
 {
     using patterns::Part;
 
+    /** How a family is played beyond its text (the Writing menu). */
+    struct RenderOptions
+    {
+        bool colourFit = false;     // 12: 7ths and 9ths only where they fit the chord
+        bool flattenPush = false;   // 11: over the push budget: hits on the chord, not ahead of it
+    };
+
     inline Part libraryPart (SongPart part)
     {
         switch (part)
@@ -117,7 +124,7 @@ namespace chords::lib
 
     /** One voice of a family over the progression. */
     inline std::vector<Note> renderVoice (const patterns::Family& f, const patterns::Voice& main, const patterns::Voice& fill, int level, bool fillAll,
-                                          const Settings& s, double lengthQ, int leadOctave)
+                                          const Settings& s, double lengthQ, int leadOctave, const RenderOptions& opt = {})
     {
         std::vector<Note> out;
         const auto count = juce::jlimit (1, maxSlots, s.count);
@@ -131,7 +138,7 @@ namespace chords::lib
         std::vector<std::vector<int>> voiced;
         if (chordal (f.part)) voiced = voiceProgression (s);
 
-        struct Ev { double start; std::vector<int> pitches; int velocity; double holdEnd; bool ghost, roll, slide; };
+        struct Ev { double start; std::vector<int> pitches; int velocity; double holdEnd; bool ghost, roll, slide; char art = ' '; };
         std::vector<Ev> evs;
         int prev = -1, arpIndex = 0;
         bool holding = false;
@@ -145,6 +152,7 @@ namespace chords::lib
           const auto barIndex = (size_t) (mel ? (answer ? bar % 8 - 6 : bar % 8) : bar) % src.bars.size();
           const auto& barText = src.bars[barIndex];
           const auto& barMarks = src.marks[barIndex];
+          const auto* barArtic = barIndex < src.artic.size() ? &src.artic[barIndex] : nullptr;
           const auto steps = (int) barText.size();     // 16 (16ths), 12 (8th triplets) or 24 (16th triplets)
           const auto stepLen = 4.0 / steps;
           for (int k = 0; k < steps; ++k)
@@ -155,7 +163,8 @@ namespace chords::lib
             const auto inBeat = std::fmod (straight, 1.0);
             const auto ch = barText[(size_t) k];
             const auto mark = barMarks[(size_t) k];
-            const auto push = ch == 'p' || ch == 'P';   // the next chord, early
+            const auto art = barArtic != nullptr && (size_t) k < barArtic->size() ? (*barArtic)[(size_t) k] : ' ';
+            const auto push = (ch == 'p' || ch == 'P') && ! opt.flattenPush;   // the next chord, early
             const auto chordIdx = ((int) std::floor (q / L + 1.0e-9) + (push ? 1 : 0)) % count;
             if (ch == '.') { holding = false; continue; }
             if (ch == '-') { if (holding && ! evs.empty()) evs.back().holdEnd = straight + stepLen; continue; }
@@ -263,8 +272,8 @@ namespace chords::lib
                     while (((p % 12) + 12) % 12 != pc) --p;
                     if (std::find (pitches.begin(), pitches.end(), p) == pitches.end()) pitches.push_back (p);
                 };
-                if (f.add7) addTone (6);
-                if (f.add9) addTone (1);
+                if (f.add7 && (! opt.colourFit || writing::colourFits (s, chordIdx, false))) addTone (6);
+                if (f.add9 && (! opt.colourFit || writing::colourFits (s, chordIdx, true))) addTone (1);
                 std::sort (pitches.begin(), pitches.end());
                 for (int inv = 0; inv < f.inversion && inv < (int) pitches.size() - 1; ++inv) pitches[(size_t) inv] += 12;
             }
@@ -276,7 +285,7 @@ namespace chords::lib
                 p = juce::jlimit (0, 127, p);
             }
             velocity = juce::jlimit (1, 127, (int) std::lround (velocity * levelVel[(size_t) juce::jlimit (0, 2, level)]));
-            evs.push_back ({ q, pitches, velocity, -1.0, ghost, roll, false });
+            evs.push_back ({ q, pitches, velocity, -1.0, ghost, roll, false, art });
             prev = pitches.front();
             holding = ! ghost;
           }
@@ -299,6 +308,8 @@ namespace chords::lib
             }
             auto len = e.holdEnd > 0.0 ? e.holdEnd - e.start - 0.02 : std::min (4.0, (next - e.start) * (double) f.gate);
             if (e.ghost) len = std::min (len, 0.12);
+            if (e.art == '^') len = std::min (len, 0.12);                     // staccato
+            if (e.art == '_' && e.holdEnd <= 0.0) len = next - e.start - 0.01; // legato: to the next note
             len = juce::jlimit (0.05, juce::jmax (0.05, next - e.start - 0.01), len);
             if (e.slide && i + 1 < evs.size()) len = next - e.start + 0.03;   // overlaps the next note: a glide on a 303-style synth
             for (auto p : e.pitches) out.push_back ({ p, e.start, len, e.velocity });
@@ -309,7 +320,8 @@ namespace chords::lib
     /** `lengthQ` quarters of the family at `level` (0-2) over the progression, from its first chord.
         `fillAll`: every bar plays the fill (the phrase-end bar). Melodic roles repeat their cell and
         answer it with the fill in the last two bars of every eight. Voices are played together. */
-    inline std::vector<Note> render (const patterns::Family& f, int level, bool fillAll, const Settings& s, double lengthQ, int leadOctave = 5, int variant = 0)
+    inline std::vector<Note> render (const patterns::Family& f, int level, bool fillAll, const Settings& s, double lengthQ, int leadOctave = 5, int variant = 0,
+                                     const RenderOptions& opt = {})
     {
         // Variant 1 (every other phrase): the family's second high energy and second fill, where it has them
         const auto lv = (size_t) juce::jlimit (0, 2, level);
@@ -321,7 +333,7 @@ namespace chords::lib
         for (size_t v = 0; v < mainVoices.size(); ++v)
         {
             const auto& fillVoice = v < fillVoices.size() ? fillVoices[v] : mainVoices[v];
-            auto notes = renderVoice (f, mainVoices[v], fillVoice, level, fillAll, s, lengthQ, leadOctave);
+            auto notes = renderVoice (f, mainVoices[v], fillVoice, level, fillAll, s, lengthQ, leadOctave, opt);
             out.insert (out.end(), notes.begin(), notes.end());
         }
         std::stable_sort (out.begin(), out.end(), [] (const Note& a, const Note& b) { return a.start < b.start; });

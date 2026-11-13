@@ -11,6 +11,7 @@
 #include "KeyBus.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
+#include "Audition.h"
 #include "ChordBus.h"
 #include "VocalBus.h"
 #include "WritingBus.h"
@@ -1880,6 +1881,175 @@ int main (int argc, char** argv)
         const auto t = chords::trimChordHangovers (notes, s, map);
         check (t == 1 && std::abs (notes[0].start + notes[0].length - 4.0) < 0.02 && std::abs (notes[1].length - 4.0) < 1.0e-6,
                "a held E ending into F is trimmed at the change; a C that fits F rings on");
+    }
+
+
+    section ("Writing: phrases, development, harmony, feel, parts, arrangement, learning, the library's tools");
+    {
+        using chords::Note;
+        namespace W = chords::writing;
+        const auto prefs = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceTestsWritingPrefs.txt");
+        prefs.deleteFile();
+        patterns::setLearnedFileForTests (prefs);
+        chords::Settings s;   // A minor: Am F C G
+        s.slots[0].degree = 1; s.slots[1].degree = 6; s.slots[2].degree = 3; s.slots[3].degree = 7;
+
+        // 51: the validator
+        const auto problems = patterns::validate();
+        check (problems.isEmpty(), "every family and kit passes the validator" + (problems.isEmpty() ? juce::String() : ": " + problems.joinIntoString ("; ").substring (0, 400)));
+        // 32, 54: the new polymetric arps and the articulation marks
+        const patterns::Family* three = nullptr;
+        for (const auto& f : patterns::library()) if (f.name == "Three over four") three = &f;
+        check (three != nullptr && patterns::voices (three->level[2]).front().bars.size() == 3, "polymetric arps: three over four, realigning every 3 bars");
+        {
+            const auto v = patterns::voices ("!a^a_a.");
+            check (v.front().artic.front()[1] == '^' && v.front().artic.front()[2] == '_' && v.front().marks.front()[0] == '!', "'^' (staccato) and '_' (legato) are read per step");
+            patterns::Family f; f.part = patterns::Part::Arp; f.gate = 0.9f;
+            f.level = { "^a.a.a.a.a.a.a.a.", "^a.a.a.a.a.a.a.a.", "^a.a.a.a.a.a.a.a." };
+            const auto n = chords::lib::render (f, 2, false, s, 4.0);
+            check (! n.empty() && n.front().length <= 0.125 && n[1].length > 0.3, "a staccato step plays short, the next as gated");
+        }
+        // 23, 53: quality and coverage
+        float worst = 1.0f; int scored = 0;
+        for (const auto& f : patterns::library()) { worst = std::min (worst, patterns::quality (f)); ++scored; }
+        const auto report = patterns::coverageReport();
+        check (scored > 100 && report.contains ("Near-duplicates") && report.contains ("Weakest"), "every family has a quality score (lowest " + juce::String (worst, 2) + "); the coverage report lists gaps, near-duplicates and the weakest");
+        // 10: interlock
+        {
+            patterns::Family a, b, c;
+            a.name = "a"; b.name = "b"; c.name = "c";
+            a.level[2] = "r...r...r...r..."; b.level[2] = "..r...r...r...r."; c.level[2] = "r...r...r...r...";
+            check (patterns::interlock ({ &a, &b }) > patterns::interlock ({ &a, &c }), "parts that fill each other's gaps score as interlocking better than parts in unison");
+        }
+        // 18, 22, 45: kit fields
+        const patterns::Kit* sunrise = nullptr;
+        for (const auto& k : patterns::kits()) if (k.name == "Sunrise anthem") sunrise = &k;
+        check (sunrise != nullptr && sunrise->enterBar[(size_t) patterns::Part::Strings] == 9 && sunrise->fromDrop[(size_t) patterns::Part::Choir] == 2
+                   && sunrise->breakdownVoice == (int) patterns::Part::Piano && ((sunrise->extras >> (int) patterns::Part::Candy) & 1u) != 0,
+               "kits say when layers enter, which are extra, and who sings the breakdown");
+        // 25: favourites and bans
+        {
+            const auto* first = patterns::pickKit (patterns::Mood::Euphoric, patterns::Style::Uplifting, 5);
+            check (first != nullptr, "(a kit for euphoric uplifting)");
+            if (first != nullptr)
+            {
+                patterns::setFavourite (patterns::kitKey (*first), -1);
+                bool never = true;
+                for (uint32_t seed = 1; seed < 200; ++seed) if (const auto* k = patterns::pickKit (patterns::Mood::Euphoric, patterns::Style::Uplifting, seed); k != nullptr && k->name == first->name) never = false;
+                check (never, "a banned kit never comes up");
+                patterns::setFavourite (patterns::kitKey (*first), 1);
+                int hits = 0;
+                for (uint32_t seed = 1; seed < 200; ++seed) if (const auto* k = patterns::pickKit (patterns::Mood::Euphoric, patterns::Style::Uplifting, seed); k != nullptr && k->name == first->name) ++hits;
+                patterns::setFavourite (patterns::kitKey (*first), 0);
+                int plain = 0;
+                for (uint32_t seed = 1; seed < 200; ++seed) if (const auto* k = patterns::pickKit (patterns::Mood::Euphoric, patterns::Style::Uplifting, seed); k != nullptr && k->name == first->name) ++plain;
+                check (hits > plain, "a favourite kit comes up more often (" + juce::String (plain) + " -> " + juce::String (hits) + " in 199 songs)");
+            }
+        }
+        // 55: the kit generator
+        {
+            const auto made = patterns::generateKits (patterns::Mood::Euphoric, patterns::Style::Uplifting, 3, 42u);
+            std::vector<patterns::Kit> back;
+            if (! made.empty()) patterns::detail::parseKits (patterns::kitLine (made.front()), back, true);
+            check (! made.empty() && back.size() == 1 && back.front().parts == made.front().parts, "the kit generator proposes kits, written as kits.txt lines that read back the same");
+        }
+        // A: the phrase arc and its parts
+        {
+            const auto& hookFam = patterns::pick (patterns::Part::Lead, 0, patterns::Mood::Euphoric, patterns::Style::Uplifting, 3);
+            const auto hook = chords::lib::render (hookFam, 2, false, s, 32.0);
+            const auto arc = W::phraseArc (hook, s, 32.0, 1u);
+            auto median = [] (const std::vector<Note>& v, double a, double b) { std::vector<int> p; for (const auto& n : v) if (n.start >= a && n.start < b) p.push_back (n.pitch); std::sort (p.begin(), p.end()); return p.empty() ? 0 : p[p.size() / 2]; };
+            check (median (arc, 16.0, 24.0) > median (hook, 16.0, 24.0), "the phrase arc: bars 5-6 climb");
+            const Note* half = nullptr; for (const auto& n : arc) if (n.start >= 8.0 && n.start < 16.0) half = &n;
+            check (half != nullptr && ((half->pitch % 12) == (9 + 7) % 12 || (half->pitch % 12) == (9 + 2) % 12), "the half-phrase ends open (on the 5th or 2nd)");
+            std::vector<Note> wide { { 60, 0.0, 1.0, 100 }, { 86, 1.0, 1.0, 100 }, { 62, 2.0, 1.0, 100 } };
+            const auto sung = W::singable (wide, s);
+            check (std::abs (sung[1].pitch - sung[0].pitch) <= 15, "singable: a two-octave leap is folded");
+            const auto aug = W::develop (hook, W::devAugment, s, 64.0), frag = W::develop (hook, W::devFragment, s, 32.0), inv = W::develop (hook, W::devInvert, s, 32.0);
+            check (! aug.empty() && std::abs (aug.front().length - 2.0 * hook.front().length) < 1.0e-6 && ! frag.empty() && ! inv.empty() && inv.front().pitch == hook.front().pitch,
+                   "development: augmented twice as slow, fragmented, inverted around its first note");
+            const auto fs = W::foreshadow (hook);
+            bool fewer = fs.size() < hook.size();
+            check (fewer, "foreshadowing keeps three notes of each two bars");
+            std::vector<Note> top { { 81, 0.0, 1.0, 100 }, { 76, 4.0, 1.0, 100 } };
+            W::climax (top, s, 81, true, false, 0.0);
+            check (top[0].pitch < 81, "the breakdown stays under the drop's climax");
+        }
+        // C: harmony
+        {
+            const auto mix = W::modalMixture ([&] { auto x = s; x.slots[1].degree = 4; return x; }());
+            check (mix.slots[1].quality == chords::Quality::Major, "modal mixture: the breakdown's iv becomes IV in a minor key");
+            auto dim = s; dim.slots[0].degree = 2;
+            check (! W::colourFits (dim, 0, true) && W::colourFits (s, 0, true), "a 9th that would be a b9 is left off; on the tonic it fits");
+            std::vector<Note> bar { { 57, 0.0, 1.0, 100 }, { 60, 1.0, 1.0, 100 }, { 64, 2.0, 1.0, 100 }, { 69, 3.0, 1.0, 100 } };
+            W::prepareKeyChange (bar, 11, 0.0, false);   // into B minor: its V is F#
+            bool onV = true;
+            for (const auto& n : bar) onV = onV && (n.pitch % 12 == 6 || n.pitch % 12 == 10 || n.pitch % 12 == 1);
+            check (onV, "the build's last bar lands on the new key's V");
+            std::vector<Note> b { { 45, 0.0, 1.0, 100 }, { 41, 4.0, 1.0, 100 } };
+            W::pedal (b, s);
+            check (b[1].pitch % 12 == 9, "a pedal holds the key's root under the chords");
+            std::vector<Note> fill { { 57, 0.0, 1.0, 100 }, { 57, 2.0, 1.0, 100 } };
+            W::passingChord (fill, s, 0.0, 4.0, true);
+            check (fill[1].pitch % 12 == (5 + 7) % 12 && fill[0].pitch == 57, "a passing chord: the fill's last two beats on the next chord's dominant");
+        }
+        // B, J: feel and parts
+        {
+            std::vector<Note> notes { { 50, 0.0, 0.5, 100 }, { 50, 0.25, 0.5, 100 } };
+            const auto late = W::microTiming (notes, patterns::Part::Bass, patterns::Style::Uplifting);
+            check (late[0].start > notes[0].start, "micro-timing: the bass sits a touch behind");
+            const auto shaped = W::velocityContour (notes, 0.0, 32.0, false, patterns::Style::Uplifting);
+            check (shaped[0].velocity > shaped[1].velocity, "velocity contours: the beat stronger than the 16th after it");
+            std::vector<Note> hi { { 75, 0.0, 1.0, 100 }, { 77, 1.0, 1.0, 100 } };
+            W::keepInBand (hi, patterns::Part::Bass);
+            check (hi[0].pitch <= 55 && hi[1].pitch <= 55, "registers: a bass line moves down into the bass's band");
+            std::vector<Note> hook { { 76, 0.0, 2.0, 100 }, { 77, 2.0, 2.0, 100 } };
+            std::vector<Note> ctr { { 76, 0.0, 2.0, 90 }, { 70, 2.0, 2.0, 90 } };
+            const auto cp = W::counterpoint (ctr, hook, s, 0.0);
+            const auto iv = (hook[0].pitch - cp[0].pitch) % 12;
+            check (cp[0].pitch < hook[0].pitch && (iv == 3 || iv == 4 || iv == 8 || iv == 9), "counterpoint: under the hook, a third or sixth on the beat");
+        }
+        // D: song-level arrangement with every group on
+        {
+            suite::SectionMap map;
+            map.count = 4; map.totalBars = 96;
+            map.sections[0] = { 1, suite::SectionType::Intro }; map.sections[1] = { 33, suite::SectionType::Breakdown };
+            map.sections[2] = { 49, suite::SectionType::Build }; map.sections[3] = { 65, suite::SectionType::Drop };
+            chords::SongPatterns sp;
+            sp.library = true; sp.libMood = 0; sp.libStyle = 0; sp.libSeed = 7;
+            sp.chords = { 1, 1, 1, 4, 3, 1 }; sp.arp = { 1, 1, 1, 1, 1, 1 };
+            auto spOn = sp; spOn.write = W::Options::all(); spOn.write.learned = false;
+            const auto chordsOff = chords::songClip (s, map, sp, chords::SongPart::Chords), chordsOn = chords::songClip (s, map, spOn, chords::SongPart::Chords);
+            auto startsIn = [] (const std::vector<Note>& v, double a, double b) { int k = 0; for (const auto& n : v) if (n.start >= a - 1.0e-6 && n.start < b - 1.0e-6) ++k; return k; };
+            check (startsIn (chordsOff, 0.0, 64.0) > 0 && startsIn (chordsOn, 0.0, 64.0) == 0, "a DJ-friendly intro: its first 16 bars are the bass's alone");
+            check (startsIn (chordsOn, 64 * 4.0 - 1.0, 64 * 4.0) == 0, "a breath before the drop: nothing starts in the build's last beat");
+            const auto leadOff = chords::songClip (s, map, sp, chords::SongPart::Lead), leadOn = chords::songClip (s, map, spOn, chords::SongPart::Lead);
+            check (startsIn (leadOn, 33 * 4.0 - 4.0, 41 * 4.0 - 4.0) != startsIn (leadOff, 33 * 4.0 - 4.0, 41 * 4.0 - 4.0) || leadOn.size() != leadOff.size(),
+                   "the hook is shaped and developed (the breakdown foreshadows it, the build fragments it)");
+            const auto arpOn = chords::songClip (s, map, spOn, chords::SongPart::Arp);
+            check (startsIn (arpOn, 32 * 4.0, 32 * 4.0 + 1.5) == 3, "the song's signature: the hook's first three notes open the breakdown");
+            bool finite = true;
+            for (auto p : { chords::SongPart::Bass, chords::SongPart::Counter, chords::SongPart::Piano, chords::SongPart::Strings, chords::SongPart::Brass, chords::SongPart::Choir })
+                for (const auto& n : chords::songClip (s, map, spOn, p)) finite = finite && n.pitch >= 0 && n.pitch <= 127 && n.length > 0.0 && std::isfinite (n.start);
+            check (finite, "every part renders sensibly with every Writing group on");
+        }
+        // F: learning from an edit
+        {
+            std::vector<Note> original, edited;
+            for (int k = 0; k < 32; ++k) original.push_back ({ 60, k * 0.5, 0.4, 100 });
+            for (int k = 0; k < 32; k += 2) edited.push_back ({ 72, k * 0.5, 0.4, 90 });
+            W::learnEdit (patterns::Part::Arp, original, edited);
+            const auto applied = W::applyLearned (original, patterns::Part::Arp);
+            check (applied.size() < original.size() && applied.front().pitch > 60, "your edit is learned: fewer notes and an octave up next time");
+        }
+        // 52: the audition renderer
+        {
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceAudition.wav");
+            chords::SongPatterns sp; sp.library = true;
+            check (chords::audition::renderDrop (wav, s, sp) && wav.getSize() > 100000, "a kit's drop renders to a WAV for audition");
+            wav.deleteFile();
+        }
+        prefs.deleteFile();
     }
 
     return finish();

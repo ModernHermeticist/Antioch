@@ -1191,6 +1191,7 @@ namespace chords
     }
 
 }
+#include "Writing.h"
 #include "PatternRender.h"
 namespace chords
 {
@@ -1240,6 +1241,7 @@ namespace chords
         // for that section; chops and candy step back while the hook is moving
         bool manageDensity = true;
         bool takeTurns = true;
+        writing::Options write;       // the Writing menu (each group on or off)
     };
 
     /** Where a library layer plays in section i before the density manager (kind, or -1). */
@@ -1269,8 +1271,21 @@ namespace chords
         const auto t = (size_t) type;
         int core = (patterns.chords[t] > 0) + (patterns.bass[t] > 0) + (patterns.arp[t] > 0) + (patterns.lead[t] > 0);
         if (patterns.lead[t] == 1 && patterns.counter) ++core;
-        const auto budget = type == ST::Drop ? 8 : type == ST::Breakdown || type == ST::Build ? 6 : 5;
-        auto priority = [type] (SongPart p)
+        auto budget = type == ST::Drop ? 8 : type == ST::Breakdown || type == ST::Build ? 6 : 5;
+        // 45: tutti and thinning: the first of several drops plays fewer layers, the final drop all
+        // of them, a breakdown a few (the kit's extra layers sit out first)
+        uint32_t kitExtras = 0;
+        if (patterns.write.arrange)
+        {
+            int drops = 0, ordinal = 0;
+            for (int k = 0; k < map.count; ++k) if (map.sections[(size_t) k].type == ST::Drop) { if (k < i) ++ordinal; ++drops; }
+            if (type == ST::Drop && drops > 1) budget = ordinal == 0 ? budget - 2 : i == map.lastDropIndex() ? 99 : budget;
+            if (type == ST::Breakdown) budget = core + 3;
+            if (patterns.libKits)
+                if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, patterns.libMood), (patterns::Style) juce::jlimit (0, 6, patterns.libStyle), patterns.libSeed))
+                    kitExtras = kit->extras;
+        }
+        auto priority = [type, kitExtras] (SongPart p)
         {
             //                              Piano Strings Brass Choir Timpani Acid Chops Candy
             static const int breakdown[] { 9,    8,      5,    7,    2,      1,   2,    3 };
@@ -1278,7 +1293,8 @@ namespace chords
             static const int drop[]      { 4,    7,      6,    5,    5,      7,   3,    2 };
             static const int other[]     { 6,    5,      3,    4,    3,      5,   3,    2 };
             const auto k = (size_t) ((int) p - (int) SongPart::Piano);
-            return type == ST::Breakdown ? breakdown[k] : type == ST::Build ? build[k] : type == ST::Drop ? drop[k] : other[k];
+            const auto extra = ((kitExtras >> (int) lib::libraryPart (p)) & 1u) != 0;
+            return (type == ST::Breakdown ? breakdown[k] : type == ST::Build ? build[k] : type == ST::Drop ? drop[k] : other[k]) - (extra ? 10 : 0);
         };
         std::vector<SongPart> playing;
         for (int p = (int) SongPart::Piano; p <= (int) SongPart::Candy; ++p)
@@ -1361,7 +1377,7 @@ namespace chords
         the seed, preferring rhythms that interlock with the parts chosen before it (the arp with
         the bass; the chords, acid and piano with those), and a section figure (a build riser, an
         intro or outro version) where the library has one for that section. */
-    inline const patterns::Family& songFamily (SongPart part, int kind, const SongPatterns& sp, int section)
+    inline const patterns::Family& songFamily (SongPart part, int kind, const SongPatterns& sp, int section, int dropOrdinal = 0)
     {
         const auto mood = (patterns::Mood) juce::jlimit (0, 6, sp.libMood);
         const auto style = (patterns::Style) juce::jlimit (0, 6, sp.libStyle);
@@ -1378,10 +1394,43 @@ namespace chords
         if (sp.libKits)
             if (const auto* kit = patterns::pickKit (mood, style, sp.libSeed))
                 if (const auto* f = patterns::kitFamily (*kit, lib::libraryPart (part), kind, figures && ! melodicPart ? section : -1))
+                {
+                    // 20: drop 2 and later keep the kit's identity but play a new arp (same kind, same feel)
+                    if (sp.write.arrange && dropOrdinal > 0 && part == SongPart::Arp)
+                    {
+                        std::vector<const patterns::Family*> ref { f };
+                        for (uint32_t t = 0; t < 6; ++t)
+                        {
+                            const auto& alt = patterns::pickFitted (patterns::Part::Arp, kind, mood, style, sp.libSeed + 101u * (uint32_t) dropOrdinal + 7919u * t, ref, -1, f->character);
+                            if (! alt.name.empty() && alt.name != f->name && patterns::feelOf (alt) == patterns::feelOf (*f)) return alt;
+                        }
+                    }
                     return *f;
+                }
         // The song's character comes from its hook; the other parts lean the same way
         const auto character = part == SongPart::Lead ? 0u : songFamily (SongPart::Lead, 0, sp, -1).character;
         return patterns::pickFitted (lib::libraryPart (part), kind, mood, style, sp.libSeed, others, figures && ! melodicPart ? section : -1, character);
+    }
+
+    /** 11: the push budget: at most two parts anticipate the next chord; past that, a part's
+        pushes land on the chord (in order: chords, bass, arp, piano, strings, brass, choir, acid). */
+    inline bool overPushBudget (SongPart part, const SongPatterns& sp)
+    {
+        if (! sp.write.parts || ! sp.library) return false;
+        using T = suite::SectionType;
+        const auto drop = (size_t) T::Drop;
+        int pushers = 0;
+        for (auto p : { SongPart::Chords, SongPart::Bass, SongPart::Arp, SongPart::Piano, SongPart::Strings, SongPart::Brass, SongPart::Choir, SongPart::Acid })
+        {
+            const auto choice = p == SongPart::Chords ? sp.chords[drop] : p == SongPart::Bass ? sp.bass[drop] : p == SongPart::Arp ? sp.arp[drop] : 1;
+            const auto kind = lib::isLayerPart (p) ? 1 : lib::kindFor (p, choice, T::Drop);
+            if (kind < 0) continue;
+            const auto& f = songFamily (p, kind, sp, -1);
+            if (f.name.empty() || ! patterns::pushes (f)) continue;
+            if (++pushers > 2 && p == part) return true;
+            if (p == part) return false;
+        }
+        return false;
     }
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
@@ -1391,8 +1440,23 @@ namespace chords
         std::vector<Note> out;
         // Turn-taking: chops and candy fill the hook's gaps (where the hook plays at all)
         const auto turns = patterns.takeTurns && patterns.library && (part == SongPart::Chops || part == SongPart::Candy);
-        const auto hook = turns ? songClip (base, map, patterns, SongPart::Lead) : std::vector<Note> {};
+        const auto& W = patterns.write;
+        const auto melodicSelf = part == SongPart::Lead || part == SongPart::Harmony;
+        const auto needHook = turns || (! melodicSelf && W.any() && patterns.library);
+        const auto hook = needHook ? songClip (base, map, patterns, SongPart::Lead) : std::vector<Note> {};
         const auto progressionQ = base.quartersPerChord * juce::jlimit (1, maxSlots, base.count);
+        const auto libPart = lib::libraryPart (part);
+        const auto wStyle = (patterns::Style) juce::jlimit (0, 6, patterns.libStyle);
+        auto hookIn = [&hook] (double from, double to) { std::vector<Note> v; for (const auto& n : hook) if (n.start >= from - 1.0e-6 && n.start < to - 1.0e-6) v.push_back (n); return v; };
+        // The hook's first 8 bars in the first drop, from 0 (for development, breakdown voices, signatures)
+        std::vector<Note> hookCell;
+        for (int k = 0; k < map.count && hookCell.empty(); ++k)
+            if (map.sections[(size_t) k].type == suite::SectionType::Drop)
+            {
+                const auto s0 = (map.sections[(size_t) k].startBar - 1) * 4.0;
+                for (auto n : hookIn (s0, s0 + 32.0)) { n.start -= s0; n.pitch -= map.keyShiftOf (k); hookCell.push_back (n); }
+            }
+        int dropsSoFar = 0;
 
         for (int i = 0; i < map.count; ++i)
         {
@@ -1442,6 +1506,7 @@ namespace chords
             const auto isBreakdown = map.sections[(size_t) i].type == suite::SectionType::Breakdown;
             if (isBreakdown && (patterns.breakdownStart == 1 || patterns.breakdownStart == 2))
                 s = startingOn (base, patterns.breakdownStart == 1 ? 6 : 4);   // the drop's return to i lands harder
+            if (isBreakdown && W.harmony) s = writing::modalMixture (s);         // 38: the borrowed lift
             // The pattern library: this part's family for the song, at the section's energy
             const auto secType = map.sections[(size_t) i].type;
             const auto kind = lib::isLayerPart (part) ? layerKind : patterns.library ? lib::kindFor (part, choice, secType) : -1;
@@ -1450,7 +1515,11 @@ namespace chords
             const auto useLib = kind >= 0 && (libLead || (part != SongPart::Lead && part != SongPart::Harmony && part != SongPart::Counter));
             const auto libMood = (patterns::Mood) juce::jlimit (0, 6, patterns.libMood);
             const auto libStyle = (patterns::Style) juce::jlimit (0, 6, patterns.libStyle);
-            const auto* family = useLib ? &songFamily (libLead ? SongPart::Lead : part, kind, patterns, (int) secType) : nullptr;
+            const auto dropOrdinal = secType == suite::SectionType::Drop ? dropsSoFar : 0;
+            const auto* family = useLib ? &songFamily (libLead ? SongPart::Lead : part, kind, patterns, (int) secType, dropOrdinal) : nullptr;
+            lib::RenderOptions ropt;
+            ropt.colourFit = W.harmony;
+            ropt.flattenPush = overPushBudget (part, patterns);
             const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
             // Register: an arp sitting on top of the library's hook moves an octave away from it (one
@@ -1472,7 +1541,7 @@ namespace chords
                 std::vector<Note> c;
                 if (family != nullptr && ! libLead)
                 {
-                    c = lib::render (*family, level, fill, cs, progressionQ, 5, variant);
+                    c = lib::render (*family, level, fill, cs, progressionQ, 5, variant, ropt);
                     if (part == SongPart::Chords && laterDrop && patterns.climbLaterDrops) c = climbVoicing (c);
                     for (auto& n : c) n.pitch = juce::jlimit (0, 127, n.pitch + arpShift);   // clear of the hook (below)
                     return c;
@@ -1488,6 +1557,7 @@ namespace chords
                 else
                 {
                     c = libLead ? lib::render (*family, laterDrop ? 2 : 1, false, cs, cycleQ, patterns.melody.octave, earlierSame % 2) : melody (cs, patterns.melody);
+                    if (W.phrase && libLead) c = writing::singable (writing::phraseArc (c, cs, cycleQ, patterns.libSeed + (uint32_t) earlierSame), cs);   // 1, 6, 26-29
                     if (choice == 2) c = teaser (c);
                     if (choice == 3) c = hookHint (c, progressionQ);
                     // Each later drop varies the hook its own way: embellished, then answered (call and
@@ -1562,7 +1632,13 @@ namespace chords
             {
                 int bounce = 0;
                 // Builds climb through the energies: low, mid, then high for the last third
-                const auto buildLevel = secType == ST::Build ? juce::jlimit (0, 2, (int) std::floor (3.0 * (offset - startQ) / juce::jmax (1.0, endQ - startQ))) : sectionLevel;
+                auto buildLevel = secType == ST::Build ? juce::jlimit (0, 2, (int) std::floor (3.0 * (offset - startQ) / juce::jmax (1.0, endQ - startQ))) : sectionLevel;
+                // 16: energy inside a section: a long groove starts a level down, a breakdown's last quarter a level up
+                if (W.arrange && useLevels)
+                {
+                    if (secType == ST::Groove && endQ - startQ >= 64.0 && offset - startQ < (endQ - startQ) / 2.0) buildLevel = juce::jmax (0, sectionLevel - 1);
+                    if (secType == ST::Breakdown && offset >= startQ + 0.75 * (endQ - startQ)) buildLevel = juce::jmin (2, sectionLevel + 1);
+                }
                 const auto alternate = useLevels && buildLevel == 2 && phraseOf (offset) % 2 == 1;   // the drop's second phrase plays the second high
                 const auto& thisCycle = lifting && offset >= liftFrom - 1.0e-9 && liftFrom > startQ ? liftCycle
                                       : alternate ? highCycle2 : useLevels ? levels[(size_t) buildLevel] : cycle;
@@ -1603,9 +1679,159 @@ namespace chords
                 }
             }
 
-            // Ghost notes in the bass and arp, more where the energy is higher.
+            // ---- Writing (the Writing menu) ----
+            {
+                const auto seed = patterns.libSeed * 31u + (uint32_t) i;
+                const auto hasNext = i + 1 < map.count;
+                const auto nextType = hasNext ? map.sections[(size_t) i + 1].type : ST::Outro;
+                const auto finalDrop = secType == ST::Drop && i == map.lastDropIndex() && earlierSame > 0;
+                const auto hookHere = hookIn (startQ, endQ);
+                auto tile = [&] (const std::vector<Note>& cell, double from, double to, double len)
+                {
+                    std::vector<Note> v;
+                    if (cell.empty() || len <= 0.0) return v;
+                    for (auto q = from; q < to - 1.0e-9; q += len)
+                        for (auto n : cell) { n.start += q; n.pitch += keyChange; if (n.start < to - 1.0e-9) { n.length = std::min (n.length, to - n.start - 0.01); v.push_back (n); } }
+                    return v;
+                };
+                auto fillBar = [&] (double q) { const auto bar = (int) std::floor ((q - startQ) / 4.0 + 1.0e-9); return bar % 8 == 7 && q < endQ - 4.0 - 1.0e-9; };
+                const auto chordal = lib::chordal (libPart);
+                auto sk = s;   // the key this section is in (after a final-drop key change)
+                sk.root = s.root + keyChange;
+
+                // A. The hook: developed per section (3, 46), its climax kept for the drops (2), tension (4, 5), ornaments (30)
+                if (part == SongPart::Lead && ! section.empty())
+                {
+                    std::vector<Note> base0;
+                    for (const auto& n : cycle) base0.push_back (n);
+                    if (W.develop && isBreakdown && ! base0.empty())
+                    {
+                        const auto mid = startQ + std::floor ((endQ - startQ) / 2.0 / 8.0) * 8.0;
+                        std::vector<Note> v;
+                        for (const auto& n : writing::foreshadow (section)) if (n.start < mid) v.push_back (n);
+                        for (const auto& n : tile (writing::develop (base0, writing::devAugment, s, cycleQ), mid, endQ, cycleQ)) v.push_back (n);
+                        section = v;
+                    }
+                    else if (W.develop && secType == ST::Build && ! base0.empty())
+                        section = tile (writing::develop (base0, writing::devFragment, s, cycleQ), startQ, endQ, cycleQ);
+                    if (W.phrase)
+                    {
+                        const auto top = writing::maxPitch (hookCell);
+                        writing::climax (section, sk, top, isBreakdown, finalDrop, startQ);
+                    }
+                    if (W.harmony) section = writing::tension (section, sk, startQ, seed);
+                    if (W.ornaments && secType == ST::Drop) section = writing::ornament (section, sk, seed, laterDrop);
+                }
+                // C. The bass: a pedal through intros and the first half of builds (37), a walk on thirds in the quiet sections (15), the hook in the final drop's fills (48)
+                if (part == SongPart::Bass && ! section.empty())
+                {
+                    if (W.harmony && (secType == ST::Intro || secType == ST::Build))
+                    {
+                        const auto until = secType == ST::Build ? startQ + (endQ - startQ) / 2.0 : endQ;
+                        std::vector<Note> ped;
+                        for (const auto& n : section) if (n.start < until) ped.push_back (n);
+                        writing::pedal (ped, sk);
+                        size_t k = 0;
+                        for (auto& n : section) if (n.start < until && k < ped.size()) n.pitch = ped[k++].pitch;
+                    }
+                    if (W.harmony && (isBreakdown || secType == ST::Intro || secType == ST::Outro)) writing::walkOnThirds (section, sk, startQ);
+                    if (W.develop && finalDrop && ! hookHere.empty())
+                        for (auto bq = startQ; bq < endQ - 1.0e-9; bq += 4.0)
+                            if (fillBar (bq))
+                            {
+                                const auto line = writing::hookInBass (hookHere, bq);
+                                if (line.empty()) continue;
+                                section.erase (std::remove_if (section.begin(), section.end(), [bq] (const Note& n) { return n.start >= bq - 1.0e-6 && n.start < bq + 4.0 - 1.0e-6; }), section.end());
+                                section.insert (section.end(), line.begin(), line.end());
+                            }
+                }
+                // E. Shared motifs: the arp walks the hook's notes in later drops (21)
+                if (part == SongPart::Arp && W.arrange && laterDrop && ! hookHere.empty()) section = writing::arpFromHook (section, hookHere, sk, startQ);
+                // C. Passing chords in the fills (13), the turnaround twice as fast (39), the key change prepared (40), voicings (41)
+                if (W.harmony && (chordal || part == SongPart::Bass) && useLevels)
+                    for (auto bq = startQ; bq < endQ - 1.0e-9; bq += 4.0)
+                        if (fillBar (bq)) writing::passingChord (section, sk, bq, bq + 4.0 - startQ, part == SongPart::Bass);
+                if (W.harmony && secType == ST::Drop && useLevels && family != nullptr && (chordal || part == SongPart::Bass || part == SongPart::Arp))
+                {
+                    auto fs = s;
+                    fs.quartersPerChord = s.quartersPerChord / 2.0;
+                    const auto fastCycle = lib::render (*family, 2, false, fs, progressionQ, 5, 0, ropt);
+                    writing::accelerate (section, tile (fastCycle, startQ, endQ, progressionQ), startQ, endQ);
+                }
+                if (W.harmony && secType == ST::Build && hasNext && map.keyShiftOf (i + 1) > map.keyShiftOf (i) && part != SongPart::Timpani)
+                    writing::prepareKeyChange (section, ((s.root + map.keyShiftOf (i + 1)) % 12 + 12) % 12, endQ - 4.0, part == SongPart::Bass);
+                if (W.harmony && chordal) writing::voiceByEnergy (section, isBreakdown, W.parts && ! hookHere.empty() ? &hookHere : nullptr);
+                // J. Counterpoint (14, 43), answers in the hook's rests (17), doublings (44)
+                if (W.parts && part == SongPart::Counter && ! hookHere.empty()) section = writing::counterpoint (section, hookHere, sk, startQ);
+                if (W.parts && (part == SongPart::Counter || part == SongPart::Candy || part == SongPart::Chops || part == SongPart::Brass) && ! hookHere.empty())
+                    writing::answerInRests (section, hookHere);
+                if (W.parts && part == SongPart::Strings && finalDrop && ! hookHere.empty())
+                    for (const auto& n : writing::thirdsBelow (hookHere, sk)) section.push_back (n);
+                if (W.parts && part == SongPart::Brass && secType == ST::Drop && ! section.empty())
+                    for (const auto& n : writing::brassOnBassHits (songClip (base, map, patterns, SongPart::Bass), sk, startQ, endQ)) section.push_back (n);
+                // D. The breakdown's voice sings the hook, slowed (22)
+                if (W.arrange && isBreakdown && lib::isLayerPart (part) && ! section.empty() && ! hookCell.empty())
+                {
+                    int voice = wStyle == patterns::Style::Orchestral ? (int) patterns::Part::Strings : (int) patterns::Part::Piano;
+                    if (patterns.libKits)
+                        if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, patterns.libMood), wStyle, patterns.libSeed); kit != nullptr && kit->breakdownVoice >= 0)
+                            voice = kit->breakdownVoice;
+                    if ((int) libPart == voice)
+                    {
+                        const auto mid = startQ + std::floor ((endQ - startQ) / 2.0 / 8.0) * 8.0;
+                        auto line = tile (writing::develop (hookCell, writing::devAugment, s, 32.0), mid, endQ, 32.0);
+                        for (auto& n : line) { while (n.pitch > 84) n.pitch -= 12; while (n.pitch < 67) n.pitch += 12; n.velocity = std::max (1, n.velocity - 8); }
+                        section.insert (section.end(), line.begin(), line.end());
+                    }
+                }
+                // D. Entries (18) and a DJ-friendly intro and outro (47)
+                if (W.arrange && lib::isLayerPart (part))
+                {
+                    int enterBar = 0, fromDrop = 0;
+                    if (part == SongPart::Strings && isBreakdown && endQ - startQ >= 64.0) enterBar = 9;
+                    if (part == SongPart::Choir && secType == ST::Drop) fromDrop = 2;
+                    if (patterns.libKits)
+                        if (const auto* kit = patterns::pickKit ((patterns::Mood) juce::jlimit (0, 6, patterns.libMood), wStyle, patterns.libSeed))
+                        {
+                            if (kit->enterBar[(size_t) libPart] > 0) enterBar = kit->enterBar[(size_t) libPart];
+                            if (kit->fromDrop[(size_t) libPart] > 0) fromDrop = kit->fromDrop[(size_t) libPart];
+                        }
+                    if (secType == ST::Drop && fromDrop > 0 && dropOrdinal + 1 < fromDrop) section.clear();
+                    if (enterBar > 1)
+                        section.erase (std::remove_if (section.begin(), section.end(), [&] (const Note& n) { return n.start < startQ + (enterBar - 1) * 4.0 - 1.0e-6; }), section.end());
+                }
+                if (W.arrange && (secType == ST::Intro || secType == ST::Outro) && part != SongPart::Bass)
+                {
+                    const auto len = endQ - startQ;
+                    const auto bare = std::min (64.0, len / 2.0), half = std::min (128.0, len) / 2.0;
+                    section.erase (std::remove_if (section.begin(), section.end(), [&] (const Note& n)
+                    {
+                        const auto fromEdge = secType == ST::Intro ? n.start - startQ : endQ - n.start;
+                        if (fromEdge < bare) return true;                                    // bass only
+                        return fromEdge < half * 2.0 && fromEdge < 128.0 && part != SongPart::Arp && fromEdge < bare * 2.0;   // then bass and arp
+                    }), section.end());
+                }
+                // B. Triplet turns in every other fill (36)
+                if (W.feel && (part == SongPart::Lead || part == SongPart::Arp || part == SongPart::Candy))
+                    for (auto bq = startQ; bq < endQ - 1.0e-9; bq += 4.0)
+                        if (fillBar (bq) && (int) std::floor ((bq - startQ) / 32.0) % 2 == 1) writing::tripletTurn (section, bq);
+                // D. The section's last bar by what comes next (19), and a breath before the drop (35)
+                if (W.arrange && hasNext && useLevels && part != SongPart::Timpani) writing::transitionBar (section, endQ - 4.0, nextType);
+                if (W.arrange && hasNext && nextType == ST::Drop && part != SongPart::Timpani) writing::breathBeforeDrop (section, endQ);
+                // B. Articulation by energy (9) and velocity contours (8, 33)
+                if (W.feel && (part == SongPart::Arp || part == SongPart::Chords || part == SongPart::Acid || part == SongPart::Candy || part == SongPart::Chops || part == SongPart::Piano))
+                    section = writing::articulate (section, sectionLevel);
+                if (W.feel) section = writing::velocityContour (section, startQ, endQ, secType == ST::Build, wStyle);
+                // J. Registers (42)
+                if (W.parts && patterns.library) writing::keepInBand (section, libPart, ! melodicSelf);
+                // F. Your edits (24)
+                if (W.learned) section = writing::applyLearned (section, libPart);
+                writing::sortByStart (section);
+            }
+
+            // Ghost notes in the bass and arp, more where the energy is higher (by section type, with the Writing menu's feel).
             if (part == SongPart::Bass || part == SongPart::Arp)
-                section = addGhostNotes (section, startQ, endQ, patterns.ghostNotes * juce::jlimit (0.0f, 1.0f, map.energyOf (i)), i * 7 + (int) part);
+                section = addGhostNotes (section, startQ, endQ, patterns.ghostNotes * juce::jlimit (0.0f, 1.0f, map.energyOf (i)) * (W.feel ? writing::ghostAmount (secType) : 1.0f), i * 7 + (int) part);
 
             // Final drop doubling: in the last of two or more drops, the lead gains an octave-up double
             // (an octave down if that would go too high) and the bass a sub octave, so the end is the biggest.
@@ -1615,6 +1841,7 @@ namespace chords
                 for (size_t k = 0; k < count; ++k)
                 {
                     auto d = section[k];
+                    if (part == SongPart::Lead && W.ornaments && writing::maxPitch (section) + 12 > 96) break;   // 31: no room above: no double
                     if (part == SongPart::Lead) d.pitch += d.pitch + 12 <= 96 ? 12 : -12;
                     else if (d.pitch - 12 >= 24) d.pitch -= 12;   // never under C1 (see foldLowBass)
                     else continue;
@@ -1642,7 +1869,31 @@ namespace chords
 
             // Room for the vocal: where it sings, the lead keeps only its beat-1 and beat-3 notes
             // (softer), and the harmony and counter-melody step out.
-            if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter || part == SongPart::Chops))
+            if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && part == SongPart::Lead && W.arrange && family != nullptr)
+            {
+                // 49: while the vocal sings the hook waits (only a pickup in a sung bar's last beat before
+                // a gap); in the bar after a sung phrase it answers with its fill
+                auto sungBar = [&] (int bar) { return bar >= 0 && bar < (int) patterns.vocalBars.size() && patterns.vocalBars[(size_t) bar]; };
+                const auto answerCycle = lib::render (*family, laterDrop ? 2 : 1, true, s, cycleQ, patterns.melody.octave);
+                std::vector<Note> kept;
+                for (const auto& n : section)
+                {
+                    const auto bar = (int) std::floor (n.start / 4.0 + 1.0e-9);
+                    if (! sungBar (bar) && ! sungBar (bar - 1)) { kept.push_back (n); continue; }
+                    if (sungBar (bar) && ! sungBar (bar + 1) && n.start - bar * 4.0 >= 3.0 - 1.0e-6) kept.push_back (n);   // a pickup into the gap
+                }
+                for (auto barQ = startQ; barQ < endQ - 1.0e-9; barQ += 4.0)
+                {
+                    const auto bar = (int) std::lround (barQ / 4.0);
+                    if (sungBar (bar) || ! sungBar (bar - 1)) continue;
+                    const auto inCycle = std::fmod (barQ - startQ, cycleQ);
+                    for (const auto& n : answerCycle)
+                        if (n.start >= inCycle - 1.0e-9 && n.start < inCycle + 4.0 - 1.0e-9)
+                            kept.push_back ({ n.pitch + keyChange + lift, barQ + (n.start - inCycle), std::min (n.length, 4.0), n.velocity });
+                }
+                section = std::move (kept);
+            }
+            else if (patterns.leaveRoomForVocal && ! patterns.vocalBars.empty() && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter || part == SongPart::Chops))
             {
                 std::vector<Note> kept;
                 for (auto n : section)
@@ -1657,7 +1908,20 @@ namespace chords
                 section = std::move (kept);
             }
             out.insert (out.end(), section.begin(), section.end());
+            if (secType == suite::SectionType::Drop) ++dropsSoFar;
         }
+        // 50: the song's signature: the hook's first three notes on the arp at the start of each
+        // intro, breakdown and build, so the sections sound related
+        if (part == SongPart::Arp && W.develop && patterns.library && ! hookCell.empty())
+            for (int i = 0; i < map.count; ++i)
+            {
+                const auto t = map.sections[(size_t) i].type;
+                if (t != suite::SectionType::Intro && t != suite::SectionType::Breakdown && t != suite::SectionType::Build) continue;
+                const auto at = (map.sections[(size_t) i].startBar - 1) * 4.0;
+                out.erase (std::remove_if (out.begin(), out.end(), [at] (const Note& n) { return n.start >= at - 1.0e-6 && n.start < at + 1.5 - 1.0e-6; }), out.end());
+                for (auto n : writing::signatureFigure (hookCell, at, 74)) { n.pitch += map.keyShiftOf (i); out.push_back (n); }
+            }
+        writing::sortByStart (out);
         return out;
     }
 

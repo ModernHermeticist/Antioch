@@ -44,7 +44,17 @@ namespace Params
     inline const juce::String libKits      { "lib_kits" };       // kits: families chosen to go together
     /** The library's layers, from Piano on (SongPart order): each on or off. */
     inline const juce::StringArray& layerNames() { static const juce::StringArray n { "Piano", "Strings", "Brass", "Choir", "Timpani", "Acid", "Chops", "Candy" }; return n; }
-    inline juce::String layerId (int i) { return "lib_layer_" + layerNames()[i].toLowerCase(); }     // ghost notes in bass and arp exports
+    inline juce::String layerId (int i) { return "lib_layer_" + layerNames()[i].toLowerCase(); }
+    /** The Writing menu's groups (each on or off). */
+    inline const juce::StringArray& writingNames()
+    {
+        static const juce::StringArray n { "Phrase shaping (arc, climax, cadences, singable)", "Development (per section, foreshadowing, signatures)",
+                                           "Harmony (tensions, passing chords, pedals, mixture, voicings)", "Feel (micro-timing, grooves, dynamics, articulation)",
+                                           "Parts together (registers, counterpoint, answers, doublings)", "Arrangement (energy curves, entries, transitions, tutti)",
+                                           "Ornaments (grace notes, mordents, trills)", "Your edits and favourites" };
+        return n;
+    }
+    inline juce::String writingId (int i) { static const char* ids[] { "write_phrase", "write_develop", "write_harmony", "write_feel", "write_parts", "write_arrange", "write_ornaments", "write_learned" }; return ids[juce::jlimit (0, 7, i)]; }     // ghost notes in bass and arp exports
     inline const juce::String songFills    { "song_fills" };     // drum fill clip
     inline const juce::String songVocalRoom { "song_vocalroom" }; // the lead thins out where the vocal sings
     inline const juce::String groove       { "groove" };         // exported MIDI feel: straight / trance shuffle / hard shuffle

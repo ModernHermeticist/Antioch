@@ -89,6 +89,8 @@ namespace Params
         layout.add (std::make_unique<AudioParameterBool> (id (libKits), "Library Kits", true));
         for (int i = 0; i < layerNames().size(); ++i)
             layout.add (std::make_unique<AudioParameterBool> (id (layerId (i)), "Library " + layerNames()[i], true));
+        for (int i = 0; i < writingNames().size(); ++i)
+            layout.add (std::make_unique<AudioParameterBool> (id (writingId (i)), "Writing: " + writingNames()[i].upToFirstOccurrenceOf (" (", false, false), true));
         layout.add (std::make_unique<AudioParameterBool> (id (songFills), "Drum Fills", true));
         layout.add (std::make_unique<AudioParameterBool> (id (songVocalRoom), "Lead Leaves Room for the Vocal", true));
         layout.add (std::make_unique<AudioParameterChoice> (id (leadExpression), "Lead Expression",
@@ -160,6 +162,9 @@ namespace Params
         p.libLayers = 0;
         for (int i = 0; i < layerNames().size(); ++i)
             if (state.getRawParameterValue (layerId (i))->load() > 0.5f) p.libLayers |= 1u << i;
+        auto w = [&] (int i) { const auto* v = state.getRawParameterValue (writingId (i)); return v != nullptr && v->load() > 0.5f; };
+        p.write.phrase = w (0); p.write.develop = w (1); p.write.harmony = w (2); p.write.feel = w (3);
+        p.write.parts = w (4); p.write.arrange = w (5); p.write.ornaments = w (6); p.write.learned = w (7);
         return p;
     }
 

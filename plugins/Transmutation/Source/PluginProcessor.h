@@ -132,6 +132,7 @@ private:
 
     // audio-thread state
     std::atomic<uint16_t> borrowedMask { 0 };
+    std::atomic<int> autoRole { 0 };   // the role from the track's name / Prima Materia (message thread; the registry allocates)
     int lastChordIndex = -1;
     int64_t chordAnchor = 0;
     double lastPosQ = -1.0;
