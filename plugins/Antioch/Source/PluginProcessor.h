@@ -98,7 +98,12 @@ public:
     float noteDipHz = 0.0f, noteRoom = 0.0f;
     bool noteRoomCounted = false;
 public:
-    std::atomic<float> levelHoldDb { 0.0f };   // how far the level match turned it down in the last block
+    std::atomic<float> levelHoldDb { 0.0f };
+    std::array<suite::Svf, 2> sibSend;
+    suite::EnvelopeFollower sibEnv;
+    float sibSlow = 0.0f, sibSlowCoeff = 0.0001f, minSib = 1.0f, endFade = 1.0f;
+    bool sibCounted = false;
+    std::atomic<float> sibNow { 0.0f };   // how far the space's sends were de-essed in the last block (dB)   // how far the level match turned it down in the last block
     double lvlIn = 0.0, lvlInSlow = 0.0, lvlOut = 0.0, lvlFast = 0.0001, lvlSlow = 0.00001;
     float lvlGain = 1.0f, minLvlGain = 1.0f, lvlAttack = 0.001f, lvlRelease = 0.0001f;
     bool levelHeld = false, wetNarrowing = false;

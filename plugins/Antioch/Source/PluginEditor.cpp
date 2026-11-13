@@ -404,6 +404,7 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
         if (p.pumpNow.load() < 0.9f) m.add ("the tail pumping with the kick");
         if (p.leadRoomNow.load() < 0.9f) m.add ("stepping back while the lead or vocal plays");
         if (p.timedNow.load()) m.add ("pre-delay and decay on the tempo");
+        if (p.sibNow.load() < -2.0f) m.add ("de-essing what goes into the space");
         if (p.levelHoldDb.load() < -0.5f) m.add ("holding the level to the input's (" + juce::String (p.levelHoldDb.load(), 1) + " dB)");
         return m;
     };

@@ -89,6 +89,9 @@ bool AntiochProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 
 void AntiochProcessor::prepareToPlay (double newSampleRate, int)
 {
+    for (auto& f : sibSend) { f.set (7000.0f, 1.5f, (float) newSampleRate); f.reset(); }
+    sibEnv.set (1.0f, 60.0f, (float) newSampleRate); sibEnv.reset();
+    sibSlow = 0.0f; sibSlowCoeff = 1.0f / (0.4f * (float) newSampleRate); endFade = 1.0f;
     {
         const auto fs = newSampleRate > 0.0 ? newSampleRate : 48000.0;
         lvlFast = 1.0 - std::exp (-1.0 / (0.3 * fs)); lvlSlow = 1.0 - std::exp (-1.0 / (3.0 * fs));
@@ -283,6 +286,17 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
     const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.003f * sr));
     float minPump = 1.0f;
+    // The song's end (the map's last bar): the space fades to silence over the next 2 bars
+    {
+        float target = 1.0f;
+        if (suite::Autopilot::on (suite::Autopilot::mixing) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
+        {
+            const auto over = (host.ppq - sections.getMap().totalBars * host.barQuarters()) / (2.0 * host.barQuarters());
+            if (over > 0.0) target = (float) juce::jlimit (0.0, 1.0, 1.0 - over);
+        }
+        if (target < 0.99f && endFade >= 0.99f) suite::Autopilot::count (suite::Autopilot::endingsFaded);
+        endFade = target;
+    }
     const auto holdLevel = suite::Autopilot::on (suite::Autopilot::stability);
     // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
     const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
@@ -356,7 +370,20 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     {
         const auto inL = left[n];
         const auto inR = inRight != nullptr ? inRight[n] : inL;
-        const auto mono = 0.5f * (inL + inR);
+        auto sendL = inL, sendR = inR;   // what feeds the echo, reverb and throws
+        // Autopilot (mixing): the space is de-essed - an "s" that spikes 6 dB over the recent 7 kHz
+        // level comes down in what's sent in (the track itself keeps it)
+        if (mixingRoom)
+        {
+            const auto bl = sibSend[0].bandpass (inL) / 1.5f, br = sibSend[1].bandpass (inR) / 1.5f;
+            const auto e = sibEnv.process (0.5f * (std::abs (bl) + std::abs (br)));
+            sibSlow += sibSlowCoeff * (e * e - sibSlow);
+            const auto thr = 2.0f * std::sqrt (sibSlow) + 1.0e-5f;
+            const auto g = e > thr ? juce::jmax (0.25f, thr / e) : 1.0f;
+            sendL -= bl * (1.0f - g); sendR -= br * (1.0f - g);
+            minSib = juce::jmin (minSib, g);
+        }
+        const auto mono = 0.5f * (sendL + sendR);
 
         // Ducking amount follows the dry signal so tails bloom in the gaps.
         const auto env = juce::jmin (1.0f, dryEnvelope.process (mono) * 3.0f);
@@ -402,14 +429,14 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             gateOpen = sections.getMap().hasMoment (bar + 1, suite::momentThrow) && posQ >= bar * barQ - juce::jmin (lengthQ, barQ);
         }
         float tL, tR;
-        throwDelay.process (inL, inR, gateOpen, tL, tR);
+        throwDelay.process (sendL, sendR, gateOpen, tL, tR);
         const auto tg = throwGain.getNextValue() * tDuck;
         tL *= tg; tR *= tg;
 
         // Reverb gets the dry signal plus sends from the echo and throw sections.
         const auto es = echoSend.getNextValue(), ts = throwSend.getNextValue();
         float rL, rR;
-        reverb.process (inL + es * eL + ts * tL, inR + es * eR + ts * tR, vDuck, rL, rR);
+        reverb.process (sendL + es * eL + ts * tL, sendR + es * eR + ts * tR, vDuck, rL, rR);
         // Autopilot (mixing): the tail makes room at the lead's note and its octave while it plays
         if (noteRoom > 0.01f)
         {
@@ -479,6 +506,8 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             if (! wetNarrowing && wetWidth < 0.7f) { wetNarrowing = true; suite::Autopilot::count (suite::Autopilot::wetNarrowed); }
             if (wetWidth > 0.95f) wetNarrowing = false;
         }
+        // Autopilot (mixing): a clean ending - past the map's last bar, the space fades out over 2 bars
+        if (endFade < 1.0f) { spaceL *= endFade; spaceR *= endFade; tL *= endFade; tR *= endFade; }
         auto oL = (inL * d + spaceL + tL) * o;
         auto oR = (inR * d + spaceR + tR) * o;
         // Autopilot (stability): level-matched - what the space adds never lifts the track over its
@@ -533,6 +562,9 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     if (spaceDry > 1.0e-9 && spaceWet > 1.0e-12) spaceTailDb.store ((float) (10.0 * std::log10 (spaceWet / spaceDry)));
     throwGate.store (throwDelay.gateLevel());
     pumpNow.store (minPump);
+    sibNow.store (juce::Decibels::gainToDecibels (minSib));
+    if (! sibCounted && minSib < 0.7f) { sibCounted = true; suite::Autopilot::count (suite::Autopilot::spaceDeessed); }
+    minSib = 1.0f;
     levelHoldDb.store (juce::Decibels::gainToDecibels (minLvlGain));
     if (! levelHeld && minLvlGain < 0.85f) { levelHeld = true; suite::Autopilot::count (suite::Autopilot::levelMatched); }
     if (minLvlGain > 0.97f) levelHeld = false;

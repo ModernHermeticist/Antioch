@@ -458,6 +458,10 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
               : kind == "Melody" ? chords::melody (s, melodySettings())
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
+    // Autopilot (arrangement): song parts don't ring on into a chord they clash with
+    if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && suite::Autopilot::on (suite::Autopilot::arrangement))
+        if (suite::SectionMap map; suite::SectionBus::read (map))
+            if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
     // Autopilot (stability): bass notes under D1 move up an octave
     if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::stability))
         if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);
@@ -720,6 +724,9 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
                 parts.push_back ({ name, std::move (notes) });
         if (apvts.getRawParameterValue (Params::songFills)->load() > 0.5f)
             parts.push_back ({ "Fills", chords::fillsClip (map) });   // General MIDI drums: use FPC or a drum kit
+        for (auto& [name, notes] : parts)
+            if (name != "Chords" && name != "Fills" && suite::Autopilot::on (suite::Autopilot::arrangement))
+                if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
         for (auto& [name, notes] : parts)
             if (name == "Bass" && suite::Autopilot::on (suite::Autopilot::stability))
                 if (const auto moved = chords::foldLowBass (notes); moved > 0) suite::Autopilot::count (suite::Autopilot::lowNotesFolded, (uint32_t) moved);

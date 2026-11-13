@@ -33,6 +33,7 @@ namespace suite::Autopilot
         resonancesSoothed, hitsEvened, tailsQuietened, returnsCleaned, sectionCorrections, reverbMadeRoom, monoLowsKept,
         kickBassDips, layersSpread, kickTuned, drumBusGlued,
         levelMatched, subTailsCleared, plosivesCut, breathsLowered, clicksGuarded, fxRepitched, balanceCentred, wetNarrowed,
+        humRemoved, spaceDeessed, driveLevelled, hangoversTrimmed, endingsFaded, layersAligned,
         numCounters
     };
     inline const char* counterName (int c)
@@ -46,7 +47,9 @@ namespace suite::Autopilot
                                    "groove / intro / outro corrections (EQ per section)", "reverb making room (kick, lead, vocal)", "tracks with mono lows",
                                    "bass making room for the kick's note", "layers spread apart", "kicks tuned to the key", "drum buses glued",
                                    "effects held to the input's level", "bass sub cleared before kicks", "vocal pops cut", "vocal breaths lowered",
-                                   "clicks at clip starts smoothed", "FX re-pitched into the key", "tracks re-centred (left/right)", "reverb kept mono-safe" };
+                                   "clicks at clip starts and ends smoothed", "FX re-pitched into the key", "tracks re-centred (left/right)", "reverb kept mono-safe",
+                                   "hum removed", "the space de-essed", "drive fed a steady level", "notes trimmed at chord changes",
+                                   "song endings faded clean", "layered parts lined up" };
         return c >= 0 && c < numCounters ? n[c] : "";
     }
 
@@ -69,6 +72,8 @@ namespace suite::Autopilot
             std::atomic<uint32_t> liveId[maxLive], liveMs[maxLive];
             std::atomic<int32_t> liveRole[maxLive];
             std::atomic<float> liveBand[maxLive][liveBands];
+            std::atomic<double> liveOnset[maxLive][16];   // each track's last 16 attacks (song position, quarters)
+            std::atomic<uint32_t> liveOnsetNext[maxLive];
             std::atomic<float> leadHz;
             std::atomic<uint32_t> leadMs;
         };
@@ -76,7 +81,7 @@ namespace suite::Autopilot
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v2", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v3", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -175,7 +180,11 @@ namespace suite::Autopilot
             if (s.liveId[i].load() == id) { slot = i; break; }
             if (s.liveMs[i].load() < s.liveMs[oldest].load()) oldest = i;
         }
-        if (slot < 0) slot = oldest;
+        if (slot < 0)
+        {
+            slot = oldest;
+            for (auto& o : s.liveOnset[slot]) o.store (0.0);
+        }
         for (int b = 0; b < liveBands; ++b) s.liveBand[slot][b].store (bandsDb[b]);
         s.liveRole[slot].store (role);
         s.liveId[slot].store (id);
@@ -200,6 +209,32 @@ namespace suite::Autopilot
             fn ((int) s.liveRole[i].load(), (const float*) bands);
         }
     }
+    /** Quintessence: an attack at song position `ppq` on this track (for lining up layered parts). */
+    inline void postOnset (uint32_t id, double ppq) noexcept
+    {
+        auto& s = detail::shared();
+        for (int i = 0; i < maxLive; ++i)
+            if (s.liveId[i].load() == id)
+            {
+                const auto k = s.liveOnsetNext[i].fetch_add (1) % 16u;
+                s.liveOnset[i][k].store (ppq);
+                return;
+            }
+    }
+    /** Calls fn (role, onsets[16]) for every other track heard in the last 300 ms (0 = no onset). */
+    template <typename Fn> inline void forEachLiveOnsets (uint32_t self, Fn&& fn) noexcept
+    {
+        auto& s = detail::shared();
+        const auto now = detail::nowMs();
+        for (int i = 0; i < maxLive; ++i)
+        {
+            const auto id = s.liveId[i].load();
+            if (id == 0 || id == self || now - s.liveMs[i].load() > 300u) continue;
+            double on[16];
+            for (int k = 0; k < 16; ++k) on[k] = s.liveOnset[i][k].load();
+            fn ((int) s.liveRole[i].load(), (const double*) on);
+        }
+    }
     /** Vibration: the lead's note now (Hz). */
     inline void publishLeadPitch (float hz) noexcept { detail::shared().leadHz.store (hz); detail::shared().leadMs.store (detail::nowMs()); }
     inline float leadPitch() noexcept
@@ -215,7 +250,7 @@ namespace suite::Autopilot
         for (auto& h : s.harshIds) h.store (0);
         for (auto& c : s.counters) c.store (0);
         for (int i = 0; i < maxResonances; ++i) { s.resonanceId[i].store (0); s.resonanceHz[i].store (0.0f); s.resonanceMs[i].store (0); }
-        for (int i = 0; i < maxLive; ++i) { s.liveId[i].store (0); s.liveMs[i].store (0); }
+        for (int i = 0; i < maxLive; ++i) { s.liveId[i].store (0); s.liveMs[i].store (0); s.liveOnsetNext[i].store (0); for (auto& o : s.liveOnset[i]) o.store (0.0); }
         s.leadHz.store (0.0f); s.leadMs.store (0);
     }
 }

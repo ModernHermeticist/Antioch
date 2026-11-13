@@ -22,6 +22,10 @@
 //   - The bass's sub (under 80 Hz) clears for the 6 ms before each kick and 3 ms into it.
 //   - The vocal: plosive pops (sudden low bursts) cut for a moment; breaths between phrases 6 dB down.
 //   - Click guard: a clip starting abruptly out of silence gets a 1 ms fade-in (not kicks or percussion).
+//   - Hum: a steady 50 or 60 Hz hum (heard in the track's quiet moments) and its harmonics notched.
+//   - Clip ends: a clip stopping abruptly into silence gets a 1 ms tail instead of a step (no latency).
+//   - Layered parts in time: two tracks of the same role hitting together a few ms apart (two kick
+//     layers, a layered lead): the earlier one waits for the later (up to 12 ms; no latency).
 //   - Left/right: a track leaning to one side (over 1.5 dB, not a wide stereo sound) is re-centred, 3 dB at most.
 //   - The kick in key: its body (under 150 Hz) is re-pitched down to the nearest note of the key
 //     (the root or fifth first, 2 semitones at most); the click is left alone. Only ever down,
@@ -51,6 +55,8 @@ namespace qn
             float msPerSample = 0.0f;
             float kickBodyHz = 0.0f;   // the kick's body pitch (Kybalion), for the bass's dip
             float kickNextMs = 1.0e9f; // until the shared kick's next hit, at the block start
+            double ppq = -1.0;         // song position at the block start (-1: not playing)
+            double samplesPerQ = 0.0;
             bool keyValid = false;     // the song's key (kick tuning)
             int keyRoot = 0, keyScale = 0;
         };
@@ -118,6 +124,13 @@ namespace qn
             balCoeff = 1.0 - std::exp (-1.0 / (2.0 * sampleRate));
             fastCoeff = 1.0 - std::exp (-1.0 / (0.02 * sampleRate));
             peakRelease = 1.0 - std::exp (-1.0 / (3.0 * sampleRate));
+            for (int h = 0; h < 2; ++h) { humDet[(size_t) h].set (h == 0 ? 50.0f : 60.0f, 25.0f, fs); humDet[(size_t) h].reset(); }
+            humBroad.set (60.0f, 0.5f, fs); humBroad.reset();
+            humPow = { 0.0, 0.0 }; humBroadPow = 0.0; humTotal = 0.0; humScore = 0.0f; humHz = 0.0f; humSet = 0.0f;
+            for (auto& ch : humNotch) for (auto& f : ch) f.reset();
+            lastOut = { 0.0f, 0.0f }; tailVal = { 0.0f, 0.0f }; tailLeft = 0;
+            for (auto& d : alignLine) { d.prepare ((int) (0.02 * sampleRate) + 8); d.reset(); }
+            alignSamples = 0.0f; alignTarget = 0.0f; sampleInBlock = 0; lastOnsetPpq = -1.0e9; alignCheck = 0;
             counted = {};
         }
 
@@ -206,6 +219,46 @@ namespace qn
             once (harmAmt > 0.5f, 3, suite::Autopilot::harmonicsAdded);
             kickMsNow = c.kickMs;
             kickNextNow = c.kickNextMs;
+            sampleInBlock = 0;
+            // Hum: settle the notches on the found frequency and its harmonics
+            if (std::abs (humHz - humSet) > 0.1f)
+            {
+                for (int k = 0; k < numHum; ++k)
+                    for (auto& f : humNotch[(size_t) k]) f.setPeak (humHz > 0.0f ? humHz * (float) (k + 1) : 1000.0f, 30.0f, humHz > 0.0f ? -30.0f : 0.0f, fs);
+                humSet = humHz;
+            }
+            // Layered parts: every half second, compare this track's attacks with the same role's others
+            if (c.mixing && c.ppq >= 0.0 && c.samplesPerQ > 0.0 && ++alignCheck % juce::jmax (1, (int) (0.5 * fs / juce::jmax (1, numSamples))) == 0)
+            {
+                const auto msPerQ = c.samplesPerQ / fs * 1000.0;
+                std::array<double, 16> mine {};
+                auto& s = suite::Autopilot::detail::shared();
+                for (int i = 0; i < suite::Autopilot::maxLive; ++i)
+                    if (s.liveId[i].load() == c.id) for (int k = 0; k < 16; ++k) mine[(size_t) k] = s.liveOnset[i][k].load();
+                float best = 0.0f;
+                suite::Autopilot::forEachLiveOnsets (c.id, [&] (int role, const double* other)
+                {
+                    if (role != c.role) return;
+                    std::vector<double> diffs;
+                    for (const auto m : mine)
+                    {
+                        if (m <= 0.0) continue;
+                        double nearest = 1.0e9;
+                        for (int k = 0; k < 16; ++k)
+                            if (other[k] > 0.0 && std::abs (other[k] - m) * msPerQ < std::abs (nearest)) nearest = (other[k] - m) * msPerQ;
+                        if (std::abs (nearest) < 15.0) diffs.push_back (nearest);
+                    }
+                    if (diffs.size() < 8) return;
+                    std::sort (diffs.begin(), diffs.end());
+                    const auto median = diffs[diffs.size() / 2];
+                    double spread = 0.0;
+                    for (const auto d : diffs) spread += std::abs (d - median);
+                    spread /= (double) diffs.size();
+                    if (median > 0.4 && median < 12.0 && spread < 0.5) best = juce::jmax (best, (float) median);   // the other hits later: wait for it
+                });
+                alignTarget = best * (float) fs / 1000.0f;
+            }
+            if (! c.mixing) alignTarget = 0.0f;
 
             // Kick and bass by note
             if (c.mixing && c.role == 2 && c.kickBodyHz > 25.0f && std::abs (c.kickBodyHz - kickDipHz) > 0.5f)
@@ -269,6 +322,18 @@ namespace qn
                 }
             }
             float x[2] = { l, r };
+            // Layered parts: this one waits for the later layer (the delay glides, so it never clicks)
+            {
+                alignSamples += (alignTarget > alignSamples ? 1.0f : -1.0f) * juce::jmin (std::abs (alignTarget - alignSamples), 0.02f);
+                for (int c = 0; c < 2; ++c)
+                {
+                    alignLine[(size_t) c].push (x[c]);
+                    if (alignSamples > 0.05f) x[c] = alignLine[(size_t) c].read (1.0f + alignSamples);
+                }
+                alignNowMs.store (alignSamples / fs * 1000.0f);
+                once (alignSamples / fs * 1000.0f > 0.4f, 14, suite::Autopilot::layersAligned);
+            }
+            if (mix) hum (x);
             if (mix && ctx.role != 1 && ctx.role != 3) clickGuard (x);
             if (mix && ctx.role > 0 && stereo) balance (x);
             if (mix)
@@ -336,6 +401,12 @@ namespace qn
             const auto a = 0.5f * (std::abs (x[0]) + std::abs (x[1]));
             const auto f = fastEnv.process (a), sl = slowEnv.process (a);
             const auto attack = f > 2.0f * sl && f > 1.0e-3f;
+            if (attack && ctx.ppq >= 0.0 && ctx.samplesPerQ > 0.0 && ctx.id != 0)
+            {
+                const auto at = ctx.ppq + (double) sampleInBlock / ctx.samplesPerQ;
+                if ((at - lastOnsetPpq) * ctx.samplesPerQ > 0.05 * fs) { suite::Autopilot::postOnset (ctx.id, at); lastOnsetPpq = at; }
+            }
+            ++sampleInBlock;
             float gain = 1.0f;
             if (mix)
             {
@@ -507,7 +578,25 @@ namespace qn
         void clickGuard (float* x) noexcept
         {
             const auto level = juce::jmax (std::abs (x[0]), std::abs (x[1]));
-            if (level < 1.0e-4f) { ++quietCount; return; }
+            // A clip that stops dead: instead of the step to silence, a 1 ms tail from where it was
+            if (level < 1.0e-6f)
+            {
+                if (tailLeft == 0 && juce::jmax (std::abs (lastOut[0]), std::abs (lastOut[1])) > 0.05f)
+                {
+                    tailLeft = fadeLen; tailVal = lastOut;
+                    suite::Autopilot::count (suite::Autopilot::clicksGuarded);
+                }
+                if (tailLeft > 0)
+                {
+                    const auto g = (float) tailLeft / (float) fadeLen;
+                    x[0] = tailVal[0] * g; x[1] = tailVal[1] * g;
+                    --tailLeft;
+                }
+                lastOut = { x[0], x[1] };
+                ++quietCount;
+                return;
+            }
+            tailLeft = 0;
             if (quietCount > (int) (0.002f * fs) && level > 0.05f && fadeLeft == 0)
             {
                 fadeLeft = fadeLen;
@@ -520,6 +609,30 @@ namespace qn
                 x[0] *= g; x[1] *= g;
                 --fadeLeft;
             }
+            lastOut = { x[0], x[1] };
+        }
+
+        // Hum: in the track's quiet moments (-40 dB and below, but not silence), a 50 or 60 Hz line
+        // holding most of the energy for a second in all is mains hum; it and 3 harmonics are notched
+        void hum (float* x) noexcept
+        {
+            const auto mono = 0.5f * (x[0] + x[1]);
+            humTotal += 0.001 * ((double) mono * mono - humTotal);
+            for (int h = 0; h < 2; ++h) { const auto y = humDet[(size_t) h].bandpass (mono) / 25.0f; humPow[(size_t) h] += 0.001 * ((double) y * y - humPow[(size_t) h]); }
+            if (humHz <= 0.0f && humTotal > 1.0e-10 && humTotal < 1.0e-4)
+            {
+                const auto h = humPow[0] > humPow[1] ? 0 : 1;
+                if (humPow[(size_t) h] > 0.5 * humTotal) humScore += 1.0f / fs;
+                if (humScore > 1.0f)
+                {
+                    humHz = h == 0 ? 50.0f : 60.0f;
+                    suite::Autopilot::count (suite::Autopilot::humRemoved);
+                }
+            }
+            if (humSet > 0.0f)
+                for (int c = 0; c < 2; ++c)
+                    for (int k = 0; k < numHum; ++k) x[c] = humNotch[(size_t) k][(size_t) c].process (x[c]);
+            humNow.store (humHz);
         }
 
         // Left/right: re-centre a track that leans one way (slowly; not a wide, uncorrelated sound)
@@ -682,6 +795,19 @@ namespace qn
         float popAmt = 0.0f, breathGain = 1.0f;
         double vocPeak = 0.0, vocFast = 0.0, vocHf = 0.0, balL = 0.0, balR = 0.0, balLR = 0.0, balCoeff = 1.0e-5, fastCoeff = 0.001, peakRelease = 1.0e-5;
         std::array<float, 2> balGain { 1.0f, 1.0f };
+        static constexpr int numHum = 4;
+        std::array<suite::Svf, 2> humDet;
+        suite::Svf humBroad;
+        std::array<double, 2> humPow {};
+        double humBroadPow = 0.0, humTotal = 0.0;
+        float humScore = 0.0f, humHz = 0.0f, humSet = 0.0f;
+        std::array<std::array<suite::Biquad, 2>, numHum> humNotch;
+        std::array<float, 2> lastOut {}, tailVal {};
+        int tailLeft = 0;
+        std::array<suite::DelayLine, 2> alignLine;
+        float alignSamples = 0.0f, alignTarget = 0.0f;
+        int sampleInBlock = 0, alignCheck = 0;
+        double lastOnsetPpq = -1.0e9;
         std::array<suite::Svf, 2> kickDip;
         float kickDipHz = 0.0f, panNow = 0.0f;
         std::array<suite::Svf, 2> tuneSplit;
@@ -693,6 +819,7 @@ namespace qn
         float tuneBodyHz = 0.0f;
         suite::EnvelopeFollower tuneFast, tuneSlow;
     public:
-        std::atomic<float> spreadNow { 0.0f }, tuneRatioNow { 1.0f }, kickBodyNow { 0.0f }, balanceNow { 0.0f }, popNow { 0.0f }, breathNow { 1.0f };
+        std::atomic<float> spreadNow { 0.0f }, tuneRatioNow { 1.0f }, kickBodyNow { 0.0f }, balanceNow { 0.0f }, popNow { 0.0f }, breathNow { 1.0f },
+                           humNow { 0.0f }, alignNowMs { 0.0f };
     };
 }

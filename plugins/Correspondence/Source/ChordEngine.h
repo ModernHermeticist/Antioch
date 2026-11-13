@@ -1290,6 +1290,39 @@ namespace chords
         return out;
     }
 
+    /** A note ringing on past a chord change into a chord it clashes with (its note isn't in the
+        new chord) ends at the change; notes that still fit ring on. Returns how many were trimmed. */
+    inline int trimChordHangovers (std::vector<Note>& notes, const Settings& s, const suite::SectionMap& map)
+    {
+        const auto voiced = voiceProgression (s);
+        if (voiced.empty() || map.count == 0) return 0;
+        const auto L = s.quartersPerChord, P = L * (double) voiced.size();
+        int trimmed = 0;
+        for (auto& n : notes)
+        {
+            const auto end = n.start + n.length;
+            for (int i = 0; i < map.count; ++i)
+            {
+                const auto startQ = (map.sections[(size_t) i].startBar - 1) * 4.0, endQ = (map.endBar (i) - 1) * 4.0;
+                if (n.start < startQ - 1.0e-9 || n.start >= endQ - 1.0e-9) continue;
+                for (auto b = startQ + std::ceil ((n.start - startQ) / L + 1.0e-9) * L; b < end - 0.25 && b < endQ - 1.0e-9; b += L)
+                {
+                    const auto slot = (size_t) std::floor (std::fmod (b - startQ, P) / L + 1.0e-9) % voiced.size();
+                    const auto pc = ((n.pitch - map.keyShiftOf (i)) % 12 + 12) % 12;
+                    const auto& chord = voiced[slot];
+                    if (std::none_of (chord.begin(), chord.end(), [pc] (int p) { return (p % 12 + 12) % 12 == pc; }))
+                    {
+                        n.length = juce::jmax (0.125, b - n.start - 0.01);
+                        ++trimmed;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        return trimmed;
+    }
+
     /** Bass notes under C1 (MIDI 24, 33 Hz) move up an octave: below that they're felt as rumble, not
         heard as notes, and eat headroom. Returns how many moved. */
     inline int foldLowBass (std::vector<Note>& notes, int lowest = 24)

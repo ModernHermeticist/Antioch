@@ -307,6 +307,22 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
     // ---- Saturation (oversampled; dry/wet blended in the same domain so they stay aligned) ----
     {
         juce::dsp::AudioBlock<float> block (buffer);
+        // Autopilot (stability): the drive sees a steady level (around -12 dBFS RMS, where it was voiced)
+        // whatever arrives, and the level is given back after - so turning the synth up doesn't make it dirtier
+        float levelIn = 1.0f;
+        if (suite::Autopilot::on (suite::Autopilot::stability))
+        {
+            const auto p = suite::SceneEngine::blockPower (buffer, n);
+            if (p > 1.0e-8f) driveLevelPow += (1.0f - std::exp (-(float) n / (0.3f * sr))) * (p - driveLevelPow);
+            if (driveLevelPow > 1.0e-8f)
+            {
+                const auto target = juce::jlimit (0.25f, 4.0f, 0.25f / std::sqrt (driveLevelPow));
+                driveLevelGain += 0.2f * (target - driveLevelGain);
+                levelIn = driveLevelGain;
+                if (! driveLevelCounted && std::abs (juce::Decibels::gainToDecibels (levelIn)) > 3.0f) { driveLevelCounted = true; suite::Autopilot::count (suite::Autopilot::driveLevelled); }
+            }
+            buffer.applyGain (0, n, levelIn);
+        }
         auto up = oversampler->processSamplesUp (block);
         const auto mix = value (satMix);
         const auto g = juce::Decibels::decibelsToGain (e.drive);
@@ -318,6 +334,8 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
                 x[i] += mix * (std::tanh (g * x[i]) / norm - x[i]);
         }
         oversampler->processSamplesDown (block);
+        if (levelIn != 1.0f) buffer.applyGain (0, n, 1.0f / levelIn);
+        driveLevelDb.store (juce::Decibels::gainToDecibels (levelIn));
     }
 
     // ---- Multiband (OTT-style upward + downward compression, depth = mix) ----

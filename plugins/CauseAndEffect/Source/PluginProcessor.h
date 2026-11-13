@@ -84,6 +84,7 @@ private:
 
     // Level-matched builds (see processBlock)
     double levelIn = 0.0, levelOut = 0.0, levelCoeff = 0.0001;
+    float endFade = 1.0f;
     float levelGain = 1.0f, minLevelGain = 1.0f, levelAttack = 0.001f, levelRelease = 0.0001f;
 public:
     std::atomic<float> levelHoldDb { 0.0f };   // how far the build's additions were turned down in the last block (dB)

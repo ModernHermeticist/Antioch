@@ -338,6 +338,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 lc.kickNextMs = kick.msUntilHit (sectionType, phase, info.barQuarters(), 60000.0 / juce::jmax (1.0, info.bpm));
             }
         if (const auto key = suite::KeyBus::read(); key.valid) { lc.keyValid = true; lc.keyRoot = key.root; lc.keyScale = key.scale; }
+        if (info.hasPpq && info.playing && info.bpm > 1.0) { lc.ppq = info.ppq; lc.samplesPerQ = sr * 60.0 / info.bpm; }
         live.beginBlock (lc, n);
         if (mixing && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
     }

@@ -150,6 +150,11 @@ private:
 
     // Saturation (2x oversampled so the drive doesn't alias)
     std::unique_ptr<juce::dsp::Oversampling<float>> oversampler;
+    float driveLevelPow = 0.0f, driveLevelGain = 1.0f;
+    bool driveLevelCounted = false;
+public:
+    std::atomic<float> driveLevelDb { 0.0f };   // how far the drive's input was levelled (tests, UI)
+private:
 
     // Multiband: per channel, split at 250 Hz then 3 kHz; the low band gets the
     // 3 kHz allpass so all three bands stay phase-aligned when summed.

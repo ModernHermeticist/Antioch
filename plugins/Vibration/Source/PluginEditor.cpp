@@ -72,6 +72,7 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
         juce::StringArray m;
         if (const auto e = p.driveEaseDb(); e > 0.5f) m.add ("drive eased " + juce::String (e, 1) + " dB on high notes");
         if (suite::Autopilot::harshNow() > 0.0f) m.add ("the master is harsh right now");
+        if (std::abs (p.driveLevelDb.load()) > 1.0f) m.add ("feeding the drive a steady level (" + juce::String (p.driveLevelDb.load(), 1) + " dB)");
         return m;
     };
     addAndMakeVisible (autopilotStrip);

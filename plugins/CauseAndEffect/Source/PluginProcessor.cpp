@@ -87,6 +87,13 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     ouroborosFound.store (sections.isAvailable());
     const auto barQ = host.barQuarters();
     double sectionProgress = -1.0, sectionBars = 0.0;
+    // A clean ending: past the map's last bar, the wash and risers fade out over 2 bars
+    endFade = 1.0f;
+    if (suite::Autopilot::on (suite::Autopilot::mixing) && haveSections && host.playing && host.hasPpq && sections.getMap().totalBars > 0)
+    {
+        const auto over = (host.ppq - sections.getMap().totalBars * barQ) / (2.0 * barQ);
+        if (over > 0.0) endFade = (float) juce::jlimit (0.0, 1.0, 1.0 - over);
+    }
 
     // ---- Key ----
     auto root = choice (rootNote);
@@ -265,8 +272,8 @@ void CauseEffectProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         }
 
         // ---- Widen: push the sides up as the build rises ----
-        auto outL = xL + (wL * 0.9f + nL + rL) * tailGain;
-        auto outR = xR + (wR * 0.9f + nR + rR) * tailGain;
+        auto outL = xL + (wL * 0.9f + nL + rL) * tailGain * endFade;
+        auto outR = xR + (wR * 0.9f + nR + rR) * tailGain * endFade;
         if (active && widenAmt > 0.0f)
         {
             const auto mid = 0.5f * (outL + outR), side = 0.5f * (outL - outR);

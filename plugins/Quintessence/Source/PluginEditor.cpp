@@ -98,6 +98,8 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         if (l.popNow.load() > 0.3f) m.add ("cutting a vocal pop");
         if (l.breathNow.load() < 0.7f) m.add ("lowering a breath");
         if (p.bypassedNow.load()) m.add ("bypassed for the A/B, at matched loudness");
+        if (l.humNow.load() > 0.0f) m.add ("removing " + juce::String (juce::roundToInt (l.humNow.load())) + " Hz hum");
+        if (l.alignNowMs.load() > 0.4f) m.add ("waiting " + juce::String (l.alignNowMs.load(), 1) + " ms for the other layer");
         return m;
     };
     addAndMakeVisible (autopilotStrip);
