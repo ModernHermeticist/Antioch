@@ -763,5 +763,31 @@ int main (int argc, char** argv)
         suite::ActivityBus::clear();
     }
 
+
+    section ("Level-matched space");
+    {
+        suite::Autopilot::reset();
+        auto run = [] (bool on)
+        {
+            suite::Autopilot::set (suite::Autopilot::stability, on);
+            auto p = make();
+            soloSection (*p, 0.0f, 1.0f, 0.0f);
+            set (*p, Params::dry, 1.0f);   // the track, with a big reverb on top
+            set (*p, Params::Verb::duck, 0.0f);
+            set (*p, Params::Verb::decay, 12.0f);
+            set (*p, Params::Verb::size, 1.0f);
+            juce::Random rng (4);
+            juce::AudioBuffer<float> out;
+            render (*p, 6.0, [&rng] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i) { const auto v = 0.2f * (rng.nextFloat() * 2.0f - 1.0f); b.setSample (0, i, v); b.setSample (1, i, v); }
+            }, &out);
+            return juce::Decibels::gainToDecibels (rmsBetween (out, 3.0, 6.0) / (0.2f / std::sqrt (3.0f)));
+        };
+        const auto off = run (false), on = run (true);
+        suite::Autopilot::reset();
+        check (off - on > 0.5f && on < 0.3f, "the reverb on top no longer lifts the track over its input (" + juce::String (off, 1) + " dB without, " + juce::String (on, 1) + " dB with)");
+    }
+
     return finish();
 }

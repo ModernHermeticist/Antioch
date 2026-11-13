@@ -133,6 +133,9 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     live.prepare (sr);
     for (auto& f : keyNotch) f.reset();
     keyNotchSet = 0.0f;
+    for (auto& ps : fxShift) { ps.prepare (sr, 0.05f); ps.setSemitones (0.0f); }
+    fxShiftSet = 0.0f;
+    abInPow = abOutPow = 0.0;
     resetMeasurement();
 }
 
@@ -157,7 +160,22 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 {
     juce::ScopedNoDenormals noDenormals;
     if (resetRequested.exchange (false)) resetMeasurement();
-    if (suite::AutomationBus::bypassed()) { bypassedNow.store (true); return; }   // "hear without the automation": the track as it comes in
+    if (suite::AutomationBus::bypassed())
+    {
+        // "Hear without the automation": the track as it comes in - at the loudness it had with it,
+        // so the comparison is about the sound, not the level
+        bypassedNow.store (true);
+        if (abInPow > 1.0e-9 && abOutPow > 1.0e-9)
+            buffer.applyGain (juce::jlimit (0.25f, 4.0f, (float) std::sqrt (abOutPow / abInPow)));
+        return;
+    }
+    const auto blockInPow = [&buffer]
+    {
+        double p = 0.0;
+        for (int c = 0; c < juce::jmin (2, buffer.getNumChannels()); ++c)
+            for (int i = 0; i < buffer.getNumSamples(); ++i) p += (double) buffer.getSample (c, i) * buffer.getSample (c, i);
+        return p;
+    }();
     bypassedNow.store (false);
 
     // Breakdowns get their own correction: a pass measures one kind of section only
@@ -317,12 +335,15 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 lc.kickMs = kick.msSinceHit (sectionType, phase, info.barQuarters(), 60000.0 / juce::jmax (1.0, info.bpm));
                 lc.msPerSample = (float) (1000.0 / sr);
                 lc.kickBodyHz = kick.bodyHz;
+                lc.kickNextMs = kick.msUntilHit (sectionType, phase, info.barQuarters(), 60000.0 / juce::jmax (1.0, info.bpm));
             }
         if (const auto key = suite::KeyBus::read(); key.valid) { lc.keyValid = true; lc.keyRoot = key.root; lc.keyScale = key.scale; }
         live.beginBlock (lc, n);
         if (mixing && ch[1] != nullptr && ! monoCounted) { monoCounted = true; suite::Autopilot::count (suite::Autopilot::monoLowsKept); }
     }
-    const auto notchHz = mixing ? keyNotchHz.load() : 0.0f;
+    const auto shiftNow = mixing && roleNow == 7 ? fxShiftSemis.load() : 0.0f;
+    const auto notchHz = mixing && std::abs (shiftNow) < 0.05f ? keyNotchHz.load() : 0.0f;   // re-pitched, it needs no notch
+    if (std::abs (shiftNow - fxShiftSet) > 0.01f) { for (auto& ps : fxShift) ps.setSemitones (shiftNow); fxShiftSet = shiftNow; }
     if (std::abs (notchHz - keyNotchSet) > 0.5f)
     {
         for (auto& f : keyNotch) { f.setPeak (juce::jmax (20.0f, notchHz), 8.0f, notchHz > 0.0f ? -6.0f : 0.0f, fs); f.reset(); }
@@ -357,6 +378,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             if (chordDipHz > 0.0f) v = chordDip[(size_t) c].process (v);
             if (riserDipDb < -0.01f) v = riserDip[(size_t) c].process (v);
             if (keyNotchSet > 0.0f) v = keyNotch[(size_t) c].process (v);
+            if (std::abs (fxShiftSet) > 0.05f) v = fxShift[(size_t) c].process (v);
             x[c] = v;
         }
 
@@ -543,6 +565,17 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         fifo.finishedWrite (n1 + n2);
     }
     live.endBlock();
+    {
+        double p = 0.0;
+        for (int c = 0; c < chs; ++c)
+            for (int i = 0; i < n; ++i) p += (double) buffer.getSample (c, i) * buffer.getSample (c, i);
+        if (blockInPow > 1.0e-9)
+        {
+            const auto a = 1.0 - std::exp (-(double) n / (3.0 * sr));
+            abInPow += a * (blockInPow - abInPow);
+            abOutPow += a * (p - abOutPow);
+        }
+    }
 }
 
 //==============================================================================
@@ -933,7 +966,7 @@ void QuintessenceProcessor::keyMove (int role)
         const auto pc = ((int) std::lround (midi) % 12 + 12) % 12;
         return std::find (steps.begin(), steps.end(), ((pc - key.root) % 12 + 12) % 12) != steps.end();
     };
-    if (const auto now = keyNotchHz.load(); now > 0.0f && inKey (now)) keyNotchHz.store (0.0f);
+    if (const auto now = keyNotchHz.load(); now > 0.0f && inKey (now)) { keyNotchHz.store (0.0f); fxShiftSemis.store (0.0f); }
     for (const auto& c : noteCandidates)
     {
         if (c.passes < 2 || c.hz < 80.0f || c.hz > 4000.0f) continue;
@@ -941,6 +974,18 @@ void QuintessenceProcessor::keyMove (int role)
         if (std::abs (midi - std::round (midi)) > 0.35f || inKey (c.hz)) continue;   // a clear note, out of the key
         if (std::abs (keyNotchHz.load() - c.hz) < 1.0f) return;
         keyNotchHz.store (c.hz);
+        {
+            // Re-pitch the FX to the nearest note of the key (a semitone at most, either way)
+            const auto rounded = (int) std::lround (midi);
+            float shift = 0.0f;
+            for (const auto d : { 1, -1 })
+            {
+                const auto pc = (((rounded + d) % 12 - key.root) % 12 + 12) % 12;
+                if (std::find (steps.begin(), steps.end(), pc) != steps.end()) { shift = (float) d + (float) (rounded - midi); break; }
+            }
+            fxShiftSemis.store (shift);
+            if (std::abs (shift) > 0.05f) suite::Autopilot::count (suite::Autopilot::fxRepitched);
+        }
         suite::Autopilot::count (suite::Autopilot::outOfKeyNotched);
         addLog (juce::String (juce::roundToInt (c.hz)) + " Hz notched 6 dB: the FX holds " + suite::music::noteNames()[((int) std::lround (midi) % 12 + 12) % 12]
                 + ", outside the song's key");

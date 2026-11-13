@@ -98,6 +98,12 @@ public:
     float noteDipHz = 0.0f, noteRoom = 0.0f;
     bool noteRoomCounted = false;
 public:
+    std::atomic<float> levelHoldDb { 0.0f };   // how far the level match turned it down in the last block
+    double lvlIn = 0.0, lvlInSlow = 0.0, lvlOut = 0.0, lvlFast = 0.0001, lvlSlow = 0.00001;
+    float lvlGain = 1.0f, minLvlGain = 1.0f, lvlAttack = 0.001f, lvlRelease = 0.0001f;
+    bool levelHeld = false, wetNarrowing = false;
+    double wetLR = 0.0, wetLL = 0.0, wetRR = 0.0, wetCoeff = 0.0001;
+    float wetWidth = 1.0f;
     std::atomic<float> noteRoomNow { 0.0f };   // how far the tail is making room at the lead's note (tests)
     std::atomic<bool> timedNow { false };       // pre-delay and decay on the tempo (tests)
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */

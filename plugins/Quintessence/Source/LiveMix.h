@@ -19,6 +19,10 @@
 //   - The noise floor: under -60 dBFS the track is gently expanded down (tails, hiss).
 //   - Kick and bass by note: the bass dips 6 dB at the kick's body pitch for the 60 ms after each hit.
 //   - Layers spread: with two or more pads (or leads) playing, each sits a little left or right.
+//   - The bass's sub (under 80 Hz) clears for the 6 ms before each kick and 3 ms into it.
+//   - The vocal: plosive pops (sudden low bursts) cut for a moment; breaths between phrases 6 dB down.
+//   - Click guard: a clip starting abruptly out of silence gets a 1 ms fade-in (not kicks or percussion).
+//   - Left/right: a track leaning to one side (over 1.5 dB, not a wide stereo sound) is re-centred, 3 dB at most.
 //   - The kick in key: its body (under 150 Hz) is re-pitched down to the nearest note of the key
 //     (the root or fifth first, 2 semitones at most); the click is left alone. Only ever down,
 //     so it needs no look-ahead.
@@ -46,6 +50,7 @@ namespace qn
             float kickMs = 1.0e9f;     // since the shared kick's last hit, at the block start
             float msPerSample = 0.0f;
             float kickBodyHz = 0.0f;   // the kick's body pitch (Kybalion), for the bass's dip
+            float kickNextMs = 1.0e9f; // until the shared kick's next hit, at the block start
             bool keyValid = false;     // the song's key (kick tuning)
             int keyRoot = 0, keyScale = 0;
         };
@@ -102,6 +107,17 @@ namespace qn
             tuneWrite = 0; tuneRead = 0.0; tuneOnsetAt = -1; tuneRatio = 1.0; tuneSince = 1 << 30; tuneFade = 0;
             tuneFast.set (0.3f, 20.0f, fs); tuneSlow.set (15.0f, 150.0f, fs); tuneFast.reset(); tuneSlow.reset();
             tuneZc = 0; tuneCrossings = 0; tuneLastSign = false; tunePeriodSum = 0.0; tunePeriods = 0; tuneBodyHz = 0.0f;
+            for (auto& f : subSplit) { f.set (80.0f, 0.707f, fs); f.reset(); }
+            subGain = 1.0f; kickNextNow = 1.0e9f;
+            for (auto& f : popSplit) { f.set (150.0f, 0.707f, fs); f.reset(); }
+            popDet.set (150.0f, 0.707f, fs); popDet.reset(); breathHp.set (3000.0f, 0.707f, fs); breathHp.reset();
+            popFast.set (1.0f, 30.0f, fs); popSlow.set (30.0f, 200.0f, fs); popFast.reset(); popSlow.reset();
+            popHold = 0; popAmt = 0.0f; vocPeak = 0.0; vocFast = 0.0; vocHf = 0.0; breathGain = 1.0f;
+            quietCount = 0; fadeLeft = 0; fadeLen = juce::jmax (1, (int) (0.001f * fs));
+            balL = balR = balLR = 0.0; balGain = { 1.0f, 1.0f };
+            balCoeff = 1.0 - std::exp (-1.0 / (2.0 * sampleRate));
+            fastCoeff = 1.0 - std::exp (-1.0 / (0.02 * sampleRate));
+            peakRelease = 1.0 - std::exp (-1.0 / (3.0 * sampleRate));
             counted = {};
         }
 
@@ -189,6 +205,7 @@ namespace qn
             harmonicsNow.store (harmAmt);
             once (harmAmt > 0.5f, 3, suite::Autopilot::harmonicsAdded);
             kickMsNow = c.kickMs;
+            kickNextNow = c.kickNextMs;
 
             // Kick and bass by note
             if (c.mixing && c.role == 2 && c.kickBodyHz > 25.0f && std::abs (c.kickBodyHz - kickDipHz) > 0.5f)
@@ -252,6 +269,8 @@ namespace qn
                 }
             }
             float x[2] = { l, r };
+            if (mix && ctx.role != 1 && ctx.role != 3) clickGuard (x);
+            if (mix && ctx.role > 0 && stereo) balance (x);
             if (mix)
             {
                 // Layers spread (before the mono lows, so the low end stays centred)
@@ -290,6 +309,21 @@ namespace qn
                     once (depth > 0.25f, 10, suite::Autopilot::kickBassDips);
                 }
                 if (ctx.role == 1) tuneKick (x);
+                if (ctx.role == 2)
+                {
+                    // The sub clears just before each kick (and its first few ms)
+                    kickNextNow -= ctx.msPerSample;
+                    const auto clear = kickNextNow < 6.0f || kickMsNow < 3.0f;
+                    const auto target = clear ? 0.25f : 1.0f;
+                    subGain += (target < subGain ? a1ms : a20ms) * (target - subGain);
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        const auto sub = subSplit[(size_t) c].lowpass (x[c]);
+                        if (subGain < 0.999f) x[c] += sub * (subGain - 1.0f);
+                    }
+                    once (subGain < 0.5f, 11, suite::Autopilot::subTailsCleared);
+                }
+                if (ctx.role == 6) vocalCare (x);
                 if (ctx.role == 2 && harmAmt > 0.01f)
                 {
                     const auto h = harmBp.bandpass (std::tanh (4.0f * harmLp.lowpass (0.5f * (x[0] + x[1])))) * 0.2f * harmAmt;
@@ -469,6 +503,85 @@ namespace qn
             tuneWrite = (tuneWrite + 1) % size;
         }
 
+        // Click guard: out of 2 ms of digital silence straight into a loud sample: a 1 ms fade-in
+        void clickGuard (float* x) noexcept
+        {
+            const auto level = juce::jmax (std::abs (x[0]), std::abs (x[1]));
+            if (level < 1.0e-4f) { ++quietCount; return; }
+            if (quietCount > (int) (0.002f * fs) && level > 0.05f && fadeLeft == 0)
+            {
+                fadeLeft = fadeLen;
+                suite::Autopilot::count (suite::Autopilot::clicksGuarded);
+            }
+            quietCount = 0;
+            if (fadeLeft > 0)
+            {
+                const auto g = 1.0f - (float) fadeLeft / (float) fadeLen;
+                x[0] *= g; x[1] *= g;
+                --fadeLeft;
+            }
+        }
+
+        // Left/right: re-centre a track that leans one way (slowly; not a wide, uncorrelated sound)
+        void balance (float* x) noexcept
+        {
+            balL += balCoeff * ((double) x[0] * x[0] - balL);
+            balR += balCoeff * ((double) x[1] * x[1] - balR);
+            balLR += balCoeff * ((double) x[0] * x[1] - balLR);
+            std::array<float, 2> target { 1.0f, 1.0f };
+            if (balL > 1.0e-7 && balR > 1.0e-7 && balLR / std::sqrt (balL * balR) > 0.3)
+            {
+                const auto lean = (float) (10.0 * std::log10 (balL / balR));   // + = left louder
+                if (std::abs (lean) > 1.5f)
+                {
+                    const auto fix = juce::jlimit (-3.0f, 3.0f, -0.5f * lean);
+                    target = { juce::Decibels::decibelsToGain (0.5f * fix), juce::Decibels::decibelsToGain (-0.5f * fix) };
+                }
+            }
+            for (int c = 0; c < 2; ++c)
+            {
+                balGain[(size_t) c] += (float) balCoeff * 4.0f * (target[(size_t) c] - balGain[(size_t) c]);
+                x[c] *= balGain[(size_t) c];
+            }
+            balanceNow.store (juce::Decibels::gainToDecibels (balGain[0] / balGain[1]));
+            once (std::abs (balanceNow.load()) > 1.0f, 12, suite::Autopilot::balanceCentred);
+        }
+
+        // The vocal: plosive pops and breaths
+        void vocalCare (float* x) noexcept
+        {
+            const auto mono = 0.5f * (x[0] + x[1]);
+            const auto low = popDet.lowpass (mono);
+            const auto lf = popFast.process (std::abs (low)), ls = popSlow.process (std::abs (low));
+            const auto broad = std::abs (mono);
+            if (lf > 3.0f * ls && lf > 0.05f && std::abs (low) > 0.6f * broad + 1.0e-4f && popHold == 0)
+            {
+                popHold = (int) (0.03f * fs);
+                suite::Autopilot::count (suite::Autopilot::plosivesCut);
+            }
+            const auto popTarget = popHold > 0 ? 1.0f : 0.0f;
+            if (popHold > 0) --popHold;
+            popAmt += (popTarget > popAmt ? a1ms : a20ms) * (popTarget - popAmt);
+            for (int c = 0; c < 2; ++c)
+            {
+                const auto hp = popSplit[(size_t) c].highpass (x[c]);   // (always run: the filter stays warm)
+                if (popAmt > 0.001f) x[c] += (hp - x[c]) * popAmt;
+            }
+            popNow.store (popAmt);
+            // Breaths: well under the phrases (20-50 dB), and mostly air (over 3 kHz)
+            const auto p2 = (double) mono * mono;
+            vocFast += fastCoeff * (p2 - vocFast);
+            vocPeak = vocFast > vocPeak ? vocFast : vocPeak + peakRelease * (vocFast - vocPeak);
+            const auto hf = breathHp.highpass (mono);
+            vocHf += fastCoeff * ((double) hf * hf - vocHf);
+            const auto breath = vocPeak > 1.0e-5 && vocFast < vocPeak * 0.01 && vocFast > vocPeak * 1.0e-5 && vocHf > 0.4 * vocFast;
+            const auto bTarget = breath ? 0.5f : 1.0f;
+            breathGain += (bTarget < breathGain ? a20ms : a40ms) * (bTarget - breathGain);
+            x[0] *= breathGain; x[1] *= breathGain;
+            breathNow.store (breathGain);
+            once (breathGain < 0.7f, 13, suite::Autopilot::breathsLowered);
+        }
+
         // Even drum hits: a hit 3 dB or more over the recent ones is brought most of the way back
         float hits (bool attack, float a) noexcept
         {
@@ -560,7 +673,15 @@ namespace qn
         int expHold = 0;
         bool wasLoud = false;
         float a1ms = 0.0f, a5ms = 0.0f, a20ms = 0.0f, a40ms = 0.0f, a80ms = 0.0f, a200ms = 0.0f;
-        std::array<bool, 12> counted {};
+        std::array<bool, 16> counted {};
+        std::array<suite::Svf, 2> subSplit, popSplit;
+        float subGain = 1.0f, kickNextNow = 1.0e9f;
+        suite::Svf popDet, breathHp;
+        suite::EnvelopeFollower popFast, popSlow;
+        int popHold = 0, quietCount = 0, fadeLeft = 0, fadeLen = 48;
+        float popAmt = 0.0f, breathGain = 1.0f;
+        double vocPeak = 0.0, vocFast = 0.0, vocHf = 0.0, balL = 0.0, balR = 0.0, balLR = 0.0, balCoeff = 1.0e-5, fastCoeff = 0.001, peakRelease = 1.0e-5;
+        std::array<float, 2> balGain { 1.0f, 1.0f };
         std::array<suite::Svf, 2> kickDip;
         float kickDipHz = 0.0f, panNow = 0.0f;
         std::array<suite::Svf, 2> tuneSplit;
@@ -572,6 +693,6 @@ namespace qn
         float tuneBodyHz = 0.0f;
         suite::EnvelopeFollower tuneFast, tuneSlow;
     public:
-        std::atomic<float> spreadNow { 0.0f }, tuneRatioNow { 1.0f }, kickBodyNow { 0.0f };
+        std::atomic<float> spreadNow { 0.0f }, tuneRatioNow { 1.0f }, kickBodyNow { 0.0f }, balanceNow { 0.0f }, popNow { 0.0f }, breathNow { 1.0f };
     };
 }

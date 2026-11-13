@@ -89,6 +89,13 @@ bool AntiochProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 
 void AntiochProcessor::prepareToPlay (double newSampleRate, int)
 {
+    {
+        const auto fs = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+        lvlFast = 1.0 - std::exp (-1.0 / (0.3 * fs)); lvlSlow = 1.0 - std::exp (-1.0 / (3.0 * fs));
+        lvlAttack = 1.0f - std::exp (-1.0f / (0.02f * (float) fs)); lvlRelease = 1.0f - std::exp (-1.0f / (0.3f * (float) fs));
+        wetCoeff = 1.0 - std::exp (-1.0 / (0.3 * fs));
+        lvlIn = lvlInSlow = lvlOut = 0.0; lvlGain = minLvlGain = 1.0f; wetLR = wetLL = wetRR = 0.0; wetWidth = 1.0f;
+    }
     sampleRate = newSampleRate;
     echo.prepare (sampleRate, maxDelaySeconds);
     scenes.prepare();
@@ -276,6 +283,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     const auto msPerQ = 60000.0 / juce::jmax (1.0, host.bpm);
     const auto pumpRelease = 1.0f - std::exp (-1.0f / (0.003f * sr));
     float minPump = 1.0f;
+    const auto holdLevel = suite::Autopilot::on (suite::Autopilot::stability);
     // Lead-aware space: the effects step back while the lead plays, and bloom in its gaps.
     const auto leadAmount = onLeadTrack.load() ? 0.0f : value (Verb::leadRoom);
     {
@@ -453,9 +461,41 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
 
         const auto d = dryGain.getNextValue();
         const auto o = outGain.getNextValue();
-        const auto spaceL = (eL + rL * vg + fL) * spaceGain, spaceR = (eR + rR * vg + fR) * spaceGain;
-        const auto oL = (inL * d + spaceL + tL) * o;
-        const auto oR = (inR * d + spaceR + tR) * o;
+        auto spaceL = (eL + rL * vg + fL) * spaceGain, spaceR = (eR + rR * vg + fR) * spaceGain;
+        // Autopilot (mixing): the space stays mono-safe - where its two sides would cancel (correlation
+        // under -0.2 over 300 ms), its stereo part narrows to half until it's safe again
+        {
+            wetLR += wetCoeff * ((double) spaceL * spaceR - wetLR);
+            wetLL += wetCoeff * ((double) spaceL * spaceL - wetLL);
+            wetRR += wetCoeff * ((double) spaceR * spaceR - wetRR);
+            const auto corr = wetLL * wetRR > 1.0e-14 ? wetLR / std::sqrt (wetLL * wetRR) : 1.0;
+            const auto target = mixingRoom && corr < -0.2 ? 0.5f : 1.0f;
+            wetWidth += (target < wetWidth ? 0.002f : 0.0002f) * (target - wetWidth);
+            if (wetWidth < 0.999f)
+            {
+                const auto mid = 0.5f * (spaceL + spaceR), side = 0.5f * (spaceL - spaceR) * wetWidth;
+                spaceL = mid + side; spaceR = mid - side;
+            }
+            if (! wetNarrowing && wetWidth < 0.7f) { wetNarrowing = true; suite::Autopilot::count (suite::Autopilot::wetNarrowed); }
+            if (wetWidth > 0.95f) wetNarrowing = false;
+        }
+        auto oL = (inL * d + spaceL + tL) * o;
+        auto oR = (inR * d + spaceR + tR) * o;
+        // Autopilot (stability): level-matched - what the space adds never lifts the track over its
+        // input's loudness (300 ms; the last 3 s of input carry the tails after a phrase ends)
+        if (holdLevel)
+        {
+            const auto inP = 0.5 * ((double) inL * inL + (double) inR * inR) * (double) o * o, outP = 0.5 * ((double) oL * oL + (double) oR * oR);
+            lvlIn += lvlFast * (inP - lvlIn);
+            lvlInSlow += lvlSlow * (inP - lvlInSlow);
+            lvlOut += lvlFast * (outP - lvlOut);
+            const auto allowed = juce::jmax (lvlIn, lvlInSlow) * 1.0233;
+            const auto target = lvlOut > allowed && lvlOut > 1.0e-9 ? (float) std::sqrt (allowed / lvlOut) : 1.0f;
+            lvlGain += (target < lvlGain ? lvlAttack : lvlRelease) * (target - lvlGain);
+            if (lvlGain > 0.9999f && target >= 1.0f) lvlGain = 1.0f;
+            oL *= lvlGain; oR *= lvlGain;
+            minLvlGain = juce::jmin (minLvlGain, lvlGain);
+        }
         if (spaceHere)
         {
             spaceDry += 0.5 * ((double) inL * inL + (double) inR * inR) * d * d;
@@ -493,6 +533,10 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     if (spaceDry > 1.0e-9 && spaceWet > 1.0e-12) spaceTailDb.store ((float) (10.0 * std::log10 (spaceWet / spaceDry)));
     throwGate.store (throwDelay.gateLevel());
     pumpNow.store (minPump);
+    levelHoldDb.store (juce::Decibels::gainToDecibels (minLvlGain));
+    if (! levelHeld && minLvlGain < 0.85f) { levelHeld = true; suite::Autopilot::count (suite::Autopilot::levelMatched); }
+    if (minLvlGain > 0.97f) levelHeld = false;
+    minLvlGain = 1.0f;
     leadRoomNow.store (leadRoomGain);
     duckAmount.store (maxDuck);
 }

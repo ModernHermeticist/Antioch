@@ -481,9 +481,19 @@ int main (int argc, char** argv)
         player.play (*p, 0.5, &out);
         juce::AudioBuffer<float> in (2, out.getNumSamples());
         bands (heavyPad) (in, player.at - (int64_t) (0.5 * sampleRate));
-        bool same = true;
-        for (int i = 0; i < out.getNumSamples() && same; ++i) same = std::abs (out.getSample (0, i) - in.getSample (0, i)) < 1.0e-6f;
-        check (same && p->bypassedNow.load(), "hear without the automation: the pad passes untouched (its moves are kept for later)");
+        // The same sound (just one gain), at the loudness the processed track had
+        const auto g = out.getSample (0, 1000) / in.getSample (0, 1000);
+        bool same = std::isfinite (g) && g > 0.0f;
+        for (int i = 0; i < out.getNumSamples() && same; ++i) same = std::abs (out.getSample (0, i) - g * in.getSample (0, i)) < 1.0e-4f;
+        Player loud { bands (heavyPad) };
+        suite::AutomationBus::setBypassed (false);
+        juce::AudioBuffer<float> processed;
+        player.play (*p, 2.0, &processed);
+        suite::AutomationBus::setBypassed (true);
+        player.play (*p, 0.5, &out);
+        const auto diff = juce::Decibels::gainToDecibels (rmsBetween (out, 0.1, 0.5) / rmsBetween (processed, 1.0, 2.0));
+        check (same && p->bypassedNow.load() && std::abs (diff) < 0.5f, "hear without the automation: the pad as it comes in (its moves kept for later), at the loudness it had with them ("
+                   + juce::String (diff, 2) + " dB)");
         suite::AutomationBus::setBypassed (false);
 
         // A5: while Azoth's riser plays, pads make room for it around 4 kHz
@@ -1046,6 +1056,112 @@ int main (int argc, char** argv)
             flat.play (*vox, 2.0);
             check ((vox->suiteStatus().flags & suite::Status::squashedInput) != 0, "a vocal arriving with no peaks left is flagged as squashed ("
                        + juce::String (vox->inCrestDb.load(), 1) + " dB crest)");
+        }
+        suite::Autopilot::reset();
+    }
+
+
+    section ("More automatic fixes: the sub before the kick, vocal pops and breaths, clicks, left/right, FX re-pitched");
+    {
+        suite::Autopilot::reset();
+        auto run = [] (qn::LiveMix& m, qn::LiveMix::Context c, double seconds, std::function<std::pair<float, float> (int64_t)> sig, bool kicks = false)
+        {
+            m.prepare (sampleRate);
+            std::vector<float> l, r;
+            const auto total = (int64_t) (seconds * sampleRate);
+            for (int64_t start = 0; start < total; start += 256)
+            {
+                auto cc = c;
+                if (kicks)
+                {
+                    const auto ms = std::fmod ((double) start / sampleRate * 1000.0, 500.0);
+                    cc.kickMs = (float) ms; cc.kickNextMs = (float) (500.0 - ms); cc.msPerSample = (float) (1000.0 / sampleRate);
+                }
+                const auto n = (int) std::min<int64_t> (256, total - start);
+                m.beginBlock (cc, n);
+                for (int i = 0; i < n; ++i) { auto [a, b] = sig (start + i); m.process (a, b, true); l.push_back (a); r.push_back (b); }
+                m.endBlock();
+            }
+            return std::make_pair (l, r);
+        };
+        auto rms = [] (const std::vector<float>& v, double a, double b)
+        {
+            double sum = 0.0; int n = 0;
+            for (auto i = (size_t) (a * sampleRate); i < (size_t) (b * sampleRate) && i < v.size(); ++i) { sum += (double) v[i] * v[i]; ++n; }
+            return (float) std::sqrt (sum / juce::jmax (1, n));
+        };
+        auto sine = [] (double hz, float amp) { return [hz, amp] (int64_t i) { const auto v = amp * (float) std::sin (juce::MathConstants<double>::twoPi * hz * (double) i / sampleRate); return std::make_pair (v, v); }; };
+        {
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 2;
+            const auto [l, r] = run (m, c, 2.0, sine (45.0, 0.3f), true);
+            const auto before = rms (l, 1.4965, 1.4995), between = rms (l, 1.2, 1.4);
+            check (juce::Decibels::gainToDecibels (before / between) < -6.0f, "the bass's sub clears just before each kick ("
+                       + juce::String (juce::Decibels::gainToDecibels (before / between), 1) + " dB)");
+        }
+        {
+            // A vowel with a pop (a low thump) every second
+            auto vox = [] (int64_t i)
+            {
+                const auto t = (double) i / sampleRate, ph = std::fmod (t, 1.0);
+                auto v = 0.15 * std::sin (juce::MathConstants<double>::twoPi * 300.0 * t) + 0.1 * std::sin (juce::MathConstants<double>::twoPi * 900.0 * t);
+                if (ph > 0.5 && ph < 0.53) v += 0.6 * std::exp (-(ph - 0.5) / 0.008) * std::sin (juce::MathConstants<double>::twoPi * 60.0 * (ph - 0.5));
+                return std::make_pair ((float) v, (float) v);
+            };
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 6;
+            const auto [l, r] = run (m, c, 3.0, vox);
+            qn::LiveMix plain; qn::LiveMix::Context c0; c0.role = 4;
+            const auto [pl, pr] = run (plain, c0, 3.0, vox);
+            const auto d = juce::Decibels::gainToDecibels (rms (l, 2.5, 2.53) / rms (pl, 2.5, 2.53));
+            check (d < -2.0f && suite::Autopilot::countOf (suite::Autopilot::plosivesCut) > 0, "a vocal pop is cut (" + juce::String (d, 1) + " dB)");
+        }
+        {
+            // Phrases of a vowel, with a breath (quiet air) between them
+            juce::Random rng (21);
+            auto vox = [&rng] (int64_t i)
+            {
+                const auto t = (double) i / sampleRate, ph = std::fmod (t, 2.0);
+                float v = ph < 1.4 ? 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 250.0 * t) : 0.0f;
+                if (ph > 1.6 && ph < 1.9) v = 0.01f * (rng.nextFloat() * 2.0f - 1.0f);   // a breath: -30 dB, all air
+                return std::make_pair (v, v);
+            };
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 6;
+            const auto [l, r] = run (m, c, 6.0, vox);
+            check (rms (l, 5.7, 5.85) < 0.6f * (0.01f / std::sqrt (3.0f)) && std::abs (rms (l, 4.5, 5.2) / (0.3f / std::sqrt (2.0f)) - 1.0f) < 0.05f,
+                   "a breath between phrases comes down, the phrases don't");
+        }
+        {
+            auto clip = [] (int64_t i) { const auto t = (double) i / sampleRate; const auto v = t < 0.5 ? 0.0f : 0.5f; return std::make_pair (v, v); };   // a jump out of silence
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 5;
+            const auto [l, r] = run (m, c, 0.6, clip);
+            qn::LiveMix k; qn::LiveMix::Context ck; ck.role = 1;   // a kick: its attack is meant (no guard)
+            const auto [kl, kr] = run (k, ck, 0.6, clip);
+            const auto start = (size_t) (0.5 * sampleRate), later = start + (size_t) (0.002 * sampleRate);
+            check (std::abs (l[start]) < 0.1f * std::abs (kl[start]) && std::abs (l[later] / kl[later] - 1.0f) < 0.02f,
+                   "a clip starting out of silence fades in over 1 ms (no click); a kick keeps its attack");
+        }
+        {
+            auto lean = [] (int64_t i) { const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 500.0 * (double) i / sampleRate); return std::make_pair (v, 0.5f * v); };   // 6 dB to the left
+            qn::LiveMix m; qn::LiveMix::Context c; c.role = 4;
+            const auto [l, r] = run (m, c, 12.0, lean);
+            const auto lr = juce::Decibels::gainToDecibels (rms (l, 11.0, 12.0) / rms (r, 11.0, 12.0));
+            check (lr < 3.5f, "a track leaning 6 dB to one side is pulled back towards the centre (" + juce::String (lr, 1) + " dB left of centre)");
+        }
+        {
+            suite::KeyBus::publish (0, 1);   // C major
+            auto fx = make (7);
+            set (*fx, qn::autoMbId, 0.0f);
+            juce::Random rng (9);
+            Player player { [&rng] (juce::AudioBuffer<float>& b, int64_t pos)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i)
+                {
+                    const auto v = 0.3f * (float) std::sin (juce::MathConstants<double>::twoPi * 369.99 * (double) (pos + i) / sampleRate) + 0.02f * (rng.nextFloat() * 2.0f - 1.0f);
+                    b.setSample (0, i, v); b.setSample (1, i, v);
+                }
+            } };
+            for (int k = 0; k < 8; ++k) { suite::KeyBus::publish (0, 1); passes (*fx, player, 1); }
+            suite::KeyBus::withdraw();
+            check (std::abs (std::abs (fx->fxShiftSemis.load()) - 1.0f) < 0.1f, "an FX holding F# in C major is re-pitched a semitone, to G or F (" + juce::String (fx->fxShiftSemis.load(), 2) + ")");
         }
         suite::Autopilot::reset();
     }

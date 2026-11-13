@@ -91,7 +91,13 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         if (std::abs (l.spreadNow.load()) > 0.08f) m.add (juce::String ("sitting a little ") + (l.spreadNow.load() > 0.0f ? "right" : "left") + " of the other layer");
         if (l.tuneRatioNow.load() < 0.999f) m.add ("kick tuned down " + juce::String (-12.0f * std::log2 (l.tuneRatioNow.load()), 1) + " semitones to the key");
         if (p.widthRideNow.load() < 0.9f) m.add ("narrowing an image that cancels in mono");
-        if (p.keyNotchHz.load() > 0.0f) m.add ("notching an out-of-key note at " + juce::String (juce::roundToInt (p.keyNotchHz.load())) + " Hz");
+        if (p.keyNotchHz.load() > 0.0f)
+            m.add (std::abs (p.fxShiftSemis.load()) > 0.05f ? "re-pitching the FX " + juce::String (p.fxShiftSemis.load(), 1) + " semitones into the key"
+                                                            : "notching an out-of-key note at " + juce::String (juce::roundToInt (p.keyNotchHz.load())) + " Hz");
+        if (std::abs (l.balanceNow.load()) > 1.0f) m.add ("re-centring a track that leans " + juce::String (l.balanceNow.load() > 0.0f ? "right" : "left"));
+        if (l.popNow.load() > 0.3f) m.add ("cutting a vocal pop");
+        if (l.breathNow.load() < 0.7f) m.add ("lowering a breath");
+        if (p.bypassedNow.load()) m.add ("bypassed for the A/B, at matched loudness");
         return m;
     };
     addAndMakeVisible (autopilotStrip);

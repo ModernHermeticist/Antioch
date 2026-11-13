@@ -39,6 +39,15 @@ namespace suite
             return bySection[(size_t) anySection].heard() ? &bySection[(size_t) anySection] : nullptr;
         }
 
+        /** Milliseconds until the next hit after `phaseQ` within the bar, or 1e9 when there's no kick. */
+        float msUntilHit (int type, double phaseQ, double barQ, double msPerQ) const noexcept
+        {
+            const auto* p = patternFor (type);
+            if (p == nullptr || ! p->kicks() || p->count == 0) return 1.0e9f;
+            for (int i = 0; i < p->count; ++i)
+                if (p->positions[(size_t) i] > phaseQ + 1.0e-9) return (float) ((p->positions[(size_t) i] - phaseQ) * msPerQ);
+            return (float) ((p->positions[0] + barQ - phaseQ) * msPerQ);   // the next bar's first hit
+        }
         /** Milliseconds since the most recent hit at `phaseQ` within the bar, or 1e9 when there's no kick. */
         float msSinceHit (int type, double phaseQ, double barQ, double msPerQ) const noexcept
         {

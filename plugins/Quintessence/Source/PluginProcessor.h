@@ -200,7 +200,11 @@ private:
     bool dipping = false, riding = false;
 public:
     std::atomic<float> widthRideNow { 1.0f };   // (tests, UI)
-    std::atomic<float> keyNotchHz { 0.0f };     // an out-of-key FX note being cut (0 = none)
+    std::atomic<float> keyNotchHz { 0.0f };     // an out-of-key FX note found (0 = none)
+    std::atomic<float> fxShiftSemis { 0.0f };   // ... and the re-pitch that puts it in the key
+    std::array<suite::PitchShifter, 2> fxShift;
+    float fxShiftSet = 0.0f;
+    double abInPow = 0.0, abOutPow = 0.0;       // loudness in and out (3 s), for the equal-loudness bypass
     qn::LiveMix live;                           // the autopilot's live mixing moves
 private:
     suite::Svf sibPostAnalyser;

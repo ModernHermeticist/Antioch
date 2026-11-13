@@ -109,6 +109,15 @@ with the project), and a count of everything done. Every move is also in *What c
   tail dips at the lead's note and its octave while the lead plays. Its pre-delay snaps to the
   nearest 1/128-1/16 note, and its decay is rounded down to whole beats. A track named drums,
   perc or beats gets bus glue.
+- **More automatic fixes.** Antioch holds a track at its input's loudness however much space
+  it adds (the last 3 s of input carry the tails after a phrase), and narrows its own reverb
+  and echo wherever they would cancel in mono. The bass's sub clears for the 6 ms before each
+  kick as well as after it. On the vocal, plosive pops are cut for a moment and breaths between
+  phrases come down 6 dB. A clip that starts abruptly out of silence gets a 1 ms fade-in (not
+  on kicks or percussion, whose attack is meant). A track leaning to one side (and not a wide
+  stereo sound) is re-centred, 3 dB at most. A pitched FX holding a note outside the key is
+  re-pitched to the nearest key note, a semitone at most. *Hear without the automation* plays
+  each track at the loudness it had with Quintessence, so the comparison is about the sound.
 - **Mixing suggestions** (in Mentalism's suggestions; they change nothing): a kick, percussion
   or vocal arriving already flattened (back off the compressor before Quintessence); more than
   two tracks with their own Antioch (move them to returns); a level jump at a section change

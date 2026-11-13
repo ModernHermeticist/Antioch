@@ -32,6 +32,7 @@ namespace suite::Autopilot
         masksDipped, partsLifted, lowEndCleared, transientsSoftened, outOfKeyNotched, bassNotesEvened, harmonicsAdded,
         resonancesSoothed, hitsEvened, tailsQuietened, returnsCleaned, sectionCorrections, reverbMadeRoom, monoLowsKept,
         kickBassDips, layersSpread, kickTuned, drumBusGlued,
+        levelMatched, subTailsCleared, plosivesCut, breathsLowered, clicksGuarded, fxRepitched, balanceCentred, wetNarrowed,
         numCounters
     };
     inline const char* counterName (int c)
@@ -43,7 +44,9 @@ namespace suite::Autopilot
                                    "transients softened on the kick", "out-of-key FX notes cut", "bass notes evened out", "harmonics added for small speakers",
                                    "moving resonances soothed", "drum hits evened out", "quiet tails cleaned (noise floor)", "effect returns cleaned",
                                    "groove / intro / outro corrections (EQ per section)", "reverb making room (kick, lead, vocal)", "tracks with mono lows",
-                                   "bass making room for the kick's note", "layers spread apart", "kicks tuned to the key", "drum buses glued" };
+                                   "bass making room for the kick's note", "layers spread apart", "kicks tuned to the key", "drum buses glued",
+                                   "effects held to the input's level", "bass sub cleared before kicks", "vocal pops cut", "vocal breaths lowered",
+                                   "clicks at clip starts smoothed", "FX re-pitched into the key", "tracks re-centred (left/right)", "reverb kept mono-safe" };
         return c >= 0 && c < numCounters ? n[c] : "";
     }
 
