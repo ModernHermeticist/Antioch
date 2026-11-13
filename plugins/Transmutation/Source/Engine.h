@@ -138,6 +138,7 @@ namespace trm
             pitchLp.setCutoff (900.0f, fs);
             memLpL.setCutoff (2500.0f, fs); memLpR.setCutoff (2500.0f, fs);
             levelCoeff = 1.0 - std::exp (-1.0 / (0.3 * sr));
+            levelCoeffFast = 1.0 - std::exp (-1.0 / (0.05 * sr));
             levelAttack = 1.0f - std::exp (-1.0f / (0.02f * fs));
             levelRelease = 1.0f - std::exp (-1.0f / (0.2f * fs));
             reset();
@@ -160,7 +161,7 @@ namespace trm
             peakL.reset(); peakR.reset(); brL.reset(); brR.reset(); airL.reset(); airR.reset();
             for (auto& g : grains) g.active = false;
             cur = Mod {}; tgt = Mod {};
-            absPos = 0; gainSm = 1.0f; echoIdle = verbIdle = 1 << 30; levelIn = levelOut = 0.0; levelGain = 1.0f;
+            absPos = 0; gainSm = 1.0f; echoIdle = verbIdle = 1 << 30; levelIn = levelOut = levelInFast = levelOutFast = 0.0; levelGain = 1.0f;
             playLastAnchor = -1; playPos = 0.0; loopPhase = 0.0; swingD = 0.0;
             accelPhase = 0.0; rotPhase = 0.0; vibPhase = 0.0; wowPhase = 0.0; fsPhase = 0.0; shepPhase = 0.0; dronePhase = 0.0;
             heldSamples = 0; held = 0.0f; sinceOnset = 1 << 30; onsetCount = 0;
@@ -487,8 +488,14 @@ namespace trm
                     const auto inP = 0.5 * ((double) inL * inL + (double) inR * inR), outP = 0.5 * ((double) xL * xL + (double) xR * xR);
                     levelIn += levelCoeff * (inP - levelIn);
                     levelOut += levelCoeff * (outP - levelOut);
+                    levelInFast += levelCoeffFast * (inP - levelInFast);
+                    levelOutFast += levelCoeffFast * (outP - levelOutFast);
                     const auto allowed = juce::jmax (levelIn, 0.004);
-                    const auto target = levelOut > allowed * 1.0233 ? (float) std::sqrt (allowed / levelOut) : 1.0f;
+                    auto target = levelOut > allowed * 1.0233 ? (float) std::sqrt (allowed / levelOut) : 1.0f;
+                    // a sudden pile-up (moves stacking after a gap) is caught in 50 ms, not 300: the fast
+                    // output may only go 1 dB over the louder of the input's fast and slow levels
+                    const auto allowedFast = juce::jmax (allowed, levelInFast) * 1.26;
+                    if (levelOutFast > allowedFast) target = juce::jmin (target, (float) std::sqrt (allowedFast / levelOutFast));
                     levelGain += (target < levelGain ? levelAttack : levelRelease) * (target - levelGain);
                     if (levelGain > 0.9999f && target >= 1.0f) levelGain = 1.0f;
                     xL *= levelGain; xR *= levelGain;
@@ -910,7 +917,7 @@ namespace trm
         int echoIdle = 1 << 30, verbIdle = 1 << 30;
         float lastEchoL = 0.0f, lastEchoR = 0.0f;
         float gainSm = 1.0f, retSm = 1.0f, lastVerbL = 0.0f, lastVerbR = 0.0f, tailEnv = 1.0f;
-        double levelIn = 0.0, levelOut = 0.0;
+        double levelIn = 0.0, levelOut = 0.0, levelInFast = 0.0, levelOutFast = 0.0, levelCoeffFast = 0.0;
         float levelGain = 1.0f;
         double levelCoeff = 1.0 / (0.3 * 48000.0);
         float levelAttack = 0.001f, levelRelease = 0.0001f;
