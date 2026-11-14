@@ -57,6 +57,7 @@ TransmutationProcessor::TransmutationProcessor()
       apvts (*this, nullptr, "TransmutationState", TParams::createLayout())
 {
     addModule ("Azoth", std::make_unique<AzothProcessor>());
+    setModuleActive ("Azoth", false);   // transitions play on the one track you choose (Transitions here), not on every Transmutation
     // Mentalism's fixes: a build that doesn't rise -> the builds work harder; a drop that doesn't
     // jump out of its build (data 0) -> the drops do more
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
@@ -416,6 +417,7 @@ void TransmutationProcessor::updateProfile()
 
 void TransmutationProcessor::pollTick()
 {
+    setModuleActive ("Azoth", transitionsHere());
     const auto nowMs = juce::Time::getMillisecondCounterHiRes();
     autoRole.store (juce::jmax (0, roleForTrack()));
     if (nowMs - lastProfileMs > 2000.0) { lastProfileMs = nowMs; updateProfile(); }

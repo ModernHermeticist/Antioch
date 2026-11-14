@@ -137,6 +137,7 @@ namespace suite
         /** Announces this instance now (the timer does it every second; tests call it directly). */
         void announce()
         {
+            if (! announcing) return;
             const auto status = suiteStatus();
             const auto older = loadedVersion >= 0 && loadedVersion < stateVersion ? Status::olderState : 0u;
             Registry::announce (instanceId, getName(), getTrackName(), status.flags | older, status.metrics, status.bands);
@@ -148,6 +149,7 @@ namespace suite
 
         void getStateInformation (juce::MemoryBlock& dest) final
         {
+            suite::Watchdog::Scope watch (getName(), "saving its state (FL asked)");
             juce::MemoryBlock own;
             getPluginState (own);
             juce::XmlElement xml ("AntiochSuiteState");
@@ -185,6 +187,7 @@ namespace suite
 
         void setStateInformation (const void* data, int sizeInBytes) final
         {
+            suite::Watchdog::Scope watch (getName(), "loading its state (FL asked)");
             const auto xml = getXmlFromBinary (data, sizeInBytes);
             if (xml == nullptr || ! xml->hasTagName ("AntiochSuiteState"))
             {
@@ -237,12 +240,30 @@ namespace suite
         // Prima Materia in Quintessence, Azoth in Transmutation). Each runs inside its host: the host's
         // audio passes through it after the host's own processing, its settings are saved inside the
         // host's, and it still tells the suite about itself under its own name.
-        struct Module { juce::String key; std::unique_ptr<SuiteProcessor> proc; };
+        struct Module { juce::String key; std::unique_ptr<SuiteProcessor> proc; std::atomic<bool> active { true };
+                        Module (juce::String k, std::unique_ptr<SuiteProcessor> p) : key (std::move (k)), proc (std::move (p)) {}
+                        Module (Module&& o) noexcept : key (std::move (o.key)), proc (std::move (o.proc)), active (o.active.load()) {} };
+        /** A module switched off runs nothing: no audio, no latency, and the suite doesn't see it
+            (Azoth's transitions belong on one track, not on every Transmutation). */
+        void setModuleActive (const juce::String& key, bool on)
+        {
+            for (auto& m : modules)
+                if (m.key == key && m.active.load() != on)
+                {
+                    m.active.store (on);
+                    m.proc->announcing = on;
+                    if (! on) Registry::remove (m.proc->getInstanceId());
+                    updateModuleLatency();
+                }
+        }
+        bool moduleActive (const juce::String& key) const { for (const auto& m : modules) if (m.key == key) return m.active.load(); return false; }
+        /** False: this instance doesn't tell the suite about itself (a module switched off). */
+        bool announcing = true;
         SuiteProcessor* addModule (const juce::String& key, std::unique_ptr<SuiteProcessor> p)
         {
             auto* raw = p.get();
             raw->setPlayConfigDetails (2, 2, 44100.0, 512);
-            modules.push_back ({ key, std::move (p) });
+            modules.emplace_back (key, std::move (p));
             return raw;
         }
         SuiteProcessor* module (const juce::String& key) const
@@ -270,6 +291,7 @@ namespace suite
             juce::AudioBuffer<float> main (buffer.getArrayOfWritePointers(), 2, buffer.getNumSamples());
             for (auto& m : modules)
             {
+                if (! m.active.load (std::memory_order_relaxed)) continue;
                 m.proc->setPlayHead (getPlayHead());
                 m.proc->processBlock (main, midi);
             }
@@ -281,7 +303,7 @@ namespace suite
             ~ModulesAfter() { host.processModules (buffer, midi); }
         };
         ModulesAfter modulesAfter (juce::AudioBuffer<float>& b, juce::MidiBuffer& m) { return { *this, b, m }; }
-        int modulesLatency() const { int l = 0; for (const auto& m : modules) l += m.proc->getLatencySamples(); return l; }
+        int modulesLatency() const { int l = 0; for (const auto& m : modules) if (m.active.load()) l += m.proc->getLatencySamples(); return l; }
         void updateModuleLatency() { if (! modules.empty() && getLatencySamples() != modulesLatency()) setLatencySamples (modulesLatency()); }
         void setNonRealtime (bool offline) noexcept override
         {

@@ -254,7 +254,7 @@ public:
 
     /** The tone it steers towards for a role: your own (from the songs you finished, once there are
         3 or more in the style log), or the built-in one. */
-    const std::array<float, 10>& shapeFor (int role) const;
+    std::array<float, 10> shapeFor (int role) const;
     int learnedSongs (int role) const { return learnedCount[(size_t) juce::jlimit (0, 7, role)]; }
     /** Reads the style log's per-role tone of your finished songs. */
     void loadLearned();

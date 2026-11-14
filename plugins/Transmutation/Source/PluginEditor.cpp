@@ -204,6 +204,13 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
     header.addRight (exportButton, 160);
     header.addRight (rerollAllButton, 190);
     header.actions = [this] { return actions(); };
+    transitionsHere.setClickingTogglesState (true);
+    transitionsHere.setColour (juce::TextButton::buttonOnColourId, Colours::ember);
+    transitionsHere.setTooltip ("Play the suite's transitions (impacts, crashes, risers, snare rolls, reverse swells) on this track. "
+                                "Switch it on for one track only: an FX bus, or the vocal or lead track for reverse swells.");
+    transitionsHere.setToggleState (processor.transitionsHere(), juce::dontSendNotification);
+    transitionsHere.onClick = [this] { processor.setTransitionsHere (transitionsHere.getToggleState()); };
+    header.addRight (transitionsHere, 150);
     pages = std::make_unique<suite::ui::ModulePages> (*this, header);
     pages->add ("Transitions", "Impacts, crashes, risers, rolls and reverse swells into each section: what Azoth did", [this] { return processor.azoth().createEditor(); });
     header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
@@ -407,6 +414,9 @@ std::vector<suite::ui::Action> TransmutationEditor::actions()
 {
     std::vector<suite::ui::Action> a;
     if (pages != nullptr) pages->addActions (a);
+    a.push_back ({ processor.transitionsHere() ? "Stop playing transitions here" : "Play transitions on this track",
+                   "impacts, crashes, risers, rolls and swells (one track only)", "Transitions",
+                   [this] { const auto on = ! processor.transitionsHere(); processor.setTransitionsHere (on); transitionsHere.setToggleState (on, juce::dontSendNotification); } });
     a.push_back ({ "Re-roll the whole track", "a new plan for this track", "Plan", [this] { rerollAllButton.triggerClick(); } });
     a.push_back ({ "Export plan (MIDI)", "a note and a marker per move, for FL", "Plan", [this] { exportButton.triggerClick(); } });
     const auto sel = lockButton.isEnabled();

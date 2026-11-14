@@ -1362,9 +1362,11 @@ int main (int argc, char** argv)
         juce::AudioBuffer<float> audio, refBuf;
         render (*p, 0.2, sine (440.0f, -6.0f), &audio);
         refBuf.setSize (2, audio.getNumSamples()); refBuf.clear(); sine (440.0f, -6.0f) (refBuf, 0);
+        // the premaster passes untouched, only delayed by the reported latency (Lapis' preview lines up with it)
+        const auto lat = p->getLatencySamples();
         float diff = 0.0f;
-        for (int i = 0; i < audio.getNumSamples(); ++i) diff = std::max (diff, std::abs (audio.getSample (0, i) - refBuf.getSample (0, i)));
-        check (diff < 1.0e-9f, "audio is bit-identical");
+        for (int i = lat; i < audio.getNumSamples(); ++i) diff = std::max (diff, std::abs (audio.getSample (0, i) - refBuf.getSample (0, i - lat)));
+        check (diff < 1.0e-9f, "audio is bit-identical (after the reported " + juce::String (lat) + "-sample latency)");
     }
 
     if (outDir != juce::File())

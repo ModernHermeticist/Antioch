@@ -8,6 +8,7 @@
 //    a little more sub...), averaged over your milestones, as an offset on the label's tone the
 //    Quintessences steer to (with its own switch).
 
+#include "Worker.h"
 #include "Alias.h"
 #include "StyleLog.h"
 #include <juce_core/juce_core.h>
@@ -38,8 +39,9 @@ namespace lab
         {
             juce::StringArray l;
             for (const auto& [name, r] : records) l.add (name.replaceCharacters ("\t\n", "  ") + "\t" + juce::String (r.kept) + "\t" + juce::String (r.undone));
-            file().getParentDirectory().createDirectory();
-            file().replaceWithText (l.joinIntoString ("\n") + "\n");
+            const auto f = file();
+            const auto text = l.joinIntoString ("\n") + "\n";
+            suite::Worker::post ([f, text] { f.getParentDirectory().createDirectory(); f.replaceWithText (text); });   // off FL's interface thread
         }
         void record (const juce::String& check, bool kept)
         {

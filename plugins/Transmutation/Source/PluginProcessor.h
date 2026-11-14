@@ -41,6 +41,10 @@ public:
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
 
+    /** Azoth's transitions (impacts, crashes, risers, rolls, swells) play on this track (saved with the project). */
+    bool transitionsHere() const { return (bool) apvts.state.getProperty ("transitionsHere", false); }
+    void setTransitionsHere (bool on) { apvts.state.setProperty ("transitionsHere", on, nullptr); setModuleActive ("Azoth", on); }
+
     /** Azoth, merged into Transmutation: it runs here, after Transmutation's own processing. */
     AzothProcessor& azoth() const { return *static_cast<AzothProcessor*> (module ("Azoth")); }
 

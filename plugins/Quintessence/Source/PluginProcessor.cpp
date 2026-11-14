@@ -1038,10 +1038,10 @@ void QuintessenceProcessor::addLog (const juce::String& line)
     suite::MoveLog::add (getName(), getTrackName(), line, kind);
 }
 
-const std::array<float, 10>& QuintessenceProcessor::shapeFor (int role) const
+std::array<float, 10> QuintessenceProcessor::shapeFor (int role) const   // by value: the target is built on the fly
 {
     const auto r = (size_t) juce::jlimit (0, 7, role);
-    const auto& base = learnedCount[r] >= 3 ? learned[r] : target ((int) r).shape;
+    const auto base = learnedCount[r] >= 3 ? learned[r] : target ((int) r).shape;
     // A reference loaded in Mentalism colours every role's target the way it differs from the guide
     std::array<float, 10> offset {};
     if (! suite::ReferenceBus::offset (offset)) { referenceShown.store (false); return base; }

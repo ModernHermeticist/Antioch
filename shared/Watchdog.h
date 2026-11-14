@@ -9,6 +9,7 @@
 #include "Alias.h"
 #include "Worker.h"
 #include <juce_core/juce_core.h>
+#include <juce_events/juce_events.h>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -26,6 +27,11 @@ namespace suite::Watchdog
         inline std::mutex& lock() { static std::mutex m; return m; }
         inline std::vector<Event>& events() { static std::vector<Event> e; return e; }
         inline std::atomic<Active*>& current() { static std::atomic<Active*> a { nullptr }; return a; }
+        /** The last job that finished (what ran just before a block that no job owns). */
+        inline std::mutex& lastLock() { static std::mutex m; return m; }
+        inline juce::String& lastJob() { static juce::String s; return s; }
+        inline std::atomic<double>& lastPong() { static std::atomic<double> t { 0.0 }; return t; }
+        inline std::atomic<bool>& pingPending() { static std::atomic<bool> b { false }; return b; }
         inline juce::File& fileOverride() { static juce::File f; return f; }
         inline juce::File file() { return fileOverride() != juce::File() ? fileOverride() : suite::Alias::suiteRoot().getChildFile ("Freeze log.txt"); }
 
@@ -47,6 +53,37 @@ namespace suite::Watchdog
             });
         }
 
+        /** The heartbeat: FL's interface (the message thread) is pinged every 100 ms; when it doesn't
+            answer for over 300 ms, the block is logged with whatever suite job was running (or ran
+            last), so a freeze with no slow suite job still shows up, and says it wasn't the suite's. */
+        inline void heartbeat()
+        {
+            if (suite::Worker::detail::thread().inlineMode) return;   // tests: no message loop
+            auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+            if (mm == nullptr) return;
+            const auto now = juce::Time::getMillisecondCounterHiRes();
+            static double blockedSince = 0.0;
+            static bool reported = false;
+            if (pingPending().load())
+            {
+                const auto waited = now - lastPong().load();
+                if (waited > 300.0 && ! reported)
+                {
+                    reported = true;
+                    blockedSince = lastPong().load();
+                    juce::String job;
+                    if (auto* a = current().load(); a != nullptr && a->what != nullptr) job = (a->plugin != nullptr ? *a->plugin : juce::String()) + ": " + a->what + " (running)";
+                    else { std::lock_guard<std::mutex> g (lastLock()); job = lastJob().isNotEmpty() ? lastJob() + " (finished just before; the block itself isn't a suite job)" : juce::String ("no suite job (FL or another plugin)"); }
+                    record ({ juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S"), "FL's interface", "blocked: " + job, waited, true });
+                }
+                return;
+            }
+            if (reported) { reported = false; juce::ignoreUnused (blockedSince); }
+            pingPending().store (true);
+            lastPong().store (now);
+            mm->callAsync ([] { lastPong().store (juce::Time::getMillisecondCounterHiRes()); pingPending().store (false); });
+        }
+
         /** Notices a job that's still running after a second (a hang) while it runs. */
         class HangWatcher : public juce::Thread
         {
@@ -59,6 +96,7 @@ namespace suite::Watchdog
                 while (! threadShouldExit())
                 {
                     wait (100);
+                    heartbeat();
                     auto* a = current().load();
                     if (a == nullptr || a == reported) continue;
                     const auto ms = juce::Time::getMillisecondCounterHiRes() - a->startMs;
@@ -88,6 +126,7 @@ namespace suite::Watchdog
         {
             detail::current().store (previous);
             const auto ms = juce::Time::getMillisecondCounterHiRes() - active.startMs;
+            { std::lock_guard<std::mutex> g (detail::lastLock()); detail::lastJob() = name + ": " + active.what; }
             if (ms > thresholdMs)
                 detail::record ({ juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S"), name, active.what, ms, false });
         }
@@ -106,6 +145,15 @@ namespace suite::Watchdog
     /** The log as text (newest first), for the search box's "Freeze log". */
     inline juce::String text()
     {
+        // the file has every plugin's (each plugin is its own DLL with its own copy of this)
+        if (const auto f = detail::file(); f.existsAsFile() && f.getSize() > 0)
+        {
+            auto lines = juce::StringArray::fromLines (f.loadFileAsString().trim());
+            lines.removeEmptyStrings();
+            juce::StringArray newest;
+            for (int i = lines.size() - 1; i >= 0 && newest.size() < 60; --i) newest.add (lines[i]);
+            return newest.joinIntoString ("\n") + "\n\n(" + f.getFullPathName() + ")";
+        }
         const auto e = recent();
         juce::StringArray l;
         for (auto it = e.rbegin(); it != e.rend(); ++it)
