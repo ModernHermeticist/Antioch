@@ -2020,6 +2020,44 @@ favourite.
   plays your rhythm over any progression. Saved with the project; Forget clears it.
 - **One melody clip** becomes the motif, as above.
 
+### Write: the writing loop and the writing tools
+
+Correspondence's **Write...** button (next to *Vary...*) holds the writing tools.
+
+- **Lock and regenerate.** Each part (Song Lead, Bass, Arp, Chords, and the Melody loop) has its own submenu. Lock
+  the sections (or bars) you like, then *Regenerate*: new seeds, the locked bars kept exactly. *Regenerate only this
+  part* locks the other song parts as they are first. Locks are saved with the project.
+- **Takes.** Every regenerate is a take. *Take back* and *Take forward* step through them; *Keep bars from a take*
+  takes a section from any earlier take into the part (as a lock). Rate takes (*I like this take* / *Not this one*):
+  once you've liked two, each regenerate tries eight and keeps the one closest to your taste (density, range, steps,
+  register, syncopation, note length). The taste is kept across projects.
+- **Hear it in context.** A part plays from a small synth in time with FL's playhead, under the song, while FL plays:
+  audition takes without exporting.
+- **One motif, the whole song.** Every section's lead derived from one two-bar hook: a soft teaser in the second half
+  of the intro, its opening in grooves, the hook slow in breakdowns, its opening cell climbing through builds, the hook
+  in full in the first drop, a sequence of it (climbing cycle by cycle) in later drops, its opening fading in the
+  outro. Change the hook (a motif, a hummed hook, the hook bank, a hook-doctor edit) and every section follows.
+- **Hook doctor.** A score with its reasons: does bar 2 echo bar 1 with a change, steps and leaps, range, the rhythm's
+  lengths, where the peak falls (and that it comes once), whether it lands on the chord. Up to three one-note changes
+  that would raise the score, each with what it improves; one click applies it.
+- **Hum a hook.** Hum or sing into the track's input; pitch tracking turns it into notes, quantised to 16ths, snapped
+  to the key, and makes it Melodia's hook (up to 30 seconds).
+- **Topline from lyrics.** Type a line: three melodies, one note per syllable, the stressed syllables on the beat on
+  chord tones, the weak ones stepping between, the peak on a stressed word about two thirds in, the last syllable
+  held on the root or third. Save one as MIDI with the lyrics as lyric events, or use it as the hook.
+- **Originality check.** The hook against your hook bank and every lead in the pattern library (its intervals in any
+  key, and its rhythm). Anything 75% alike or more is named.
+- **Emotional arc.** Classic uplifting, dark to light, melancholic, driving: each sets the breakdown's progression,
+  the tension writing, the later-drop lift and the home chord's colour. It shows the chords each section plays and
+  why it works; *Undo the arc* puts it back.
+- **Trance harmony moves.** VI-VII-i lift, borrowed iv, suspended turnaround, add9 at home, start on VI, the
+  i-VII-VI-VII pendulum, a V that pulls; each with what it does. Undoable.
+- **Feel from a reference.** An audio file's swing and accents (statistics only, never its notes), found from its
+  onsets after its intro, applied to the exported bass, arp and drums.
+- **Shared rhythm.** The bass and arp lean on the hook's rhythm: notes on the hook's 16ths accented, the others softer.
+- **Why it works.** One line of theory each: chord tones on the beat, where the peak falls, a leap answered by a step,
+  how it ends. Also under every take.
+
 ## Solve et Coagula: vocal unmasking
 
 ![Solve et Coagula](docs/solveetcoagula.png)
@@ -2269,6 +2307,12 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   (saved), latching per role, and the DSP (the bass's lows ducking after each kick, DC, breakdown drums, the build's
   high-pass, the impact dip, the correlation guard, pan, the pad under the lead's note, inter-sample peaks, the riser's
   energy, the expander, a phrase ride). Kybalion's, Antioch's, Vibration's and Solve et Coagula's latches and tables.
+- **Writing tools:** locks through a regenerate and through the project, takes (back, forward, a new branch), the
+  whole-song motif (teased, slow, full, sequenced), the hook doctor (a flat hook scores lower, its edit helps), humming
+  (A, C, E heard and in key), syllables and stresses and a topline on the beat with lyric events, the same hook in another
+  key caught, the arc's chords, the harmony moves, a shuffled reference's swing found and applied, the shared rhythm,
+  taste ranking, why it works; and in the processor: a locked bar kept through a regenerate, take back, a rating
+  remembered, a part heard in context, locks saved.
 - **Mix fixes 2:** the shared latch (asked for, revoked by the self-check, off for a song, reset and undo, frozen
   while rendering, bypassed in the A/B, published), knob ownership, the normalised band-pass, LabelDsp4 (phase
   rotation keeps the level, the bass out for the last 16th but never silent, the riser widening, a 2 ms left/right

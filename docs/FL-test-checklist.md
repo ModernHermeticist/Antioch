@@ -335,6 +335,18 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6j.12** Leave it playing until nothing moves: the dashboard points to *what's left for you*, three items with
   their points.
 
+### 6k. Writing tools (Correspondence's Write...)
+
+- [ ] **6k.1** Song Lead > Lock the first drop, Regenerate: the drop's lead is unchanged, the rest new.
+- [ ] **6k.2** Regenerate twice more, Take back twice: you're back on the first take; Take forward returns.
+- [ ] **6k.3** Song Lead > Hear it in context, play the song: the lead plays in time from Correspondence's track.
+- [ ] **6k.4** Hook doctor: the report reads sensibly; apply an edit and hear the hook change in context.
+- [ ] **6k.5** Arm Hum a hook, hum four notes into a mic on Correspondence's track, stop: they come back in key.
+- [ ] **6k.6** Topline from lyrics: three options; save one; FL's piano roll shows the lyrics on the notes.
+- [ ] **6k.7** Emotional arc > Classic uplifting: the breakdown opens on VI; Undo puts it back.
+- [ ] **6k.8** Feel from a reference: a shuffled track gives a swing figure; the exported bass shuffles.
+- [ ] **6k.9** One motif, the whole song on: the intro teases the hook, the breakdown plays it slowly, drop 2 moves it on.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is
