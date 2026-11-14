@@ -4,6 +4,7 @@
 // 0 none, 1 kick, 2 bass, 3 hats & percussion, 4 pads & chords, 5 lead, 6 vocal, 7 FX.
 
 #include <juce_core/juce_core.h>
+#include "RoleCatalog.h"
 
 namespace suite
 {
@@ -25,6 +26,9 @@ namespace suite
         if (any ({ "fx", "atmos", "riser", "sweep", "noise", "impact", "crash", "downlift", "texture" })) return roleFx;
         if (any ({ "lead", "saw", "melody", "arp", "hook", "synth" }))                        return roleLead;
         if (any ({ "pad", "chord", "string", "keys", "piano", "pluck", "stab" }))             return rolePads;
+        // the detailed roles' names (acid, organ, brass, choir, bells, guitar...): their broad role
+        if (const auto m = suite::roles::fromTrackName (trackName); m.role >= 0 && suite::roles::info (m.role).legacy <= roleFx)
+            return suite::roles::info (m.role).legacy;
         return -1;
     }
     /** Plucks and arps sit in the lead and pad roles; some plugins treat them on their own. */

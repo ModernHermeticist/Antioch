@@ -55,6 +55,7 @@ QuintessenceProcessor::QuintessenceProcessor()
       apvts (*this, nullptr, "QuintessenceState", qn::layout())
 {
     addModule ("Prima Materia", std::make_unique<PrimaMateriaProcessor>());
+    prima().hosted = true;   // its role comes from Quintessence's
     for (const auto& [id, bit] : lockBits()) apvts.addParameterListener (id, this);
 
     // Mentalism's masking, mud and harshness fixes for this track land here (Prima Materia leaves
@@ -401,10 +402,11 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
 
     // Autopilot (mixing): the live moves, with the shared kick's position for every role
-    const auto mixing = suite::Autopilot::on (suite::Autopilot::mixing);
+    const auto mixing = suite::Autopilot::anyOn (suite::Autopilot::allMixing);   // any of the mixing groups (each fix checks its own)
     {
         qn::LiveMix::Context lc;
         lc.role = (int) value (qn::roleId) > 0 ? (int) value (qn::roleId) : roleNow;   // the chosen role from the start
+        lc.rank = suite::roles::valid (subRole()) && suite::roles::info (subRole()).legacy == lc.role ? suite::roles::rank (subRole()) : suite::roles::legacyRank (lc.role);
         lc.id = getInstanceId(); lc.mixing = mixing; lc.stability = suite::Autopilot::on (suite::Autopilot::stability);
         if (mixing && info.hasPpq && info.playing)
             if (const auto kick = suite::KickBus::read(); kick.valid)
@@ -870,7 +872,7 @@ QuintessenceProcessor::Measurement QuintessenceProcessor::measurement() const
 std::array<float, 10> QuintessenceProcessor::toneDiff (const Measurement& m, int role) const
 {
     std::array<float, 10> diff {};
-    const auto& t = qn::targets::roles()[(size_t) juce::jlimit (0, qn::targets::musicBus, role)];
+    const auto t = target (juce::jlimit (0, qn::targets::musicBus, role));
     if (t.from > t.to) return diff;
     const auto& shape = shapeFor (role);
 
@@ -910,9 +912,72 @@ int QuintessenceProcessor::effectiveRole() const
 {
     const auto chosen = (int) value (qn::roleId);
     if (chosen > 0) return chosen;
+    if (const auto sub = (int) value (qn::subRoleId) - 1; suite::roles::valid (sub)) return suite::roles::info (sub).legacy;
     const auto track = getTrackName().toLowerCase();
     if (track.contains ("bus") || track.contains ("group") || track.contains ("music")) return qn::targets::musicBus;   // the music bus: glue
-    return juce::jlimit (0, 7, roleForTrack());
+    if (const auto r = roleForTrack(); r > 0) return juce::jlimit (0, 7, r);
+    if (const auto m = suite::roles::fromTrackName (getTrackName()); m.role >= 0) return suite::roles::info (m.role).legacy;
+    return 0;
+}
+
+void QuintessenceProcessor::updateSubRole()
+{
+    namespace R = suite::roles;
+    int sub = -1;
+    bool guessed = false;
+    const auto chosen = (int) value (qn::subRoleId) - 1;
+    const auto legacy = effectiveRole();
+    if (R::valid (chosen)) sub = chosen;
+    else if (legacy >= 1)
+    {
+        const auto m = R::fromTrackName (getTrackName());
+        if (m.role >= 0 && ! m.onlyFamily && R::info (m.role).legacy == legacy) sub = m.role;
+        else
+        {
+            // the family: from the name when it names one in this broad role, else the broad role's
+            auto family = R::info (R::fromLegacy (legacy)).family;
+            if (m.role >= 0 && R::info (m.role).legacy == legacy) family = R::info (m.role).family;
+            const auto me = measurement();
+            if (stickyGuess >= 0 && R::info (stickyGuess).family == family && stickyName == getTrackName())
+            {
+                sub = stickyGuess;   // a guess sticks once made (its sections aren't rewritten as the sound varies)
+                guessed = true;
+            }
+            else if (me.seconds >= 6.0f)
+            {
+                R::Sound snd;
+                snd.bandsDb = me.bandsDb; snd.punchDb = me.punchDb; snd.sideMinusMidDb = me.sideMinusMid();
+                snd.movementDb = lastMovementDb; snd.decayMs = lastDecayMs;
+                sub = R::guessFromSound (family, snd);
+                guessed = true;
+                stickyGuess = sub; stickyName = getTrackName();
+            }
+            else sub = m.role >= 0 && R::info (m.role).legacy == legacy ? m.role : (int) R::familyDefault (family);
+            if (R::info (sub).legacy != legacy) sub = R::fromLegacy (legacy);
+        }
+    }
+    subRoleCached.store (sub);
+    subRoleWasGuessed.store (guessed);
+    // the section mixer inside (Prima Materia) follows this role
+    if (sub != lastSyncedSubRole && R::valid (sub)) { prima().applySubRole (sub); lastSyncedSubRole = sub; }
+}
+
+qn::targets::Role QuintessenceProcessor::target (int role) const
+{
+    auto t = qn::targets::roles()[(size_t) juce::jlimit (0, (int) qn::targets::roles().size() - 1, role)];
+    const auto sub = subRole();
+    if (! suite::roles::valid (sub) || suite::roles::info (sub).legacy != role) return t;
+    const auto& i = suite::roles::info (sub);
+    t.name = i.name;
+    if (t.from <= t.to)
+    {
+        float top = -1000.0f;
+        for (size_t b = 0; b < t.shape.size(); ++b) { t.shape[b] += i.tone[b]; top = juce::jmax (top, t.shape[b]); }
+        for (auto& v : t.shape) v -= top;   // still relative to its loudest band
+    }
+    if (i.lowCutHz >= 0.0f) t.lowCutHz = i.lowCutHz;
+    if (std::abs (i.sideDb) > 0.01f) t.sideDb = i.sideDb;
+    return t;
 }
 
 //==============================================================================
@@ -973,7 +1038,7 @@ void QuintessenceProcessor::addLog (const juce::String& line)
 const std::array<float, 10>& QuintessenceProcessor::shapeFor (int role) const
 {
     const auto r = (size_t) juce::jlimit (0, 7, role);
-    const auto& base = learnedCount[r] >= 3 ? learned[r] : qn::targets::roles()[r].shape;
+    const auto& base = learnedCount[r] >= 3 ? learned[r] : target ((int) r).shape;
     // A reference loaded in Mentalism colours every role's target the way it differs from the guide
     std::array<float, 10> offset {};
     if (! suite::ReferenceBus::offset (offset)) { referenceShown.store (false); return base; }
@@ -1070,7 +1135,7 @@ bool QuintessenceProcessor::autoPass()
 
     // Spire tips from this pass
     {
-        const auto& t = qn::targets::roles()[(size_t) role];
+        const auto t = target (role);
         qn::spire::Reading reading;
         reading.role = role;
         reading.toneDiff = diff;
@@ -1095,7 +1160,7 @@ bool QuintessenceProcessor::autoPass()
         {
             const auto after = toneError (m, role);
             helped = after >= 0.0f && after < pending.errBefore - 0.15f;
-            measure = "distance from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s usual tone " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB";
+            measure = "distance from a " + juce::String (target (role).name) + "'s usual tone " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB";
             if (! helped && pending.band >= 0) toneCooldown[(size_t) pending.band] = 8;
         }
         else if (pending.kind == Pending::lowCut)
@@ -1110,9 +1175,9 @@ bool QuintessenceProcessor::autoPass()
         }
         else if (pending.kind == Pending::width)
         {
-            const auto after = std::abs (m.sideMinusMid() - (qn::targets::roles()[(size_t) role].sideDb + sideOffset()));
+            const auto after = std::abs (m.sideMinusMid() - (target (role).sideDb + sideOffset()));
             helped = m.sideMinusMid() > -90.0f && after < pending.errBefore - 0.5f;
-            measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (qn::targets::roles()[(size_t) role].name) + "'s";
+            measure = "width " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from a " + juce::String (target (role).name) + "'s";
             if (! helped) widthCooldown = 8;
         }
         else if (pending.kind == Pending::budget)
@@ -1153,7 +1218,7 @@ bool QuintessenceProcessor::autoPass()
         }
         else
         {
-            const auto& t = qn::targets::roles()[(size_t) role];
+            const auto t = target (role);
             const auto after = std::abs (m.swingPost (pending.index) - (t.swing[(size_t) pending.index] + swingOffset()));
             helped = after < pending.errBefore - 0.5f;
             measure = "loud moments " + juce::String (pending.errBefore, 1) + " -> " + juce::String (after, 1) + " dB from the target";
@@ -1261,7 +1326,7 @@ void QuintessenceProcessor::returnsMove()
 float QuintessenceProcessor::dynamicsError (const Measurement& m, int role) const
 {
     if (value (qn::autoMbId) < 0.5f || m.group != 0 || role < 0 || role >= (int) qn::targets::roles().size()) return 0.0f;
-    const auto& t = qn::targets::roles()[(size_t) role];
+    const auto t = target (role);
     float loudest = -200.0f, worst = 0.0f;
     for (int b = 0; b < qn::numMbBands; ++b) loudest = juce::jmax (loudest, m.p95Pre[(size_t) b]);
     for (int b = 0; b < qn::numMbBands; ++b)
@@ -1576,7 +1641,7 @@ bool QuintessenceProcessor::punchMove (const Measurement& m, int role)
     pending = { Pending::punch, -1, -1, { { qn::punchId, punch } }, std::abs (err), "punch " + juce::String (juce::roundToInt (next * 100.0f)) + "%" };
     write (qn::punchId, next);
     addLog ("Punch " + juce::String (juce::roundToInt (punch * 100.0f)) + "% -> " + juce::String (juce::roundToInt (next * 100.0f)) + "% (its hits stand "
-            + juce::String (m.punchDb, 1) + " dB over its body; a " + juce::String (qn::targets::roles()[(size_t) role].name) + " usually has about " + juce::String (juce::roundToInt (target)) + ")");
+            + juce::String (m.punchDb, 1) + " dB over its body; a " + juce::String (this->target (role).name) + " usually has about " + juce::String (juce::roundToInt (target)) + ")");
     return true;
 }
 
@@ -1659,7 +1724,7 @@ void QuintessenceProcessor::drainSpectrum()
 
 bool QuintessenceProcessor::widthMove (const Measurement& m, int role)
 {
-    const auto& t = qn::targets::roles()[(size_t) role];
+    const auto t = target (role);
     if (value (qn::autoEqId) < 0.5f || t.sideDb == 0.0f || m.group == 1 || widthCooldown > 0 || value (qn::widthLockId) > 0.5f) return false;
     const auto now = m.sideMinusMid();
     if (now < -90.0f) return false;
@@ -1764,7 +1829,7 @@ int QuintessenceProcessor::slotFor (int band, bool forCarve) const
 bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
 {
     if (value (qn::autoEqId) < 0.5f) return false;
-    const auto& t = qn::targets::roles()[(size_t) role];
+    const auto t = target (role);
 
     // Low cut where the part has no job (once; it's checked like any move)
     const auto breakdown = m.group == 1, groove = m.group == 3;   // each gets its own correction
@@ -1840,7 +1905,7 @@ bool QuintessenceProcessor::eqMove (const Measurement& m, int role)
 bool QuintessenceProcessor::mbMove (const Measurement& m, int role)
 {
     if (value (qn::autoMbId) < 0.5f || m.group == 1) return false;   // dynamics are set in the main sections
-    const auto& t = qn::targets::roles()[(size_t) role];
+    const auto t = target (role);
     // Bands with something in them (not just the edges of another band's sound), furthest from their target first
     float loudest = -200.0f;
     for (int b = 0; b < qn::numMbBands; ++b) loudest = juce::jmax (loudest, m.p95Pre[(size_t) b]);
@@ -1971,7 +2036,7 @@ QuintessenceProcessor::SuiteStatus QuintessenceProcessor::suiteStatus()
     for (int sl = 0; sl < qn::numSlots; ++sl) if (std::abs (value (qn::gainId (sl))) > 0.05f) ++active;
     float gr = 0.0f;
     for (auto& g : grNow) gr = juce::jmax (gr, g.load());
-    s.metrics = { (float) effectiveRole(), (float) active, gr, sideNow.load() };   // [3]: the side under the middle (dB): the stereo field map
+    s.metrics = { suite::roles::encode (effectiveRole(), subRole()), (float) active, gr, sideNow.load() };   // [0]: the role, the detailed one in its fraction   // [3]: the side under the middle (dB): the stereo field map
     if (haveBands) { s.flags |= suite::Status::hasBands; s.bands = longBands; }
     // Squashed before it arrives: a kick, percussion or vocal with almost no crest left
     {

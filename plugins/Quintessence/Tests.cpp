@@ -10,6 +10,8 @@
 #include "LabelReadyBus.h"
 #include "MixFixBus.h"
 #include "TestUtils.h"
+#include "RoleCatalog.h"
+#include "Roles.h"
 #include "ConductorBus.h"
 #include "ReferenceBus.h"
 #include "AutomationBus.h"
@@ -1994,6 +1996,61 @@ int main (int argc, char** argv)
             check (monoDb > -3.0f, label + "it stays mono-safe (the mono sum " + juce::String (monoDb, 1) + " dB against stereo)");
         }
         AP::reset(); suite::LabelReadyBus::reset(); suite::FixBus::reset(); suite::MixFixBus::reset();
+    }
+
+    section ("Track roles: 36, in nine families");
+    {
+        namespace R = suite::roles;
+        std::array<int, R::numFamilies> perFamily {};
+        for (int r = 0; r < R::numRoles; ++r) ++perFamily[(size_t) R::info (r).family];
+        check (R::numRoles == 36 && perFamily == std::array<int, R::numFamilies> { 3, 4, 4, 4, 7, 4, 4, 4, 2 },
+               "kick 3, bass 4, drums 4, chords 4, keys & orchestral 7, leads 4, vocals 4, FX 4, buses 2");
+        auto named = [] (const char* n) { return R::fromTrackName (n).role; };
+        check (named ("Sub Bass") == R::subBass && named ("Acid 303") == R::acidBass && named ("Reese") == R::acidBass && named ("Rolling Bass") == R::midBass
+               && named ("Kick Top") == R::kickTop && named ("Kick") == R::kick && named ("Vox Chop") == R::chops && named ("Lead Vox") == R::leadVocal
+               && named ("BVs") == R::backing && named ("Supersaw Chords") == R::supersaw && named ("Pluck 2") == R::plucks && named ("Strings") == R::strings
+               && named ("Choir") == R::choir && named ("Glock") == R::bells && named ("Duduk") == R::guitar && named ("Arp") == R::arps
+               && named ("Riser FX") == R::risers && named ("Impact") == R::impacts && named ("Crash") == R::cymbals && named ("Drum Bus") == R::drumBus,
+               "the track's name picks the role");
+        check (R::fromTrackName ("Bass").onlyFamily && R::fromTrackName ("Chords").onlyFamily && ! R::fromTrackName ("Sub Bass").onlyFamily,
+               "a name that only names the family leaves the role to the sound");
+        check (suite::roleFromTrackName ("Acid") == suite::roleBass && suite::roleFromTrackName ("Choir") == suite::rolePads && suite::roleFromTrackName ("Brass") == suite::rolePads,
+               "the suite's broad roles know the new names too");
+        check ((int) R::encode (2, R::midBass) == 2 && R::decode (R::encode (2, R::midBass)) == R::midBass && R::decode (2.0f) == -1,
+               "the registry carries the detailed role in the broad role's fraction (old readers see the broad role)");
+        check (R::rank (R::leadVocal) > R::rank (R::mainLead) && R::rank (R::chops) == R::rank (R::mainLead) && R::rank (R::mainLead) > R::rank (R::subBass)
+               && R::rank (R::subBass) > R::rank (R::supersaw) && R::rank (R::supersaw) > R::rank (R::pads) && R::rank (R::pads) > R::rank (R::atmos),
+               "who gives way: lead vocal > main lead and chops > kick and sub > supersaw and arps > pads > FX and atmos");
+
+        // guessing from the sound, inside the family
+        R::Sound sub, top;
+        sub.bandsDb = { 0, 0, -8, -20, -30, -35, -40, -45, -50, -55 };
+        top.bandsDb = { -30, -20, -6, -2, 0, -2, -4, -8, -14, -20 };
+        check (R::guessFromSound (R::famBass, sub) == R::subBass && R::guessFromSound (R::famBass, top) == R::bassTop, "a bass is told sub from top layer by its sound");
+        R::Sound pluck; pluck.bandsDb = { -30, -20, -10, -4, 0, -2, -4, -8, -12, -18 }; pluck.punchDb = 12.0f;
+        check (R::guessFromSound (R::famChords, pluck) == R::plucks, "a chord part with sharp attacks is plucks & stabs");
+
+        // Quintessence: the detailed role refines the broad role's targets
+        auto q = make (2);
+        if (auto* p = q->apvts.getParameter (qn::subRoleId)) p->setValueNotifyingHost (p->convertTo0to1 ((float) (R::bassTop + 1)));
+        q->updateSubRole();
+        const auto topTarget = q->target (2);
+        if (auto* p = q->apvts.getParameter (qn::subRoleId)) p->setValueNotifyingHost (p->convertTo0to1 ((float) (R::subBass + 1)));
+        q->updateSubRole();
+        const auto subTarget = q->target (2);
+        check (q->subRole() == R::subBass && topTarget.lowCutHz > subTarget.lowCutHz + 100.0f && topTarget.sideDb > subTarget.sideDb
+               && topTarget.shape[0] < subTarget.shape[0] - 10.0f,
+               "a bass top layer is steered higher, wider and without the sub; a sub bass keeps it");
+        check (q->prima().getSubRole() == R::subBass
+               && q->prima().apvts.getRawParameterValue (pm::levelId ((int) suite::SectionType::Breakdown))->load() <= pm::offDb + 0.5f,
+               "the section mixer inside follows the role (a sub bass sits out the breakdown)");
+        juce::MemoryBlock saved;
+        q->getStateInformation (saved);
+        auto again = make (0);
+        again->setStateInformation (saved.getData(), (int) saved.getSize());
+        again->updateSubRole();
+        check (again->subRole() == R::subBass, "the role comes back with the project");
+        check (juce::String (R::fullName (R::acidBass)) == "Bass > Acid / 303 & reese", "roles show as family > role");
     }
 
     return finish();

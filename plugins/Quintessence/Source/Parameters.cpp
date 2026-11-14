@@ -1,3 +1,4 @@
+#include "RoleCatalog.h"
 #include "Parameters.h"
 
 namespace qn
@@ -20,6 +21,12 @@ namespace qn
         l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { chordAwareId, 1 }, "Chord-aware", true));
         l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { roleId, 1 }, "Role",
                    juce::StringArray { "From the track", "Kick", "Bass", "Hats", "Pads", "Lead", "Vocal", "FX", "Music bus" }, 0, notAutomatable));
+        {
+            // the finer role (36, in families): 0 = from the track's name, or guessed from the sound
+            juce::StringArray subNames { "From the track" };
+            for (int r = 0; r < suite::roles::numRoles; ++r) subNames.add (suite::roles::fullName (r));
+            l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { subRoleId, 1 }, "Track role", subNames, 0, notAutomatable));
+        }
 
         l.add (std::make_unique<juce::AudioParameterFloat> (juce::ParameterID { lowCutId, 1 }, "Low cut", hz (20.0f, 1000.0f), 20.0f,
                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return v <= lowCutOff ? juce::String ("Off") : juce::String (juce::roundToInt (v)) + " Hz"; })));

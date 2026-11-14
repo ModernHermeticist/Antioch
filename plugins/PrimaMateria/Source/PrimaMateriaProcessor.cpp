@@ -747,7 +747,7 @@ PrimaMateriaProcessor::SuiteStatus PrimaMateriaProcessor::suiteStatus()
         s.flags |= suite::Status::hasBands;
         for (size_t b = 0; b < s.bands.size(); ++b) s.bands[b] = spectrum.longDb[b].load();
     }
-    s.metrics = { (float) role, lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
+    s.metrics = { suite::roles::encode (role, getSubRole()), lufs, apvts.getRawParameterValue (pm::trimId)->load(), (float) soundingMask() };
     guessRoleFromSound();
     autoStage();
     refreshLowOwners();
@@ -808,6 +808,34 @@ std::optional<float> PrimaMateriaProcessor::roughMixTrim() const
     if (std::abs (wanted - trim) < 0.5f)
         return std::nullopt;
     return wanted;
+}
+
+void PrimaMateriaProcessor::applySubRole (int role)
+{
+    namespace R = suite::roles;
+    if (! R::valid (role)) return;
+    const auto& info = R::info (role);
+    if (info.legacy >= 1 && info.legacy < (int) pm::roles().size()) applyRole (info.legacy);
+    auto setValue = [this] (const juce::String& id, float v)
+    {
+        if (auto* p = apvts.getParameter (id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (p->getNormalisableRange().snapToLegalValue (v)));
+            p->endChangeGesture();
+        }
+    };
+    for (int t = 0; t < pm::numTypes && t < 6; ++t)
+    {
+        const auto level = info.sections[(size_t) t];
+        if (level < R::keep - 1.0f) setValue (pm::levelId (t), level <= R::off + 0.5f ? pm::offDb : level);
+        // its low cut, where the section had none
+        if (info.lowCutHz > 0.0f && apvts.getRawParameterValue (pm::lowCutId (t))->load() <= pm::lowCutOff + 1.0f)
+            setValue (pm::lowCutId (t), info.lowCutHz);
+    }
+    setValue (pm::pumpId, info.duck);
+    subRoleNow.store (role);
+    apvts.state.setProperty ("subrole", role, nullptr);
 }
 
 void PrimaMateriaProcessor::applyRole (int index)
@@ -971,5 +999,6 @@ void PrimaMateriaProcessor::setPluginState (const void* data, int sizeInBytes)
             }
             apvts.replaceState (state);
         }
+    subRoleNow.store ((int) apvts.state.getProperty ("subrole", -1));
 }
 

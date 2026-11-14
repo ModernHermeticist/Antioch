@@ -644,6 +644,7 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     state.removeChild (state.getChildWithName ("Autopilot"), nullptr);
     juce::ValueTree autopilotTree ("Autopilot");
     autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
+    autopilotTree.setProperty ("groups12", true, nullptr);   // the twelve groups (older projects had four)
     autopilotTree.setProperty ("fixesOff", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeatures()), nullptr);
     autopilotTree.setProperty ("fixesOff2", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeaturesHigh()), nullptr);
     autopilotTree.setProperty ("fixesOffRest", suite::Autopilot::disabledFeaturesRest(), nullptr);
@@ -692,7 +693,12 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
     auto state = juce::ValueTree::fromXml (*xml);
     if (const auto ap = state.getChildWithName ("Autopilot"); ap.isValid())
     {
-        suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
+        {
+            auto off = (uint32_t) (int) ap["off"];
+            if (! (bool) ap.getProperty ("groups12", false) && (off & suite::Autopilot::mixing) != 0)
+                off |= suite::Autopilot::allMixing;   // an older project's "Mixing off" covered all of these
+            suite::Autopilot::setDisabledGroups (off);
+        }
         suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
         suite::Autopilot::setDisabledFeaturesHigh ((uint32_t) ap["fixesOff2"].toString().getHexValue64());
         if (ap.hasProperty ("fixesOffRest")) suite::Autopilot::setDisabledFeaturesRest (ap["fixesOffRest"].toString());

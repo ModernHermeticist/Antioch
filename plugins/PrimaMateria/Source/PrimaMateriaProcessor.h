@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RoleCatalog.h"
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -48,6 +49,12 @@ public:
     void setPluginState (const void* data, int sizeInBytes) override;
 
     void applyRole (int index);
+    /** A detailed role (RoleCatalog.h): its broad role's settings, then its own sections, cuts and ducking. */
+    void applySubRole (int role);
+    int getSubRole() const noexcept { return subRoleNow.load(); }
+    std::atomic<int> subRoleNow { -1 };
+    /** Inside Quintessence: the role comes from there (the role box only shows it). */
+    bool hosted = false;
     int getRole() const { return (int) apvts.getRawParameterValue (pm::roleId)->load() - 1; }   // -1 = not set
 
     /** This track's loudness (LUFS, gated), measured in Drop sections (or all playback without a map). */

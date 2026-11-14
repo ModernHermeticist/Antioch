@@ -65,7 +65,15 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         label->setSize (460, 80 + 36 * (tips.size() + (start.isNotEmpty() ? 2 : 0)));
         juce::CallOutBox::launchAsynchronously (std::move (label), tipsButton.getScreenBounds(), nullptr);
     };
-    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &role, &lowCut, &highCut, &width,
+    roleCaption.setText ("Role", juce::dontSendNotification);
+    roleCaption.setJustificationType (juce::Justification::centred);
+    roleButton.setTooltip ("The track's role, in detail (36, in families): it sets this track's tone, low cut and width, the section mixer, "
+                           "its ducking, and who gives way to whom. From the track: from its name, or guessed from the sound.");
+    roleButton.onClick = [this] { showRoleMenu(); };
+    addAndMakeVisible (roleButton);
+    addAndMakeVisible (roleCaption);
+    role.setVisible (false);
+    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &lowCut, &highCut, &width,
                                                               &lowLock, &highLock, &widthLock })
         addAndMakeVisible (c);
     for (int s = 0; s < qn::numSlots; ++s)
@@ -132,8 +140,57 @@ QuintessenceEditor::~QuintessenceEditor()
     setLookAndFeel (nullptr);
 }
 
+void QuintessenceEditor::showRoleMenu()
+{
+    namespace R = suite::roles;
+    juce::PopupMenu m;
+    const auto chosen = (int) processor.apvts.getRawParameterValue (qn::subRoleId)->load() - 1;
+    m.addItem (1, "From the track (" + (R::valid (processor.subRole()) ? R::fullName (processor.subRole()) + (processor.subRoleGuessed() ? ", by its sound" : ", by its name")
+                                                                     : juce::String ("not known yet")) + ")", true, ! R::valid (chosen));
+    m.addSeparator();
+    for (int f = 0; f < R::numFamilies; ++f)
+    {
+        juce::PopupMenu fam;
+        for (int r = 0; r < R::numRoles; ++r)
+            if ((int) R::info (r).family == f) fam.addItem (100 + r, R::info (r).name, true, chosen == r);
+        m.addSubMenu (R::familyName ((R::Family) f), fam, true, nullptr, R::valid (chosen) && (int) R::info (chosen).family == f);
+    }
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&roleButton), [this] (int id)
+    {
+        if (id == 1) setSubRole (-1);
+        else if (id >= 100) setSubRole (id - 100);
+    });
+}
+
+void QuintessenceEditor::setSubRole (int detailedRole)
+{
+    auto set = [this] (const juce::String& id, float plain)
+    {
+        if (auto* p = processor.apvts.getParameter (id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (plain));
+            p->endChangeGesture();
+        }
+    };
+    if (suite::roles::valid (detailedRole))
+    {
+        set (qn::subRoleId, (float) (detailedRole + 1));
+        set (qn::roleId, (float) suite::roles::info (detailedRole).legacy);
+    }
+    else { set (qn::subRoleId, 0.0f); set (qn::roleId, 0.0f); }
+    processor.updateSubRole();
+}
+
 void QuintessenceEditor::timerCallback()
 {
+    {
+        const auto r = processor.subRole();
+        const auto chosen = (int) processor.apvts.getRawParameterValue (qn::subRoleId)->load() > 0;
+        const auto text = suite::roles::valid (r) ? suite::roles::fullName (r) + (chosen ? juce::String() : processor.subRoleGuessed() ? "  (by its sound)" : "  (by its name)")
+                                                  : juce::String ("Choose a role...");
+        if (roleButton.getButtonText() != text) roleButton.setButtonText (text);
+    }
     suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     const auto moves = processor.kept.load();
     if (processor.failsafeTripped.load()) header.setStatus ("Failsafe: it stepped back (something went wrong)", Colours::ember);
@@ -354,7 +411,11 @@ void QuintessenceEditor::resized()
     auto toggles = c.removeFromTop (30);
     autoEq.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2).reduced (2, 0));
     autoMb.setBounds (toggles.reduced (2, 0));
-    role.setBounds (c.removeFromTop (54));
+    {
+        auto rr = c.removeFromTop (54);
+        roleCaption.setBounds (rr.removeFromTop (18));
+        roleButton.setBounds (rr.withSizeKeepingCentre (juce::jmin (rr.getWidth(), 260), 30));
+    }
     if (! advanced) return;
 
     auto cu = cutArea.reduced (10, 8).withTrimmedTop (18);
@@ -385,6 +446,9 @@ std::vector<suite::ui::Action> QuintessenceEditor::actions()
     std::vector<suite::ui::Action> a;
     if (pages != nullptr) pages->addActions (a);
     a.push_back ({ "Re-learn", "forget what it learned on this track and listen again", "Learning", [this] { processor.relearn(); } });
+    a.push_back ({ "Role: from the track", "from its name, or guessed from the sound", "Role", [this] { setSubRole (-1); } });
+    for (int r = 0; r < suite::roles::numRoles; ++r)
+        a.push_back ({ "Role: " + juce::String (suite::roles::info (r).name), suite::roles::familyName (suite::roles::info (r).family), "Role", [this, r] { setSubRole (r); } });
     a.push_back ({ "Spire tips", "what to change in Spire for this sound", "Tips", [this] { tipsButton.triggerClick(); } });
     a.push_back ({ deltaButton.getToggleState() ? "Stop delta listen" : "Hear what it changes (delta listen)", "only what it takes out and adds", "Listen",
                    [this] { deltaButton.triggerClick(); } });

@@ -6,7 +6,7 @@ namespace qn
 {
     constexpr int numSlots = 12, numMbBands = 7, numCross = numMbBands - 1;
 
-    inline const juce::String autoEqId { "autoeq" }, autoMbId { "automb" }, roleId { "role" };
+    inline const juce::String autoEqId { "autoeq" }, autoMbId { "automb" }, roleId { "role" }, subRoleId { "subrole" };
     inline const juce::String widthId { "width" }, widthLockId { "width_lock" };
     inline const juce::String transitionsId { "transitions" };
     inline const juce::String chordAwareId { "chord_aware" };   // pads and leads leave room at the chord's root, where the bass plays it   // builds tighten the glue and widen the image; the drop lets go

@@ -25,7 +25,11 @@ private:
     juce::TextButton deltaButton { "Hear what it changes" };
     std::vector<suite::ui::Action> actions();
     suite::ui::Toggle autoEq, autoMb;
-    suite::ui::Choice role;
+    suite::ui::Choice role;   // the broad role (kept for old projects; the role button sets both)
+    juce::TextButton roleButton;
+    juce::Label roleCaption;
+    void showRoleMenu();
+    void setSubRole (int detailedRole);   // -1: from the track
     juce::TextButton relearnButton { "Re-learn" }, tipsButton { "Spire tips" };
     std::vector<std::unique_ptr<suite::ui::Knob>> bandKnobs, mbKnobs;
     std::vector<std::unique_ptr<suite::ui::Toggle>> bandLocks, mbLocks;

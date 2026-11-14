@@ -1,24 +1,71 @@
 # Antioch Suite
 
-Thirteen VST3 plugins for uplifting trance production in FL Studio. They're built to replace
+Nine VST3 plugins for uplifting trance production in FL Studio (Lapis, Emerald Tablet, Azoth and
+Prima Materia now live inside Mentalism, Correspondence, Transmutation and Quintessence). They're built to replace
 the setup work you'd otherwise redo in every project. They share one key: set it once
 in **Correspondence**, and the others follow it.
 
 | Plugin | What it replaces |
 |---|---|
 | **Antioch**: harmonic echo, euphoric reverb, throw delay | A delay, a reverb + EQ + sidechain chain, and the send automation for delay throws |
-| **Transmutation**: creative moves, directed per track | The build automation you draw for every build (filter, reverb, risers, gates), and the stutters, reverses, freezes, throws and pitch tricks you place by hand |
-| **Correspondence**: key and chord engine | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
+| **Transmutation**: creative moves, directed per track, with the **Transitions** page (what Azoth was) | The build automation you draw for every build (filter, reverb, risers, gates), and the stutters, reverses, freezes, throws and pitch tricks you place by hand |
+| **Correspondence**: key and chord engine, with the **Key detect** page (what Emerald Tablet was) | Working out progressions, voicings and offbeat basslines in the piano roll by hand |
 | **Kybalion**: trance gate + smart ducking | Drawing gate shapes in Gross Beat or Peak Controller, and sidechain/LFO Tool setups |
 | **Vibration**: lead polish strip | The EQ → saturation → multiband → widener chain on every lead |
-| **Mentalism**: mix assistant | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong |
+| **Mentalism**: mix assistant, with the **Premaster** page (what Lapis was) | Loudness meters, correlation meters, reference A/B and guesswork about what's wrong; checking the premaster's headroom and hearing how it would master (A/B only) |
 | **Ouroboros**: arrangement conductor | Automation clips that switch builds, ducking and throws on and off across the song |
-| **Lapis**: premaster check and master preview | Checking a premaster's headroom before it goes to mastering, and hearing how it would master (A/B only) |
-| **Emerald Tablet**: key detector | Working out the key of a track, loop or acapella by ear |
-| **Azoth**: automatic transition FX | Placing impacts, crashes, swells, downlifters and snare rolls at every transition |
-| **Prima Materia**: section mixer | Muting, filtering and riding individual tracks section by section with automation |
 | **Solve et Coagula**: vocal unmasking | Carving EQ space for the vocal by hand, or a static cut that's there even when nobody sings |
-| **Quintessence**: self-managing EQ and multiband dynamics | The channel EQ and multiband compressor you set by ear on every track, then forget to revisit |
+| **Quintessence**: self-managing EQ and multiband dynamics, with the **Section mixer** page (what Prima Materia was) | The channel EQ and multiband compressor you set by ear on every track, then forget to revisit |
+
+## Merged plugins
+
+Four plugins became pages of others. Each still runs as before (inside its new home, after the
+host's own processing), keeps its settings with the project, and the rest of the suite still sees it
+under its old name; its window opens from a button in the host's header (Back returns).
+
+| Was | Now | Header button |
+|---|---|---|
+| Lapis | Mentalism, on the master | **Premaster** |
+| Emerald Tablet | Correspondence | **Key detect**: it reads the master's key from Mentalism (a KeyDetector on the master), so Correspondence can sit anywhere; without Mentalism it listens to its own track |
+| Prima Materia | Quintessence, on every track | **Section mixer**: its role follows Quintessence's |
+| Azoth | Transmutation | **Transitions** |
+
+Older FL projects show the four old plugins as missing: delete them (their settings don't carry over).
+
+## Track roles
+
+36 roles in 9 families (choose one in Quintessence: **Role** button, or search "Role:"):
+
+| Family | Roles |
+|---|---|
+| Kick | Kick, Kick top / click, Kick tail / rumble |
+| Bass | Sub bass, Mid / rolling bass, Acid / 303 & reese, Bass top layer |
+| Drums | Clap / snare, Hats, Percussion / tops, Cymbals / crashes / rides |
+| Chords | Pads, Supersaw chords, Plucks & stabs, Organ / drones |
+| Keys & orchestral | Piano / keys, Strings, Brass, Choir, Timpani / orchestral perc, Bells / mallets, Guitar / ethnic / woodwind |
+| Leads | Main lead / hook, Arps & sequences, Lead layers / octaves, Counter-melody |
+| Vocals | Lead vocal, Backing / harmonies, Vocal chops, Spoken / vocal FX |
+| FX | Risers / sweeps, Impacts / downlifters, Atmos / textures, Ear candy |
+| Buses | Drum bus, Music bus |
+
+- **Found for you**: from the track's name ("Sub Bass", "Acid 303", "Vox Chop", "BVs", "Glock"...).
+  A name that only names the family ("Bass", "Chords", "Lead") is settled by the sound: sub vs mid vs
+  top layer from where the bass's energy sits, plucks from sharp attacks, supersaw from width and
+  brightness. A guess sticks once made.
+- **What a role changes**: Quintessence's tone target, low cut and width; the section mixer's
+  levels per section and its ducking to the kick; and who gives way in a clash: lead vocal, then the
+  main lead and vocal chops, then kick and sub, then supersaw chords and arps, then pads, FX and atmos.
+- **Old projects** keep their broad role (kick, bass, hats, pads, lead, vocal, FX) and get the
+  detailed one from the track's name or sound; every plugin that knew the old roles still sees them.
+- Correspondence's search has **Which role each clip gets**: name the FL track after it.
+
+## The autopilot's twelve groups
+
+The Autopilot page (Ouroboros) shows twelve switches: Harshness, Safety & stability, Arrangement &
+writing, Tone & balance, Low end, Space, Vocals, Drums & transients, Width & stereo, Dynamics &
+loudness, Transitions & FX, and How the autopilot works. Every fix is on by default inside its
+group; each one can still be switched on its own from Ouroboros' search ("Fix off: ..."). An older
+project's "Mixing off" switches off all the mixing groups.
 
 ## Using the plugins
 
@@ -1449,7 +1496,7 @@ top end falls away at the end, it proposes the Outro. Press **Apply** to use the
 **Discard** it. Everything snaps to 4-bar phrases. Treat the proposal as a starting point:
 check it and nudge the edges if needed.
 
-## Lapis: premaster check and master preview
+## Lapis: premaster check and master preview (now Mentalism's Premaster page)
 
 ![Lapis](docs/lapis.png)
 
@@ -1499,7 +1546,7 @@ integrated target, because breakdowns pull the song average down by about that m
   **Tilt** (shelves at 300 Hz and 3 kHz) half a dB at a time, within ±3 dB, and keeps a step
   only if the tilt got closer.
 
-## Emerald Tablet: key detector
+## Emerald Tablet: key detector (now Correspondence's Key detect page)
 
 ![Emerald Tablet](docs/emerald_tablet.png)
 
@@ -1517,7 +1564,7 @@ When the result has been confident and stable for 8 seconds, it **sends the key*
 It detects major and minor; modes such as Dorian are reported as their nearest major or
 minor key.
 
-## Azoth: automatic transition FX
+## Azoth: automatic transition FX (now Transmutation's Transitions page)
 
 ![Azoth](docs/azoth.png)
 
@@ -1585,7 +1632,7 @@ future, so it adds **3 seconds of latency**. FL compensates automatically, keepi
 track in time with everything else. The synth transitions move with it, so they stay
 aligned.
 
-## Prima Materia: section mixer
+## Prima Materia: section mixer (now Quintessence's Section mixer page)
 
 ![Prima Materia](docs/prima_materia.png)
 

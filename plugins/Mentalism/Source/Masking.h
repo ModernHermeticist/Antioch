@@ -3,6 +3,7 @@
 // Masking map: which tracks fight for the same frequencies in the drops, from the spectra
 // the Prima Materia tracks share (octave bands). Pure logic, so it's directly testable.
 
+#include "RoleCatalog.h"
 #include "Registry.h"
 #include "Analysis.h"
 #include <juce_core/juce_core.h>
@@ -18,11 +19,13 @@ namespace masking
         float severity = 0.0f;         // larger = worse
     };
 
-    /** Which of two roles gives way: vocal > lead > kick > bass > pads > hats > FX (> unset). */
-    inline int priority (int role)
+    /** Which of two tracks gives way: the detailed role's rank when known (lead vocal > main lead and
+        chops > kick and sub > supersaw and arps > pads > FX and atmos), else the broad role's. */
+    inline int priority (float roleMetric)
     {
-        static const int rank[] = { 0, 5, 4, 2, 3, 6, 7, 1 };   // Neutral, Kick, Bass, Hats, Pads, Lead, Vocal, Atmos
-        return juce::isPositiveAndBelow (role, 8) ? rank[role] : 0;
+        const auto detailed = suite::roles::decode (roleMetric);
+        if (suite::roles::valid (detailed)) return suite::roles::rank (detailed);
+        return suite::roles::legacyRank ((int) roleMetric);
     }
 
     inline juce::String bandName (int b)
@@ -59,7 +62,7 @@ namespace masking
                     if (severity > best.severity) { best.severity = severity; best.band = band; }
                 }
                 if (best.severity <= 0.0f) continue;
-                const auto aKeeps = priority ((int) a.metrics[0]) >= priority ((int) b.metrics[0]);
+                const auto aKeeps = priority (a.metrics[0]) >= priority (b.metrics[0]);
                 const auto& keep = aKeeps ? a : b;
                 const auto& give = aKeeps ? b : a;
                 best.carveId = give.id;

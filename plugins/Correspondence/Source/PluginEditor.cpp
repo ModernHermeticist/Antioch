@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "RoleCatalog.h"
 #include "Audition.h"
 #include "Drums.h"
 #include "Identity.h"
@@ -1504,6 +1505,17 @@ std::vector<suite::ui::Action> CorrespondenceEditor::actions()
     a.push_back ({ "New melody", "", "Melody", [this] { newMelodyButton.triggerClick(); }, newMelodyButton.isEnabled() });
     a.push_back ({ "Export all...", "every clip, the markers and a song pack", "Export", [this] { saveButton.triggerClick(); } });
     a.push_back ({ "Song patterns...", "", "Song", [this] { songButton.triggerClick(); } });
+    a.push_back ({ "Which role each clip gets", "the track role a dragged clip becomes (name the FL track after it and every plugin picks it up)", "Song", []
+    {
+        juce::StringArray lines;
+        for (const auto* kind : { "Song Chords", "Song Bass", "Song Sub", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills",
+                                  "Piano", "Strings", "Brass", "Choir", "Timpani", "Acid", "Chops", "Candy" })
+        {
+            const auto r = suite::roles::forLibraryRole (kind);
+            lines.add (juce::String (kind) + "  ->  " + (suite::roles::valid (r) ? suite::roles::fullName (r) : juce::String ("(no role)")));
+        }
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Clips and roles", lines.joinIntoString ("\n"));
+    } });
     for (int i = 0; i < presetBox.getNumItems(); ++i)
         if (const auto id = presetBox.getItemId (i); id > 0)
             a.push_back ({ presetBox.getItemText (i), "", "Presets", [this, id] { presetBox.setSelectedId (id); } });

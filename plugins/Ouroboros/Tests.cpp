@@ -1095,7 +1095,23 @@ int main (int argc, char** argv)
     {
         suite::Autopilot::reset();
         AutopilotPanel panel;
-        check (panel.switches[0].getToggleState() && panel.switches[1].getToggleState() && panel.switches[2].getToggleState() && panel.switches[3].getToggleState(), "every group starts on");
+        bool allOn = true;
+        for (auto& b : panel.switches) allOn = allOn && b.getToggleState();
+        check (allOn && (int) panel.switches.size() == 12, "twelve groups, every one starts on");
+        {
+            std::array<int, suite::Autopilot::numGroups> counts {};
+            for (int f = 0; f < suite::Autopilot::numFeatures; ++f)
+                for (int i = 0; i < suite::Autopilot::numGroups; ++i)
+                    if (suite::Autopilot::featureGroup (f) == (uint32_t) suite::Autopilot::groupAt (i)) ++counts[(size_t) i];
+            juce::StringArray sizes;
+            int smallest = 1000;
+            for (int i = 0; i < suite::Autopilot::numGroups; ++i) { sizes.add (juce::String (suite::Autopilot::groupName (suite::Autopilot::groupAt (i))) + " " + juce::String (counts[(size_t) i])); smallest = juce::jmin (smallest, counts[(size_t) i]); }
+            check (smallest > 0, "every fix is in one of the twelve, and every group has fixes (" + sizes.joinIntoString (", ") + ")");
+            check (suite::Autopilot::featureGroup (suite::Autopilot::vocalPopsF) == suite::Autopilot::vocals
+                   && suite::Autopilot::featureGroup (suite::Autopilot::harshDipF) == suite::Autopilot::harshness
+                   && suite::Autopilot::featureGroup (suite::Autopilot::mx2SelfCheckF) == suite::Autopilot::behaviour,
+                   "fixes land where you'd look for them (vocal pops in Vocals, the self-check in How the autopilot works)");
+        }
         panel.switches[2].setToggleState (false, juce::sendNotificationSync);
         check (! suite::Autopilot::on (suite::Autopilot::arrangement) && suite::Autopilot::on (suite::Autopilot::harshness), "switching one off affects only that group");
         auto p = std::make_unique<OuroborosProcessor>();
@@ -1140,12 +1156,26 @@ int main (int argc, char** argv)
     }
 
 
+    section ("Autopilot: the groups are saved one by one");
+    {
+        suite::Autopilot::reset();
+        auto p = std::make_unique<OuroborosProcessor>();
+        juce::MemoryBlock state;
+        suite::Autopilot::set (suite::Autopilot::mixing, false);
+        p->getStateInformation (state);
+        suite::Autopilot::reset();
+        auto q = std::make_unique<OuroborosProcessor>();
+        q->setStateInformation (state.getData(), (int) state.getSize());
+        check (! suite::Autopilot::on (suite::Autopilot::mixing) && suite::Autopilot::on (suite::Autopilot::lowEnd),
+               "a new project keeps Tone & balance off on its own");
+        suite::Autopilot::reset();
+    }
+
     section ("Autopilot: each fix has its own switch, saved with the project");
     {
         suite::Autopilot::reset();
-        AutopilotPanel panel;
-        check ((int) panel.fixes.size() == suite::Autopilot::numFeatures && panel.fixes[(size_t) suite::Autopilot::humF]->getToggleState(), "every fix is listed, on");
-        panel.fixes[(size_t) suite::Autopilot::humF]->setToggleState (false, juce::sendNotificationSync);
+        check (suite::Autopilot::switchedOn (suite::Autopilot::humF), "every fix starts on (each one is in the search box, under its group)");
+        suite::Autopilot::set (suite::Autopilot::humF, false);
         check (! suite::Autopilot::on (suite::Autopilot::humF) && suite::Autopilot::on (suite::Autopilot::maskingF), "switching one fix off leaves the rest of its group on");
         suite::Autopilot::set (suite::Autopilot::harshness, false);
         check (! suite::Autopilot::on (suite::Autopilot::spikeTamerF) && suite::Autopilot::switchedOn (suite::Autopilot::spikeTamerF), "a fix runs only when its group is on too");

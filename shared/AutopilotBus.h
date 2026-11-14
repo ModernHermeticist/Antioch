@@ -17,6 +17,8 @@
 #include "SharedMemory.h"
 #include <juce_core/juce_core.h>
 #include <atomic>
+#include <array>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -24,7 +26,56 @@
 
 namespace suite::Autopilot
 {
-    enum Group : uint32_t { harshness = 1u, stability = 2u, arrangement = 4u, mixing = 8u };
+    /** The twelve switches you see (each fix lives in one; a fix runs when its group is on). The first
+        four keep their old bits, so saved projects keep their meaning; "mixing" is now the tone and
+        balance fixes left after the others took theirs. */
+    enum Group : uint32_t
+    {
+        harshness = 1u, stability = 2u, arrangement = 4u, mixing = 8u,
+        lowEnd = 16u, space = 32u, vocals = 64u, drums = 128u, width = 256u, dynamics = 512u, transitions = 1024u, behaviour = 2048u
+    };
+    constexpr int numGroups = 12;
+    /** Every mixing group (what an old project's "Mixing off" means now). */
+    constexpr uint32_t allMixing = mixing | lowEnd | space | vocals | drums | width | dynamics | transitions;
+    inline Group groupAt (int i) noexcept { return (Group) (1u << juce::jlimit (0, numGroups - 1, i)); }
+    inline const char* groupName (Group g) noexcept
+    {
+        switch (g)
+        {
+            case harshness:   return "Harshness";
+            case stability:   return "Safety & stability";
+            case arrangement: return "Arrangement & writing";
+            case mixing:      return "Tone & balance";
+            case lowEnd:      return "Low end (kick, bass, sub)";
+            case space:       return "Space (reverb, delay, sends)";
+            case vocals:      return "Vocals";
+            case drums:       return "Drums & transients";
+            case width:       return "Width & stereo";
+            case dynamics:    return "Dynamics & loudness";
+            case transitions: return "Transitions & FX";
+            case behaviour:   return "How the autopilot works";
+            default:          return "";
+        }
+    }
+    inline const char* groupDetail (Group g) noexcept
+    {
+        switch (g)
+        {
+            case harshness:   return "harsh moments, spiky bands, drive on high notes, bright tails, shared resonances";
+            case stability:   return "runaway feedback, peaks, DC and rumble, level wobble, clicks, failsafes";
+            case arrangement: return "busy moments thinned, parts taking turns, fills, entries, the writing goals";
+            case mixing:      return "tracks making room for each other: masking, resonances, tone per section";
+            case lowEnd:      return "kick and bass together, sub per note, mono lows, low cuts";
+            case space:       return "reverb and delay per section and role, ducked returns, pre-delay";
+            case vocals:      return "the vocal on top: presence, sibilance, pops, breaths, doubles";
+            case drums:       return "transients, claps, hats, cymbals, drum glue";
+            case width:       return "width per section, mono safety, panning, layers spread";
+            case dynamics:    return "levels, glue, punch, peaks, headroom and the budgets";
+            case transitions: return "risers, impacts, sweeps and fills around the sections";
+            case behaviour:   return "self-checks, judging, one fix at a time, undo, learning";
+            default:          return "";
+        }
+    }
 
     /** Each automatic fix, with its own switch inside its group (it runs when both are on). */
     enum Feature : int
@@ -285,7 +336,7 @@ namespace suite::Autopilot
         static_assert (numFeatures <= 384, "twelve words of switches");
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
-    inline uint32_t featureGroup (int f)
+    inline uint32_t baseGroup (int f)
     {
         if (f == transmuteF) return 4u;
         if (f >= mx2PhaseRotateF)
@@ -317,6 +368,49 @@ namespace suite::Autopilot
                 default: return 8u;
             }
         return f <= sharedResonanceF ? 1u : f <= driveLevelF ? 2u : f <= hangoverTrimF ? 4u : 8u;
+    }
+
+    namespace detail
+    {
+        /** Case-insensitive "contains" on plain C strings (no allocation: the audio thread asks). */
+        inline bool has (const char* text, const char* word) noexcept
+        {
+            for (const char* t = text; *t != 0; ++t)
+            {
+                const char* a = t; const char* b = word;
+                while (*a != 0 && *b != 0 && (char) std::tolower ((unsigned char) *a) == *b) { ++a; ++b; }
+                if (*b == 0) return true;
+            }
+            return false;
+        }
+        inline uint32_t classify (int f) noexcept
+        {
+            const auto base = baseGroup (f);
+            if ((f >= mx2SelfCheckF && f <= mx2MilestoneFixesF) || (f >= mxToneBudgetF && f <= mxProvenanceF)
+                || f == learnKeptF || f == learnUndoneF || f == tasteF || f == regressionGuardF || f == preRenderF || f == idleSleepF)
+                return behaviour;
+            if (base != mixing) return base;
+            const char* n = featureName (f);
+            for (auto* w : { "vocal", "vox", "sibil", "de-ess", "plosive", "breath", "pop" }) if (has (n, w)) return vocals;
+            for (auto* w : { "reverb", "verb", "delay", "echo", "send", "room", "pre-delay", "decay", "throw" }) if (has (n, w)) return space;
+            for (auto* w : { "clap", "hat", "drum", "transient", "cymbal", "perc", "snare", "hits" }) if (has (n, w)) return drums;
+            for (auto* w : { "kick", "bass", "sub", "low end", "lows", "low-end" }) if (has (n, w)) return lowEnd;
+            for (auto* w : { "width", "wide", "stereo", "pan", "mono", "haas", "side", "correlation", "spread" }) if (has (n, w)) return width;
+            for (auto* w : { "riser", "impact", "sweep", "downlifter", "fill", "transition", "fx " }) if (has (n, w)) return transitions;
+            for (auto* w : { "level", "loud", "glue", "punch", "peak", "headroom", "dynamic", "expander", "squash", "budget", "compress" }) if (has (n, w)) return dynamics;
+            return mixing;
+        }
+    }
+    /** The group a fix belongs to (one of the twelve). */
+    inline uint32_t featureGroup (int f) noexcept
+    {
+        static const auto table = []
+        {
+            std::array<uint32_t, numFeatures> t {};
+            for (int i = 0; i < numFeatures; ++i) t[(size_t) i] = detail::classify (i);
+            return t;
+        }();
+        return f >= 0 && f < numFeatures ? table[(size_t) f] : (uint32_t) mixing;
     }
 
     enum Counter
@@ -396,6 +490,8 @@ namespace suite::Autopilot
     }
 
     inline bool on (Group g) noexcept { return (detail::shared().disabled.load() & g) == 0; }
+    /** True if any of these groups is on. */
+    inline bool anyOn (uint32_t groups) noexcept { return (detail::shared().disabled.load() & groups) != groups; }
     inline void set (Group g, bool enabled) noexcept
     {
         auto& d = detail::shared().disabled;
@@ -513,7 +609,7 @@ namespace suite::Autopilot
     }
 
     /** Quintessence, every block: what this track plays now. */
-    inline void postLive (uint32_t id, int role, const float* bandsDb) noexcept
+    inline void postLive (uint32_t id, int role, const float* bandsDb, int rank = -1) noexcept
     {
         auto& s = detail::shared();
         const auto now = detail::nowMs();
@@ -529,7 +625,8 @@ namespace suite::Autopilot
             for (auto& o : s.liveOnset[slot]) o.store (0.0);
         }
         for (int b = 0; b < liveBands; ++b) s.liveBand[slot][b].store (bandsDb[b]);
-        s.liveRole[slot].store (role);
+        // the role in the low byte, its clash rank (0..100) above it: readers of the role alone see it unchanged
+        s.liveRole[slot].store ((role & 0xff) | (juce::jlimit (0, 255, rank >= 0 ? rank : priorityOf (role) * 18) << 8));
         s.liveId[slot].store (id);
         s.liveMs[slot].store (now);
     }
@@ -549,7 +646,22 @@ namespace suite::Autopilot
             if (id == 0 || id == self || now - s.liveMs[i].load() > 300u) continue;
             float bands[liveBands];
             for (int b = 0; b < liveBands; ++b) bands[b] = s.liveBand[i][b].load();
-            fn ((int) s.liveRole[i].load(), (const float*) bands);
+            fn ((int) (s.liveRole[i].load() & 0xff), (const float*) bands);
+        }
+    }
+    /** The same, with each track's clash rank (higher keeps the space; RoleCatalog's rank). */
+    template <typename Fn> inline void forEachLiveRanked (uint32_t self, Fn&& fn) noexcept
+    {
+        auto& s = detail::shared();
+        const auto now = detail::nowMs();
+        for (int i = 0; i < maxLive; ++i)
+        {
+            const auto id = s.liveId[i].load();
+            if (id == 0 || id == self || now - s.liveMs[i].load() > 300u) continue;
+            float bands[liveBands];
+            for (int b = 0; b < liveBands; ++b) bands[b] = s.liveBand[i][b].load();
+            const auto packed = (int) s.liveRole[i].load();
+            fn (packed & 0xff, (packed >> 8) & 0xff, (const float*) bands);
         }
     }
     /** Quintessence: an attack at song position `ppq` on this track (for lining up layered parts). */
@@ -575,7 +687,7 @@ namespace suite::Autopilot
             if (id == 0 || id == self || now - s.liveMs[i].load() > 300u) continue;
             double on[16];
             for (int k = 0; k < 16; ++k) on[k] = s.liveOnset[i][k].load();
-            fn ((int) s.liveRole[i].load(), (const double*) on);
+            fn ((int) (s.liveRole[i].load() & 0xff), (const double*) on);
         }
     }
     /** Vibration: the lead's note now (Hz). */

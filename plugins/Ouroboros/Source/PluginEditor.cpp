@@ -611,55 +611,24 @@ void MixerPanel::paint (juce::Graphics& g)
 
 AutopilotPanel::AutopilotPanel()
 {
-    static const char* names[] { "Harshness: harsh moments, spiky bands, drive on high notes, bright tails, shared resonances",
-                                 "Stability: runaway feedback, peaks, DC and rumble, low bass notes, level wobble, stereo collapse, clicks",
-                                 "Arrangement: thins parts when too many play at once; chops and candy take turns with the hook",
-                                 "Mixing: tracks make room for each other (masking, low end, transients, notes, resonances, noise, mono lows)" };
-    const suite::Autopilot::Group groups[] { suite::Autopilot::harshness, suite::Autopilot::stability, suite::Autopilot::arrangement, suite::Autopilot::mixing };
-    for (size_t i = 0; i < switches.size(); ++i)
+    for (int i = 0; i < suite::Autopilot::numGroups; ++i)
     {
-        auto& b = switches[i];
-        b.setButtonText (names[i]);
-        b.setToggleState (suite::Autopilot::on (groups[i]), juce::dontSendNotification);
-        b.setColour (juce::ToggleButton::textColourId, Colours::text);
+        const auto g = suite::Autopilot::groupAt (i);
+        auto& b = switches[(size_t) i];
+        int count = 0;
+        for (int f = 0; f < suite::Autopilot::numFeatures; ++f) if (suite::Autopilot::featureGroup (f) == (uint32_t) g) ++count;
+        b.setButtonText (juce::String (suite::Autopilot::groupName (g)) + "  (" + juce::String (count) + ")");
+        b.setTooltip (juce::String (suite::Autopilot::groupDetail (g)) + ". Each fix in it can be switched on its own from the search box (Ctrl+K).");
+        b.setToggleState (suite::Autopilot::on (g), juce::dontSendNotification);
         b.setColour (juce::ToggleButton::tickColourId, Colours::ember);
-        const auto g = groups[i];
         b.onClick = [&b, g]
         {
             suite::Autopilot::set (g, b.getToggleState());
-            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot ") + (g == suite::Autopilot::harshness ? "harshness" : g == suite::Autopilot::stability ? "stability" : g == suite::Autopilot::arrangement ? "arrangement" : "mixing")
-                                                      + (b.getToggleState() ? " on" : " off"));
+            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot: ") + suite::Autopilot::groupName (g) + (b.getToggleState() ? " on" : " off"));
         };
         addAndMakeVisible (b);
     }
-    // Each fix on its own (inside its group): a scrolling list on the right
-    for (int f = 0; f < suite::Autopilot::numFeatures; ++f)
-    {
-        auto t = std::make_unique<juce::ToggleButton> (suite::Autopilot::featureName (f));
-        t->setToggleState (suite::Autopilot::switchedOn ((suite::Autopilot::Feature) f), juce::dontSendNotification);
-        t->setColour (juce::ToggleButton::textColourId, Colours::text);
-        t->setColour (juce::ToggleButton::tickColourId, Colours::verdigris);
-        auto* raw = t.get();
-        t->onClick = [raw, f]
-        {
-            suite::Autopilot::set ((suite::Autopilot::Feature) f, raw->getToggleState());
-            suite::MoveLog::add ("Ouroboros", {}, juce::String ("Autopilot: ") + suite::Autopilot::featureName (f) + (raw->getToggleState() ? " on" : " off"));
-        };
-        fixList.addAndMakeVisible (*t);
-        fixes.push_back (std::move (t));
-    }
-    for (size_t h = 0; h < headings.size(); ++h)
-    {
-        static const char* names[] { "HARSHNESS", "STABILITY", "ARRANGEMENT", "MIXING" };
-        headings[h].setText (names[h], juce::dontSendNotification);
-        headings[h].setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        headings[h].setColour (juce::Label::textColourId, Colours::dimText);
-        fixList.addAndMakeVisible (headings[h]);
-    }
-    fixView.setViewedComponent (&fixList, false);
-    fixView.setScrollBarsShown (true, false);
-    addAndMakeVisible (fixView);
-    setSize (1040, 140 + 4 * 28 + suite::Autopilot::numCounters * 18);
+    setSize (1040, 140 + 6 * 40 + suite::Autopilot::numCounters * 18);
     startTimerHz (2);
 }
 
@@ -667,27 +636,10 @@ void AutopilotPanel::resized()
 {
     auto r = getLocalBounds().reduced (14);
     r.removeFromTop (48);
-    auto right = r.removeFromRight (400);
-    for (auto& b : switches) b.setBounds (r.removeFromTop (28));
-    // The fixes, under a heading per group
-    right.removeFromTop (22);
-    fixView.setBounds (right);
-    int y = 0;
-    uint32_t lastGroup = 0;
-    for (int f = 0; f < (int) fixes.size(); ++f)
-    {
-        if (suite::Autopilot::featureGroup (f) != lastGroup)
-        {
-            lastGroup = suite::Autopilot::featureGroup (f);
-            const auto h = lastGroup == 1u ? 0 : lastGroup == 2u ? 1 : lastGroup == 4u ? 2 : 3;
-            headings[(size_t) h].setBounds (4, y + 2, 200, 18);
-            y += 22;
-        }
-        fixes[(size_t) f]->setBounds (8, y, right.getWidth() - 24, 22);
-        y += 22;
-    }
-    fixList.setSize (right.getWidth() - 12, y + 6);
-    fixList.repaint();
+    auto grid = r.removeFromTop (6 * 40);
+    const auto colW = grid.getWidth() / 2;
+    for (int i = 0; i < suite::Autopilot::numGroups; ++i)
+        switches[(size_t) i].setBounds (grid.getX() + (i % 2) * colW, grid.getY() + (i / 2) * 40, colW - 8, 34);
 }
 
 void AutopilotPanel::paint (juce::Graphics& g)
@@ -700,15 +652,7 @@ void AutopilotPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.setColour (Colours::dimText);
     g.drawText ("What the suite manages by itself while you choose sounds and effects. Each move is in What changed.", r.removeFromTop (18), juce::Justification::centredLeft);
-    {
-        // The fixes' list: its title and group headings
-        auto right = getLocalBounds().reduced (14).withTrimmedTop (48).removeFromRight (400);
-        g.setColour (Colours::text);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText ("Each fix on its own (it runs when its group is on too)", right.removeFromTop (20), juce::Justification::centredLeft);
-    }
-    r.removeFromRight (400);
-    r.removeFromTop (8 + 4 * 28 + 10);
+    r.removeFromTop (8 + 6 * 40 + 10);
     g.setColour (Colours::text);
     g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
     g.drawText ("Done so far (all instances on this computer)", r.removeFromTop (20), juce::Justification::centredLeft);
@@ -1922,6 +1866,23 @@ std::vector<suite::ui::Action> OuroborosEditor::actions()
     a.push_back ({ "Save snapshot " + suite::SuiteProcessor::slotName (currentSlot), "the chosen slot", "Snapshots", [this] { saveSnapshotButton.triggerClick(); } });
     for (int t = 0; t < (int) markButtons.size(); ++t)
         a.push_back ({ "Mark " + markButtons[(size_t) t]->getButtonText().toLowerCase() + " at the playhead", "", "Mark", [this, t] { markButtons[(size_t) t]->triggerClick(); } });
+    // the autopilot: each group, and each fix on its own (the Autopilot page shows only the groups)
+    for (int i = 0; i < suite::Autopilot::numGroups; ++i)
+    {
+        const auto g = suite::Autopilot::groupAt (i);
+        const auto on = suite::Autopilot::on (g);
+        a.push_back ({ juce::String (on ? "Autopilot off: " : "Autopilot on: ") + suite::Autopilot::groupName (g), suite::Autopilot::groupDetail (g), "Autopilot",
+                       [g, on] { suite::Autopilot::set (g, ! on); } });
+    }
+    for (int f = 0; f < suite::Autopilot::numFeatures; ++f)
+    {
+        const auto feature = (suite::Autopilot::Feature) f;
+        const auto on = suite::Autopilot::switchedOn (feature);
+        const juce::String name = juce::String (suite::Autopilot::featureName (f)).fromFirstOccurrenceOf (": ", false, false);
+        a.push_back ({ (on ? "Fix off: " : "Fix on: ") + (name.isNotEmpty() ? name : juce::String (suite::Autopilot::featureName (f))),
+                       suite::Autopilot::groupName ((suite::Autopilot::Group) suite::Autopilot::featureGroup (f)), "Autopilot fixes",
+                       [feature, on] { suite::Autopilot::set (feature, ! on); } });
+    }
     for (int i = 0; i < templateBox.getNumItems(); ++i)
         if (const auto id = templateBox.getItemId (i); id > 0)
             a.push_back ({ templateBox.getItemText (i).upToFirstOccurrenceOf ("...", false, false), "", id < 900 ? "Templates" : "Tools",

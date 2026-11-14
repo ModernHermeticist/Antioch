@@ -195,9 +195,16 @@ void PrimaMateriaEditor::timerCallback()
     const auto in = processor.inputLevelDb();
     inputLabel.setText (in > -80.0f ? "Input " + juce::String (in, 1) + " dBFS RMS" : juce::String ("Input: play to measure"), juce::dontSendNotification);
 
-    // The role (also set automatically from the track's name).
+    // The role (also set automatically from the track's name; inside Quintessence, from there).
     const auto role = processor.getRole();
-    if (role >= 0 && roleBox.getSelectedId() != role + 1)
+    if (processor.hosted)
+    {
+        roleBox.setEnabled (false);
+        saveRole.setVisible (false);
+        const auto text = suite::roles::valid (processor.getSubRole()) ? suite::roles::fullName (processor.getSubRole()) + "  (Quintessence's role)" : juce::String ("Role: set in Quintessence");
+        if (roleBox.getText() != text) roleBox.setText (text, juce::dontSendNotification);
+    }
+    else if (role >= 0 && roleBox.getSelectedId() != role + 1)
         roleBox.setSelectedId (role + 1, juce::dontSendNotification);
 }
 

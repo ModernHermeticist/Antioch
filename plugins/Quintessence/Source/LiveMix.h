@@ -31,6 +31,7 @@
 //     (the root or fifth first, 2 semitones at most); the click is left alone. Only ever down,
 //     so it needs no look-ahead.
 
+#include "RoleCatalog.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -50,6 +51,7 @@ namespace qn
         struct Context
         {
             int role = 0;              // 1 kick, 2 bass, 3 hats/perc, 4 pads, 5 lead, 6 vocal, 7 FX, 8 bus
+            int rank = 0;              // who gives way in a clash (RoleCatalog's rank: the detailed role's, else the broad role's)
             uint32_t id = 0;
             bool mixing = true, stability = true;
             float kickMs = 1.0e9f;     // since the shared kick's last hit, at the block start
@@ -154,7 +156,7 @@ namespace qn
                     }
                 if (std::abs (want - monoHz) > 1.0f) { monoHz = want; sideLow.set (monoHz, 0.707f, fs); }
             }
-            const auto mine = suite::Autopilot::priorityOf (c.role);
+            const auto mine = c.rank > 0 ? c.rank : suite::roles::legacyRank (c.role);
             const auto blockA = [&] (float tau) { return 1.0f - std::exp (-(float) numSamples / (tau * fs)); };
 
             std::array<std::array<float, 3>, 2> want { { { 0, 0, 0 }, { 0, 0, 0 } } };   // hz, gain dB, q
@@ -163,9 +165,8 @@ namespace qn
             {
                 std::array<float, analysis::numBands> need {};
                 bool masked = false, lowOwned = false;
-                suite::Autopilot::forEachLive (c.id, [&] (int role, const float* other)
+                suite::Autopilot::forEachLiveRanked (c.id, [&] (int role, int theirs, const float* other)
                 {
-                    const auto theirs = suite::Autopilot::priorityOf (role);
                     if (theirs > mine)
                         for (int b = 3; b <= 8; ++b)
                             if (other[b] > -45.0f && bandsDb[(size_t) b] > -60.0f)
@@ -454,7 +455,7 @@ namespace qn
         void endBlock()
         {
             for (int b = 0; b < analysis::numBands; ++b) bandsDb[(size_t) b] = (float) (10.0 * std::log10 (bandPow[(size_t) b] + 1.0e-12));
-            if (ctx.role > 0 && ctx.id != 0) suite::Autopilot::postLive (ctx.id, ctx.role, bandsDb.data());
+            if (ctx.role > 0 && ctx.id != 0) suite::Autopilot::postLive (ctx.id, ctx.role, bandsDb.data(), ctx.rank);
         }
 
         void forget (uint32_t id) { suite::Autopilot::withdrawLive (id); }

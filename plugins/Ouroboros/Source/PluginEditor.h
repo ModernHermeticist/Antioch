@@ -127,11 +127,7 @@ public:
     AutopilotPanel();
     void paint (juce::Graphics&) override;
     void resized() override;
-    std::array<juce::ToggleButton, 4> switches;
-    std::vector<std::unique_ptr<juce::ToggleButton>> fixes;   // one per Feature, under their group
-    std::array<juce::Label, 4> headings;   // Harshness, Stability, Arrangement, Mixing (in the list)
-    juce::Component fixList;   // (before the viewport, so the viewport goes first when the panel closes)
-    juce::Viewport fixView;
+    std::array<juce::ToggleButton, suite::Autopilot::numGroups> switches;   // the twelve groups (each fix: in search)
 
 private:
     void timerCallback() override { repaint(); }

@@ -11,6 +11,7 @@
 // here instead of to Prima Materia, with dips that open only while the vocal or lead plays.
 // Touch a band and it's yours: it locks, and the automation leaves it alone.
 
+#include "RoleCatalog.h"
 #include "PrimaMateriaProcessor.h"   // merged into Quintessence: runs inside it (a module)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -81,6 +82,7 @@ public:
     bool morphsWithSnapshots() const override { return false; }   // it manages its own settings
     void pollTick() override
     {
+        updateSubRole();
         applyLocks();
         autoPass();
         labelDsp3.tick();
@@ -95,6 +97,7 @@ public:
         if (++traitsTick % 5 == 0)
         {
             auto t = traits.snapshot (getInstanceId(), effectiveRole(), getTrackName());
+            lastMovementDb = t.movementDb; lastDecayMs = t.decayMs;
             t.lowestNote = labelDsp3.lowestNote.load();
             t.haasMs = labelDsp4.haasMs.load();
             suite::TrackTraits::publish (t);
@@ -227,6 +230,21 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     std::unique_ptr<suite::FixReceiver> fixes;
+
+    //==============================================================================
+    // The track's role in detail (one of 36, RoleCatalog.h): chosen, else from the track's name, else
+    // guessed from the sound inside its family. It refines the broad role's targets (tone, low cut,
+    // width), its rank in clashes, and the section mixer's settings (Prima Materia, inside).
+    int subRole() const noexcept { return subRoleCached.load(); }
+    bool subRoleGuessed() const noexcept { return subRoleWasGuessed.load(); }
+    void updateSubRole();
+    /** The target for `role`, refined by the detailed role when it's in that family. */
+    qn::targets::Role target (int role) const;
+    std::atomic<int> subRoleCached { -1 };
+    std::atomic<bool> subRoleWasGuessed { false };
+    float lastMovementDb = 0.0f, lastDecayMs = 0.0f;
+    int lastSyncedSubRole = -2, stickyGuess = -1;
+    juce::String stickyName;
 
     std::array<std::atomic<float>, qn::numMbBands> grNow {};          // gain reduction, dB (UI)
     std::array<std::atomic<float>, 10> shownDiff {};                  // measured minus target (UI)
