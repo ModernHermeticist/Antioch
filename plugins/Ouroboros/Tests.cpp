@@ -2570,6 +2570,7 @@ int main (int argc, char** argv)
         suite::Watchdog::setFileForTests (juce::File());
         log.deleteFile();
         testStyleLog.deleteFile();
+        suite::DirectorBus::withdraw();   // the plan published above is shared memory: don't leave it for the next plugin's tests
     }
 
     return finish();
