@@ -51,6 +51,7 @@ int main (int argc, char** argv)
 {
     suite::MasterKeyBus::withdraw();   // these tests listen to their own audio, not a master
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Emerald Tablet", [] { auto p = std::make_unique<EmeraldTabletProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())

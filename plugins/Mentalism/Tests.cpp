@@ -42,6 +42,7 @@ namespace
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Mentalism", [] { auto p = std::make_unique<MentalismProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     // Never write the real style log from tests.
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");

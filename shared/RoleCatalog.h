@@ -245,6 +245,9 @@ namespace suite::roles
         if (l.contains ("timpani")) return timpani;
         if (l.contains ("chop"))    return chops;
         if (l.contains ("candy"))   return earCandy;
+        if (l.contains ("bell"))    return bells;
+        if (l.contains ("organ"))   return organ;
+        if (l.contains ("guitar"))  return guitar;
         if (l.contains ("fill") || l.contains ("drum")) return percussion;
         if (l.contains ("chord") || l.contains ("gate")) return supersaw;
         if (l.contains ("pad"))     return pads;

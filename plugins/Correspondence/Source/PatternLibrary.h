@@ -41,7 +41,7 @@ namespace patterns
 {
     enum class Mood  { Euphoric, Hopeful, Melancholic, Dark, Driving, Dreamy, Epic, count };
     enum class Style { Uplifting, Classic, Progressive, Tech, Psy, Vocal, Orchestral, count };
-    enum class Part  { Bass, Arp, Chords, Lead, Piano, Strings, Brass, Choir, Timpani, Acid, Chops, Candy, Counter, count };
+    enum class Part  { Bass, Arp, Chords, Lead, Piano, Strings, Brass, Choir, Timpani, Acid, Chops, Candy, Counter, Bells, Organ, Guitar, count };
 
     inline const juce::StringArray& moodNames()
     {
@@ -56,7 +56,7 @@ namespace patterns
     /** The role's file name (Patterns/<name>.txt) and its name in the song. */
     inline const juce::StringArray& partFiles()
     {
-        static const juce::StringArray n { "bass", "arp", "chords", "lead", "piano", "strings", "brass", "choir", "timpani", "acid", "chops", "candy", "counter" };
+        static const juce::StringArray n { "bass", "arp", "chords", "lead", "piano", "strings", "brass", "choir", "timpani", "acid", "chops", "candy", "counter", "bells", "organ", "guitar" };
         return n;
     }
 

@@ -13,6 +13,7 @@
 #include "HostInfo.h"
 #include "KeyBus.h"
 #include "AutopilotBus.h"
+#include "RoleCatalog.h"
 
 CorrespondenceProcessor::CorrespondenceProcessor()
     : SuiteProcessor (BusesProperties()
@@ -67,6 +68,7 @@ void CorrespondenceProcessor::prepareToPlay (double sampleRate, int blockSizeFor
 
 void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     const auto runModules = modulesAfter (buffer, midiForModules);   // Emerald Tablet runs on the way out
     juce::ScopedNoDenormals noDenormals;
     for (auto ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
@@ -229,6 +231,7 @@ void CorrespondenceProcessor::publishKey()
 {
     // The label-ready work renders the song (seconds of it): every 2 s, if anything changed, it's done
     // on the worker thread from a copy; the result is applied here when it's ready.
+    if (labelTick % 8 == 4) roleLayersNow.store (roleLayersFrom (suite::Registry::list()));   // which role layers the tracks ask for
     if (++labelTick % 8 == 0) startLabelJob();   // (not on the first call: that one is in the constructor)
     finishLabelJob();
     // Adopt a key detected by Emerald Tablet, if allowed.
@@ -1156,6 +1159,7 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     auto patterns = Params::readSongPatterns (apvts);
     patterns.melody = melodySettings();
     patterns.vocalBars = suite::VocalBus::read();
+    patterns.roleLayers = roleLayersNow.load();
     patterns.manageDensity = suite::Autopilot::on (suite::Autopilot::densityF);
     patterns.takeTurns = suite::Autopilot::on (suite::Autopilot::turnTakingF);
     namespace AP = suite::Autopilot;
@@ -1255,7 +1259,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
 
     for (auto* kind : { "Chords", "Bass", "Arp", "Melody", "Counter", "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills", "Song Drums", "Song Piano",
                        "Song Lead Octave", "Song Lead Pluck", "Song Sub", "Song Vocal Answer", "Song Layer", "Song Transitions",
-                       "Song Strings", "Song Brass", "Song Choir", "Song Timpani", "Song Acid", "Song Chops", "Song Candy" })
+                       "Song Strings", "Song Brass", "Song Choir", "Song Timpani", "Song Acid", "Song Chops", "Song Candy", "Song Bells", "Song Organ", "Song Guitar" })
         exportClip (kind, folder);   // song clips are skipped without an Ouroboros map
     // The mix follows the writing: parts whose notes changed since the last export are measured
     // afresh (Quintessence and Prima Materia on those roles re-learn)
@@ -1338,7 +1342,8 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
                                           { "Harmony", chords::SongPart::Harmony }, { "Counter", chords::SongPart::Counter },
                                           { "Piano", chords::SongPart::Piano }, { "Strings", chords::SongPart::Strings }, { "Brass", chords::SongPart::Brass },
                                           { "Choir", chords::SongPart::Choir }, { "Timpani", chords::SongPart::Timpani }, { "Acid", chords::SongPart::Acid },
-                                          { "Chops", chords::SongPart::Chops }, { "Candy", chords::SongPart::Candy } })
+                                          { "Chops", chords::SongPart::Chops }, { "Candy", chords::SongPart::Candy },
+                                          { "Bells", chords::SongPart::Bells }, { "Organ", chords::SongPart::Organ }, { "Guitar", chords::SongPart::Guitar } })
             if (auto notes = chords::songClip (s, map, patterns, part, &thinned, &turned); ! notes.empty() || part == chords::SongPart::Chords || part == chords::SongPart::Bass
                                                                          || part == chords::SongPart::Arp || part == chords::SongPart::Lead)
                 parts.push_back ({ name, std::move (notes) });
@@ -1776,6 +1781,21 @@ chords::tools::Feel CorrespondenceProcessor::feel() const
 }
 
 //==============================================================================
+uint32_t CorrespondenceProcessor::roleLayersFrom (const std::vector<suite::SuiteEntry>& entries)
+{
+    namespace R = suite::roles;
+    uint32_t out = 0;
+    for (const auto& e : entries)
+    {
+        if (e.plugin != "Quintessence" && e.plugin != "Prima Materia") continue;
+        const auto role = R::decode (e.metrics[0]);
+        if (role == R::bells) out |= 1u;
+        if (role == R::organ) out |= 2u;
+        if (role == R::guitar) out |= 4u;
+    }
+    return out;
+}
+
 void CorrespondenceProcessor::startLabelJob()
 {
     auto job = labelJob;
@@ -1791,6 +1811,7 @@ void CorrespondenceProcessor::startLabelJob()
     for (int f = 0; f < AP::numFeatures; ++f) if (suite::LabelReadyBus::needed (f)) h = h * 31 + f;
     h = h * 31 + (int64_t) AP::disabledGroups() + (int64_t) AP::disabledFeatures() * 7 + (int64_t) AP::disabledFeaturesHigh() * 13 + (int64_t) labelLatched * 3;
     h = h * 31 + (int64_t) suite::VocalBus::read().size();
+    h = h * 31 + (int64_t) roleLayersNow.load();
     const auto now = juce::Time::getMillisecondCounter();
     if (h == labelInputsHash && now - labelRunMs < 30000u) return;   // nothing changed (and checked within 30 s)
     labelInputsHash = h;

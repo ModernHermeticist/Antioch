@@ -215,6 +215,8 @@ void QuintessenceProcessor::resetMeasurement() noexcept
 
 void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto guard = blockGuard (buffer, true);   // CPU: timed, and asleep through silence
+    if (guard.idle) return;
     const auto runModules = modulesAfter (buffer, midiForModules);   // Prima Materia runs on the way out
     juce::ScopedNoDenormals noDenormals;
     if (resetRequested.exchange (false)) resetMeasurement();

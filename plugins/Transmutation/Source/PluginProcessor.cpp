@@ -146,6 +146,7 @@ trm::Ctx TransmutationProcessor::contextFor (const trm::Move& mv, double posQ, c
 
 void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     const auto runModules = modulesAfter (buffer, midiForModules);   // Azoth runs on the way out
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();

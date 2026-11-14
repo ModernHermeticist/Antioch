@@ -94,6 +94,7 @@ namespace
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Solve et Coagula", [] { return make (false); }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())

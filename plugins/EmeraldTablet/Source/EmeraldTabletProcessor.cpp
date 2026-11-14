@@ -37,6 +37,7 @@ void EmeraldTabletProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
 void EmeraldTabletProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     if (resetRequested.exchange (false))
         detector.reset();
 

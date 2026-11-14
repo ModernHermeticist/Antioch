@@ -1493,6 +1493,7 @@ void MentalismProcessor::prepareToPlay (double newSampleRate, int samplesPerBloc
 
 void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     const auto runModules = modulesAfter (buffer, midiForModules);   // Lapis runs on the way out
     juce::ScopedNoDenormals noDenormals;
 

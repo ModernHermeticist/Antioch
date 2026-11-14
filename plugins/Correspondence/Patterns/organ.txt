@@ -1,0 +1,27 @@
+# Organs and drones for Correspondence's pattern library (church organ, Hammond, drone pads,
+# shruti boxes). They play only when a track in the project has the Organ / drones role.
+# One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by "/", voices by "+".
+# A voice starting with "<" or ">" sits an octave lower or higher. Spaces are ignored.
+# Kinds: 0 drones and held chords (intros, breakdowns, outros, and under the drop in the darker
+# styles), 1 a pulse that climbs through the build.
+
+# --- 0: drones and held chords
+Root drone | 0 | * | * | 1.0 | - | <o--- ---- ---- ---- | <o--- ---- ---- ---- | <o--- ---- ---- ---- | <o--- ---- ---- ----
+Cathedral chords | 0 | PEM | OUV | 1.0 | - | <l--- ---- ---- ---- + c--- ---- ---- ---- | <l--- ---- ---- ---- + c--- ---- ---- ---- | <l--- ---- ---- ---- + C--- ---- ---- ---- | <l--- ---- ---- ---- + C--- ---- c--- ----
+Fifth drone | 0 | KRY | TYP | 1.0 | - | <r--- ---- ---- ---- + f--- ---- ---- ---- | <r--- ---- ---- ---- + f--- ---- ---- ---- | <r--- ---- ---- ---- + f--- ---- R--- ---- | <r--- ---- ---- ---- + f--- ---- n--- ----
+Breathing organ | 0 | MR | PV | 1.0 | - | c--- ---- ---- ---. | c--- ---- ---- ---. | c--- ---- c--- ---. | c--- ---- C--- ----
+Hammond hold | 0 | HE | CUV | 0.95 | - | c--- ---- ---- ---- | c--- ---- ---c ---- | c--- ---c ---- c--- | c--- ---c ---c C---
+Dark pedal | 0 | K | TYC | 1.0 | - | <l--- ---- ---- ---- | <l--- ---- ---- ---- + o--- ---- ---- ---- | <l--- ---- ---- ---- + o--- ---- o--- ---- | <l--- ---- ---- ---- + o--- ---- c--- ----
+Shruti box | 0 | RKY | YP | 1.0 | - | <r--- ---- ---- ---- + r--- ---- ---- ---- | <r--- ---- ---- ---- + r--- ---- f--- ---- | <r--- ---- ---- ---- + r--- f--- r--- f--- | <r--- ---- ---- ---- + r--- f--- R--- ----
+Suspended drone | 0 | RH | PVO | 1.0 | - | <r--- ---- ---- ---- + 4--- ---- ---- ---- | <r--- ---- ---- ---- + 4--- ---- t--- ---- | <r--- ---- ---- ---- + 4--- t--- 4--- t--- | <r--- ---- ---- ---- + 9--- ---- t--- ----
+
+# --- 1: the build's pulse
+Quarter pulse | 1 | * | * | 0.8 | - | c--- c--- c--- c--- | c-c- c-c- c-c- c-c- | cccc cccc cccc cccc | cccc cccc CCCC CCCC
+Rising organ | 1 | PEH | OUV | 0.9 | - | c--- ---- c--- ---- | c--- c--- c--- c--- | c-c- c-c- C-C- C-C- | C-C- C-C- CCCC CCCC
+Dark pulse | 1 | KD | TYC | 0.5 | - | o... o... o... o... | o.o. o.o. o.o. o.o. | oooo oooo oooo oooo | oooo oooo oooo oooo
+Drone swell | 1 | RM | PV | 1.0 | - | <o--- ---- ---- ---- | <o--- ---- o--- ---- | <o--- o--- o--- o--- | <o--- o--- c--- C---

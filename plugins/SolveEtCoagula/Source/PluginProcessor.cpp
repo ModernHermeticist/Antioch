@@ -79,6 +79,7 @@ void SolveEtCoagulaProcessor::prepareToPlay (double newSampleRate, int)
 
 void SolveEtCoagulaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
     const auto n = buffer.getNumSamples();
     const auto inPower = suite::SceneEngine::blockPower (buffer, n);

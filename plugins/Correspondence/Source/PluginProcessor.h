@@ -109,6 +109,11 @@ public:
     juce::File exportEverything (const juce::File& parent) const;
     mutable std::map<juce::String, juce::int64> lastExportHash;   // what each part was at the last export (the mix re-learns the parts that change)
     mutable std::atomic<uint32_t> lastRelearnMask { 0 };
+    /** The role layers the project's tracks ask for (SongPatterns::roleLayers): a Quintessence (or
+        its section mixer) on a track with the Bells / mallets, Organ / drones or Guitar / ethnic /
+        woodwind role. Looked at every couple of seconds. */
+    static uint32_t roleLayersFrom (const std::vector<suite::SuiteEntry>& entries);
+    std::atomic<uint32_t> roleLayersNow { 0 };
     mutable std::atomic<int> directedChanges { 0 };   // notes the suite director's plan changed in the last clip
     mutable std::atomic<int> movedForVocal { 0 };   // notes moved off the vocal's held notes in the last clip
     /** Song pack for a collaborator (a vocalist): a folder with the song sheet, the chords,

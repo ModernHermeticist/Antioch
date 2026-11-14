@@ -840,7 +840,8 @@ namespace chords
     }
 
     enum class SongPart { Chords, Bass, Arp, Lead, Harmony, Counter,
-                          Piano, Strings, Brass, Choir, Timpani, Acid, Chops, Candy };   // the pattern library's layers
+                          Piano, Strings, Brass, Choir, Timpani, Acid, Chops, Candy,
+                          Bells, Organ, Guitar };   // the pattern library's layers (the last three only for a track with that role)
 
     //==============================================================================
     /** Learns bassline DNA from bass clips (each rebased to the bar of its first note). */
@@ -1239,6 +1240,7 @@ namespace chords
         bool libLead = true;          // the lead hook from the library too (a learned motif or style always wins)
         bool libKits = true;          // a kit (families chosen to go together) where one fits the mood and style
         uint32_t libLayers = 0xffffffffu;   // which layers play (bit per SongPart from Piano on)
+        uint32_t roleLayers = 0;            // the layers a track's role asks for: bit 0 bells / mallets, 1 organ / drones, 2 guitar / ethnic / woodwind
         // The autopilot's arrangement group: too many parts at once thins the least important layers
         // for that section; chops and candy step back while the hook is moving
         bool manageDensity = true;
@@ -1259,6 +1261,7 @@ namespace chords
     inline int layerKindAt (SongPart part, const suite::SectionMap& map, const SongPatterns& patterns, int i)
     {
         if (! lib::isLayerPart (part) || ! patterns.library || ((patterns.libLayers >> ((int) part - (int) SongPart::Piano)) & 1u) == 0) return -1;
+        if ((int) part >= (int) SongPart::Bells && ((patterns.roleLayers >> ((int) part - (int) SongPart::Bells)) & 1u) == 0) return -1;   // no track for it
         int before = 0;
         for (int k = 0; k < i; ++k) before += map.sections[(size_t) k].type == map.sections[(size_t) i].type ? 1 : 0;
         const auto isDrop = map.sections[(size_t) i].type == suite::SectionType::Drop;
@@ -1298,17 +1301,18 @@ namespace chords
         }
         auto priority = [type, kitExtras] (SongPart p)
         {
-            //                              Piano Strings Brass Choir Timpani Acid Chops Candy
-            static const int breakdown[] { 9,    8,      5,    7,    2,      1,   2,    3 };
-            static const int build[]     { 3,    7,      3,    3,    8,      5,   3,    3 };
-            static const int drop[]      { 4,    7,      6,    5,    5,      7,   3,    2 };
-            static const int other[]     { 6,    5,      3,    4,    3,      5,   3,    2 };
+            // (a layer a track asked for by its role comes before the ones the style added)
+            //                              Piano Strings Brass Choir Timpani Acid Chops Candy Bells Organ Guitar
+            static const int breakdown[] { 9,    8,      5,    7,    2,      1,   2,    3,    8,    7,    8 };
+            static const int build[]     { 3,    7,      3,    3,    8,      5,   3,    3,    4,    7,    4 };
+            static const int drop[]      { 4,    7,      6,    5,    5,      7,   3,    2,    6,    6,    5 };
+            static const int other[]     { 6,    5,      3,    4,    3,      5,   3,    2,    6,    6,    7 };
             const auto k = (size_t) ((int) p - (int) SongPart::Piano);
             const auto extra = ((kitExtras >> (int) lib::libraryPart (p)) & 1u) != 0;
             return (type == ST::Breakdown ? breakdown[k] : type == ST::Build ? build[k] : type == ST::Drop ? drop[k] : other[k]) - (extra ? 10 : 0);
         };
         std::vector<SongPart> playing;
-        for (int p = (int) SongPart::Piano; p <= (int) SongPart::Candy; ++p)
+        for (int p = (int) SongPart::Piano; p <= (int) SongPart::Guitar; ++p)
             if (layerKindAt ((SongPart) p, map, patterns, i) >= 0) playing.push_back ((SongPart) p);
         std::stable_sort (playing.begin(), playing.end(), [&] (SongPart a, SongPart b) { return priority (a) > priority (b); });
         uint32_t out = 0;

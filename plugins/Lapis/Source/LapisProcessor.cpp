@@ -251,6 +251,7 @@ void LapisProcessor::prepareToPlay (double newSampleRate, int)
 
 void LapisProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     juce::ScopedNoDenormals noDenormals;
 
     if (toneReset.exchange (false)) toneBands.reset();

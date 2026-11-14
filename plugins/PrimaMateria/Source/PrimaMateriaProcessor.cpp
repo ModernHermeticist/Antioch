@@ -336,6 +336,7 @@ pm::Setting PrimaMateriaProcessor::settingFor (int type) const
 
 void PrimaMateriaProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     juce::ScopedNoDenormals noDenormals;
     using T = suite::SectionType;
     // The track as it comes in: what goes out (unless previewing the suggestions)

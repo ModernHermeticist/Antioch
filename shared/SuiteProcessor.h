@@ -272,6 +272,60 @@ namespace suite
             return nullptr;
         }
         const std::vector<Module>& getModules() const noexcept { return modules; }
+        //==============================================================================
+        /** CPU, per audio block (made first thing in processBlock and kept to its end):
+            - times the block, so a plugin taking a big share of the audio thread is named in the
+              freeze log (the worst block of every 10 s, when it used over a quarter of its time);
+            - with `mayIdle`: once the track has been silent going in and coming out for half a
+              second, `idle` is set and the block is cleared, so the plugin can skip it (a silent track
+              costs nothing; its tails have died away by then, and the first sound wakes it). */
+        struct BlockGuard
+        {
+            BlockGuard (SuiteProcessor& p, juce::AudioBuffer<float>& b, bool mayIdle)
+                : owner (p), buffer (b), t0 (juce::Time::getMillisecondCounterHiRes())
+            {
+                if (! mayIdle) return;
+                const auto n = b.getNumSamples();
+                float peak = 0.0f;
+                for (int c = 0; c < b.getNumChannels(); ++c) peak = std::max (peak, b.getMagnitude (c, 0, n));
+                watchOutput = true;
+                if (peak > silenceFloor || ! owner.outputQuiet) { owner.quietSamples = 0; owner.idleNow.store (false); return; }
+                owner.quietSamples += n;
+                if (owner.quietSamples < (int64_t) (0.5 * std::max (1.0, owner.getSampleRate()))) return;
+                b.clear();
+                idle = true;
+                owner.idleNow.store (true);
+            }
+            ~BlockGuard()
+            {
+                if (watchOutput && ! idle)
+                {
+                    float peak = 0.0f;
+                    for (int c = 0; c < std::min (2, buffer.getNumChannels()); ++c) peak = std::max (peak, buffer.getMagnitude (c, 0, buffer.getNumSamples()));
+                    owner.outputQuiet = peak <= silenceFloor;
+                }
+                const auto sr = owner.getSampleRate();
+                if (sr <= 0.0 || buffer.getNumSamples() <= 0) return;
+                const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+                const auto load = (float) (ms / (1000.0 * buffer.getNumSamples() / sr));
+                if (load > owner.worstLoad.load()) { owner.worstLoad.store (load); owner.worstBlockMs.store ((float) ms); }
+            }
+            BlockGuard (const BlockGuard&) = delete;
+            BlockGuard& operator= (const BlockGuard&) = delete;
+            static constexpr float silenceFloor = 1.0e-6f;   // -120 dB
+            SuiteProcessor& owner;
+            juce::AudioBuffer<float>& buffer;
+            const double t0;
+            bool idle = false, watchOutput = false;
+        };
+        BlockGuard blockGuard (juce::AudioBuffer<float>& b, bool mayIdle = false) { return { *this, b, mayIdle }; }
+        /** CPU: sleeping through silence right now (tests, UI). */
+        bool isIdle() const noexcept { return idleNow.load(); }
+        std::atomic<float> worstLoad { 0.0f }, worstBlockMs { 0.0f };
+        std::atomic<bool> idleNow { false };
+        int64_t quietSamples = 0;
+        bool outputQuiet = true;
+
         /** Tests: what this plugin's timers cost FL's interface thread, in ms of work per second, over
             `seconds` of simulated time (each timer called as often as it would be; modules included). */
         double timerCostForTests (double seconds)
@@ -574,6 +628,11 @@ namespace suite
                 { suite::Watchdog::Scope w (name, "recipes"); owner.pollRecipes(); }   // before sessions: a new song can load your signature, then set its key
                 { suite::Watchdog::Scope w (name, "session"); owner.pollSession(); }
                 if (++ticks % 5 == 1) { suite::Watchdog::Scope w (name, "suite status"); owner.announce(); }
+                if (ticks % 50 == 0)   // the audio thread: the worst block of the last 10 s, when it was heavy
+                    if (const auto load = owner.worstLoad.exchange (0.0f); load > 0.25f)
+                        suite::Watchdog::detail::record ({ juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H:%M:%S"), name,
+                                                           "audio thread (CPU): its heaviest block used " + juce::String (juce::roundToInt (load * 100.0f)) + "% of the block's time and",
+                                                           (double) owner.worstBlockMs.exchange (0.0f), false });
                 owner.updateModuleLatency();
             }
             // each instance starts at a different point of the cycle, so a project's plugins don't all

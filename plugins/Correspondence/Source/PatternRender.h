@@ -32,6 +32,9 @@ namespace chords::lib
             case SongPart::Acid: return Part::Acid;
             case SongPart::Chops: return Part::Chops;
             case SongPart::Candy: return Part::Candy;
+            case SongPart::Bells: return Part::Bells;
+            case SongPart::Organ: return Part::Organ;
+            case SongPart::Guitar: return Part::Guitar;
             case SongPart::Lead: case SongPart::Harmony: default: return Part::Lead;
         }
     }
@@ -98,6 +101,24 @@ namespace chords::lib
             case SongPart::Acid:  return type == T::Groove || type == T::Build || drop ? 0 : -1;
             case SongPart::Chops: return type == T::Groove || drop ? 0 : -1;
             case SongPart::Candy: return type == T::Groove || type == T::Build || type == T::Breakdown || drop ? 0 : -1;
+            // The role layers (only with a track of that role): bells ring in the quiet sections and
+            // sparkle over the later drops; an organ drones under the quiet sections, pulses through
+            // the build and holds under the drop in the darker styles; a guitar, flute or duduk takes
+            // the breakdown's solo and the rhythm of the intro, outro and grooves
+            case SongPart::Bells:
+                if (type == T::Breakdown || type == T::Intro || type == T::Outro) return 0;
+                if (drop && (laterDrop || lastDrop)) return 1;
+                return -1;
+            case SongPart::Organ:
+                if (type == T::Breakdown || type == T::Intro || type == T::Outro) return 0;
+                if (type == T::Build) return 1;
+                if (drop && (style == patterns::Style::Tech || style == patterns::Style::Psy || orchestral)) return 0;
+                return -1;
+            case SongPart::Guitar:
+                if (type == T::Breakdown) return 0;
+                if (type == T::Intro || type == T::Outro || type == T::Groove) return 1;
+                if (drop && (style == patterns::Style::Vocal || style == patterns::Style::Progressive)) return 1;
+                return -1;
             default: return -1;
         }
     }
@@ -115,11 +136,12 @@ namespace chords::lib
             case Part::Chops:   return 5;
             case Part::Counter: return 4;
             case Part::Candy:   return 6;
+            case Part::Bells:   return 5;
             default:            return s.registerOctave;
         }
     }
     inline bool melodic (Part p) { return p == Part::Lead || p == Part::Chops || p == Part::Counter || p == Part::Candy; }
-    inline bool chordal (Part p) { return p == Part::Chords || p == Part::Piano || p == Part::Strings || p == Part::Brass || p == Part::Choir; }
+    inline bool chordal (Part p) { return p == Part::Chords || p == Part::Piano || p == Part::Strings || p == Part::Brass || p == Part::Choir || p == Part::Organ; }
     inline bool monophonic (Part p) { return p == Part::Bass || p == Part::Lead || p == Part::Counter || p == Part::Chops || p == Part::Candy; }
 
     /** One voice of a family over the progression. */

@@ -168,8 +168,9 @@ namespace suite::test
     /** CPU: the audio thread's cost (% of one core in real time, 48 kHz, 512-sample blocks) playing
         noise, stopped with noise coming in, and playing silence; and the timers' cost on FL's interface
         thread (ms per second). Each is measured on a fresh instance from `make` (already prepared). */
+    struct CpuCost { double playing = 0.0, stopped = 0.0, silent = 0.0, timersMsPerSecond = 0.0; };
     template <typename Make>
-    inline void cpuReport (const juce::String& name, Make&& make, double seconds = 4.0)
+    inline CpuCost cpuReport (const juce::String& name, Make&& make, double seconds = 4.0)
     {
         auto audio = [&] (bool playing, bool silent)
         {
@@ -203,6 +204,26 @@ namespace suite::test
         }
         std::cout << "  CPU   " << name << ": playing " << juce::String (playing, 2) << "%, stopped " << juce::String (stopped, 2)
                   << "%, silent " << juce::String (silent, 2) << "% of a core; timers " << juce::String (ui, 1) << " ms/s" << std::endl;
+        return { playing, stopped, silent, ui };
+    }
+
+    /** CPU: a plugin that sleeps through silence does (after half a second of it), costs a fraction
+        of playing then, and wakes on the first sound, passing it straight through. */
+    template <typename Make>
+    inline void checkSleepsThroughSilence (const juce::String& name, Make&& make, const CpuCost& cost)
+    {
+        auto p = make();
+        FakePlayHead head;
+        p->setPlayHead (&head);
+        render (*p, 1.5, {}, nullptr, &head);
+        const auto asleep = p->isIdle();
+        juce::AudioBuffer<float> out;
+        render (*p, 0.5, pluck (440.0f), &out, &head);
+        const auto woke = ! p->isIdle() && peakBetween (out, 0.0, 0.1) > 0.01f;
+        p->setPlayHead (nullptr);
+        check (asleep && woke && cost.silent < 0.35 * cost.playing,
+               name + " sleeps through silence (" + juce::String (cost.silent, 2) + "% against " + juce::String (cost.playing, 2)
+                   + "% playing) and wakes on the first note, passing it straight through");
     }
 
     inline int finish()

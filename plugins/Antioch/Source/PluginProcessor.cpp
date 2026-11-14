@@ -156,6 +156,8 @@ void AntiochProcessor::prepareToPlay (double newSampleRate, int)
 
 void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    const auto guard = blockGuard (buffer, true);   // CPU: timed, and asleep through silence
+    if (guard.idle) return;
     // Label-ready: an Antioch with every level at zero sleeps (the sound passes straight through)
     if (sleeping.load()) return;
     // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).

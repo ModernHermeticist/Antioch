@@ -595,7 +595,8 @@ namespace
             {
                 auto t = std::make_unique<juce::ToggleButton> (Params::layerNames()[i]);
                 t->setTooltip ("The library's " + Params::layerNames()[i].toLowerCase() + " layer in the song (piano and orchestra in breakdowns, "
-                               "intros and the final drop; acid, chops and candy where the style uses them)");
+                               "intros and the final drop; acid, chops and candy where the style uses them; bells, organ and guitar only when "
+                               "a track in the project has that role)");
                 layerAttachments.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, Params::layerId (i), *t));
                 addAndMakeVisible (*t);
                 layerToggles.push_back (std::move (t));
@@ -741,7 +742,8 @@ namespace
                     for (auto [word, p] : { std::pair { "bass", chords::SongPart::Bass }, std::pair { "arp", chords::SongPart::Arp }, std::pair { "chord", chords::SongPart::Chords },
                                             std::pair { "counter", chords::SongPart::Counter }, std::pair { "piano", chords::SongPart::Piano }, std::pair { "string", chords::SongPart::Strings },
                                             std::pair { "brass", chords::SongPart::Brass }, std::pair { "choir", chords::SongPart::Choir }, std::pair { "acid", chords::SongPart::Acid },
-                                            std::pair { "candy", chords::SongPart::Candy }, std::pair { "chop", chords::SongPart::Chops } })
+                                            std::pair { "candy", chords::SongPart::Candy }, std::pair { "chop", chords::SongPart::Chops },
+                                            std::pair { "bell", chords::SongPart::Bells }, std::pair { "organ", chords::SongPart::Organ }, std::pair { "guitar", chords::SongPart::Guitar } })
                         if (name.contains (word)) { part = p; break; }
                     std::vector<chords::Note> edited;
                     juce::MidiFile mf;
@@ -1509,7 +1511,7 @@ std::vector<suite::ui::Action> CorrespondenceEditor::actions()
     {
         juce::StringArray lines;
         for (const auto* kind : { "Song Chords", "Song Bass", "Song Sub", "Song Arp", "Song Lead", "Song Harmony", "Song Counter", "Song Fills",
-                                  "Piano", "Strings", "Brass", "Choir", "Timpani", "Acid", "Chops", "Candy" })
+                                  "Piano", "Strings", "Brass", "Choir", "Timpani", "Acid", "Chops", "Candy", "Bells", "Organ", "Guitar" })
         {
             const auto r = suite::roles::forLibraryRole (kind);
             lines.add (juce::String (kind) + "  ->  " + (suite::roles::valid (r) ? suite::roles::fullName (r) : juce::String ("(no role)")));

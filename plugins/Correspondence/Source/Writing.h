@@ -648,6 +648,9 @@ namespace chords::writing
             case P::Counter: return { 50, 79 };
             case P::Chops:   return { 57, 86 };
             case P::Candy:   return { 69, 100 };
+            case P::Bells:   return { 67, 100 };
+            case P::Organ:   return { 36, 79 };
+            case P::Guitar:  return { 48, 84 };
             case P::count: default: return { 24, 108 };
         }
     }

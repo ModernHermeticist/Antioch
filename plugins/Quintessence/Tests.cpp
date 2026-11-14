@@ -112,6 +112,7 @@ namespace
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Quintessence", [] { auto p = std::make_unique<QuintessenceProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
@@ -2054,7 +2055,8 @@ int main (int argc, char** argv)
     }
 
     suite::test::section ("CPU");
-    suite::test::cpuReport ("Quintessence", [] { auto p = std::make_unique<QuintessenceProcessor>(); suite::test::prepare (*p); return p; });
+    const auto cost = suite::test::cpuReport ("Quintessence", [] { auto p = std::make_unique<QuintessenceProcessor>(); suite::test::prepare (*p); return p; });
+    suite::test::checkSleepsThroughSilence ("Quintessence", [] { auto p = std::make_unique<QuintessenceProcessor>(); suite::test::prepare (*p); return p; }, cost);
 
     return finish();
 }

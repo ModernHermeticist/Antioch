@@ -246,6 +246,8 @@ void VibrationProcessor::prepareToPlay (double newSampleRate, int samplesPerBloc
 
 void VibrationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    const auto guard = blockGuard (buffer, true);   // CPU: timed, and asleep through silence
+    if (guard.idle) return;
     // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
     const auto n = buffer.getNumSamples();
     const auto inPower = suite::SceneEngine::blockPower (buffer, n);
@@ -365,6 +367,7 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
     for (auto& b : bands)
         b.env.set (b.attackMs * timeScale, b.releaseMs * timeScale, sr);
 
+    const auto monoBelowHz = value (monoBelow);   // (read once a block, not by name every sample)
     for (int i = 0; i < n; ++i)
     {
         std::array<std::array<float, 3>, 2> split {};
@@ -394,8 +397,7 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
 
         // ---- Width: mono below the crossover, scaled sides above ----
         auto mid = 0.5f * (outL + outR), side = 0.5f * (outL - outR);
-        const auto monoHz = value (monoBelow);
-        if (monoHz >= lowCutOffBelow)
+        if (monoBelowHz >= lowCutOffBelow)
         {
             float sideLow, sideHigh;
             sideSplit.process (side, sideLow, sideHigh);

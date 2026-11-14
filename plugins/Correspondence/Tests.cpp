@@ -75,6 +75,7 @@ namespace
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Correspondence", [] { auto p = std::make_unique<CorrespondenceProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     suite::WritingBus::clearSung();   // nothing left over from another plugin's tests
     suite::WritingBus::publishThin (0);
@@ -2474,6 +2475,45 @@ int main (int argc, char** argv)
         check (! suite::SongBus::read().hook.empty(), "and the song still reaches Ouroboros' checks");
         suite::SongBus::withdraw();
         suite::SectionBus::withdraw();
+    }
+
+    section ("Parts for the new track roles (bells, organ, guitar) when a track asks for them");
+    {
+        namespace R = suite::roles;
+        std::vector<suite::SuiteEntry> entries (3);
+        entries[0].plugin = "Quintessence";  entries[0].metrics[0] = R::encode (4, R::bells);
+        entries[1].plugin = "Prima Materia"; entries[1].metrics[0] = R::encode (4, R::guitar);
+        entries[2].plugin = "Kybalion";      entries[2].metrics[0] = R::encode (4, R::organ);   // not a track role
+        check (CorrespondenceProcessor::roleLayersFrom (entries) == (1u | 4u), "a bells track and a guitar track ask for their layers (another plugin's number doesn't)");
+
+        chords::Settings s;
+        s.root = 9; s.scale = 0; s.count = 4;
+        s.slots[0] = { 1 }; s.slots[1] = { 6 }; s.slots[2] = { 3 }; s.slots[3] = { 7 };
+        suite::SectionMap map;
+        map.totalBars = 48; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Intro }; map.sections[1] = { 9, suite::SectionType::Breakdown };
+        map.sections[2] = { 25, suite::SectionType::Build }; map.sections[3] = { 33, suite::SectionType::Drop };
+        chords::SongPatterns sp;
+        sp.library = true; sp.libMood = 0; sp.libStyle = 0;
+        auto partIn = [&] (chords::SongPart part, double from, double to)
+        {
+            int n = 0;
+            for (const auto& note : chords::songClip (s, map, sp, part)) if (note.start >= from && note.start < to) ++n;
+            return n;
+        };
+        const auto none = partIn (chords::SongPart::Bells, 0.0, 192.0) + partIn (chords::SongPart::Organ, 0.0, 192.0) + partIn (chords::SongPart::Guitar, 0.0, 192.0);
+        check (none == 0, "with no such track, the song has no bells, organ or guitar");
+        sp.roleLayers = 7u;
+        const auto bells = partIn (chords::SongPart::Bells, 32.0, 96.0), organBuild = partIn (chords::SongPart::Organ, 96.0, 128.0), guitar = partIn (chords::SongPart::Guitar, 32.0, 96.0);
+        check (bells > 0 && organBuild > 0 && guitar > 0, "with them: bells and a guitar line in the breakdown, the organ pulsing through the build ("
+                   + juce::String (bells) + ", " + juce::String (guitar) + ", " + juce::String (organBuild) + " notes)");
+        bool inRange = true;
+        for (auto part : { chords::SongPart::Bells, chords::SongPart::Organ, chords::SongPart::Guitar })
+            for (const auto& note : chords::songClip (s, map, sp, part)) inRange = inRange && note.pitch >= 33 && note.pitch <= 108;
+        check (inRange, "each in a playable register");
+        int fams = 0;
+        for (const auto& f : patterns::library()) if (f.part == patterns::Part::Bells || f.part == patterns::Part::Organ || f.part == patterns::Part::Guitar) ++fams;
+        check (fams >= 30, juce::String (fams) + " hand-written families for the three");
     }
 
     suite::test::section ("CPU");

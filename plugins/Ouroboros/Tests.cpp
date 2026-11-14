@@ -23,6 +23,7 @@ using T = suite::SectionType;
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Ouroboros", [] { auto p = std::make_unique<OuroborosProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     // Never the real style log (Make versions reads your version lengths from it).
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosTestsStyleLog.txt");

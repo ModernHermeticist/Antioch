@@ -1,0 +1,30 @@
+# Guitar, ethnic and woodwind lines for Correspondence's pattern library (nylon and steel guitar,
+# flute, duduk, oboe, sitar). They play only when a track in the project has the Guitar / ethnic /
+# woodwind role.
+# One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by "/", voices by "+".
+# A voice starting with "<" or ">" sits an octave lower or higher. Spaces are ignored.
+# Kinds: 0 breakdown lines (picked or breathed, a solo moment), 1 rhythm and figures for intros,
+# outros and grooves (and the drops of the vocal and progressive styles).
+
+# --- 0: breakdown lines
+Nylon picking | 0 | MRH | PVO | 0.9 | u | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- a-a- a-aa | a-a- a-a- A-A- A---
+Travis pattern | 0 | HE | VUP | 0.8 | - | r... t... f... t... | r..t ..f. f..t ..r. | r.tf .r.t f.tr .t.f | r.tf .r.t n.tN .t..
+Flute lament | 0 | MR | PVO | 1.0 | - | r--- ---- ---- ---- | r--- ---- u--- ---- | r--- u--- d--- ---- | r--- u--- u--- n---
+Duduk call | 0 | MKR | PYO | 1.0 | - | t--- ---- ---- ---- | t--- ---- d--- ---- | t--- ---- d--- r--- | t--- d--- r--- n---
+Sitar drone line | 0 | KRY | YP | 0.9 | - | r--- -r-- ---- ---- | r--- -r-- f--- ---- | r--- -u-- r--- -d-- | r-u- r-d- r-u- n---
+Harp arpeggio | 0 | HRE | OUV | 0.9 | w | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA | aaaa AAAA aaaa A---
+Oboe sigh | 0 | M | VOP | 1.0 | - | f--- ---- ---- ---- | f--- ---- d--- ---- | f--- d--- d--- ---- | f--- d--- r--- n---
+Hopeful strum | 0 | HE | UV | 0.9 | - | c--- ---- ---- ---- | c--- ---- c--- ---- | c--- c--- c--- c--- | c--- c--- c--- C---
+
+# --- 1: rhythm and figures
+Offbeat strum | 1 | EHD | UCV | 0.5 | - | ..c. ..c. ..c. ..c. | ..c. ..c. ..c. ..cc | .cc. .cc. .cc. .cc. | .cc. .cc. cccc cccc
+Muted chug | 1 | KD | TYC | 0.3 | - | r.r. r.r. r.r. r.r. | rrrr rrrr rrrr rrrr | r,r, r,r, r,r, rrrr | rrrr rrrr rrrr nnnn
+Picked 3-3-2 | 1 | EHP | UPV | 0.6 | u | a..a ..a. .... .... | a..a ..a. a..a ..a. | a..a ..a. a..a ..aa | a..a ..a. A..A ..AA
+Flute riff | 1 | HER | UPV | 0.6 | - | r... .... .... .... | r..u ..r. .... .... | r..u ..r. d..r ..u. | r..u ..r. d..r nnnn
+Ethnic pulse | 1 | KRY | YT | 0.5 | - | r.., r.., r.., r.., | r.u, r.d, r.u, r.d, | rru, rrd, rru, rrd, | rudr udru drud nnnn
+Folk strum | 1 | HM | VPO | 0.7 | - | c... ..c. c... ..c. | c..c ..c. c..c ..c. | c.cc .cc. c.cc .cc. | c.cc .cc. c.cc cccc

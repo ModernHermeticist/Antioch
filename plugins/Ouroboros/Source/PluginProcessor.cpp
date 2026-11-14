@@ -118,6 +118,7 @@ void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
 
 void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    const auto guard = blockGuard (buffer);   // CPU: timed (the freeze log names a heavy plugin)
     // Audio passes through untouched; we watch the transport and (when listening) measure the mix.
     const auto host = suite::HostInfo::read (getPlayHead(), bpm.load());
     bpm.store (host.bpm);

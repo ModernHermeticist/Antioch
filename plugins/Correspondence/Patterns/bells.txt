@@ -1,0 +1,30 @@
+# Bells and mallets for Correspondence's pattern library (glockenspiel, celesta, music box,
+# marimba, vibes). They play only when a track in the project has the Bells / mallets role.
+# One family per line:
+#   name | kind | moods | styles | gate | arp order | low | mid | high | fill [| fill 2 | high 2 | feel | colour | where] ("-" = none)
+# moods: E euphoric, H hopeful, M melancholic, K dark, D driving, R dreamy, P epic (* = all)
+# styles: U uplifting, C classic 138, P progressive, T tech, Y psy, V vocal, O orchestral (* = all)
+# arp order: u up, d down, w up-down, c converge, s skip, - (none)
+# Patterns: a character per 16th (see PatternLibrary.h), bars split by "/", voices by "+".
+# A voice starting with "<" or ">" sits an octave lower or higher. Spaces are ignored.
+# Kinds: 0 figures for breakdowns, intros and outros (sparse, ringing), 1 the drop's sparkle over the hook.
+
+# --- 0: ringing figures
+Music box | 0 | RHM | PVO | 0.9 | u | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a-a- a-a- a-a- | a-a- a-a- A-A- A---
+Celesta steps | 0 | HR | VPO | 0.8 | - | R--- ---- ---- ---- | R--- ---- F--- ---- | R--- T--- F--- T--- | R--- T--- F--- 9---
+Glass bells | 0 | RM | PV | 1.0 | - | R--- ---- ---- ---- | R--- ---- ---- F--- | R--- ---- T--- F--- | R--- F--- T--- R---
+Lullaby chime | 0 | HRM | VOU | 0.9 | w | a--- ---- ---- ---- | a--- ---- a--- ---- | a--- a--- a--- a--- | a-a- a--- a-a- a---
+Falling stars | 0 | RE | UPV | 0.7 | d | a--- ---- ---- ---- | a--- ---- a--- a--- | a--a --a- -a-- a--- | a-a- a-a- aaaa a---
+Vibes pairs | 0 | MR | PV | 1.0 | - | r--- ---- ---- ---- + t--- ---- ---- ---- | r--- ---- f--- ---- + t--- ---- s--- ---- | r--- f--- r--- f--- + t--- s--- t--- s--- | r--- f--- t--- r---
+Marimba ripple | 0 | HE | UPC | 0.5 | u | a.a. .... a.a. .... | a.a. a.a. a.a. a.a. | aaaa .... aaaa .... | aaaa aaaa AAAA AAAA
+Dark mallet | 0 | K | TYP | 0.6 | - | r--- ---- ---- ---- | r--- ---- d--- ---- | r--- d--- r--- n--- | r--- d--- n--- N---
+Epic chime | 0 | PE | OU | 1.0 | - | R--- ---- ---- ---- | R--- ---- R--- ---- | R--- F--- R--- F--- | R--- F--- T--- R---
+Ninth bells | 0 | RH | PV | 1.0 | - | 9--- ---- ---- ---- | 9--- ---- F--- ---- | 9--- F--- R--- F--- | 9--- F--- R--- 4---
+
+# --- 1: the drop's sparkle (an octave over everything, out of the hook's way)
+Offbeat sparkle | 1 | EH | UCV | 0.4 | - | ..R. ..R. ..R. ..R. | ..R. ..R. ..R. ..F. | ..R. .FR. ..R. .FR. | ..R. .FR. .TF. RRRR
+Rolling glock | 1 | ED | UC | 0.4 | u | a... a... a... a... | a.a. a.a. a.a. a.a. | aaaa aaaa aaaa aaaa | aaaa aaaa AAAA AAAA
+Answer chime | 1 | EHP | UVO | 0.8 | - | .... .... R--- ---- | .... .... R--- F--- | .... .... R-T- F--- | .... R--- T--- F---
+Tech ping | 1 | KD | TY | 0.25 | - | r... .... .... .... | r... ..r. .... .... | r... ..r. ..r. .... | r..r ..r. .r.r rrrr
+Celesta lift | 1 | PE | OU | 0.7 | w | a... a... a... a... | a.a. a.a. a.a. a.a. | a.a. a.a. A.A. A.A. | A.A. A.A. AAAA AAAA
+Dreamy drops | 1 | RM | PV | 0.9 | - | R... .... .... .... | R... .... F... .... | R... ..F. T... ..F. | R... F... T... 9...
