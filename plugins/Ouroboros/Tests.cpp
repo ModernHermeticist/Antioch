@@ -2240,6 +2240,7 @@ int main (int argc, char** argv)
         pad.phraseDb[8] = -24.0f;                      // bars 33-36 sag 4 dB under the rest of the drop
         kick.sectionDb[1] = -25.0f;                    // the kick 5 dB down in the first build against the drop
         hat2.dcDb = -20.0f;                            // DC on a sample
+        hat1.sideDb = hat2.sideDb = -45.0f;            // both hat tracks sit in the centre
         lead.sectionDb[2] = -21.0f;                    // the lead 1 dB under the pad in the drop: no room
         in.traits = { kick, pad, hat1, hat2, lead };
         const auto rep = lab::evaluate (in);
