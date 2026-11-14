@@ -229,7 +229,7 @@ void CorrespondenceProcessor::publishKey()
 {
     // The label-ready work renders the song (seconds of it): every 2 s, if anything changed, it's done
     // on the worker thread from a copy; the result is applied here when it's ready.
-    if (labelTick++ % 8 == 0) startLabelJob();
+    if (++labelTick % 8 == 0) startLabelJob();   // (not on the first call: that one is in the constructor)
     finishLabelJob();
     // Adopt a key detected by Emerald Tablet, if allowed.
     const auto suggestion = suite::KeyBus::readSuggestion();

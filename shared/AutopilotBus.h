@@ -608,6 +608,12 @@ namespace suite::Autopilot
         switch (role) { case 6: return 5; case 5: return 4; case 1: case 2: return 3; case 4: return 2; case 3: case 7: return 1; default: return 0; }
     }
 
+    /** The clash rank of a broad role, on RoleCatalog's scale (its legacyRank), for posts that carry none. */
+    inline int defaultRank (int role) noexcept
+    {
+        switch (role) { case 6: return 90; case 5: return 80; case 1: case 2: return 70; case 3: return 40; case 4: return 30; case 7: return 20; default: return 0; }
+    }
+
     /** Quintessence, every block: what this track plays now. */
     inline void postLive (uint32_t id, int role, const float* bandsDb, int rank = -1) noexcept
     {
@@ -626,7 +632,7 @@ namespace suite::Autopilot
         }
         for (int b = 0; b < liveBands; ++b) s.liveBand[slot][b].store (bandsDb[b]);
         // the role in the low byte, its clash rank (0..100) above it: readers of the role alone see it unchanged
-        s.liveRole[slot].store ((role & 0xff) | (juce::jlimit (0, 255, rank >= 0 ? rank : priorityOf (role) * 18) << 8));
+        s.liveRole[slot].store ((role & 0xff) | (juce::jlimit (0, 255, rank >= 0 ? rank : defaultRank (role)) << 8));
         s.liveId[slot].store (id);
         s.liveMs[slot].store (now);
     }
