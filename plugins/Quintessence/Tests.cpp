@@ -1525,5 +1525,86 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+
+    section ("Label-ready 4: a tone and a width per section; kick tail, sub hand-over, choke, subsonics, drive");
+    {
+        suite::FixBus::reset();
+        auto q = make (4);
+        suite::FixBus::send (suite::Fix::SectionTone, suite::packSectionTone (q->getInstanceId(), (int) suite::SectionType::Drop, 6, -1.5f));
+        q->fixes->poll();
+        suite::FixBus::send (suite::Fix::SectionWidth, suite::packSectionTrim (q->getInstanceId(), (int) suite::SectionType::Breakdown, 2.0f));
+        q->fixes->poll();
+        check (std::abs (q->labelDsp2.toneDb[(size_t) suite::SectionType::Drop][6].load() + 1.5f) < 0.01f && std::abs (q->labelDsp2.widthOffset[(size_t) suite::SectionType::Breakdown].load() - 0.2f) < 0.01f,
+               "a tone step in the drops only, a width step in the breakdowns only");
+        juce::MemoryBlock mb;
+        q->getStateInformation (mb);
+        auto q2 = make (4);
+        q2->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (std::abs (q2->labelDsp2.toneDb[(size_t) suite::SectionType::Drop][6].load() + 1.5f) < 0.01f, "kept with the project");
+        // the DSP on its own
+        auto runRms = [] (qn::LabelDsp2& d, qn::LabelDsp2::Context cx, std::function<float (int)> sig, int from, int to)
+        {
+            juce::AudioBuffer<float> b (2, 512);
+            double p = 0.0; int n = 0, pos = 0;
+            for (int blk = 0; blk < (int) (2.0 * sampleRate / 512); ++blk)
+            {
+                for (int i = 0; i < 512; ++i) { const auto v = sig (pos + i); b.setSample (0, i, v); b.setSample (1, i, v); }
+                cx.ppq = (double) pos / sampleRate * 2.0;
+                d.process (b.getArrayOfWritePointers(), 2, 512, cx);
+                for (int i = 0; i < 512; ++i) if (pos + i >= from && pos + i < to) { p += (double) b.getSample (0, i) * b.getSample (0, i); ++n; }
+                pos += 512;
+            }
+            return n > 0 ? (float) std::sqrt (p / n) : 0.0f;
+        };
+        const auto sr = (int) sampleRate;
+        {
+            qn::LabelDsp2 d; d.prepare (sampleRate);
+            d.toneDb[4][6].store (-6.0f); d.sectionTone.store (true);
+            qn::LabelDsp2::Context cx; cx.sectionType = 4; cx.role = 4;
+            const auto tone2k = [] (int i) { return 0.3f * std::sin (2.0f * juce::MathConstants<float>::pi * 2000.0f * (float) i / (float) sampleRate); };
+            const auto cut = runRms (d, cx, tone2k, sr, 2 * sr);
+            qn::LabelDsp2 flat; flat.prepare (sampleRate);
+            const auto plain = runRms (flat, cx, tone2k, sr, 2 * sr);
+            check (cut < plain * 0.7f, "the drop's tone step takes 2 kHz down (" + juce::String (juce::Decibels::gainToDecibels (cut / plain), 1) + " dB)");
+        }
+        {
+            qn::LabelDsp2 d; d.prepare (sampleRate);
+            d.kickTail.store (true);
+            qn::LabelDsp2::Context cx; cx.sectionType = 4; cx.role = 1;
+            const auto beat = sr / 2;
+            const auto kick = [beat] (int i) { const auto k = i % beat; return 0.6f * std::exp (-(float) k / (0.15f * (float) sampleRate)) * std::sin (2.0f * juce::MathConstants<float>::pi * 55.0f * (float) k / (float) sampleRate); };
+            qn::LabelDsp2 flat; flat.prepare (sampleRate);
+            const auto lateTail = [&] (qn::LabelDsp2& x) { double p = 0.0; juce::ignoreUnused (p); return runRms (x, cx, kick, sr + (int) (0.25 * sampleRate), sr + (int) (0.45 * sampleRate)); };
+            const auto shortened = lateTail (d), full = lateTail (flat);
+            check (shortened < full * 0.75f, "the kick's tail shortened in the drops (" + juce::String (juce::Decibels::gainToDecibels (shortened / full), 1) + " dB late in the beat)");
+        }
+        {
+            qn::LabelDsp2 d; d.prepare (sampleRate);
+            d.choke.store (true);
+            qn::LabelDsp2::Context cx; cx.sectionType = 3; cx.role = 3; cx.nextIsDrop = true; cx.playing = true; cx.sectionEndQ = 3.0;   // the drop at 1.5 s
+            const auto hiss = [] (int i) { return 0.2f * std::sin (0.7f * (float) i); };
+            const auto inChoke = runRms (d, cx, hiss, (int) (1.42 * sampleRate), (int) (1.49 * sampleRate));
+            check (inChoke < 0.02f, "hats cut for the last 16th before the drop (" + juce::String (inChoke, 3) + ")");
+        }
+        {
+            qn::LabelDsp2 d; d.prepare (sampleRate);
+            d.subsonic.store (true);
+            qn::LabelDsp2::Context cx; cx.sectionType = 4; cx.role = 4;
+            const auto rumble = [] (int i) { return 0.3f * std::sin (2.0f * juce::MathConstants<float>::pi * 8.0f * (float) i / (float) sampleRate); };
+            check (runRms (d, cx, rumble, sr, 2 * sr) < 0.3f * 0.707f * 0.5f, "8 Hz rumble filtered out");
+            qn::LabelDsp2 h; h.prepare (sampleRate);
+            h.subHandover.store (true);
+            qn::LabelDsp2::Context b; b.sectionType = 3; b.role = 2; b.buildProgress = 1.0f;
+            const auto sub = [] (int i) { return 0.3f * std::sin (2.0f * juce::MathConstants<float>::pi * 50.0f * (float) i / (float) sampleRate); };
+            check (runRms (h, b, sub, sr, 2 * sr) < 0.3f * 0.707f * 0.7f, "at the end of a build the bass's sub is handed over (lower)");
+            qn::LabelDsp2 dr; dr.prepare (sampleRate);
+            dr.drive.store (true);
+            const auto quiet = [] (int i) { return 0.05f * std::sin (0.05f * (float) i); };
+            const auto out = runRms (dr, cx, quiet, sr, 2 * sr);
+            check (std::abs (out / (0.05f * 0.707f) - 1.0f) < 0.05f, "drive keeps a quiet part's level (it only rounds the peaks)");
+        }
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

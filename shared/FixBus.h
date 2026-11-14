@@ -107,15 +107,19 @@ namespace suite
         db = (float) (int8_t) (uint8_t) ((data >> 16) & 0xff) / 2.0f;
     }
 
-    /** SectionTone: which Quintessence (12 bits), which kind of section (3 bits), which octave band (4 bits), signed half dB. */
+    /** SectionTone: which Quintessence (12 bits), which kind of section (3 bits), which octave band (4 bits), a step in
+        signed half dB (5 bits: up to +-7.5 dB) - 24 bits, all a fix message carries. */
     inline uint32_t packSectionTone (uint32_t instanceId, int type, int band, float db) noexcept
     {
-        return (instanceId & 0xfffu) | ((uint32_t) (type & 0x7) << 12) | ((uint32_t) (band & 0xf) << 15) | ((uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 2.0f)) << 19);
+        const auto half = juce::jlimit (-15, 15, (int) std::lround (db * 2.0f));
+        return (instanceId & 0xfffu) | ((uint32_t) (type & 0x7) << 12) | ((uint32_t) (band & 0xf) << 15) | ((uint32_t) (half & 0x1f) << 19);
     }
     inline void unpackSectionTone (uint32_t data, uint32_t& instanceLow, int& type, int& band, float& db) noexcept
     {
         instanceLow = data & 0xfffu; type = (int) ((data >> 12) & 0x7); band = (int) ((data >> 15) & 0xf);
-        db = (float) (int8_t) (uint8_t) ((data >> 19) & 0xff) / 2.0f;
+        auto half = (int) ((data >> 19) & 0x1f);
+        if (half >= 16) half -= 32;
+        db = (float) half / 2.0f;
     }
 
     /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */

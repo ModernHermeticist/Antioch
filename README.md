@@ -189,6 +189,38 @@ song against your best signed track; each check shows what fixing it would add. 
 hidden, a reminder to rest every 45 minutes), a blind A/B of two milestones, sign-off per area (the gate can wait for
 it), and before/after snippets of every fix (the same bar heard before and after, saved as WAVs).
 
+**The fourth set** (52 more "Label:" switches, each acting only where its check finds the problem):
+- **Toward the label, section by section:** each part's tone where it's most exposed, the loudness journey (every
+  track a step in a section that sits off the label's level), width per section, every phrase breathing, each
+  section's own tone (Quintessence now carries a ten-band tone and a width per kind of section, set step by step),
+  the director's moves in the label's style (its genre from the references' tempo or the profile's sub-style).
+- **Low end over time:** the kick's tail shortened in the drops, the sub handed over through the builds, sub phase bar
+  by bar (Kybalion flips the polarity), a sub under a thin bass, a subsonic filter, mono lows following the key.
+- **Top and space:** harshness over the whole song, air on top, the riser peaking under the drop, hats and FX cut for
+  the last 16th before each drop (never a full silence), fewer echoes in a busy drop, the reverb stepping back for the
+  lead, drier drops and more space in the breakdowns, the pads behind the lead.
+- **Parts:** movement on parts that never change (and Spire macro rides in the exports), drive where the lead doesn't
+  cut through, drum attacks against each other, layers in one octave split.
+- **Writing, latched in Correspondence:** bass lengths per section, the bass locked to the kit, fills at phrase ends
+  and pickups into the drops, the arp off the hook's rhythm, melodic peaks late in each phrase, the counter-melody from
+  drop 2, chords held in breakdowns and gated in drops, the final drop as the peak, a bed in thin breakdowns, the bass
+  carrying on into the outro, call and response in the hook; the five scored goals (breakdown emotion, drop 2, the
+  counter's space, the bass's fit, the hook teased early) applied by themselves when the song scores under 60%; the
+  parts exported again after a writing fix; the vocal's harmonies written (Solve et Coagula).
+- **Arrangement:** section openings and endings marked, a swell in long breakdowns, ear-candy one-shots (a pluck, a
+  riser and a fall in the key, written as WAVs) where nothing new happens; checks for build length, the number of
+  breakdowns and a consistent palette (no automatic fix: they're arrangement decisions).
+- **Learning:** fixes you keep are tried first next time; fixes undone get smaller steps, and after three undos with no
+  keeps they're left alone; your taste (where your milestones sit against the label) can ride on top of the label's
+  tone; *Tools > More > Start new projects like my last song* (off by default: a new idea starts clean).
+- **Safety and confidence:** a change that pulls a signed-off area down is undone; when FL starts rendering, what's in
+  the way is reported; the autopilot slows down when its fixes keep failing; each report says how much of the song was
+  heard and how steady the score is between play-throughs; the suite's CPU (each Quintessence's share) is measured.
+- **Listening** (*Tools > Hear*, never in a render): a reference from the profile played at the same place in the same
+  kind of section, level-matched; mono, phone and car previews. *Tools > More*: front to back and who ducks, the label's
+  structure proposed as a map, whether a milestone's stage ("sketch", "arrangement", "mix", "premaster" in its name) is
+  done. A heat map of each section's score sits under the area bars.
+
 **What stays manual, and why:** vocal tuning (the suite has no pitch correction: the notes are listed for a pitch
 editor), a late vocal (a plugin can't play audio before it arrives: slide the clip), cutting a long drop (a plugin
 can't edit FL's playlist), and a plugin that renders differently (it's named; its setting is yours to change). Sample
@@ -2150,6 +2182,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   reference views, sign-off and before/after. Quintessence's: punch, the vocal delay, the breakdown low
   cut, input staging, pad motion latched and saved. Antioch's: pre-delay, throws, sleeping. Correspondence's:
   the bass clean-ups latched where asked, a switch turning one off, the latches saved.
+  **Label-ready 4:** each new check flagged with its switch on a made-up song (kick tail, sub hand-over,
+  sub phase, subsonics, the riser, tails, section edges, the breakdown's bed, movement, drive, drum
+  attacks, phrase dynamics, CPU), the journey and width fixes reaching every track, learning (smaller
+  steps, left alone, tried first, kept across songs), the previews (and never while rendering), stages,
+  the heat map, the depth map, ear-candy one-shots, the render report, score steadiness, the structure
+  proposal. Quintessence's: a tone and a width per section (saved), and its DSP: the tone step, the
+  kick's tail, the choke, subsonics, the sub hand-over, drive keeping the level. Antioch's: tighter
+  echoes, the reverb stepping back. Correspondence's: pickups, fills, the counter from drop 2, a goal
+  applied by itself.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true

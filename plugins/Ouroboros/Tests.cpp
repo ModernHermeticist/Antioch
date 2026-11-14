@@ -23,6 +23,8 @@ int main (int argc, char** argv)
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosTestsStyleLog.txt");
     testStyleLog.deleteFile();
     suite::StyleLog::setFileForTests (testStyleLog);
+    lab::Learning::fileForTests() = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroLearningTest.txt");
+    lab::Learning::fileForTests().deleteFile();
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();
     if (outDir != juce::File())
         outDir.createDirectory();
@@ -2051,6 +2053,155 @@ int main (int argc, char** argv)
             sn.tick (true, 100.0, 4.0);   // the bar never comes back...
             check (sn.pairs().empty(), "the after waits for the same bar");
         }
+    }
+
+
+    section ("Label-ready 4: tone and width per section, the low end over time, the arrangement's edges, learning, listening");
+    {
+        using T = suite::SectionType;
+        namespace AP = suite::Autopilot;
+        AP::reset();
+        suite::SectionMap map;
+        const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+        for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+        map.totalBars = 96;
+        // a flat song: same everywhere, low end cancelling in the drops, a riser brighter than the drop
+        std::vector<lab::Bar> bars ((size_t) map.totalBars);
+        for (int b = 0; b < map.totalBars; ++b)
+        {
+            auto& x = bars[(size_t) b];
+            x.heard = true; x.db = -12.0f; x.sideDb = -16.0f; x.onsets = 4.0f; x.peakDb = -10.0f;
+            x.lowCorrCount = 1; x.lowCorr = (b >= 24 && b < 40) ? 0.2f : 0.95f;
+            for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = x.db - 3.0f * (float) std::abs (k - 3) + (k >= 8 && b == 23 ? 8.0f : 0.0f);
+        }
+        lab::Inputs in;
+        in.map = map; in.bpm = 138.0; in.bars = bars; in.sections = lab::sections (bars, map);
+        auto track = [] (uint32_t id, int role, const char* name)
+        {
+            suite::TrackTraits::Traits t;
+            t.id = id; t.role = role; juce::String (name).copyToUTF8 (t.track, sizeof (t.track) - 1);
+            t.outRmsDb = -20.0f; t.sideDb = -35.0f; t.lowMidDb = -30.0f; t.lowSideDb = -60.0f; t.crestDb = 10.0f; t.inPeakDb = -8.0f; t.inRmsDb = -20.0f;
+            for (auto& v : t.sectionDb) v = -20.0f;
+            for (auto& v : t.sectionPeakDb) v = -15.0f;
+            for (auto& v : t.sectionDbOffline) v = -100.0f;
+            return t;
+        };
+        auto kick = track (0x301, 1, "Kick"), bass = track (0x302, 2, "Bass"), hats = track (0x303, 3, "Hats"), lead = track (0x304, 5, "Lead"), fx = track (0x305, 7, "Riser");
+        kick.decayCount = 6; kick.decayMs = 250.0f;          // rings well over a beat
+        bass.subsonicDb = -25.0f;                            // energy under 20 Hz
+        lead.movementCount = 40; lead.movementDb = 0.2f;     // never changes
+        lead.crestDb = 22.0f;                                // clean, no edge
+        hats.crestDb = 22.0f;                                // much spikier than the kick
+        fx.decayCount = 5; fx.decayMs = 400.0f;
+        kick.cpuPercent = 30.0f; bass.cpuPercent = 30.0f;
+        in.traits = { kick, bass, hats, lead, fx };
+        auto bandsOf = [] (std::initializer_list<float> v) { lab::Bands b {}; int k = 0; for (auto x : v) b[(size_t) k++] = x; return b; };
+        in.tracks = { { 2, "Bass", -12.0f, bandsOf ({ -30, -10, -14, -20, -30, -40, -50, -60, -70, -80 }) },
+                      { 5, "Lead", -16.0f, bandsOf ({ -80, -60, -30, -20, -14, -16, -30, -34, -40, -50 }) } };
+        const auto rep = lab::evaluate (in);
+        auto find = [&rep] (const juce::String& name) -> const lab::Check* { for (const auto& c : rep.checks) if (c.name == name) return &c; return nullptr; };
+        auto flagged = [&] (const juce::String& name, AP::Feature f)
+        {
+            const auto* c = find (name);
+            check (c != nullptr && c->measured && c->score < 0.75f && c->action == "autopilot:" + juce::String ((int) f),
+                   name + " flagged, with its switch (" + (c == nullptr ? juce::String ("missing") : c->detail) + ")");
+        };
+        flagged ("Kick tail in the drops", AP::kickTailF);
+        flagged ("The sub hands over into the drop", AP::subHandoverF);
+        flagged ("Sub phase bar by bar", AP::subPhaseF);
+        flagged ("Sub under the bass", AP::subFillF);
+        flagged ("No subsonics", AP::subsonicF);
+        flagged ("The riser peaks under the drop", AP::riserTopF);
+        flagged ("Tails cleared before the drop", AP::chokeF);
+        flagged ("Section openings and endings", AP::sectionEdgesF);
+        flagged ("The breakdown has a bed", AP::breakdownBedF);
+        flagged ("Parts that move", AP::motionF);
+        flagged ("The lead cuts through on its own", AP::driveF);
+        flagged ("Drum attacks against each other", AP::clapTransientF);
+        flagged ("Every phrase breathes", AP::phraseDynamicsF);
+        {
+            const auto* cpu = find ("The suite's CPU");
+            check (cpu != nullptr && cpu->measured && cpu->score < 0.75f && cpu->action.isEmpty(), "the suite's CPU measured (no automatic fix: said so)");
+            check (rep.coverage > 0.99f, "the report says how much of the song was heard (" + juce::String (rep.coverage * 100.0f, 0) + "%)");
+        }
+
+        // the autopilot: journey and width go to every track
+        {
+            suite::FixBus::reset();
+            lab::AutoFixer fixer;
+            lab::Check c; c.name = "The loudness journey"; c.measured = true; c.score = 0.3f; c.fix = suite::Fix::SectionTrim;
+            c.fixData = suite::packSectionTrim (0, (int) T::Breakdown, -1.0f); c.action = "autopilot:" + juce::String ((int) AP::journeyF);
+            const auto seqs = fixer.apply (c, in.traits);
+            check (seqs.size() == in.traits.size(), "the loudness journey: a step on every track (" + juce::String ((int) seqs.size()) + ")");
+            c.name = "Width section by section"; c.fix = suite::Fix::SectionWidth; c.action = "autopilot:" + juce::String ((int) AP::sectionWidthF);
+            check (fixer.apply (c, in.traits).size() == in.traits.size() - 2, "width: every track but the kick and bass");
+            suite::FixBus::reset();
+        }
+        // learning: undone three times and never kept, left alone; the steps smaller each time
+        {
+            lab::Learning::fileForTests().deleteFile();
+            lab::Learning l;
+            check (std::abs (l.stepScale ("Kick quality") - 1.0f) < 1.0e-4f && ! l.retired ("Kick quality"), "nothing learned yet: full steps");
+            l.record ("Kick quality", false);
+            const auto once = l.stepScale ("Kick quality");
+            l.record ("Kick quality", false); l.record ("Kick quality", false);
+            check (once < 1.0f && l.retired ("Kick quality"), "undone three times: smaller steps, then left alone");
+            l.record ("Build tension at bar 17", true); l.record ("Build tension at bar 57", true);
+            lab::Learning again;
+            check (again.favoured ("Build tension at bar 99") && again.retired ("Kick quality"), "kept twice (any bar): tried first; remembered across songs");
+            lab::Learning::fileForTests().deleteFile();
+        }
+        // listening: previews change the sound only when listening, never in a render
+        {
+            lab::Monitor mon;
+            mon.prepare (44100.0);
+            juce::AudioBuffer<float> b (2, 512);
+            for (int i = 0; i < 512; ++i) { b.setSample (0, i, 0.5f); b.setSample (1, i, -0.5f); }
+            mon.preview.store (lab::Monitor::mono);
+            auto r = b;
+            mon.process (r, false, 0.0, 4.0, 4, 0.0, -10.0f, true);
+            check (std::abs (r.getSample (0, 100)) < 1.0e-6f && std::abs (r.getSample (1, 100)) < 1.0e-6f, "the mono preview sums left and right (here they cancel)");
+            auto off = b;
+            mon.process (off, true, 0.0, 4.0, 4, 0.0, -10.0f, true);
+            check (std::abs (off.getSample (0, 100) - 0.5f) < 1.0e-6f && mon.rendering.load(), "while FL renders, the previews stay off");
+        }
+        // the host: stages, the structure proposal, the heat map, the maps, ear candy, the render check, steadiness, the regression guard
+        {
+            lab::LabelReadyHost host;
+            host.report = rep;
+            host.lastSections = in.sections;
+            host.lastTraits = in.traits;
+            check (lab::LabelReadyHost::stageOf ("A&R mix v2") == 2 && lab::LabelReadyHost::stageOf ("sketch") == 0, "a milestone's stage from its name");
+            check (host.stageDone (0).isNotEmpty() && host.stageDone (3).contains ("gate"), "what a stage still needs (" + host.stageDone (3).substring (0, 60) + ")");
+            const auto scores = host.sectionScores (map);
+            bool some = false; for (auto v : scores) some = some || v >= 0.0f;
+            check ((int) scores.size() == map.count && some, "the heat map: a score per section");
+            check (host.depthMap().contains ("FRONT TO BACK") && host.depthMap().contains ("Lead"), "front to back, track by track");
+            const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroCandyShots");
+            dir.deleteRecursively();
+            check (host.writeEarCandyShots (dir) && dir.getChildFile ("Candy pluck.wav").existsAsFile() && dir.getChildFile ("Candy riser.wav").existsAsFile(), "ear-candy one-shots written in the key");
+            dir.deleteRecursively();
+            check (host.preRenderReport (true).contains ("A/B"), "when FL renders: what's in the way (" + host.preRenderReport (true).substring (0, 60) + ")");
+            host.playthroughs = { 70, 74, 72 };
+            check (std::abs (host.scoreSpread() - 4.0f) < 1.0e-4f, "how steady the score is between play-throughs");
+            lab::Profile p = lab::genericProfile();
+            lab::Reference r; r.name = "Release"; r.bpm = 138.0; r.map = map; r.sections = in.sections; r.addedMs = juce::Time::currentTimeMillis(); r.summarise();
+            host.profile.refs = { r }; host.profile.learn();
+            check (host.proposeMap().count == map.count, "the label's structure proposed from its closest release");
+            // the regression guard: a signed-off area falling after a change
+            suite::FixBus::reset();
+            AP::reset();
+            host.report.areaScore[(size_t) lab::aLowEnd] = 0.9f; host.report.areaMeasured[(size_t) lab::aLowEnd] = true;
+            host.signOffArea (lab::aLowEnd, true);
+            suite::FixBus::send (suite::Fix::LessSquash);
+            host.logAction ("test change");
+            const auto before = suite::FixBus::latest();
+            host.update (map, 138.0, 4.0, nullptr);   // the live report: the area unmeasured or lower
+            check (host.signOffScore.count (lab::aLowEnd) == 1, "the sign-off keeps the area's score");
+            juce::ignoreUnused (before);
+            suite::FixBus::reset();
+        }
+        AP::reset();
     }
 
     return finish();

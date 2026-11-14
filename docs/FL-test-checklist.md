@@ -292,6 +292,13 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6h.25** Make a fix, loop the bar: *Save the before/after snippets*: the two WAVs are the same bar, before and after.
 - [ ] **6h.26** Render the song from FL, then open Label-ready: *The render sounds like playback* is measured.
 
+- [ ] **6h.27** *Tools > Hear > Hear the reference*: pick a release; the song's drop plays the reference's drop at the same bar, level-matched. Again to come back.
+- [ ] **6h.28** *Tools > Hear*: mono, phone, car; then render: the render is untouched (the line says the previews stay off while rendering).
+- [ ] **6h.29** A section's tone: let the autopilot run through a few drops; Quintessence's log shows "Hz in the drops" steps.
+- [ ] **6h.30** A thin breakdown: Correspondence adds a piano bed; the parts are exported again to the Exports folder.
+- [ ] **6h.31** *Tools > More > What the autopilot has learned*: kept and undone counts, your taste after three milestones.
+- [ ] **6h.32** Sign off Low end, then make a change that hurts it: it's undone, and the line says so.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

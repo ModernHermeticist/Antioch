@@ -2235,5 +2235,40 @@ int main (int argc, char** argv)
         suite::LabelReadyBus::reset();
     }
 
+
+    section ("Label-ready 4: pickups, fills, the counter from drop 2, the goals applied by themselves");
+    {
+        namespace AP = suite::Autopilot;
+        AP::reset();
+        auto p = make();
+        p->applyPreset (0);
+        const auto map = CorrespondenceProcessor::songMapOrDefault();
+        const auto s = p->currentSettings();
+        auto sp = p->currentSongPatterns();
+        sp.polish.pickups = true; sp.polish.partFills = true; sp.polish.counterLater = true;
+        double drop1 = -1.0, drop1End = 0.0;
+        for (int i = 0; i < map.count && drop1 < 0.0; ++i) if (map.sections[(size_t) i].type == suite::SectionType::Drop) { drop1 = 4.0 * (map.sections[(size_t) i].startBar - 1); drop1End = 4.0 * (map.endBar (i) - 1); }
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        int pickup = 0; for (const auto& n : lead) pickup += n.start >= drop1 - 0.75 - 1.0e-6 && n.start < drop1 ? 1 : 0;
+        check (pickup == 3, "three pickup notes climb into the first drop");
+        const auto counter = chords::songClip (s, map, sp, chords::SongPart::Counter);
+        bool none = true; for (const auto& n : counter) none = none && ! (n.start >= drop1 && n.start < drop1End);
+        check (none, "the counter-melody waits for the second drop");
+        const auto bass = chords::songClip (s, map, sp, chords::SongPart::Bass);
+        int fills = 0; for (const auto& n : bass) fills += std::abs (n.length - 0.2) < 1.0e-6 && n.velocity == 92 ? 1 : 0;
+        check (fills >= 4, "a bass run at each 8-bar phrase end (" + juce::String (fills) + " notes)");
+        // the scored goals, applied by themselves where the song scores low
+        float teaser = 0.0f;
+        p->labelOptions (CorrespondenceProcessor::LabelGoal::IntroTeaser, teaser);
+        for (int f = AP::kickShapeF; f < AP::numFeatures; ++f) AP::set ((AP::Feature) f, false);
+        AP::set (AP::goalTeaserF, true);
+        suite::LabelReadyBus::reset();
+        p->latchLabelWriting();
+        float after = 0.0f;
+        p->labelOptions (CorrespondenceProcessor::LabelGoal::IntroTeaser, after);
+        check (teaser >= 0.6f || (after > teaser && (p->labelLatched & (1u << 27)) != 0), "a hook not teased early: the best option applied by itself (" + juce::String (teaser, 2) + " -> " + juce::String (after, 2) + ")");
+        AP::reset();
+    }
+
     return finish();
 }

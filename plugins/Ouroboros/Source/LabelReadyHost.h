@@ -500,10 +500,14 @@ namespace lab
         juce::String stageDone (int stage) const
         {
             juce::StringArray missing;
-            auto need = [&] (int area, float min) { if (report.areaMeasured[(size_t) area] && report.areaScore[(size_t) area] < min) missing.add (juce::String (areaName (area)) + " " + juce::String (juce::roundToInt (report.areaScore[(size_t) area] * 100.0f)) + "% (needs " + juce::String (juce::roundToInt (min * 100.0f)) + ")"); };
+            std::map<int, float> mins;
+            auto need = [&mins] (int area, float min) { mins[area] = juce::jmax (mins.count (area) ? mins[area] : 0.0f, min); };
             if (stage >= 0) { need (aAR, 0.6f); need (aWriting, 0.6f); }
             if (stage >= 1) { need (aAR, 0.75f); need (aReference, 0.7f); }
             if (stage >= 2) { need (aLowEnd, 0.75f); need (aMids, 0.75f); need (aBalance, 0.75f); need (aTranslation, 0.7f); }
+            for (const auto& [area, min] : mins)
+                if (report.areaMeasured[(size_t) area] && report.areaScore[(size_t) area] < min)
+                    missing.add (juce::String (areaName (area)) + " " + juce::String (juce::roundToInt (report.areaScore[(size_t) area] * 100.0f)) + "% (needs " + juce::String (juce::roundToInt (min * 100.0f)) + ")");
             if (stage >= 3) { if (! report.ready) missing.add ("the gate: " + (report.blockers.isEmpty() ? "the score under the label's threshold" : report.blockers.joinIntoString ("; "))); }
             return missing.isEmpty() ? juce::String ("done") : missing.joinIntoString (", ");
         }

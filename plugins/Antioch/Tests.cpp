@@ -868,5 +868,21 @@ int main (int argc, char** argv)
         suite::FixBus::reset();
     }
 
+
+    section ("Label-ready 4: fewer echoes when it's busy, the reverb steps back for the lead");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        set (*p, Params::tapId (0, Params::Tap::feedback), 0.6f);
+        suite::FixBus::send (suite::Fix::EchoTighter);
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (Params::tapId (0, Params::Tap::feedback))->load() - 0.45f) < 0.02f, "each tap's feedback down a quarter");
+        const auto room = p->apvts.getRawParameterValue (Params::Verb::leadRoom)->load();
+        suite::FixBus::send (suite::Fix::ReverbDuck);
+        p->fixes->poll();
+        check (p->apvts.getRawParameterValue (Params::Verb::leadRoom)->load() > room + 0.2f, "the reverb makes more room for the lead");
+        suite::FixBus::reset();
+    }
+
     return finish();
 }

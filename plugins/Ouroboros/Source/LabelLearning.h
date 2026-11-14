@@ -21,7 +21,8 @@ namespace lab
     public:
         struct Record { int kept = 0, undone = 0; };
 
-        static juce::File file() { return suite::Alias::file ("Label autopilot memory.txt"); }
+        static juce::File& fileForTests() { static juce::File f; return f; }
+        static juce::File file() { return fileForTests() != juce::File() ? fileForTests() : suite::Alias::file ("Label autopilot memory.txt"); }
 
         void load()
         {
