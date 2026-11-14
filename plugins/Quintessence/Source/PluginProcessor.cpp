@@ -916,7 +916,8 @@ int QuintessenceProcessor::effectiveRole() const
     const auto track = getTrackName().toLowerCase();
     if (track.contains ("bus") || track.contains ("group") || track.contains ("music")) return qn::targets::musicBus;   // the music bus: glue
     if (const auto r = roleForTrack(); r > 0) return juce::jlimit (0, 7, r);
-    if (const auto m = suite::roles::fromTrackName (getTrackName()); m.role >= 0) return suite::roles::info (m.role).legacy;
+    if (getTrackName() == matchedName) { if (nameMatch.role >= 0) return suite::roles::info (nameMatch.role).legacy; }
+    else if (const auto m = suite::roles::fromTrackName (getTrackName()); m.role >= 0) return suite::roles::info (m.role).legacy;
     return 0;
 }
 
@@ -930,7 +931,9 @@ void QuintessenceProcessor::updateSubRole()
     if (R::valid (chosen)) sub = chosen;
     else if (legacy >= 1)
     {
-        const auto m = R::fromTrackName (getTrackName());
+        // the name's role only when the name changes (36 roles' keywords: not five times a second)
+        if (const auto name = getTrackName(); name != matchedName) { matchedName = name; nameMatch = R::fromTrackName (name); }
+        const auto m = nameMatch;
         if (m.role >= 0 && ! m.onlyFamily && R::info (m.role).legacy == legacy) sub = m.role;
         else
         {

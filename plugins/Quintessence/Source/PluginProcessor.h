@@ -244,6 +244,8 @@ public:
     std::atomic<bool> subRoleWasGuessed { false };
     float lastMovementDb = 0.0f, lastDecayMs = 0.0f;
     int lastSyncedSubRole = -2, stickyGuess = -1;
+    juce::String matchedName { "\x01" };
+    suite::roles::NameMatch nameMatch;
     juce::String stickyName;
 
     std::array<std::atomic<float>, qn::numMbBands> grNow {};          // gain reduction, dB (UI)

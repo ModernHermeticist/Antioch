@@ -396,9 +396,9 @@ int main (int argc, char** argv)
         auto& any = kp.bySection[(size_t) suite::KickPatternSet::anySection];
         any.count = 4; any.positions = { 0.0f, 1.0f, 2.0f, 3.0f }; any.kickBars = 4;
         suite::KickBus::publish (kp);
-        suite::Autopilot::set (suite::Autopilot::mixing, false);   // (with the autopilot the pump never goes below 35%)
+        suite::Autopilot::set ((suite::Autopilot::Group) suite::Autopilot::allMixing, false);   // every mixing group (with the autopilot the pump never goes below 35%)
         const auto [off, offMin] = run (0.0f);
-        suite::Autopilot::set (suite::Autopilot::mixing, true);
+        suite::Autopilot::set ((suite::Autopilot::Group) suite::Autopilot::allMixing, true);
         const auto [auto0, autoMin] = run (0.0f);
         const auto [on, onMin] = run (1.0f);
         suite::KickBus::withdraw();

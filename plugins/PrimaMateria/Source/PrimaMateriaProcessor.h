@@ -79,7 +79,13 @@ public:
     /** The CC 7 value for a fader change of `db` (100 = unchanged; FL's linked fader at 100%). */
     /** The plan as numbers (shared with Ouroboros' Mixer page through the plan bus). */
     suite::PlanBus::Plan makePlan() const;
-    void pollTick() override { if (getRole() > 0) suite::PlanBus::publish (makePlan()); else suite::PlanBus::withdraw (getInstanceId()); }
+    void pollTick() override
+    {
+        // once a second: the plan only changes with the map and its settings (and it now runs on every Quintessence)
+        if (planTick++ % 5 != 0) return;
+        if (getRole() > 0) suite::PlanBus::publish (makePlan()); else suite::PlanBus::withdraw (getInstanceId());
+    }
+    int planTick = 0;
     static int faderCc (float db) { return suite::PlanBus::faderCc (db); }
     SuiteStatus suiteStatus() override;
 

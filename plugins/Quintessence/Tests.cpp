@@ -581,7 +581,7 @@ int main (int argc, char** argv)
     {
         auto p = make (5);   // lead
         set (*p, qn::autoMbId, 0.0f);
-        if (std::getenv ("QOFF")) suite::Autopilot::set (suite::Autopilot::mixing, false);
+        if (std::getenv ("QOFF")) suite::Autopilot::set ((suite::Autopilot::Group) suite::Autopilot::allMixing, false);
         // A bare sine: no EQ move can change its shape (there's nothing else there to bring up or down)
         Player player { sine (500.0f, 0.3f) };
         passes (*p, player, 10);
@@ -813,7 +813,7 @@ int main (int argc, char** argv)
         suite::Autopilot::reset();
         {
             auto pad = make (4); set (*pad, qn::autoEqId, 0.0f); set (*pad, qn::autoMbId, 0.0f);
-            suite::Autopilot::set (suite::Autopilot::mixing, false);
+            suite::Autopilot::set ((suite::Autopilot::Group) suite::Autopilot::allMixing, false);   // every mixing group
             const auto off = levelDb (*pad, sine (2000.0f, 0.3f), other (5, leadAt2k));
             suite::Autopilot::reset();
             check (std::abs (off) - std::abs (juce::Decibels::gainToDecibels (0.3f / std::sqrt (2.0f))) < 0.2f, "switched off: no dip");
