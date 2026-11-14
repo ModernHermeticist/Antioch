@@ -234,12 +234,12 @@ void AzothEditor::resized()
         riserChords.setBounds (col.removeFromTop (col.getHeight() / 2).withSizeKeepingCentre (160, 30));
         rollPitchSpeed.setBounds (col.withSizeKeepingCentre (160, 30));
     }
+    if (! advanced) riserNote.setBounds (ri.reduced (12, 0));
     rollFrom.setBounds (ri.removeFromLeft (90));
     rollTo.setBounds (ri.removeFromLeft (90));
     rollCurve.setBounds (ri.removeFromLeft (110));
     rollVel.setBounds (ri.removeFromLeft (100));
     riserNote.setVisible (! advanced);
-    if (! advanced) riserNote.setBounds (ri.reduced (12, 0));
 
     auto rv = reverseArea.reduced (10, 6).withTrimmedTop (14);
     reverseOn.setBounds (rv.removeFromLeft (170).withSizeKeepingCentre (160, 30));

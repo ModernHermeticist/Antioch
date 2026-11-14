@@ -724,7 +724,14 @@ int main (int argc, char** argv)
     if (outDir != juce::File())
     {
         auto p = make();
+        {
+            std::unique_ptr<juce::AudioProcessorEditor> simple (p->createEditor());   // opens on the simple view
+            check (simple->getHeight() < 400, "the editor opens on its simple view (the master row only)");
+            snapshot (*simple, outDir.getChildFile ("antioch.png"));
+        }
+        p->apvts.state.setProperty ("uiAdvanced", true, nullptr);   // the tabs live under Advanced
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
+        check (editor->getHeight() > 700, "Advanced shows every tab (and the remembered choice reopens it)");
         auto* tabs = dynamic_cast<suite::ui::TabBar*> (editor->findChildWithID ("tabs"));
         const char* names[] = { "antioch_echo.png", "antioch_reverb.png", "antioch_throw.png", "antioch_scenes.png" };
         for (int i = 0; i < 4; ++i)

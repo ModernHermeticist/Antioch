@@ -231,6 +231,7 @@ namespace suite::ui
         bool advancedOn = false, hasAdvanced = false;
         std::vector<std::pair<juce::Component*, int>> rights;
         juce::Component* keyTarget = nullptr;
+        int buttonsLeft = 0;   // where the buttons on the right start (the status pill stops before it)
         bool keyPressed (const juce::KeyPress&, juce::Component*) override;
         using juce::Component::keyPressed;
     };

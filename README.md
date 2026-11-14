@@ -20,6 +20,26 @@ in **Correspondence**, and the others follow it.
 | **Solve et Coagula**: vocal unmasking | Carving EQ space for the vocal by hand, or a static cut that's there even when nobody sings |
 | **Quintessence**: self-managing EQ and multiband dynamics | The channel EQ and multiband compressor you set by ear on every track, then forget to revisit |
 
+## Using the plugins
+
+Every plugin shares one layout, so once you know one you know them all:
+
+- **The header**: the plugin's name, a status pill with what it's doing right now (the key it
+  follows, the next transition, the premaster's peak, the label-ready score), and its main actions
+  as buttons (Write in Correspondence, Label-ready in Ouroboros, Finish the song in Mentalism,
+  Hear what it changes in Quintessence, Suggested mixer moves in Prima Materia).
+- **Search (Ctrl+K, Cmd+K on a Mac)**: one box that finds any action in the plugin, including
+  every item in its menus. Type a few letters, use the arrows, press Enter.
+- **Simple by default, Advanced when you want it**: each plugin opens on the few controls that
+  matter; the manual knobs and rare settings are under **Advanced** (remembered with the project).
+  Antioch and Azoth also shrink to the simple view.
+- **Freeze log**: anything in the suite that holds FL's interface for more than 50 ms is written to
+  `Freeze log.txt` in the Antioch Suite folder, and shown by searching for "Freeze log". The slow
+  work (the label-ready scoring, recipe and autosave files) runs on a background thread, and the
+  style log and alias are kept in memory, so this should stay empty.
+
+![Antioch, simple view](docs/antioch.png)
+
 ## The goal: a label-ready premaster
 
 Every automatic tuning in the suite drives towards one deliverable: a **label-ready, unmastered

@@ -726,7 +726,8 @@ namespace suite::ui
         if (status.isNotEmpty())
         {
             const auto f = font (Type::label, true);
-            const auto w = juce::jmin (r.getWidth() - 20, (int) std::ceil (juce::GlyphArrangement::getStringWidth (f, status)) + 34);
+            const auto room = (buttonsLeft > 0 ? buttonsLeft : r.getRight()) - 12 - (r.getX() + 4);
+            const auto w = juce::jmin (room, (int) std::ceil (juce::GlyphArrangement::getStringWidth (f, status)) + 34);
             if (w > 60)
             {
                 const auto pill = juce::Rectangle<int> (r.getX() + 4, r.getCentreY() - 12, w, 24).toFloat();
@@ -751,6 +752,7 @@ namespace suite::ui
         if (hasAdvanced) { advancedButton.setBounds (r.removeFromRight (104)); r.removeFromRight (8); }
         searchButton.setBounds (r.removeFromRight (150)); r.removeFromRight (8);
         for (auto& [c, w] : rights) { c->setBounds (r.removeFromRight (w)); r.removeFromRight (8); }
+        buttonsLeft = r.getRight() + 8;
     }
 
     void HeaderBar::parentHierarchyChanged()

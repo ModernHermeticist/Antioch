@@ -21,7 +21,7 @@ private:
     suite::ui::LookAndFeel lnf;
     suite::ui::HeaderBar header;
     std::vector<suite::ui::Action> actions();
-    int heightFor (bool advanced) const { return advanced ? 1014 : 800; }
+    int heightFor (bool advanced) const { return advanced ? 1014 : 840; }
     suite::ui::Knob impact, crash, swell, down, roll, level, tone, rollPitch, laterDrops;
     suite::ui::Choice swellLen, rollStart, gap;
     suite::ui::Toggle follow, grooveCrash, reverseOn;
