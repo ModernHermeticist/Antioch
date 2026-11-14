@@ -1606,5 +1606,255 @@ int main (int argc, char** argv)
         }
     }
 
+
+    section ("Label-ready 2: each track measured, chords heard, the new checks and the tools");
+    {
+        using T = suite::SectionType;
+        const double fs = 44100.0;
+        // the track meter: a pad ducked by a kick, coming back in about 120 ms
+        {
+            suite::TrackTraits::TraitsMeter m;
+            m.prepare (fs);
+            const auto n = (int) (fs * 4.0);
+            std::vector<float> l ((size_t) n), r ((size_t) n);
+            const auto beat = (int) (fs * 0.5);
+            for (int i = 0; i < n; ++i)
+            {
+                const auto inBeat = i % beat;
+                const auto duck = inBeat < (int) (0.12 * fs) ? 0.15f + 0.85f * (float) inBeat / (float) (0.12 * fs) : 1.0f;
+                const auto v = 0.3f * duck * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 300.0 * i / fs);
+                l[(size_t) i] = v + 0.05f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 60.0 * i / fs);
+                r[(size_t) i] = v - 0.05f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 60.0 * i / fs);   // the 60 Hz is all side
+            }
+            for (int i = 0; i < n; i += 512)
+            {
+                m.input (l.data() + i, r.data() + i, juce::jmin (512, n - i));
+                m.output (l.data() + i, r.data() + i, juce::jmin (512, n - i), (double) i / fs * 2.0, 120.0, i < n / 2 ? 0 : 1);
+            }
+            const auto t = m.snapshot (7, 4, "Pad");
+            check (t.duckCount >= 5 && t.recoveryMs > 50.0f && t.recoveryMs < 200.0f, "sidechain recovery: ducked " + juce::String (t.duckCount) + " times, back in " + juce::String (juce::roundToInt (t.recoveryMs)) + " ms (made: 120)");
+            check (t.lowSideDb > t.lowMidDb - 6.0f && t.lowSideDb > -40.0f, "stereo lows: the 60 Hz that's all side shows under 150 Hz (side " + juce::String (t.lowSideDb, 1) + " dB, middle " + juce::String (t.lowMidDb, 1) + " dB)");
+            check (t.inPeakDb > -10.0f && t.inPeakDb < -6.0f && t.sectionDb[0] > -40.0f && t.sectionDb[1] > -40.0f && t.sectionDb[2] < -90.0f,
+                   "the input's peak (" + juce::String (t.inPeakDb, 1) + " dB) and the level in each section");
+        }
+        // tails: hits that die away (tau 60 ms: 20 dB in about 140 ms)
+        {
+            suite::TrackTraits::TraitsMeter m;
+            m.prepare (fs);
+            const auto n = (int) (fs * 4.0);
+            std::vector<float> x ((size_t) n);
+            for (int i = 0; i < n; ++i)
+            {
+                const auto k = i % (int) fs;
+                x[(size_t) i] = 0.5f * (float) std::exp (-(double) k / (0.06 * fs)) * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 400.0 * i / fs);
+            }
+            for (int i = 0; i < n; i += 512) m.output (x.data() + i, x.data() + i, juce::jmin (512, n - i), -1.0, 120.0, -1);
+            const auto t = m.snapshot (8, 7, "FX");
+            check (t.decayCount >= 3 && t.decayMs > 90.0f && t.decayMs < 200.0f, "reverb sizes: a hit's tail falls 20 dB in " + juce::String (juce::roundToInt (t.decayMs)) + " ms (made: about 140)");
+        }
+        // layers: the same part, upside down, and a little late
+        {
+            suite::TrackTraits::Traits a, b, c;
+            a.id = 1; b.id = 2; c.id = 3; a.role = b.role = c.role = 5;
+            juce::Random rng (3);
+            std::vector<float> w ((size_t) suite::TrackTraits::ringSize + 8);
+            for (auto& v : w) v = rng.nextFloat() * 2.0f - 1.0f;
+            for (int i = 0; i < suite::TrackTraits::ringSize; ++i)
+            {
+                a.ring[(size_t) i] = w[(size_t) i + 4];
+                b.ring[(size_t) i] = -w[(size_t) i + 4];
+                c.ring[(size_t) i] = w[(size_t) i];   // c lags a by 4 samples (1 ms)
+            }
+            a.ringPos = b.ringPos = c.ringPos = 0;
+            a.ringPpq = b.ringPpq = c.ringPpq = 10.0; a.ringBpm = b.ringBpm = c.ringBpm = 120.0;
+            const auto flipped = suite::TrackTraits::layerPhase (a, b), late = suite::TrackTraits::layerPhase (a, c);
+            check (flipped.valid && flipped.correlation < -0.95f, "layer phase: a layer upside down correlates " + juce::String (flipped.correlation, 2));
+            check (late.valid && late.bestCorrelation > 0.95f && std::abs (std::abs (late.lagMs) - 1.0f) < 0.3f && late.correlation < 0.5f,
+                   "and a layer 1 ms late is found (" + juce::String (late.lagMs, 2) + " ms, " + juce::String (late.correlation, 2) + " as it is)");
+        }
+        // chords from the audio: Am, F, C, G a bar each
+        {
+            const double bpm = 120.0;
+            const auto barN = (int) (fs * 2.0);
+            juce::AudioBuffer<float> audio (2, barN * 4);
+            const int chordsMidi[4][3] = { { 57, 60, 64 }, { 53, 57, 60 }, { 48, 52, 55 }, { 55, 59, 62 } };
+            for (int i = 0; i < audio.getNumSamples(); ++i)
+            {
+                const auto bar = i / barN;
+                float v = 0.0f;
+                for (int k = 0; k < 3; ++k) v += 0.15f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 440.0 * std::pow (2.0, (chordsMidi[bar][k] - 69) / 12.0) * i / fs);
+                audio.setSample (0, i, v); audio.setSample (1, i, v);
+            }
+            const auto wav = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("LabChords.wav");
+            wav.deleteFile();
+            {
+                juce::WavAudioFormat fmt;
+                std::unique_ptr<juce::AudioFormatWriter> w (fmt.createWriterFor (new juce::FileOutputStream (wav), fs, 2, 24, {}, 0));
+                if (w != nullptr) w->writeFromAudioSampleBuffer (audio, 0, audio.getNumSamples());
+            }
+            double seconds = 0.0;
+            const auto bars = lab::analyseFile (wav, bpm, seconds);
+            juce::StringArray roots;
+            for (const auto& b : bars) roots.add (juce::String (lab::barRoot (b)));
+            const auto prog = lab::progression (bars, 0, 4);
+            const auto print = lab::progressionPrint (prog);
+            check (prog.size() == 4 && prog[0] == 9 && prog[1] == 5 && prog[2] == 0 && prog[3] == 7, "the chords heard from the audio: A, F, C, G (" + roots.joinIntoString (" ") + ")");
+            check (print == "8,7,7,2", "as a print that doesn't depend on the key: " + print);
+            check (lab::progressionSimilarity ("8,7,7,2", "7,7,2,8") > 0.99f && lab::progressionSimilarity ("8,7,7,2", "5,2,5,0") < 0.5f, "the same loop starting elsewhere counts as the same");
+            wav.deleteFile();
+        }
+
+        // the new checks, from what the tracks share
+        suite::SectionMap map;
+        const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+        for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+        map.totalBars = 96;
+        std::vector<lab::Bar> bars ((size_t) map.totalBars);
+        for (int b = 0; b < map.totalBars; ++b)
+        {
+            int i = 0; for (int k = 0; k < map.count; ++k) if (map.sections[(size_t) k].startBar <= b + 1) i = k;
+            const auto type = map.sections[(size_t) i].type;
+            auto& x = bars[(size_t) b];
+            x.heard = true; x.db = type == T::Drop ? -8.0f : type == T::Breakdown ? -18.0f : -14.0f; x.sideDb = x.db - 8.0f; x.onsets = 4.0f;
+            for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = x.db - 3.0f * (float) std::abs (k - 3);
+        }
+        lab::Inputs in;
+        in.map = map; in.bpm = 138.0; in.bars = bars; in.sections = lab::sections (bars, map);
+        auto trackOf = [] (uint32_t id, int role, const char* name)
+        {
+            suite::TrackTraits::Traits t;
+            t.id = id; t.role = role; juce::String (name).copyToUTF8 (t.track, sizeof (t.track) - 1);
+            t.outRmsDb = -20.0f; t.sideDb = -35.0f; t.lowMidDb = -30.0f; t.lowSideDb = -60.0f; t.crestDb = 10.0f; t.inPeakDb = -8.0f; t.inRmsDb = -20.0f;
+            for (auto& v : t.sectionDb) v = -100.0f;
+            return t;
+        };
+        auto lead1 = trackOf (0x101, 5, "Lead A"), lead2 = trackOf (0x102, 5, "Lead B"), pad = trackOf (0x103, 4, "Pad"), hot = trackOf (0x104, 3, "Hats");
+        juce::Random rng (9);
+        for (int i = 0; i < suite::TrackTraits::ringSize; ++i) { const auto v = rng.nextFloat() - 0.5f; lead1.ring[(size_t) i] = v; lead2.ring[(size_t) i] = -v; }
+        lead1.ringPpq = lead2.ringPpq = 100.0;
+        pad.lowSideDb = -28.0f;                       // stereo lows on the pad
+        hot.inPeakDb = 0.3f;                          // clipping into its chain
+        lead1.sectionDb[2] = -20.0f; lead1.sectionDb[5] = -29.0f;   // the second drop's lead 9 dB down: automation left behind
+        in.traits = { lead1, lead2, pad, hot };
+        const auto rep = lab::evaluate (in);
+        auto find = [&rep] (const juce::String& name) -> const lab::Check* { for (const auto& c : rep.checks) if (c.name == name) return &c; return nullptr; };
+        const auto* phase = find ("Layers in phase");
+        check (phase != nullptr && phase->measured && phase->score < 0.5f && phase->fix == suite::Fix::TrackPolarity && phase->fixData == 0x102u,
+               "two leads cancelling: flip one (" + (phase != nullptr ? phase->detail : juce::String ("missing")) + ")");
+        const auto* lows = find ("Stereo lows per track");
+        check (lows != nullptr && lows->measured && lows->score < 0.5f && lows->detail.contains ("Pad") && lows->action.startsWith ("autopilot:"), "the pad's stereo lows, with the autopilot's mono lows as the fix");
+        const auto* clip = find ("Clip gain");
+        check (clip != nullptr && clip->measured && clip->score < 0.3f && clip->detail.contains ("Hats"), "clip gain: the hats come in clipping");
+        const auto* leftover = find ("Automation leftovers");
+        check (leftover != nullptr && leftover->measured && leftover->score < 0.5f && leftover->bar == 65, "an automation leftover: the lead 9 dB down in the second drop, at bar 65");
+        const auto* tension = find ("Build tension at bar 17");
+        check (tension != nullptr && tension->measured && tension->score < 0.5f, "a flat build has no tension (" + (tension != nullptr ? tension->detail : juce::String ("missing")) + ")");
+        bool noTraitsUnmeasured = true;
+        {
+            auto bare = in; bare.traits.clear();
+            for (const auto& c : lab::evaluate (bare).checks) if (c.name == "Sidechain recovery" || c.name == "Layers in phase") noTraitsUnmeasured = noTraitsUnmeasured && ! c.measured;
+        }
+        check (noTraitsUnmeasured, "without Quintessences those checks say so instead of guessing");
+        // a label's must
+        {
+            lab::Profile strict = lab::genericProfile();
+            strict.minScore["Clip gain"] = 0.8f;
+            auto in2 = in; in2.profile = &strict;
+            const auto r2 = lab::evaluate (in2);
+            check (r2.blockers.joinIntoString (";").contains ("Clip gain") && r2.blockers.joinIntoString (";").contains ("minimum"), "a check this label insists on blocks the gate");
+            const auto back = lab::Profile::fromTree (strict.toTree());
+            check (back.minScore.count ("Clip gain") == 1 && std::abs (back.minScore.at ("Clip gain") - 0.8f) < 0.01f, "and is saved with the profile");
+        }
+        // one section only
+        {
+            auto in3 = in; in3.focusSection = 5;
+            int counted = 0, outside = 0;
+            for (const auto& c : lab::evaluate (in3).checks) if (c.measured) { ++counted; outside += (c.bar < 65 || c.bar >= 81) ? 1 : 0; }
+            check (counted > 0 && outside == 0, "scoring one section counts only the checks inside it (" + juce::String (counted) + ")");
+        }
+        // writing intelligence: singability, the key change, chord freshness
+        {
+            auto in4 = in;
+            in4.song.valid = true; in4.song.root = 9; in4.song.scale = 0; in4.song.hookStartQ = 96.0; in4.song.finalLift = 7;
+            const int notes[] = { 69, 88, 70, 89, 71, 90, 69, 91 };   // leaps everywhere, no breath
+            for (int i = 0; i < 8; ++i) in4.song.hook.push_back ({ notes[i], (float) (96.0 + i * 0.5), 0.5f, 100 });
+            for (int i = 0; i < 16; ++i) in4.song.bass.push_back ({ 45, (float) (i * 4.0), 1.0f, 100 });
+            in4.song.chordCount[(size_t) T::Drop] = 4; in4.song.chordRoots[(size_t) T::Drop] = { 0, 8, 3, 10, -1, -1, -1, -1 };
+            in4.otherProgressions = { "8,7,7,2" };
+            const auto r4 = lab::evaluate (in4);
+            auto find4 = [&r4] (const juce::String& name) -> const lab::Check* { for (const auto& c : r4.checks) if (c.name == name) return &c; return nullptr; };
+            const auto* sing = find4 ("Singable hook");
+            check (sing != nullptr && sing->score < 0.5f, "a hook of big leaps with no breath isn't singable (" + (sing != nullptr ? sing->detail : juce::String ("missing")) + ")");
+            const auto* key = find4 ("The key change fits every part");
+            check (key != nullptr && key->score < 0.8f && key->action.startsWith ("lift:"), "a +7 lift pushes the hook too high: a smaller one suggested (" + (key != nullptr ? key->explain : juce::String()) + ")");
+            const auto* fresh = find4 ("Chord freshness");
+            check (fresh != nullptr && fresh->measured && fresh->score < 0.3f, "i-VI-III-VII again: the same progression as your last song (" + (fresh != nullptr ? fresh->detail : juce::String()) + ")");
+        }
+
+        // the host's tools
+        {
+            lab::LabelReadyHost host;
+            host.report = rep;
+            host.lastSections = in.sections;
+            const auto q = host.listenQueue();
+            bool ordered = ! q.empty();
+            for (size_t i = 1; i < q.size(); ++i) ordered = ordered && q[i - 1].bar <= q[i].bar;
+            check (ordered && host.listenNow (65).contains ("bar 65"), "the listen-through queue, in bar order; at bar 65 it says what to listen for");
+            check (host.blindSpots().contains ("BLIND SPOTS") && host.blindSpots().contains ("generic trance"), "blind spots: what couldn't be measured and why");
+            const auto impact = host.dropImpactOptions (map);
+            check (impact.size() == 3 && impact[0].score >= impact[1].score && (impact[0].fix != suite::Fix::None || impact[0].action.isNotEmpty()),
+                   "the drop-impact designer: three ways, ranked (" + (impact.empty() ? juce::String() : impact[0].name) + ")");
+            host.logAction ("test change");
+            host.report.overall = rep.overall + 5;
+            host.update (map, 138.0, 4.0, nullptr);
+            host.update (map, 138.0, 4.0, nullptr);
+            check (host.scoreLog.size() == 1 && host.scoreLog[0].after >= 0 && host.scoreLogText().contains ("test change"), "the score log: each change with the score before and after");
+            // the label's own tracks scored
+            lab::Reference r;
+            r.name = "Release"; r.bpm = 138.0; r.map = map; r.sections = in.sections; r.addedMs = juce::Time::currentTimeMillis();
+            r.summarise();
+            host.profile.refs = { r, r };
+            host.profile.learn();
+            const auto text = host.scoreReferences (true);
+            check (text.contains ("Release") && host.profile.readyThreshold >= 50 && host.profile.readyThreshold <= 95, "the label's tracks scored, and the threshold set from them (" + juce::String (host.profile.readyThreshold) + ")");
+            // A/B: switching on the bar, level-matched
+            host.milestones.push_back ({ "one", "Milestone - one", 0, 70, {}, -10.0f });
+            host.milestones.push_back ({ "two", "Milestone - two", 0, 75, {}, -13.0f });
+            host.abStart (0, 1);
+            host.abTick();
+            const auto g1 = host.abGainDb.load();
+            host.abToggle();
+            host.abTick();
+            const auto g2 = host.abGainDb.load();
+            check (host.abShowing == 1 && std::abs (g1 + 3.0f) < 0.01f && std::abs (g2) < 0.01f, "milestone A/B: the louder one is turned down 3 dB to match; they switch on the bar");
+            host.abStop();
+            // saved with the project
+            lab::LabelReadyHost other;
+            other.fromTree (host.toTree());
+            check (other.scoreLog.size() == 1 && std::abs (other.milestones[0].lufs + 10.0f) < 0.01f, "the score log and the milestones' loudness are saved with the project");
+            // ear candy where nothing new happens
+            const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroCandy");
+            dir.deleteRecursively();
+            lab::Accumulator acc;
+            for (int b = 0; b < 32; ++b) { acc = {}; acc.samples = 1000; acc.full = 1000 * 0.01; for (auto& v : acc.band) v = 1000 * 0.001; host.live.add (b, acc); }
+            const auto f = host.writeEarCandy (dir, map, 4.0);
+            juce::MidiFile mf;
+            juce::FileInputStream is (f);
+            check (f.existsAsFile() && mf.readFrom (is) && host.earCandySpots >= 4 && mf.getTrack (0)->getNumEvents() >= 4 * 6,
+                   "ear candy: one-shots in key wherever 4 bars go by with nothing new (" + juce::String (host.earCandySpots) + " spots)");
+            dir.deleteRecursively();
+        }
+        // the processor: the key change, the drop entrance
+        {
+            auto o = std::make_unique<OuroborosProcessor>();
+            o->setMap (map);
+            lab::Check c; c.name = "key"; c.action = "lift:2";
+            check (o->applyLabelCheck (c) && o->getMap().finalLift == 2, "one click sets the suggested final-drop key change");
+            c.action = "entrance:2";
+            check (o->applyLabelCheck (c) && o->getMap().dropEntrance == 2, "and the drop's entrance");
+            suite::SectionBus::withdraw();
+        }
+    }
+
     return finish();
 }

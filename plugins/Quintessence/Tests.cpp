@@ -15,6 +15,8 @@
 #include "FixBus.h"
 #include "AutopilotBus.h"
 #include "KeyBus.h"
+#include "TrackTraits.h"
+#include "SectionBus.h"
 
 using namespace suite::test;
 
@@ -1385,6 +1387,74 @@ int main (int argc, char** argv)
         check (std::abs (q->headroomTrimNow.load() + 3.0f) < 0.05f && st.peak < 0.45f, "every Quintessence applies the keeper's trim (-3 dB): no limiter, the same balance ("
                    + juce::String (q->headroomTrimNow.load(), 2) + " dB, peak " + juce::String (st.peak, 3) + ")");
         headroom::withdraw();
+    }
+
+
+    section ("Label-ready: each track measured and shared; a polarity flip and a level per section");
+    {
+        suite::FixBus::reset();
+        suite::TrackTraits::reset();
+        auto tone = [] (juce::AudioBuffer<float>& b, int64_t pos)
+        {
+            for (int i = 0; i < b.getNumSamples(); ++i)
+            {
+                const auto t = (double) (pos + i) / sampleRate;
+                const auto v = 0.2f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * t) + 0.1f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 50.0 * t);
+                b.setSample (0, i, v); b.setSample (1, i, v);
+            }
+        };
+        // the polarity flip: the same track, upside down
+        auto a = make (4), b = make (4);
+        b->setPlayHead (nullptr);
+        suite::FixBus::send (suite::Fix::TrackPolarity, b->getInstanceId() & 0xfffu);
+        b->fixes->poll();
+        juce::AudioBuffer<float> outA, outB;
+        render (*a, 0.4, tone, &outA);
+        render (*b, 0.4, tone, &outB);
+        double ab = 0.0, aa = 0.0, bb = 0.0;
+        for (int i = (int) (0.2 * sampleRate); i < outA.getNumSamples() && i < outB.getNumSamples(); ++i)
+        {
+            ab += (double) outA.getSample (0, i) * outB.getSample (0, i); aa += (double) outA.getSample (0, i) * outA.getSample (0, i); bb += (double) outB.getSample (0, i) * outB.getSample (0, i);
+        }
+        const auto corr = aa > 0.0 && bb > 0.0 ? ab / std::sqrt (aa * bb) : 0.0;
+        check (b->polarityFlipped.load() && corr < -0.95, "a polarity flip turns the track upside down (correlation " + juce::String (corr, 3) + ")");
+        // saved with the project
+        juce::MemoryBlock mb;
+        b->getStateInformation (mb);
+        auto c = make (4);
+        c->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (c->polarityFlipped.load(), "the flip is saved with the project");
+
+        // a level for one kind of section (the lead kept on top)
+        suite::SectionMap map;
+        map.count = 2;
+        map.sections[0].type = suite::SectionType::Drop; map.sections[0].startBar = 1;
+        map.sections[1].type = suite::SectionType::Breakdown; map.sections[1].startBar = 9;
+        map.totalBars = 16;
+        suite::SectionBus::publish (map);
+        auto d = make (4), e = make (4);
+        suite::FixBus::send (suite::Fix::SectionTrim, suite::packSectionTrim (e->getInstanceId(), (int) suite::SectionType::Drop, -6.0f));
+        e->fixes->poll();
+        FakePlayHead head; head.bpm = 120.0; head.ppq = 0.0;
+        d->setPlayHead (&head); e->setPlayHead (&head);
+        juce::AudioBuffer<float> outD, outE;
+        render (*d, 1.2, tone, &outD, &head);
+        head.ppq = 0.0;
+        render (*e, 1.2, tone, &outE, &head);
+        const auto diff = juce::Decibels::gainToDecibels (rmsBetween (outE, 0.5, 1.0) / juce::jmax (1.0e-9f, rmsBetween (outD, 0.5, 1.0)));
+        check (std::abs (diff + 6.0f) < 0.5f && std::abs (e->sectionTrimDb[(size_t) suite::SectionType::Drop].load() + 6.0f) < 0.01f,
+               "a section trim moves the track's level in that kind of section only (" + juce::String (diff, 2) + " dB in the drop)");
+
+        // what the track is like, shared for the label-ready checks
+        e->traitsTick = 4;
+        e->pollTick();
+        bool found = false;
+        for (const auto& t : suite::TrackTraits::list())
+            if (t.id == e->getInstanceId())
+                found = t.role == 4 && t.inPeakDb > -12.0f && t.inPeakDb < -6.0f && t.sectionDb[0] > -40.0f && t.sectionDb[1] < -90.0f && t.lowMidDb > t.lowSideDb + 20.0f;
+        check (found, "each Quintessence shares what its track is like: the input's peak, the level in each section, the stereo lows");
+        suite::SectionBus::withdraw();
+        suite::TrackTraits::reset();
     }
 
     return finish();

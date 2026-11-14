@@ -66,6 +66,8 @@ QuintessenceProcessor::QuintessenceProcessor()
         if (fix == suite::Fix::MasterTone) return masterTone (data);
         if (fix == suite::Fix::Narrower) return narrower (data);
         if (fix == suite::Fix::LessSquash) return lessSquash();
+        if (fix == suite::Fix::TrackPolarity) return flipPolarity (data);
+        if (fix == suite::Fix::SectionTrim) return sectionTrim (data);
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
             relearn();
@@ -91,6 +93,7 @@ QuintessenceProcessor::~QuintessenceProcessor()
 {
     suite::Conductor::forget (getInstanceId());
     live.forget (getInstanceId());
+    suite::TrackTraits::withdraw (getInstanceId());
     for (const auto& [id, bit] : lockBits()) apvts.removeParameterListener (id, this);
 }
 
@@ -104,6 +107,7 @@ bool QuintessenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
 void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
 {
     directorStage.prepare (sampleRate);
+    traits.prepare (sampleRate);
     sr = sampleRate;
     const auto fs = (float) sr;
     for (auto& f : lowCuts) f.reset();
@@ -193,12 +197,14 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         return p;
     }();
     bypassedNow.store (false);
+    if (buffer.getNumChannels() > 0) traits.input (buffer.getReadPointer (0), buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : nullptr, buffer.getNumSamples());
+    if (polarityFlipped.load()) buffer.applyGain (-1.0f);
 
     // Breakdowns get their own correction: a pass measures one kind of section only
     int group = 0;
     float buildProgress = 0.0f, energyRatio = 1.0f;
     double sectionStartQ = 0.0;
-    int sectionType = -1;
+    int sectionType = -1, sectionIndexNow = -1;
     const auto info = suite::HostInfo::read (getPlayHead());
     if (follower.refresh() && info.hasPpq)
     {
@@ -208,7 +214,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (pos.valid && (pos.type == suite::SectionType::Groove || pos.type == suite::SectionType::Intro || pos.type == suite::SectionType::Outro)
             && suite::Autopilot::on (suite::Autopilot::sectionEqF)) group = 3;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
-        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; }
+        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; sectionIndexNow = pos.index; }
     }
     if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
     if (group != passGroup) { resetMeasurement(); passGroup = group; measureGroup.store (group); }
@@ -648,6 +654,16 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         fifo.finishedWrite (n1 + n2);
     }
     live.endBlock();
+    {
+        const auto target = sectionType >= 0 && sectionType < 6 ? juce::Decibels::decibelsToGain (sectionTrimDb[(size_t) sectionType].load()) : 1.0f;
+        if (std::abs (target - trimGain) > 1.0e-5f || std::abs (trimGain - 1.0f) > 1.0e-5f)
+        {
+            for (int c = 0; c < chs; ++c) buffer.applyGainRamp (c, 0, n, trimGain, target);
+            trimGain = target;
+        }
+    }
+    traits.output (buffer.getReadPointer (0), chs > 1 ? buffer.getReadPointer (1) : nullptr, n, info.playing && info.hasPpq ? info.ppq : -1.0,
+                   info.bpm > 0.0 ? info.bpm : 120.0, sectionIndexNow);
     {
         double p = 0.0;
         for (int c = 0; c < chs; ++c)
@@ -1176,6 +1192,45 @@ std::function<void()> QuintessenceProcessor::masterTone (uint32_t data)
 void QuintessenceProcessor::setOffset (const juce::Identifier& id, float v)
 {
     apvts.state.setProperty (id, v, nullptr);   // saved with the project
+}
+
+std::function<void()> QuintessenceProcessor::flipPolarity (uint32_t data)
+{
+    if ((data & 0xfffu) != (getInstanceId() & 0xfffu)) return {};
+    polarityFlipped.store (! polarityFlipped.load());
+    storeLabelFixes();
+    addLog (juce::String ("Polarity ") + (polarityFlipped.load() ? "flipped" : "back to normal") + " (label-ready: this layer was cancelling another)");
+    return [this] { polarityFlipped.store (! polarityFlipped.load()); storeLabelFixes(); };
+}
+
+std::function<void()> QuintessenceProcessor::sectionTrim (uint32_t data)
+{
+    uint32_t low; int type; float db;
+    suite::unpackSectionTrim (data, low, type, db);
+    if (low != (getInstanceId() & 0xfffu) || type < 0 || type >= 6 || std::abs (db) < 0.01f) return {};
+    auto& t = sectionTrimDb[(size_t) type];
+    const auto before = t.load(), after = juce::jlimit (-6.0f, 6.0f, before + db);
+    if (std::abs (after - before) < 0.01f) return {};
+    t.store (after);
+    storeLabelFixes();
+    addLog ("Level in the " + juce::String (suite::sectionName ((suite::SectionType) type)).toLowerCase() + "s " + juce::String (before, 1) + " -> " + juce::String (after, 1)
+            + " dB (label-ready)");
+    return [this, type, before] { sectionTrimDb[(size_t) type].store (before); storeLabelFixes(); };
+}
+
+void QuintessenceProcessor::storeLabelFixes()
+{
+    juce::StringArray trims;
+    for (auto& t : sectionTrimDb) trims.add (juce::String (t.load(), 2));
+    apvts.state.setProperty ("labelPolarity", polarityFlipped.load(), nullptr);
+    apvts.state.setProperty ("labelTrims", trims.joinIntoString (","), nullptr);
+}
+
+void QuintessenceProcessor::loadLabelFixes()
+{
+    polarityFlipped.store ((bool) apvts.state.getProperty ("labelPolarity", false));
+    const auto trims = juce::StringArray::fromTokens (apvts.state.getProperty ("labelTrims", "").toString(), ",", "");
+    for (int i = 0; i < 6; ++i) sectionTrimDb[(size_t) i].store (i < trims.size() ? juce::jlimit (-6.0f, 6.0f, trims[i].getFloatValue()) : 0.0f);
 }
 
 std::function<void()> QuintessenceProcessor::narrower (uint32_t data)
@@ -1765,6 +1820,7 @@ void QuintessenceProcessor::setPluginState (const void* data, int sizeInBytes)
             apvts.replaceState (state);
             autoWriting.store (false);
             pendingLocks.store (0);
+            loadLabelFixes();
         }
 }
 

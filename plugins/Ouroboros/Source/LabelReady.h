@@ -12,6 +12,8 @@
 #include "LabelReadyBus.h"
 #include "Registry.h"
 #include "FixBus.h"
+#include "TrackTraits.h"
+#include "AutopilotBus.h"
 #include <juce_core/juce_core.h>
 #include <map>
 #include <set>
@@ -31,7 +33,7 @@ namespace lab
         int area = aAR;
         juce::String name, detail, explain;   // what it found; what moving it would take
         float score = 1.0f;
-        bool measured = true, blocking = false, safeFix = false;
+        bool measured = true, blocking = false, safeFix = false, belowMinimum = false;
         int bar = -1;                         // where (1-based), -1 = the whole song
         suite::Fix fix = suite::Fix::None;    // a one-click fix the suite can make
         uint32_t fixData = 0;
@@ -58,6 +60,11 @@ namespace lab
         std::map<int, std::array<float, numTypes>> roleLevelPerType;   // per role, per kind of section: its level (dB)
         std::vector<juce::String> otherHooks;        // earlier songs' hooks (interval prints)
         int fxRepitched = 0, clicksGuarded = 0;
+        std::vector<suite::TrackTraits::Traits> traits;  // what each Quintessence measures on its track
+        std::vector<juce::String> otherProgressions;     // your earlier songs' drop progressions (prints)
+        juce::String groovePrint;                        // this song's kit groove (KitBus), as hits
+        std::vector<juce::String> otherGrooves;          // your earlier songs' grooves
+        int focusSection = -1;                           // score one section only (its index), -1 = the whole song
     };
 
     struct Report
@@ -101,12 +108,14 @@ namespace lab
         }
     }
 
+    inline void extraChecks (const Inputs& in, const Profile& P, std::vector<Check>& out);   // LabelChecksMore.h
+
     inline Report evaluate (const Inputs& in)
     {
         using namespace detail;
         Report rep;
         static const Profile generic = genericProfile();
-        const auto& P = in.profile != nullptr && ! in.profile->empty() ? *in.profile : generic;
+        const auto& P = in.profile != nullptr && (! in.profile->empty() || in.profile->drops.valid()) ? *in.profile : generic;
         auto& out = rep.checks;
         auto add = [&out] (int area, const juce::String& name, bool measured, float score, const juce::String& detail, const juce::String& explain = {}, int bar = -1,
                            bool blocking = false, suite::Fix fix = suite::Fix::None, uint32_t data = 0, bool safe = false, const juce::String& action = {})
@@ -120,6 +129,7 @@ namespace lab
         const auto& S = in.sections;
         int heardBars = 0;
         for (const auto& b : in.bars) heardBars += b.heard ? 1 : 0;
+        if (in.bars.empty()) for (const auto& s : in.sections) heardBars += s.heardBars;   // scored from its sections only (a reference)
         const auto songHeard = heardBars >= 16;
         std::vector<int> drops, breaks, builds;
         for (const auto& s : S) { if (s.type == T::Drop) drops.push_back (s.index); if (s.type == T::Breakdown) breaks.push_back (s.index); if (s.type == T::Build) builds.push_back (s.index); }
@@ -651,6 +661,18 @@ namespace lab
             }
         }
 
+        extraChecks (in, P, out);
+
+        // one section only: the checks that point inside it (the rest don't count)
+        if (in.focusSection >= 0 && in.focusSection < in.map.count)
+        {
+            const auto from = in.map.sections[(size_t) in.focusSection].startBar, to = in.map.endBar (in.focusSection);
+            for (auto& c : out) if (c.bar < from || c.bar >= to) c.measured = false;
+        }
+        // the label's own minimums: a check under its minimum blocks the gate
+        for (auto& c : out)
+            if (const auto it = P.minScore.find (c.name); it != P.minScore.end() && c.measured && c.score < it->second) { c.blocking = true; c.belowMinimum = true; }
+
         // ===== scores =====
         float total = 0.0f, weights = 0.0f;
         for (int a = 0; a < numAreas; ++a)
@@ -663,8 +685,8 @@ namespace lab
         }
         rep.overall = weights > 0.0f ? juce::roundToInt (100.0f * total / weights) : 0;
         // the gate: the label's threshold, and nothing blocking
-        for (const auto& c : out) if (c.measured && c.blocking && c.score < 0.5f) rep.blockers.add (c.name + ": " + c.detail);
-        rep.ready = rep.overall >= P.readyThreshold && rep.blockers.isEmpty() && weights > 0.0f;
+        for (const auto& c : out) if (c.measured && c.blocking && (c.score < 0.5f || c.belowMinimum)) rep.blockers.add (c.name + ": " + c.detail + (c.belowMinimum ? " (under this label's minimum)" : ""));
+        rep.ready = rep.overall >= P.readyThreshold && rep.blockers.isEmpty() && weights > 0.0f && songHeard;   // never "ready" unheard
         // the next action: the biggest weighted gap
         const Check* next = nullptr; float gap = 0.0f;
         for (const auto& c : out)
@@ -686,3 +708,5 @@ namespace lab
         return rep;
     }
 }
+
+#include "LabelChecksMore.h"

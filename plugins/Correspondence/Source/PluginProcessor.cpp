@@ -326,6 +326,238 @@ bool CorrespondenceProcessor::applyStrongerHook (const StrongerHook& h)
     return true;
 }
 
+float CorrespondenceProcessor::labelScore (LabelGoal goal, const suite::SectionMap& map, const chords::SongPatterns& sp) const
+{
+    using T = suite::SectionType;
+    const auto s = currentSettings();
+    auto ramp = [] (float v, float good, float bad) { return std::abs (good - bad) < 1.0e-9f ? 1.0f : juce::jlimit (0.0f, 1.0f, (v - bad) / (good - bad)); };
+    auto firstOf = [&map] (T type, int nth = 0)
+    {
+        for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].type == type && nth-- == 0) return i;
+        return -1;
+    };
+    auto window = [&map] (int i) { return std::pair<double, double> { 4.0 * (map.sections[(size_t) i].startBar - 1), 4.0 * (map.endBar (i) - 1) }; };
+    auto notesIn = [] (const std::vector<chords::Note>& notes, double from, double to)
+    {
+        std::vector<chords::Note> out;
+        for (const auto& n : notes) if (n.start >= from - 1.0e-6 && n.start < to) out.push_back (n);
+        return out;
+    };
+    const auto minor = ! (s.scale == 1 || s.scale == 5);
+    switch (goal)
+    {
+        case LabelGoal::BreakdownEmotion:
+        {
+            const auto b = firstOf (T::Breakdown), d = firstOf (T::Drop);
+            if (b < 0) return 0.0f;
+            const auto [from, to] = window (b);
+            const auto ch = notesIn (chords::songClip (s, map, sp, chords::SongPart::Chords), from, to);
+            const auto lead = notesIn (chords::songClip (s, map, sp, chords::SongPart::Lead), from, to);
+            if (ch.empty()) return 0.2f;
+            // the first chord: VI or IV opens a breakdown up; the tonic is plainer
+            int lowest = 200; for (const auto& n : ch) if (n.start < from + 1.0e-6 + s.quartersPerChord) lowest = juce::jmin (lowest, n.pitch);
+            const auto rel = ((lowest - s.root) % 12 + 12) % 12;
+            const auto start = rel == (minor ? 8 : 9) || rel == 5 ? 1.0f : rel == 0 ? 0.6f : 0.8f;
+            // held chords, slower harmony than the drop
+            double len = 0.0; for (const auto& n : ch) len += n.length;
+            const auto held = ramp ((float) (len / (double) ch.size()), 2.0f, 0.5f);
+            std::set<double> onsB; for (const auto& n : ch) onsB.insert (std::round (n.start * 4.0));
+            float pace = 1.0f;
+            if (d >= 0)
+            {
+                const auto [df, dt] = window (d);
+                std::set<double> onsD; for (const auto& n : notesIn (chords::songClip (s, map, sp, chords::SongPart::Chords), df, dt)) onsD.insert (std::round (n.start * 4.0));
+                const auto perBarB = (float) onsB.size() / (float) juce::jmax (1.0, (to - from) / 4.0), perBarD = (float) onsD.size() / (float) juce::jmax (1.0, (dt - df) / 4.0);
+                pace = ramp (perBarD - perBarB, 0.5f, -0.5f);
+            }
+            // the top voice climbs through it; the hook hinted
+            int topFirst = 0, topLast = 0;
+            for (const auto& n : ch) { if (n.start < from + (to - from) * 0.25) topFirst = juce::jmax (topFirst, n.pitch); if (n.start >= from + (to - from) * 0.75) topLast = juce::jmax (topLast, n.pitch); }
+            const auto climb = topLast >= topFirst ? 1.0f : 0.7f;
+            const auto hint = lead.empty() ? 0.6f : 1.0f;
+            return (start + held + pace + climb + hint) / 5.0f;
+        }
+        case LabelGoal::Drop2Different:
+        {
+            const auto d1 = firstOf (T::Drop, 0), d2 = firstOf (T::Drop, 1);
+            if (d1 < 0 || d2 < 0) return 0.0f;
+            std::set<std::tuple<int, int, int>> a, b;
+            int part = 0;
+            for (auto sp1 : { chords::SongPart::Lead, chords::SongPart::Chords, chords::SongPart::Bass, chords::SongPart::Arp, chords::SongPart::Harmony })
+            {
+                const auto clip = chords::songClip (s, map, sp, sp1);
+                for (auto [idx, set] : { std::pair<int, std::set<std::tuple<int, int, int>>*> { d1, &a }, { d2, &b } })
+                {
+                    const auto [from, to] = window (idx);
+                    for (const auto& n : notesIn (clip, from, juce::jmin (to, from + 32.0)))
+                        set->insert ({ part, n.pitch, (int) std::lround ((n.start - from) * 4.0) });
+                }
+                ++part;
+            }
+            if (a.empty() || b.empty()) return 0.0f;
+            int same = 0; for (const auto& x : a) same += b.count (x) ? 1 : 0;
+            const auto jacc = (float) same / (float) (a.size() + b.size() - (size_t) same);
+            const auto diff = 1.0f - jacc;
+            return juce::jmin (ramp (diff, 0.3f, 0.05f), ramp (diff, 0.65f, 0.9f));   // new enough, still the same song
+        }
+        case LabelGoal::CounterSpace:
+        {
+            const auto d = firstOf (T::Drop);
+            if (d < 0) return 0.0f;
+            const auto [from, to] = window (d);
+            const auto hook = notesIn (chords::songClip (s, map, sp, chords::SongPart::Lead), from, to);
+            const auto counter = notesIn (chords::songClip (s, map, sp, chords::SongPart::Counter), from, to);
+            if (counter.empty()) return 0.5f;   // no counter-line: neither helps nor crowds
+            int inRests = 0; double dist = 0.0; int distN = 0;
+            for (const auto& c : counter)
+            {
+                bool covered = false;
+                for (const auto& h : hook)
+                {
+                    if (c.start >= h.start - 1.0e-6 && c.start < h.start + h.length) covered = true;
+                    if (std::abs (h.start - c.start) < 2.0) { dist += std::abs (h.pitch - c.pitch); ++distN; }
+                }
+                inRests += covered ? 0 : 1;
+            }
+            const auto rests = (float) inRests / (float) counter.size();
+            const auto apart = distN > 0 ? (float) (dist / distN) : 12.0f;
+            return 0.5f * ramp (rests, 0.7f, 0.2f) + 0.5f * ramp (apart, 7.0f, 2.0f);
+        }
+        case LabelGoal::BassFit:
+        {
+            const auto d = firstOf (T::Drop);
+            if (d < 0) return 0.0f;
+            const auto [from, to] = window (d);
+            const auto bass = notesIn (chords::songClip (s, map, sp, chords::SongPart::Bass), from, to);
+            const auto ch = notesIn (chords::songClip (s, map, sp, chords::SongPart::Chords), from, to);
+            if (bass.empty()) return 0.0f;
+            int beats = 0, fit = 0; std::set<int> pcs;
+            for (const auto& n : bass)
+            {
+                pcs.insert (n.pitch % 12);
+                if (std::abs (std::fmod (n.start, 1.0)) > 0.01) continue;
+                const auto slot = (int) std::floor ((n.start - from) / juce::jmax (0.5, s.quartersPerChord));
+                int lowest = 200;
+                for (const auto& c : ch) if ((int) std::floor ((c.start - from) / juce::jmax (0.5, s.quartersPerChord)) == slot) lowest = juce::jmin (lowest, c.pitch);
+                if (lowest >= 200) continue;
+                ++beats;
+                const auto rel = ((n.pitch - lowest) % 12 + 12) % 12;
+                fit += rel == 0 || rel == 7 ? 1 : 0;
+            }
+            const auto fitShare = beats > 0 ? (float) fit / (float) beats : 0.5f;
+            const auto movement = ramp ((float) pcs.size(), 3.0f, 1.0f);
+            const auto drive = ramp ((float) bass.size() / (float) juce::jmax (1.0, (to - from) / 4.0), 6.0f, 1.0f);   // trance: a bass that moves the bar
+            return 0.6f * ramp (fitShare, 0.85f, 0.4f) + 0.2f * movement + 0.2f * drive;
+        }
+        case LabelGoal::IntroTeaser:
+        {
+            const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+            double first = 1.0e9;
+            for (const auto& n : lead) first = juce::jmin (first, n.start);
+            const auto d = firstOf (T::Drop);
+            const auto dropQ = d >= 0 ? window (d).first : 1.0e9;
+            if (first >= dropQ) return 0.3f;                       // the hook first heard in the drop
+            return ramp ((float) first, 64.0f, 160.0f) * 0.7f + 0.3f;   // a hint within the first 16 bars
+        }
+    }
+    return 0.0f;
+}
+
+std::vector<CorrespondenceProcessor::LabelOption> CorrespondenceProcessor::labelOptions (LabelGoal goal, float& current) const
+{
+    using T = suite::SectionType;
+    const auto map = songMapOrDefault();
+    const auto sp = currentSongPatterns();
+    current = labelScore (goal, map, sp);
+    struct Cand { juce::String name; std::function<void (chords::SongPatterns&)> change; std::vector<std::pair<juce::String, float>> params; };
+    std::vector<Cand> cands;
+    const auto bd = (size_t) T::Breakdown, dr = (size_t) T::Drop;
+    auto songParam = [] (chords::SongPart part, T t) { return Params::songId (part, (int) t); };
+    switch (goal)
+    {
+        case LabelGoal::BreakdownEmotion:
+        {
+            static const char* starts[] = { "the same progression", "starting on VI", "starting on IV", "lifting to III halfway" };
+            for (int bs = 0; bs < 4; ++bs)
+                for (int lead : { sp.lead[bd], 2, 3 })
+                    for (int chordsChoice : { sp.chords[bd], 1 })
+                    {
+                        if (bs == sp.breakdownStart && lead == sp.lead[bd] && chordsChoice == sp.chords[bd]) continue;
+                        juce::String name = juce::String ("Breakdown ") + starts[bs];
+                        if (chordsChoice != sp.chords[bd]) name << ", held chords";
+                        if (lead != sp.lead[bd]) name << (lead == 3 ? ", hinting at the hook" : lead == 2 ? ", a teaser of the lead" : "");
+                        cands.push_back ({ name, [=] (chords::SongPatterns& p) { p.breakdownStart = bs; p.lead[bd] = lead; p.chords[bd] = chordsChoice; },
+                                           { { Params::songBreakdown, (float) bs }, { songParam (chords::SongPart::Lead, T::Breakdown), (float) lead },
+                                             { songParam (chords::SongPart::Chords, T::Breakdown), (float) chordsChoice } } });
+                    }
+            break;
+        }
+        case LabelGoal::Drop2Different:
+        {
+            auto toggle = [&] (const char* name, bool now, const juce::String& id, std::function<void (chords::SongPatterns&, bool)> set)
+            {
+                cands.push_back ({ juce::String (now ? "No " : "") + name, [set, now] (chords::SongPatterns& p) { set (p, ! now); }, { { id, now ? 0.0f : 1.0f } } });
+            };
+            toggle ("embellished lead and a harmony line in drop 2", sp.varyLaterDrops, Params::songVary, [] (chords::SongPatterns& p, bool v) { p.varyLaterDrops = v; });
+            toggle ("chords climbing an octave in drop 2", sp.climbLaterDrops, Params::songClimb, [] (chords::SongPatterns& p, bool v) { p.climbLaterDrops = v; });
+            toggle ("lead up an octave in drop 2", sp.liftLaterDrops, Params::songLift, [] (chords::SongPatterns& p, bool v) { p.liftLaterDrops = v; });
+            toggle ("doubled lead and sub-octave bass in the final drop", sp.doubleFinalDrop, Params::songDouble, [] (chords::SongPatterns& p, bool v) { p.doubleFinalDrop = v; });
+            toggle ("development between sections (Writing)", sp.write.develop, Params::writingId (1), [] (chords::SongPatterns& p, bool v) { p.write.develop = v; });
+            break;
+        }
+        case LabelGoal::CounterSpace:
+        {
+            cands.push_back ({ sp.counter ? "No counter-line" : "A counter-line", [] (chords::SongPatterns& p) { p.counter = ! p.counter; }, { { Params::songCounter, sp.counter ? 0.0f : 1.0f } } });
+            cands.push_back ({ sp.write.parts ? "Counter-line written freely (Parts together off)" : "Counter-line in counterpoint with the hook (Parts together on)",
+                               [] (chords::SongPatterns& p) { p.write.parts = ! p.write.parts; p.counter = true; },
+                               { { Params::writingId (4), sp.write.parts ? 0.0f : 1.0f }, { Params::songCounter, 1.0f } } });
+            break;
+        }
+        case LabelGoal::BassFit:
+        {
+            const auto names = chords::songChoiceNames (chords::SongPart::Bass);
+            for (int b = 1; b < names.size(); ++b)
+                if (b != sp.bass[dr])
+                    cands.push_back ({ "Drop bass: " + names[b], [b, dr] (chords::SongPatterns& p) { p.bass[dr] = b; }, { { songParam (chords::SongPart::Bass, T::Drop), (float) b } } });
+            break;
+        }
+        case LabelGoal::IntroTeaser:
+        {
+            for (auto [t, label] : { std::pair<T, const char*> { T::Intro, "intro" }, { T::Groove, "groove" } })
+                for (int lead : { 2, 3 })
+                    if (sp.lead[(size_t) t] != lead)
+                        cands.push_back ({ juce::String (lead == 3 ? "A hint of the hook in the " : "A teaser of the lead in the ") + label,
+                                           [t, lead] (chords::SongPatterns& p) { p.lead[(size_t) t] = lead; }, { { songParam (chords::SongPart::Lead, t), (float) lead } } });
+            break;
+        }
+    }
+    std::vector<LabelOption> out;
+    for (const auto& c : cands)
+    {
+        auto changed = sp;
+        c.change (changed);
+        const auto score = labelScore (goal, map, changed);
+        if (score > current + 0.01f) out.push_back ({ c.name, score, c.params });
+    }
+    std::stable_sort (out.begin(), out.end(), [] (const LabelOption& a, const LabelOption& b) { return a.score > b.score; });
+    if (out.size() > 3) out.resize (3);
+    return out;
+}
+
+bool CorrespondenceProcessor::applyLabelOption (const LabelOption& o)
+{
+    beforeVariation.clear();
+    for (const auto& [id, value] : o.params)
+        if (auto* param = apvts.getParameter (id))
+        {
+            beforeVariation.push_back ({ id, param->convertFrom0to1 (param->getValue()) });
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (value));
+            param->endChangeGesture();
+        }
+    return ! o.params.empty();
+}
+
 bool CorrespondenceProcessor::applyVariation (suite::SectionType type, int index)
 {
     const auto list = sectionVariations (type);

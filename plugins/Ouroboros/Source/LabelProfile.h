@@ -67,6 +67,7 @@ namespace lab
         std::array<Bands, numTypes> tone {};
         std::array<float, numTypes> width {}, level {};
         std::array<bool, numTypes> has {};
+        juce::String dropProgression;   // the first drop's chords, as steps between roots (SongLab::progressionPrint)
 
         void summarise()
         {
@@ -112,6 +113,8 @@ namespace lab
             map = listen::propose (features (bars));
             if (map.count == 0) return false;
             sections = lab::sections (bars, map);
+            for (const auto& sec : sections)
+                if (sec.type == T::Drop) { dropProgression = progressionPrint (progression (bars, sec.startBar - 1, sec.startBar - 1 + juce::jmin (16, sec.bars))); break; }
             summarise();
             if (addedMs == 0) addedMs = juce::Time::currentTimeMillis();
             return true;
@@ -127,6 +130,8 @@ namespace lab
         Stat minutes, introBars, breakdownBars, drops, impactDb, breakdownDepthDb, buildRiseDb, finalLiftDb, onsetsPerMinute;
         std::array<std::array<Stat, numBands>, numTypes> tone {};   // the tone shape per kind of section
         std::array<Stat, numTypes> width {};
+        /** Per check (by name): the lowest score this label accepts; under it the check blocks the gate. */
+        std::map<juce::String, float> minScore;
 
         /** Recent references count more (a label's sound drifts): half the weight every two years. Yours count double. */
         static float weightOf (const Reference& r)
@@ -194,6 +199,9 @@ namespace lab
         {
             juce::ValueTree t ("LabelProfile");
             t.setProperty ("name", name, nullptr); t.setProperty ("subStyle", subStyle, nullptr); t.setProperty ("ready", readyThreshold, nullptr);
+            juce::StringArray mins;
+            for (const auto& [check, v] : minScore) mins.add (check.replaceCharacters ("=;", "  ") + "=" + juce::String (v, 2));
+            t.setProperty ("minScores", mins.joinIntoString (";"), nullptr);
             for (const auto& r : refs)
             {
                 juce::ValueTree c ("Reference");
@@ -208,6 +216,7 @@ namespace lab
                     secs.add (f.joinIntoString (","));
                 }
                 c.setProperty ("sections", secs.joinIntoString (";"), nullptr);
+                c.setProperty ("progression", r.dropProgression, nullptr);
                 t.appendChild (c, nullptr);
             }
             return t;
@@ -216,12 +225,15 @@ namespace lab
         {
             Profile p;
             p.name = t["name"].toString(); p.subStyle = t["subStyle"].toString(); p.readyThreshold = (int) t.getProperty ("ready", 80);
+            for (const auto& m : juce::StringArray::fromTokens (t["minScores"].toString(), ";", ""))
+                if (m.contains ("=")) p.minScore[m.upToLastOccurrenceOf ("=", false, false)] = juce::jlimit (0.0f, 1.0f, m.fromLastOccurrenceOf ("=", false, false).getFloatValue());
             for (const auto& c : t)
             {
                 if (! c.hasType ("Reference")) continue;
                 Reference r;
                 r.name = c["name"].toString(); r.file = c["file"].toString(); r.addedMs = (juce::int64) c["added"];
                 r.yours = (bool) c["yours"]; r.bpm = (double) c["bpm"]; r.seconds = (double) c["seconds"];
+                r.dropProgression = c["progression"].toString();
                 int idx = 0;
                 for (const auto& sec : juce::StringArray::fromTokens (c["sections"].toString(), ";", ""))
                 {

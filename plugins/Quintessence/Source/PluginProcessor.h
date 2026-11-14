@@ -31,6 +31,7 @@
 #include "ActivityBus.h"
 #include "Music.h"
 #include "Registry.h"
+#include "TrackTraits.h"
 #include "LiveMix.h"
 #include "DirectorStage.h"
 #include "Premaster.h"
@@ -78,7 +79,22 @@ public:
         float recent = 0.0f;
         for (auto v : peakWindow) recent = juce::jmax (recent, v);
         if (recent > 1.0e-5f) suite::PeakBus::post (getInstanceId(), getTrackName(), roleShown.load(), juce::Decibels::gainToDecibels (recent), peakAtQ.load());
+        // what this track is like, for the label-ready checks (about once a second)
+        if (++traitsTick % 5 == 0) suite::TrackTraits::publish (traits.snapshot (getInstanceId(), effectiveRole(), getTrackName()));
     }
+    /** What this track is like (clip gain, recovery, stereo lows, tails, levels per section...). */
+    suite::TrackTraits::TraitsMeter traits;
+    int traitsTick = 0;
+    /** The label-ready fixes for this track: its polarity flipped (a layer cancelling another), and
+        its level in each kind of section (the lead kept on top, a section matched to the label).
+        Saved with the project. */
+    std::atomic<bool> polarityFlipped { false };
+    std::array<std::atomic<float>, 6> sectionTrimDb {};
+    std::function<void()> flipPolarity (uint32_t data);
+    std::function<void()> sectionTrim (uint32_t data);
+    void storeLabelFixes();
+    void loadLabelFixes();
+    float trimGain = 1.0f;   // audio thread: the section trim in use (ramped)
 
     //==============================================================================
     static constexpr double passSeconds = 3.0;   // music heard per pass

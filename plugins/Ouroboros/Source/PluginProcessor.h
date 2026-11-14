@@ -402,12 +402,45 @@ public:
     lab::Analyser songAnalyser;          // audio thread
     lab::Accumulator songBar;            // audio thread: the bar being heard
     int songBarIndex = -1;               // audio thread
-    int labelTicks = 0;
+    float abGainNow = 1.0f;              // audio thread: the A/B level match in use
+    int labelTicks = 0, labelBar = -1;
+    /** A check's one click: its fix, its autopilot switch, a word to the director, or the key change. */
+    bool applyLabelCheck (const lab::Check& c)
+    {
+        if (c.action.startsWith ("director:"))
+        {
+            addNote (director.chat (c.action.fromFirstOccurrenceOf (":", false, false).trim()));
+            directorDirty = true;
+            labelReady.logAction (c.name + " (" + c.action + ")");
+            return true;
+        }
+        if (c.action.startsWith ("entrance:") || c.action.startsWith ("gap:"))
+        {
+            auto m = getMap();
+            const auto v = c.action.fromFirstOccurrenceOf (":", false, false).getIntValue();
+            if (c.action.startsWith ("entrance:")) m.dropEntrance = juce::jlimit (0, 2, v); else m.dropGap = juce::jlimit (0, 3, v);
+            setMap (m);
+            labelReady.logAction (c.name);
+            return true;
+        }
+        if (c.action.startsWith ("lift:"))
+        {
+            auto m = getMap();
+            m.finalLift = juce::jlimit (0, 7, c.action.fromFirstOccurrenceOf (":", false, false).getIntValue());
+            setMap (m);
+            labelReady.logAction (c.name + " (final-drop key change +" + juce::String (m.finalLift) + ")");
+            return true;
+        }
+        return labelReady.applyCheck (c);
+    }
     void tickLabelReady()
     {
         ++labelTicks;
         if (playing.load() && labelTicks % 5 == 0) labelReady.sampleTracks (getMap(), ppq.load(), barQuarters.load(), bpm.load());
-        if (labelTicks % 40 == 0)
+        // milestone A/B: switches land on a bar line
+        const auto barNow = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load()));
+        if (barNow != labelBar) { labelBar = barNow; if (playing.load()) labelReady.abTick(); }
+        if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
         {
             labelReady.live.expectedSamples = (float) (sampleRate * barQuarters.load() * 60.0 / juce::jmax (1.0, bpm.load()));
             labelReady.update (getMap(), bpm.load(), barQuarters.load(), director.havePlan ? &director.plan : nullptr);

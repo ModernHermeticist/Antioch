@@ -270,6 +270,18 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6h.8** *Hand-off pack...*: the folder has the report, known issues, session notes, the plan and the re-render instructions.
 - [ ] **6h.9** Save the FL project, reload: the profile, the history graph and the milestones are back.
 
+- [ ] **6h.10** With Quintessence on several tracks, play a drop: *Sidechain recovery*, *Stereo lows per track*, *Clip gain*,
+  *Reverb sizes* and *Depth* fill in. Put two leads with one upside down: *Layers in phase* offers the flip; Fix this; it adds up again.
+- [ ] **6h.11** *Tools > Steer every Quintessence toward the label's tone* (with references): the Quintessences' moves follow the label.
+- [ ] **6h.12** *Tools > Translation loop*: the line above the list says what it's trying; after about half a minute, kept or undone.
+- [ ] **6h.13** *Tools > Drop-impact designer*: three options with estimates; pick one, the drop changes (map or director).
+- [ ] **6h.14** *Tools > Ear candy*: drag the clip onto a candy track; one-shots land where nothing new happened.
+- [ ] **6h.15** Correspondence, *Writing > Write for the label*: each goal shows its score and up to three better options; Undo works.
+- [ ] **6h.16** *Tools > Score one section only*, *Watch mode*, *Score log*, *Score the label's own tracks*: each does what it says.
+- [ ] **6h.17** Select a check, *Tools > ... is a must for this label*: when it's under 80% the gate shows it as blocking.
+- [ ] **6h.18** *Milestones > A/B two milestones*: they switch on the bar line, at matched loudness. Stop the A/B before rendering.
+- [ ] **6h.19** *Tools > Blind spots*: remove Mentalism: it says the master can't be heard. The listen-through line follows the playhead.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

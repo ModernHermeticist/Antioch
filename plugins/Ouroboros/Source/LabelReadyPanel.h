@@ -23,9 +23,12 @@ namespace lab
             addAndMakeVisible (list);
             detail.setMultiLine (true); detail.setReadOnly (true); detail.setFont (juce::FontOptions (12.5f));
             addAndMakeVisible (detail);
-            fixB.onClick = [this] { if (const auto* c = selected()) { if (c->fix != suite::Fix::None) suite::FixBus::send (c->fix, c->fixData); else if (c->action.startsWith ("director:")) processor.director.chat (c->action.fromFirstOccurrenceOf (":", false, false).trim()), processor.directorDirty = true; note ("Sent: " + c->name); } };
-            safeB.onClick = [this] { note (juce::String (processor.labelReady.fixAllSafe()) + " safe fix(es) sent; the scores update as the song plays."); };
-            for (auto* b : { &fixB, &safeB, &profileB, &refsB, &milestoneB, &handoffB, &saveB }) addAndMakeVisible (b);
+            fixB.onClick = [this] { if (const auto* c = selected()) { const auto copy = *c; if (processor.applyLabelCheck (copy)) note ("Done: " + copy.name + " (the Score log shows what it did)"); } };
+            safeB.onClick = [this] { processor.labelReady.logAction ("Fix all safe ones"); note (juce::String (processor.labelReady.fixAllSafe()) + " safe fix(es) sent; the scores update as the song plays."); };
+            for (auto* b : { &fixB, &safeB, &toolsB, &profileB, &refsB, &milestoneB, &handoffB, &saveB }) addAndMakeVisible (b);
+            toolsB.onClick = [this] { toolsMenu(); };
+            listenLabel.setColour (juce::Label::textColourId, Colours::brass);
+            addAndMakeVisible (listenLabel);
             profileB.onClick = [this] { profileMenu(); };
             refsB.onClick = [this] { refsMenu(); };
             milestoneB.onClick = [this] { milestoneMenu(); };
@@ -105,8 +108,10 @@ namespace lab
         {
             auto r = getLocalBounds().reduced (14);
             r.removeFromTop (70 + 44 + 8);
+            listenLabel.setBounds (r.removeFromTop (20));
+            r.removeFromTop (4);
             auto bottom = r.removeFromBottom (30);
-            for (auto* b : { &fixB, &safeB, &profileB, &refsB, &milestoneB, &handoffB, &saveB }) { b->setBounds (bottom.removeFromLeft (150).reduced (2, 0)); }
+            for (auto* b : { &fixB, &safeB, &toolsB, &profileB, &refsB, &milestoneB, &handoffB, &saveB }) { b->setBounds (bottom.removeFromLeft (132).reduced (2, 0)); }
             status.setBounds (bottom);
             r.removeFromBottom (6);
             auto rightCol = r.removeFromRight (440);
@@ -121,9 +126,9 @@ namespace lab
         OuroborosProcessor& processor;
         juce::ListBox list;
         juce::TextEditor detail;
-        juce::TextButton fixB { "Fix this" }, safeB { "Fix all safe ones" }, profileB { "Label profile..." }, refsB { "References..." },
+        juce::TextButton fixB { "Fix this" }, safeB { "Fix all safe ones" }, toolsB { "Tools..." }, profileB { "Label profile..." }, refsB { "References..." },
                          milestoneB { "Milestones..." }, handoffB { "Hand-off pack..." }, saveB { "Save the report..." };
-        juce::Label status;
+        juce::Label status, listenLabel;
         juce::Rectangle<int> historyArea;
         std::vector<int> rows;   // check indices, by area then score
         int selectedRow = -1;
@@ -151,6 +156,16 @@ namespace lab
             list.updateContent();
             list.repaint();
             showSelected();
+            // the listen-through: what to listen for where the playhead is
+            {
+                auto& lr = processor.labelReady;
+                const auto bar = (int) std::floor (processor.ppq.load() / juce::jmax (1.0, processor.barQuarters.load())) + 1;
+                juce::String line = processor.playing.load() ? "Listen: " + lr.listenNow (bar) : juce::String ("Listen-through: play the song; flagged bars come up here as you reach them (" + juce::String ((int) lr.listenQueue().size()) + " flagged)");
+                if (lr.watching && lr.watchBaseline >= 0) line = "WATCHING: " + juce::String (lr.report.overall - lr.watchBaseline >= 0 ? "+" : "") + juce::String (lr.report.overall - lr.watchBaseline) + " since you started.  " + line;
+                if (lr.abOn) line = "A/B: " + (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("switching")) + " (level-matched " + juce::String (lr.abGainDb.load(), 1) + " dB).  " + line;
+                if (lr.translationLoop) line << "  |  Translation loop: " << lr.loopNote;
+                listenLabel.setText (line, juce::dontSendNotification);
+            }
             if (processor.labelReady.analysing.isNotEmpty()) note ("Measuring \"" + processor.labelReady.analysing + "\"...");
             else if (processor.labelReady.lastAdded.isNotEmpty()) { note (processor.labelReady.lastAdded); processor.labelReady.lastAdded = {}; }
             repaint();
@@ -158,7 +173,7 @@ namespace lab
         void showSelected()
         {
             const auto* c = selected();
-            fixB.setEnabled (c != nullptr && (c->fix != suite::Fix::None || c->action.startsWith ("director:")));
+            fixB.setEnabled (c != nullptr && (c->fix != suite::Fix::None || c->action.startsWith ("director:") || c->action.startsWith ("autopilot:") || c->action.startsWith ("lift:")));
             if (c == nullptr) { detail.setText ("Click a check to see what it found, where, and what would move it.\n\nBlocking:\n" + processor.labelReady.report.blockers.joinIntoString ("\n")); return; }
             juce::StringArray t;
             t.add (c->name + (c->blocking ? "  (blocks the gate when low)" : ""));
@@ -170,6 +185,10 @@ namespace lab
             if (c->fix != suite::Fix::None) t.add (juce::String ("One click: ") + (c->safeFix ? "a safe fix (in Fix all safe ones)" : "a fix (undoable in Mentalism's History)"));
             else if (c->action == "write stronger") t.add ("In Correspondence: Song page > Write it stronger (three stronger hooks, scored).");
             else if (c->action.startsWith ("director:")) t.add ("One click: tells the director \"" + c->action.fromFirstOccurrenceOf (":", false, false).trim() + "\"");
+            else if (c->action.startsWith ("autopilot:")) t.add (juce::String ("One click: turns on the autopilot's \"") + suite::Autopilot::featureName (c->action.fromFirstOccurrenceOf (":", false, false).getIntValue()) + "\"");
+            else if (c->action.startsWith ("lift:")) t.add ("One click: the final-drop key change becomes +" + c->action.fromFirstOccurrenceOf (":", false, false) + " semitones");
+            if (const auto it = processor.labelReady.profile.minScore.find (c->name); it != processor.labelReady.profile.minScore.end())
+                t.add ("This label insists: at least " + juce::String (juce::roundToInt (it->second * 100.0f)) + "% (Tools > This check is a must)");
             detail.setText (t.joinIntoString ("\n"));
         }
         int getNumRows() override { return (int) rows.size(); }
@@ -257,12 +276,98 @@ namespace lab
             m.addItem (1, "Save a milestone (the whole suite's state)...");
             m.addSubMenu ("Restore a milestone", restore, ! ms.empty());
             m.addSubMenu ("Compare with the one before", compare, ms.size() >= 2);
+            juce::PopupMenu ab;
+            for (int i = 0; i < (int) ms.size(); ++i)
+                for (int j = i + 1; j < (int) ms.size(); ++j)
+                    if (i * 50 + j < 2000) ab.addItem (1000 + i * 50 + j, ms[(size_t) i].name + "  vs  " + ms[(size_t) j].name);
+            m.addSubMenu ("A/B two milestones (level-matched, switching on the bar)", ab, ms.size() >= 2 && ! processor.labelReady.abOn);
+            m.addItem (2, "Switch the A/B at the next bar", processor.labelReady.abOn);
+            m.addItem (3, "Stop the A/B", processor.labelReady.abOn);
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&milestoneB), [this] (int r)
             {
                 auto& lr = processor.labelReady;
-                if (r == 1) askText ("Save a milestone", "What it is, e.g. \"sent to vocalist\", \"A&R round 1\"", [this] (juce::String n) { processor.labelReady.saveMilestone (n); note ("Milestone saved: " + n); });
+                if (r >= 1000) { lr.abStart ((r - 1000) / 50, (r - 1000) % 50); note ("A/B: the first milestone loads at the next bar; Switch flips at the bar after. A monitor level match only: stop the A/B before you render."); }
+                else if (r == 2) lr.abToggle();
+                else if (r == 3) { lr.abStop(); note ("A/B stopped (the last one loaded stays)."); }
+                else if (r == 1) askText ("Save a milestone", "What it is, e.g. \"sent to vocalist\", \"A&R round 1\"", [this] (juce::String n) { processor.labelReady.saveMilestone (n); note ("Milestone saved: " + n); });
                 else if (r >= 300) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "What changed between the milestones", lr.diffMilestones (r - 301, r - 300).joinIntoString ("\n"));
                 else if (r >= 100) { lr.restoreMilestone (r - 100); note ("Restoring \"" + lr.milestones[(size_t) r - 100].name + "\" across the suite"); }
+            });
+        }
+        void toolsMenu()
+        {
+            auto& lr = processor.labelReady;
+            juce::PopupMenu m, mix, writing, iterate, focus;
+            mix.addItem (10, "Match the label: one step (the furthest-out check with a fix)");
+            mix.addItem (11, "Steer every Quintessence toward the label's tone", lr.profileFromCatalogue, lr.steerToLabel);
+            mix.addItem (12, "Translation loop: try a fix, keep it only if it helped", true, lr.translationLoop);
+            m.addSubMenu ("The mix toward the label", mix);
+            writing.addItem (20, "Drop-impact designer (3 ways, ranked)...");
+            writing.addItem (21, "Ear candy where nothing new happens (a MIDI clip)...");
+            writing.addItem (22, "Write in Correspondence: Writing > Write for the label (breakdown, drop 2, counter, bass, teaser)", false);
+            m.addSubMenu ("Writing", writing);
+            const auto map = processor.getMap();
+            focus.addItem (300, "The whole song", true, lr.focusSection < 0);
+            for (int i = 0; i < map.count; ++i)
+                focus.addItem (301 + i, juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " at bar " + juce::String (map.sections[(size_t) i].startBar), true, lr.focusSection == i);
+            iterate.addSubMenu ("Score one section only", focus, map.count > 0);
+            iterate.addItem (30, "Watch mode: score faster while you loop, against where you started", true, lr.watching);
+            iterate.addItem (31, "Score log: what each change did...");
+            iterate.addItem (32, "Score the label's own tracks...", ! lr.profile.refs.empty());
+            iterate.addItem (33, "... and set the ready threshold from them", ! lr.profile.refs.empty());
+            if (const auto* c = selected())
+            {
+                const auto must = lr.profile.minScore.count (c->name) > 0;
+                iterate.addItem (34, must ? "\"" + c->name + "\" is no longer a must" : "\"" + c->name + "\" is a must for this label (at least 80%)");
+            }
+            m.addSubMenu ("Iterate", iterate);
+            m.addItem (40, "Blind spots: what couldn't be measured, and why...");
+            m.addItem (41, "The listen-through queue (every flagged bar, in order)...");
+            m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsB), [this] (int r)
+            {
+                auto& host = processor.labelReady;
+                if (r == 10) note (host.matchLabelStep());
+                else if (r == 11) { host.steerToLabel = ! host.steerToLabel; if (! host.steerToLabel) suite::ReferenceBus::withdraw(); note (host.steerToLabel ? "Every Quintessence now steers toward the label's tone (Mentalism's loaded reference, if any, takes over)." : "Steering toward the label off."); }
+                else if (r == 12) { host.translationLoop = ! host.translationLoop; host.tried.clear(); note (host.translationLoop ? "Translation loop on: one fix at a time, about half a minute each, undone if it didn't help." : "Translation loop off."); }
+                else if (r == 20) impactMenu();
+                else if (r == 21)
+                {
+                    chooser = std::make_unique<juce::FileChooser> ("Where to put the ear candy clip", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
+                    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+                    {
+                        if (! fc.getResult().isDirectory()) return;
+                        const auto f = processor.labelReady.writeEarCandy (fc.getResult(), processor.getMap(), processor.barQuarters.load());
+                        note (juce::String (processor.labelReady.earCandySpots) + " spot(s) where nothing new happens for 4 bars: one-shots in key there. Drag " + f.getFileName() + " onto a candy track.");
+                        f.revealToUser();
+                    });
+                }
+                else if (r >= 300 && r < 400) { host.focusSection = r - 301; note (host.focusSection < 0 ? juce::String ("Scoring the whole song.") : "Scoring one section only: the checks that point inside it."); }
+                else if (r == 30) { host.setWatching (! host.watching); note (host.watching ? "Watch mode: scoring every half second; the line above shows the change since now." : "Watch mode off."); }
+                else if (r == 31) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Score log", host.scoreLogText());
+                else if (r == 32 || r == 33) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "The label's tracks, scored", host.scoreReferences (r == 33));
+                else if (r == 34) if (const auto* c = selected()) { const auto must = host.profile.minScore.count (c->name) > 0; host.setMinimum (c->name, must ? 0.0f : 0.8f); }
+                if (r == 40) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Blind spots", host.blindSpots());
+                else if (r == 41)
+                {
+                    juce::StringArray l;
+                    for (const auto& q : host.listenQueue()) l.add ("bar " + juce::String (q.bar) + ": " + q.what);
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Listen-through", l.isEmpty() ? juce::String ("Nothing flagged at a bar.") : l.joinIntoString ("\n"));
+                }
+                refresh();
+            });
+        }
+        void impactMenu()
+        {
+            const auto options = processor.labelReady.dropImpactOptions (processor.getMap());
+            juce::PopupMenu m;
+            m.addSectionHeader ("The drops' impact (estimates of what each adds)");
+            if (options.empty()) m.addItem (-1, "Play the song through first", false);
+            for (size_t i = 0; i < options.size(); ++i) m.addItem ((int) i + 1, options[i].name + "  (" + options[i].detail + ")");
+            m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsB), [this, options] (int r)
+            {
+                if (r <= 0 || r > (int) options.size()) return;
+                if (processor.applyLabelCheck (options[(size_t) r - 1])) note ("Done: " + options[(size_t) r - 1].name);
+                refresh();
             });
         }
         void handoff()

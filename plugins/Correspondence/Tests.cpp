@@ -2164,5 +2164,34 @@ int main (int argc, char** argv)
         }
     }
 
+
+    section ("Write for the label: scored options for the breakdown, drop 2, the counter, the bass, the teaser");
+    {
+        auto p = make();
+        p->applyPreset (0);
+        using G = CorrespondenceProcessor::LabelGoal;
+        static const char* names[] = { "breakdown emotion", "drop 2 differs", "counter space", "bass fits the chords", "hook teased early" };
+        for (int g = 0; g < 5; ++g)
+        {
+            float current = -1.0f;
+            const auto options = p->labelOptions ((G) g, current);
+            bool better = current >= 0.0f && current <= 1.0f && options.size() <= 3;
+            for (const auto& o : options) better = better && o.score > current && ! o.params.empty();
+            check (better, juce::String (names[g]) + ": now " + juce::String (current, 2) + ", " + juce::String ((int) options.size()) + " higher-scoring option(s)"
+                           + (options.empty() ? juce::String() : " (best: " + options[0].name + ", " + juce::String (options[0].score, 2) + ")"));
+            if (! options.empty())
+            {
+                p->applyLabelOption (options[0]);
+                float after = 0.0f;
+                p->labelOptions ((G) g, after);
+                check (std::abs (after - options[0].score) < 0.02f, juce::String ("  applying it writes it (") + juce::String (after, 2) + ")");
+                check (p->undoVariation(), "  and Undo puts it back");
+                float back = 0.0f;
+                p->labelOptions ((G) g, back);
+                check (std::abs (back - current) < 0.02f, "  (back to " + juce::String (back, 2) + ")");
+            }
+        }
+    }
+
     return finish();
 }

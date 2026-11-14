@@ -118,6 +118,7 @@ private:
                      colourButton { "Colour..." }, varyButton { "Vary..." };
     void showSongPatterns();
     void showStrongerHooks (juce::Component& target);
+    void showLabelOptions (juce::Component& target, int goal);
     void layoutKeyRow();
     std::unique_ptr<juce::FileChooser> chooser;
 

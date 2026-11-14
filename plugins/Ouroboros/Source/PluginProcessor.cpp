@@ -188,6 +188,15 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     else if (songBarIndex >= 0) { labelReady.live.add (songBarIndex, songBar); songBar = {}; songBarIndex = -1; }
+    // milestone A/B, level-matched: a monitor trim only (never in a render)
+    if (labelReady.abOn && ! isNonRealtime())
+    {
+        const auto g = juce::Decibels::decibelsToGain (labelReady.abGainDb.load());
+        if (std::abs (g - 1.0f) > 1.0e-4f || std::abs (abGainNow - 1.0f) > 1.0e-4f)
+            for (int c = 0; c < buffer.getNumChannels(); ++c) buffer.applyGainRamp (c, 0, buffer.getNumSamples(), abGainNow, g);
+        abGainNow = g;
+    }
+    else abGainNow = 1.0f;
 
     if (resetFeatures.exchange (false))
         for (auto& b : barData) { b.flux.store (0.0f); b.high.store (0.0f); b.full.store (0.0f); b.samples.store (0); }

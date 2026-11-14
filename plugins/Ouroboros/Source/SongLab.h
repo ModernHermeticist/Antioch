@@ -23,6 +23,7 @@ namespace lab
         bool heard = false;
         float db = -100.0f, sideDb = -100.0f, onsets = 0.0f, lowFlux = 0.0f;
         Bands band {};
+        std::array<float, 12> chroma {};   // the pitch classes' share of the bar's tonal energy (C = 0), sums to 1 (or all 0)
         float bandDb (int b) const { return band[(size_t) juce::jlimit (0, numBands - 1, b)]; }
     };
 
@@ -31,6 +32,7 @@ namespace lab
     {
         double full = 0.0, side = 0.0, low = 0.0;
         std::array<double, numBands> band {};
+        std::array<double, 12> chroma {};
         int samples = 0, onsets = 0;
         Bar finish() const
         {
@@ -42,6 +44,9 @@ namespace lab
             for (int i = 0; i < numBands; ++i) b.band[(size_t) i] = db (band[(size_t) i]);
             b.onsets = (float) onsets;
             b.lowFlux = (float) low;
+            double c = 0.0;
+            for (auto v : chroma) c += v;
+            if (c > 1.0e-12) for (int k = 0; k < 12; ++k) b.chroma[(size_t) k] = (float) (chroma[(size_t) k] / c);
             return b;
         }
     };
@@ -59,6 +64,47 @@ namespace lab
             fastA = 1.0f - std::exp (-1.0f / (0.005f * fs)); slowA = 1.0f - std::exp (-1.0f / (0.12f * fs));
             lowA = 1.0f - std::exp (-1.0f / (0.002f * fs)); lowR = 1.0f - std::exp (-1.0f / (0.04f * fs));
             holdOff = 0; armed = true;
+            // the chroma: 4x decimated (about 11 kHz), 2048-point frames, 65 Hz .. 2 kHz
+            decimFactor = juce::jmax (1, (int) std::lround (sr / 11025.0));
+            antiAlias.set (juce::jmin (2500.0f, 0.4f * fs / (float) decimFactor), 0.707f, fs);
+            frameFill = 0; decimCount = 0; decimSum = 0.0f;
+            const auto rate = (double) fs / decimFactor;
+            for (int k = 0; k < fftSize / 2; ++k)
+            {
+                const auto hz = (double) k * rate / fftSize;
+                binClass[(size_t) k] = hz >= 65.0 && hz <= 2000.0 ? ((int) std::lround (12.0 * std::log2 (hz / 440.0)) + 9 + 1200) % 12 : -1;
+            }
+            for (int i = 0; i < fftSize; ++i) window[(size_t) i] = 0.5f - 0.5f * std::cos (2.0f * juce::MathConstants<float>::pi * (float) i / (float) (fftSize - 1));
+        }
+        static constexpr int fftOrder = 11, fftSize = 1 << fftOrder;
+        /** A small in-place radix-2 FFT (real input in re, im zeroed). */
+        static void fft (std::array<float, fftSize>& re, std::array<float, fftSize>& im) noexcept
+        {
+            for (int i = 1, j = 0; i < fftSize; ++i)
+            {
+                int bit = fftSize >> 1;
+                for (; (j & bit) != 0; bit >>= 1) j ^= bit;
+                j ^= bit;
+                if (i < j) { std::swap (re[(size_t) i], re[(size_t) j]); std::swap (im[(size_t) i], im[(size_t) j]); }
+            }
+            for (int len = 2; len <= fftSize; len <<= 1)
+            {
+                const auto ang = -2.0 * juce::MathConstants<double>::pi / len;
+                const auto wr0 = (float) std::cos (ang), wi0 = (float) std::sin (ang);
+                for (int i = 0; i < fftSize; i += len)
+                {
+                    float wr = 1.0f, wi = 0.0f;
+                    for (int k = 0; k < len / 2; ++k)
+                    {
+                        const auto a = (size_t) (i + k), b = (size_t) (i + k + len / 2);
+                        const auto xr = re[b] * wr - im[b] * wi, xi = re[b] * wi + im[b] * wr;
+                        re[b] = re[a] - xr; im[b] = im[a] - xi;
+                        re[a] += xr; im[a] += xi;
+                        const auto nwr = wr * wr0 - wi * wi0;
+                        wi = wr * wi0 + wi * wr0; wr = nwr;
+                    }
+                }
+            }
         }
         void process (float l, float r, Accumulator& acc) noexcept
         {
@@ -78,13 +124,33 @@ namespace lab
             const auto lo = std::abs (lowBand.lowpass (mono)), before = lowEnv;
             lowEnv += (lo > lowEnv ? lowA : lowR) * (lo - lowEnv);
             acc.low += std::max (0.0f, lowEnv - before);
+            // the chroma
+            decimSum += antiAlias.lowpass (mono);
+            if (++decimCount >= decimFactor)
+            {
+                frame[(size_t) frameFill++] = decimSum / (float) decimFactor;
+                decimSum = 0.0f; decimCount = 0;
+                if (frameFill >= fftSize)
+                {
+                    frameFill = 0;
+                    for (int i = 0; i < fftSize; ++i) { re[(size_t) i] = frame[(size_t) i] * window[(size_t) i]; im[(size_t) i] = 0.0f; }
+                    fft (re, im);
+                    for (int k = 1; k < fftSize / 2; ++k)
+                        if (const auto c = binClass[(size_t) k]; c >= 0)
+                            acc.chroma[(size_t) c] += (double) (re[(size_t) k] * re[(size_t) k] + im[(size_t) k] * im[(size_t) k]);
+                }
+            }
         }
     private:
         float fs = 44100.0f, envFast = 0.0f, envSlow = 0.0f, fastA = 0.1f, slowA = 0.01f, lowEnv = 0.0f, lowA = 0.1f, lowR = 0.01f;
         int holdOff = 0;
         bool armed = true;
         std::array<suite::Svf, numBands> filters;
-        suite::Svf lowBand;
+        suite::Svf lowBand, antiAlias;
+        int decimFactor = 4, decimCount = 0, frameFill = 0;
+        float decimSum = 0.0f;
+        std::array<float, fftSize> frame {}, re {}, im {}, window {};
+        std::array<int, fftSize / 2> binClass {};
     };
 
     /** A whole file, bar by bar at `bpm` (up to 15 minutes). */
@@ -206,5 +272,60 @@ namespace lab
         double d = 0.0;
         for (int k = 1; k < numBands - 1; ++k) d += (double) (sa[(size_t) k] - sb[(size_t) k]) * (sa[(size_t) k] - sb[(size_t) k]);
         return (float) std::sqrt (d / (numBands - 2));
+    }
+
+    //==============================================================================
+    // Chords from the chroma: each bar's root (the best major or minor triad), a section's
+    // progression, and a key-independent print of it (the steps between the roots).
+    inline int barRoot (const Bar& b, float* strength = nullptr)
+    {
+        float total = 0.0f;
+        for (auto v : b.chroma) total += v;
+        if (total < 0.5f) return -1;
+        int best = -1; float bestScore = 0.0f;
+        for (int r = 0; r < 12; ++r)
+            for (int third : { 3, 4 })
+            {
+                const auto sc = b.chroma[(size_t) r] + 0.7f * b.chroma[(size_t) ((r + third) % 12)] + 0.8f * b.chroma[(size_t) ((r + 7) % 12)];
+                if (sc > bestScore) { bestScore = sc; best = r; }
+            }
+        if (strength != nullptr) *strength = bestScore;
+        return bestScore > 0.35f ? best : -1;
+    }
+    /** The chord roots of bars [from, to), repeats merged (up to 8). */
+    inline std::vector<int> progression (const std::vector<Bar>& bars, int from, int to)
+    {
+        std::vector<int> roots;
+        for (int b = juce::jmax (0, from); b < juce::jmin ((int) bars.size(), to) && roots.size() < 8; ++b)
+        {
+            const auto r = barRoot (bars[(size_t) b]);
+            if (r >= 0 && (roots.empty() || roots.back() != r)) roots.push_back (r);
+        }
+        // a loop that comes back to its first chord: drop the repeat
+        if (roots.size() > 2 && roots.back() == roots.front()) roots.pop_back();
+        return roots;
+    }
+    /** The steps between successive roots, around the loop ("8,7,7,2" for i-VI-III-VII). */
+    inline juce::String progressionPrint (const std::vector<int>& roots)
+    {
+        if (roots.size() < 2) return {};
+        juce::StringArray steps;
+        for (size_t i = 0; i < roots.size(); ++i) steps.add (juce::String (((roots[(i + 1) % roots.size()] - roots[i]) % 12 + 12) % 12));
+        return steps.joinIntoString (",");
+    }
+    /** How alike two progression prints are (0..1), allowing the loop to start anywhere. */
+    inline float progressionSimilarity (const juce::String& a, const juce::String& b)
+    {
+        const auto x = juce::StringArray::fromTokens (a, ",", ""), y = juce::StringArray::fromTokens (b, ",", "");
+        if (x.size() < 2 || y.size() < 2) return 0.0f;
+        float best = 0.0f;
+        const auto n = juce::jmax (x.size(), y.size());
+        for (int rot = 0; rot < y.size(); ++rot)
+        {
+            int same = 0;
+            for (int i = 0; i < juce::jmin (x.size(), y.size()); ++i) same += x[i] == y[(i + rot) % y.size()] ? 1 : 0;
+            best = juce::jmax (best, (float) same / (float) n);
+        }
+        return best;
     }
 }

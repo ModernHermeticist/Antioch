@@ -31,7 +31,9 @@ namespace suite
                                     ReverbLowCut,                                   // every Antioch's reverb low cut up (mud from the reverb returns)
                                     DriveSofter,                                    // every Vibration's drive down (harshness)
                                     SectionDown,                                    // every track 1 dB down in one kind of section (data: the type)
-                                    BuildImpact };
+                                    BuildImpact,
+                                    TrackPolarity,                                  // one Quintessence flips its polarity (data: its id's low 12 bits)
+                                    SectionTrim };                                  // one Quintessence's level in one kind of section (packSectionTrim)
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
@@ -58,7 +60,8 @@ namespace suite
                                        "Learning pass", "Kick fit", "Phase flip", "Finish the song", "Balance step",
                                        "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
                                        "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
-                                       "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact" };
+                                       "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact",
+                                       "Polarity flip", "Section trim" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -80,6 +83,18 @@ namespace suite
     {
         instanceLow = data & 0xfffu;
         band = (int) ((data >> 12) & 0xf);
+        db = (float) (int8_t) (uint8_t) ((data >> 16) & 0xff) / 2.0f;
+    }
+
+    /** SectionTrim: which Quintessence (low 12 bits of its id), which kind of section, how much (signed half dB). */
+    inline uint32_t packSectionTrim (uint32_t instanceId, int type, float db) noexcept
+    {
+        return (instanceId & 0xfffu) | ((uint32_t) (type & 0xf) << 12) | ((uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 2.0f)) << 16);
+    }
+    inline void unpackSectionTrim (uint32_t data, uint32_t& instanceLow, int& type, float& db) noexcept
+    {
+        instanceLow = data & 0xfffu;
+        type = (int) ((data >> 12) & 0xf);
         db = (float) (int8_t) (uint8_t) ((data >> 16) & 0xff) / 2.0f;
     }
 

@@ -179,6 +179,14 @@ public:
     struct StrongerHook { juce::String name; float score = 0.0f; int seed = 7, style = 1; bool libLead = false; };
     std::vector<StrongerHook> strongerHooks (float& current) const;
     bool applyStrongerHook (const StrongerHook&);
+    /** Write for the label: options for one goal, each scored the way the label-ready checks
+        would see it, best first (up to three that beat today's); applying one sets its parameters
+        (the variation Undo puts them back). */
+    enum class LabelGoal { BreakdownEmotion, Drop2Different, CounterSpace, BassFit, IntroTeaser };
+    struct LabelOption { juce::String name; float score = 0.0f; std::vector<std::pair<juce::String, float>> params; };
+    std::vector<LabelOption> labelOptions (LabelGoal goal, float& current) const;
+    float labelScore (LabelGoal goal, const suite::SectionMap& map, const chords::SongPatterns& sp) const;
+    bool applyLabelOption (const LabelOption&);
     /** The map the song is written against: Ouroboros' when it shares one, else a standard trance form. */
     static suite::SectionMap songMapOrDefault();
     /** Clash check: parts in the song clips that sit in the same register, each with a fix. */

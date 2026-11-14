@@ -16,7 +16,7 @@ namespace
 }
 
 //==============================================================================
-namespace { std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState&, std::function<void (juce::Component&)> writeStronger); }
+namespace { std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState&, std::function<void (juce::Component&)> writeStronger, std::function<void (juce::Component&, int)> writeForLabel); }
 
 DragTile::DragTile (CorrespondenceProcessor& p, juce::String k, juce::Colour c)
     : processor (p), kind (std::move (k)), colour (c)
@@ -403,7 +403,7 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
         addAndMakeVisible (c);
 
     // Two pages: Chords and Song
-    songGrid = makeSongGrid (processor.apvts, [this] (juce::Component& c) { showStrongerHooks (c); });
+    songGrid = makeSongGrid (processor.apvts, [this] (juce::Component& c) { showStrongerHooks (c); }, [this] (juce::Component& c, int goal) { showLabelOptions (c, goal); });
     addChildComponent (*songGrid);
     for (auto* t : { &songHarmonyTile, &songCounterTile, &songSubTile, &songFillsTile }) addChildComponent (*t);
     for (auto* b : { &chordsTab, &songTab })
@@ -597,6 +597,7 @@ namespace
         }
 
         std::function<void (juce::Component&)> writeStronger;   // the editor's: scores the drop leads
+        std::function<void (juce::Component&, int)> writeForLabel;   // the editor's: scored options per goal
 
         /** The Writing menu: the groups on or off, favourites and bans, and the library's tools. */
         void showWritingMenu()
@@ -639,6 +640,15 @@ namespace
             m.addItem (35, "Sound guide: what each part should sound like...");
             m.addItem (36, "Save this song's hook to the hook bank");
             m.addItem (37, "Write the hook stronger (3 scored new hooks)...", writeStronger != nullptr);
+            {
+                juce::PopupMenu label;
+                label.addItem (40, "The breakdown's emotion...");
+                label.addItem (41, "Drop 2 differs from drop 1...");
+                label.addItem (42, "The counter-line's space...");
+                label.addItem (43, "The drop's bass fits the chords...");
+                label.addItem (44, "Tease the hook in the intro...");
+                m.addSubMenu ("Write for the label (scored options)", label, writeForLabel != nullptr);
+            }
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writingButton), [this, kitName = kit != nullptr ? kit->name : std::string(), hookKey = patterns::familyKey (hook)] (int id)
             {
                 if (id <= 0 || stateRef == nullptr) return;
@@ -663,6 +673,7 @@ namespace
                     return;
                 }
                 if (id == 37) { if (writeStronger) writeStronger (writingButton); return; }
+                if (id >= 40 && id <= 44) { if (writeForLabel) writeForLabel (writingButton, id - 40); return; }
                 if (id == 36)
                 {
                     juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Hook bank", saveHookToBank());
@@ -884,12 +895,35 @@ namespace
 
 namespace
 {
-    std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState& s, std::function<void (juce::Component&)> writeStronger)
+    std::unique_ptr<juce::Component> makeSongGrid (juce::AudioProcessorValueTreeState& s, std::function<void (juce::Component&)> writeStronger, std::function<void (juce::Component&, int)> writeForLabel)
     {
         auto g = std::make_unique<SongPatternGrid> (s);
         g->writeStronger = std::move (writeStronger);
+        g->writeForLabel = std::move (writeForLabel);
         return g;
     }
+}
+
+/** Write for the label: options for one goal, scored, the best three offered (with Undo). */
+void CorrespondenceEditor::showLabelOptions (juce::Component& target, int goal)
+{
+    static const char* goals[] = { "The breakdown's emotion", "Drop 2 isn't a copy of drop 1", "The counter-line's space", "The drop's bass fits the chords", "The hook teased early" };
+    float current = 0.0f;
+    const auto g = (CorrespondenceProcessor::LabelGoal) juce::jlimit (0, 4, goal);
+    const auto options = processor.labelOptions (g, current);
+    juce::PopupMenu m;
+    m.addSectionHeader (juce::String (goals[juce::jlimit (0, 4, goal)]) + ": now " + juce::String (juce::roundToInt (current * 100.0f)) + "/100");
+    if (options.empty()) m.addItem (-1, "Nothing scores higher than what's there", false);
+    for (size_t i = 0; i < options.size(); ++i)
+        m.addItem ((int) i + 1, options[i].name + "  (" + juce::String (juce::roundToInt (options[i].score * 100.0f)) + "/100)");
+    m.addSeparator();
+    m.addItem (99, "Undo the last change", ! processor.beforeVariation.empty());
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&target), [this, options] (int id)
+    {
+        if (id == 99) { processor.undoVariation(); return; }
+        if (id <= 0 || id > (int) options.size()) return;
+        processor.applyLabelOption (options[(size_t) id - 1]);
+    });
 }
 
 /** Write the hook stronger: the drop's lead variations scored as hooks, the best three offered. */

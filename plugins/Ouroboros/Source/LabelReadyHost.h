@@ -14,6 +14,10 @@
 #include "Recipes.h"
 #include "StyleLog.h"
 #include "MoveLog.h"
+#include "ReferenceBus.h"
+#include "KeyBus.h"
+#include "KitBus.h"
+#include <optional>
 #include <thread>
 
 namespace lab
@@ -22,7 +26,7 @@ namespace lab
     struct LiveBars
     {
         static constexpr int maxBars = 1024;
-        struct B { std::atomic<float> full { 0 }, side { 0 }, low { 0 }, onsets { 0 }; std::array<std::atomic<float>, numBands> band {}; std::atomic<int> samples { 0 }; };
+        struct B { std::atomic<float> full { 0 }, side { 0 }, low { 0 }, onsets { 0 }; std::array<std::atomic<float>, numBands> band {}; std::array<std::atomic<float>, 12> chroma {}; std::atomic<int> samples { 0 }; };
         std::array<B, maxBars> bars;
         void add (int bar, const Accumulator& a) noexcept
         {
@@ -31,6 +35,7 @@ namespace lab
             b.full.store (b.full.load() + (float) a.full); b.side.store (b.side.load() + (float) a.side); b.low.store (b.low.load() + (float) a.low);
             b.onsets.store (b.onsets.load() + (float) a.onsets);
             for (int k = 0; k < numBands; ++k) b.band[(size_t) k].store (b.band[(size_t) k].load() + (float) a.band[(size_t) k]);
+            for (int k = 0; k < 12; ++k) b.chroma[(size_t) k].store (b.chroma[(size_t) k].load() + (float) a.chroma[(size_t) k]);
             b.samples.store (b.samples.load() + a.samples);
         }
         std::vector<Bar> read (int totalBars) const
@@ -43,6 +48,7 @@ namespace lab
                 a.samples = b.samples.load();
                 a.full = b.full.load(); a.side = b.side.load(); a.low = b.low.load(); a.onsets = (int) std::lround (b.onsets.load());
                 for (int k = 0; k < numBands; ++k) a.band[(size_t) k] = b.band[(size_t) k].load();
+                for (int k = 0; k < 12; ++k) a.chroma[(size_t) k] = b.chroma[(size_t) k].load();
                 auto bar = a.finish();
                 // onsets were summed over every time the bar was heard: per hearing
                 if (a.samples > 0) bar.onsets = b.onsets.load() * juce::jmin (1.0f, expectedSamples / (float) a.samples);
@@ -50,7 +56,7 @@ namespace lab
             }
             return out;
         }
-        void clear() noexcept { for (auto& b : bars) { b.full.store (0); b.side.store (0); b.low.store (0); b.onsets.store (0); for (auto& x : b.band) x.store (0); b.samples.store (0); } }
+        void clear() noexcept { for (auto& b : bars) { b.full.store (0); b.side.store (0); b.low.store (0); b.onsets.store (0); for (auto& x : b.band) x.store (0); for (auto& x : b.chroma) x.store (0); b.samples.store (0); } }
         float expectedSamples = 44100.0f * 1.74f;   // one bar's samples at the current tempo (the message thread keeps it up to date)
     };
 
@@ -62,7 +68,7 @@ namespace lab
         bool profileFromCatalogue = false;
         Report report;
         std::vector<std::pair<juce::int64, int>> history;      // (time, overall), a point a minute
-        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; };
+        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; float lufs = -100.0f; };
         std::vector<Milestone> milestones;
         std::map<int, std::array<double, numTypes>> rolePower;   // per role, per kind of section: summed power
         std::map<int, std::array<int, numTypes>> roleCount;
@@ -186,6 +192,15 @@ namespace lab
                 const auto mine = detail::hookPrint (in.song.hook);
                 in.otherHooks.erase (std::remove (in.otherHooks.begin(), in.otherHooks.end(), mine), in.otherHooks.end());
             }
+            in.traits = suite::TrackTraits::list();
+            const auto myProg = in.song.valid ? songProgressionPrint (in.song) : juce::String();
+            in.groovePrint = groovePrintNow();
+            for (const auto& e : suite::StyleLog::read())
+            {
+                if (e.kind == "progprint" && e.get ("print").isNotEmpty() && e.get ("print") != myProg) in.otherProgressions.push_back (e.get ("print"));
+                if (e.kind == "grooveprint" && e.get ("print").isNotEmpty() && e.get ("print") != in.groovePrint) in.otherGrooves.push_back (e.get ("print"));
+            }
+            in.focusSection = focusSection;
             in.fxRepitched = (int) suite::Autopilot::countOf (suite::Autopilot::fxRepitched);
             in.clicksGuarded = (int) suite::Autopilot::countOf (suite::Autopilot::clicksGuarded);
             return in;
@@ -200,6 +215,7 @@ namespace lab
                 in = gather (map, bpm, barQ, plan);
                 in.profile = &profile;
                 report = evaluate (in);
+                lastSections = in.sections;
             }
             const auto now = juce::Time::currentTimeMillis();
             if (report.overall > 0 && (history.empty() || now - history.back().first > 60000))
@@ -208,6 +224,314 @@ namespace lab
                 if (history.size() > 600) history.erase (history.begin());
             }
             suite::LabelReadyBus::publishOverall (report.overall, report.nextAction);
+            // the score log: what each action did, two updates later
+            for (auto& e : scoreLog) if (e.after < 0 && ++e.updatesSince >= 2) e.after = report.overall;
+            // steering toward the label: its drop tone becomes every Quintessence's reference
+            if (steerToLabel && profileFromCatalogue) suite::ReferenceBus::publish (labelToneTarget());
+            // the translation loop: one fix at a time, kept only if it helped
+            if (translationLoop) stepTranslationLoop();
+            // the first time the gate passes: a milestone, automatically
+            if (report.ready && focusSection < 0 && ! autoReadySaved) { autoReadySaved = true; saveMilestone ("Label-ready (first pass)"); }
+            if (watching && watchBaseline < 0) watchBaseline = report.overall;
+        }
+
+        // ---- iteration ----
+        int focusSection = -1;        // score one section only
+        bool watching = false;        // watch mode: score faster while you loop, against where you started
+        int watchBaseline = -1;
+        void setWatching (bool on) { watching = on; watchBaseline = on ? report.overall : -1; }
+        /** The score log: each thing done, the score before and (two updates later) after. */
+        struct LogEntry { juce::int64 timeMs = 0; juce::String what; int before = 0, after = -1, updatesSince = 0; };
+        std::vector<LogEntry> scoreLog;
+        void logAction (const juce::String& what)
+        {
+            scoreLog.push_back ({ juce::Time::currentTimeMillis(), what, report.overall, -1, 0 });
+            if (scoreLog.size() > 200) scoreLog.erase (scoreLog.begin());
+        }
+        juce::String scoreLogText() const
+        {
+            juce::StringArray l;
+            for (auto it = scoreLog.rbegin(); it != scoreLog.rend(); ++it)
+                l.add (juce::Time (it->timeMs).formatted ("%H:%M") + "  " + it->what + ": " + juce::String (it->before) + " -> "
+                       + (it->after >= 0 ? juce::String (it->after) + " (" + (it->after >= it->before ? "+" : "") + juce::String (it->after - it->before) + ")" : juce::String ("(listening...)")));
+            return l.isEmpty() ? juce::String ("Nothing done yet.") : l.joinIntoString ("\n");
+        }
+        /** Sends a check's one-click fix (or its autopilot switch), and logs it. */
+        bool applyCheck (const Check& c)
+        {
+            if (c.fix != suite::Fix::None) { suite::FixBus::send (c.fix, c.fixData); logAction (c.name + " (" + suite::fixName (c.fix) + ")"); return true; }
+            if (c.action.startsWith ("autopilot:"))
+            {
+                const auto f = c.action.fromFirstOccurrenceOf (":", false, false).getIntValue();
+                if (f >= 0 && f < suite::Autopilot::numFeatures)
+                {
+                    suite::Autopilot::set ((suite::Autopilot::Feature) f, true);
+                    suite::Autopilot::set ((suite::Autopilot::Group) suite::Autopilot::featureGroup (f), true);
+                    logAction (c.name + " (autopilot: " + suite::Autopilot::featureName (f) + ")");
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // ---- the mix toward the label ----
+        bool steerToLabel = false;    // the label's drop tone as every Quintessence's reference
+        /** The label's drop tone shape (the profile's medians), as a reference for the Quintessences. */
+        std::array<float, 10> labelToneTarget() const
+        {
+            const auto b = profile.toneOf (T::Drop);
+            std::array<float, 10> out {};
+            for (int k = 0; k < 10 && k < numBands; ++k) out[(size_t) k] = b[(size_t) k];
+            return out;
+        }
+        /** One step toward the label: the check against the label furthest out that has a fix. */
+        juce::String matchLabelStep()
+        {
+            const Check* worst = nullptr;
+            for (const auto& c : report.checks)
+                if (c.measured && c.fix != suite::Fix::None && (c.area == aReference || c.area == aAR || c.area == aLowEnd || c.area == aBalance) && c.score < 0.8f
+                    && (worst == nullptr || c.score < worst->score)) worst = &c;
+            if (worst == nullptr) return "Nothing with a fix is out of the label's range.";
+            const auto what = worst->name + ": " + suite::fixName (worst->fix);
+            applyCheck (*worst);
+            return "Sent: " + what + " (Undo in Mentalism's What changed).";
+        }
+        // the translation loop: the worst translation (or mono) problem's fix, kept only if it helped
+        bool translationLoop = false;
+        struct Trial { juce::String check; uint32_t seq = 0; float before = 0.0f; int updates = 0; };
+        std::optional<Trial> trial;
+        std::set<juce::String> tried;
+        juce::String loopNote;
+        void stepTranslationLoop()
+        {
+            auto scoreOf = [this] (const juce::String& name) { for (const auto& c : report.checks) if (c.name == name && c.measured) return c.score; return -1.0f; };
+            if (trial)
+            {
+                if (++trial->updates < 3) return;   // listen for a while (about half a minute)
+                const auto now = scoreOf (trial->check);
+                if (now >= 0.0f && now < trial->before + 0.05f) { suite::FixBus::sendUndo (trial->seq); loopNote = trial->check + ": didn't help, undone"; }
+                else loopNote = trial->check + ": kept (" + juce::String (juce::roundToInt (trial->before * 100)) + " -> " + juce::String (juce::roundToInt (now * 100)) + ")";
+                logAction ("Translation loop: " + loopNote);
+                tried.insert (trial->check);
+                trial.reset();
+                return;
+            }
+            const Check* worst = nullptr;
+            for (const auto& c : report.checks)
+                if (c.measured && c.area == aTranslation && c.fix != suite::Fix::None && c.score < 0.8f && ! tried.count (c.name) && (worst == nullptr || c.score < worst->score)) worst = &c;
+            if (worst == nullptr) { loopNote = "nothing left to try"; return; }
+            Trial t; t.check = worst->name; t.before = worst->score; t.seq = suite::FixBus::send (worst->fix, worst->fixData);
+            loopNote = "trying " + suite::fixName (worst->fix) + " for " + worst->name;
+            trial = t;
+        }
+
+        // ---- confidence ----
+        bool autoReadySaved = false;
+        /** What the suite can't hear this session, and why. */
+        juce::String blindSpots() const
+        {
+            juce::StringArray l;
+            l.add ("BLIND SPOTS: what the checks couldn't measure, and why");
+            l.add ("");
+            const auto entries = suite::Registry::list();
+            auto loaded = [&entries] (const char* plugin) { for (const auto& e : entries) if (e.plugin == plugin) return true; return false; };
+            for (auto [plugin, what] : { std::pair<const char*, const char*> { "Mentalism", "the master (loudness, peaks, mono, translation)" },
+                                         { "Quintessence", "each track (balance, clip gain, recovery, layers, tails, depth)" },
+                                         { "Correspondence", "the written parts (hook, bass, chords, key change)" },
+                                         { "Kybalion", "the kick's pitch and the sidechain" } })
+                if (! loaded (plugin)) l.add ("- No " + juce::String (plugin) + " loaded: nothing on " + what + ".");
+            if (! profileFromCatalogue) l.add ("- No references in the profile: the label norms are generic trance, not this label's.");
+            for (int a = 0; a < numAreas; ++a)
+            {
+                juce::StringArray miss;
+                for (const auto& c : report.checks) if (c.area == a && ! c.measured) miss.add ("  " + c.name + ": " + c.detail);
+                if (! miss.isEmpty()) { l.add (""); l.add (areaName (a)); l.addArray (miss); }
+            }
+            l.add ("");
+            l.add ("Never measured (the suite can't hear these): the sound design's own quality, the vocal's performance, whether the idea is good.");
+            return l.joinIntoString ("\n") + "\n";
+        }
+        /** The listen-through queue: every flagged bar, in order, with what to listen for. */
+        struct QueueItem { int bar = 0; juce::String what; };
+        std::vector<QueueItem> listenQueue() const
+        {
+            std::vector<QueueItem> q;
+            for (const auto& c : report.checks)
+                if (c.measured && c.bar > 0 && c.score < 0.8f) q.push_back ({ c.bar, c.name + ": " + c.detail });
+            std::stable_sort (q.begin(), q.end(), [] (const QueueItem& a, const QueueItem& b) { return a.bar < b.bar; });
+            return q;
+        }
+        /** What to listen for around the playhead's bar (within 2 bars after a flag), else the next flag. */
+        juce::String listenNow (int bar) const
+        {
+            const auto q = listenQueue();
+            for (const auto& i : q) if (bar >= i.bar && bar < i.bar + 2) return "Now (bar " + juce::String (i.bar) + "): " + i.what;
+            for (const auto& i : q) if (i.bar > bar) return "Next: bar " + juce::String (i.bar) + " - " + i.what;
+            return q.empty() ? juce::String ("Nothing flagged at a bar.") : juce::String ("Past the last flagged bar.");
+        }
+
+        // ---- the profile's thresholds ----
+        /** Scores every reference as if it were the song (from its sections): how the label's own
+            released tracks score, and the threshold that 80% of them pass. */
+        juce::String scoreReferences (bool setThreshold)
+        {
+            std::vector<int> scores;
+            juce::StringArray l;
+            for (const auto& r : profile.refs)
+            {
+                Inputs in;
+                in.map = r.map; in.bpm = r.bpm; in.sections = r.sections; in.profile = &profile;
+                if (in.map.count == 0) for (const auto& sec : r.sections) { in.map.sections[(size_t) in.map.count].type = sec.type; in.map.sections[(size_t) in.map.count].startBar = sec.startBar; ++in.map.count; }
+                in.map.totalBars = 0;
+                for (const auto& sec : r.sections) in.map.totalBars = juce::jmax (in.map.totalBars, sec.startBar - 1 + sec.bars);
+                const auto rep = evaluate (in);
+                scores.push_back (rep.overall);
+                l.add (r.name + ": " + juce::String (rep.overall));
+            }
+            if (scores.empty()) return "No references to score.";
+            auto sorted = scores;
+            std::sort (sorted.begin(), sorted.end());
+            const auto p20 = sorted[(size_t) juce::jlimit (0, (int) sorted.size() - 1, (int) std::floor (0.2 * (double) sorted.size()))];
+            if (setThreshold) { profile.readyThreshold = juce::jlimit (50, 95, p20); profile.save(); }
+            return "The label's tracks, scored from their sections (the parts and the tracks can't be heard in a file, so only the arrangement, tone and dynamics count):\n"
+                   + l.joinIntoString ("\n") + "\n\n80% of them score " + juce::String (p20) + " or more"
+                   + (setThreshold ? ": the ready threshold is now " + juce::String (profile.readyThreshold) + "." : ".");
+        }
+        /** This label insists on a check: under `minimum` it blocks the gate. */
+        void setMinimum (const juce::String& check, float minimum)
+        {
+            if (minimum <= 0.0f) profile.minScore.erase (check); else profile.minScore[check] = juce::jlimit (0.1f, 1.0f, minimum);
+            if (profileFromCatalogue) profile.save();
+        }
+
+        // ---- milestone A/B ----
+        int abA = -1, abB = -1, abShowing = -1;   // the two milestones, and which is loaded
+        bool abOn = false, abSwitchPending = false;
+        std::atomic<float> abGainDb { 0.0f };     // the monitor level match (Ouroboros' output, never in a render)
+        /** Asks to switch at the next bar (the processor calls abTick at each bar). */
+        void abToggle() { if (abOn) abSwitchPending = true; }
+        void abStart (int a, int b)
+        {
+            if (a < 0 || b < 0 || a >= (int) milestones.size() || b >= (int) milestones.size() || a == b) return;
+            abA = a; abB = b; abOn = true; abShowing = -1; abSwitchPending = true;
+        }
+        void abStop() { abOn = false; abSwitchPending = false; abGainDb.store (0.0f); }
+        void abTick()
+        {
+            if (! abOn || ! abSwitchPending) return;
+            abSwitchPending = false;
+            abShowing = abShowing == abA ? abB : abA;
+            restoreMilestone (abShowing);
+            // level-matched: the louder one turned down to the quieter
+            const auto la = milestones[(size_t) abA].lufs, lb = milestones[(size_t) abB].lufs;
+            if (la > -90.0f && lb > -90.0f)
+            {
+                const auto quieter = juce::jmin (la, lb);
+                abGainDb.store (juce::jlimit (-12.0f, 0.0f, quieter - milestones[(size_t) abShowing].lufs));
+            }
+            else abGainDb.store (0.0f);
+        }
+
+        // ---- writing tools that live here (they need the song as heard) ----
+        /** The drop-impact designer: ways to make the drops hit harder, each with the jump it would
+            likely add (an estimate from how each move works, not a measurement), ranked by how close
+            they bring the drops to the label's impact. Each is a Check to apply (applyLabelCheck). */
+        std::vector<Check> dropImpactOptions (const suite::SectionMap& map) const
+        {
+            float now = 0.0f; int n = 0, firstBar = -1;
+            const auto& S = lastSections;
+            for (size_t i = 1; i < S.size(); ++i)
+                if (S[i].type == T::Drop && S[i].heard() && S[i - 1].heard()) { now += S[i].firstDb - S[i - 1].lastDb; ++n; if (firstBar < 0) firstBar = S[i].startBar; }
+            now = n > 0 ? now / (float) n : 0.0f;
+            const auto target = profile.impactDb.valid() ? profile.impactDb.median : 5.0f;
+            struct Way { const char* name; float addDb; suite::Fix fix; const char* action; bool already; };
+            const Way ways[] = {
+                { "The drop arrives through a filter opening", 1.5f, suite::Fix::None, "entrance:2", map.dropEntrance == 2 },
+                { "The drop arrives staggered (kick, bass, then the rest)", 1.0f, suite::Fix::None, "entrance:1", map.dropEntrance == 1 },
+                { "A kick-only bar before each drop (the kick keeps playing: no silence)", 2.5f, suite::Fix::None, "gap:3", map.dropGap == 3 },
+                { "The director makes every drop hit harder", 2.0f, suite::Fix::None, "director: make every drop hit harder", false },
+                { "The builds hold back more and the drops do more (Transmutation)", 1.5f, suite::Fix::BuildImpact, "", false } };
+            std::vector<Check> out;
+            for (const auto& w : ways)
+            {
+                if (w.already) continue;
+                Check c;
+                c.area = aAR; c.name = w.name;
+                const auto predicted = now + w.addDb;
+                c.score = juce::jlimit (0.0f, 1.0f, 1.0f - std::abs (predicted - target) / juce::jmax (2.0f, target));
+                c.detail = "about " + juce::String (now, 1) + " -> " + juce::String (predicted, 1) + " dB (the label: " + juce::String (target, 1) + ")";
+                c.fix = w.fix; c.action = w.action; c.bar = firstBar;
+                out.push_back (c);
+            }
+            std::stable_sort (out.begin(), out.end(), [] (const Check& a, const Check& b) { return a.score > b.score; });
+            if (out.size() > 3) out.resize (3);
+            return out;
+        }
+        std::vector<SectionStat> lastSections;   // the song's sections at the last update
+        /** Bars where nothing new happens for 4 bars or more: a MIDI clip of short one-shots in key
+            there (chord tones, high), to put on an ear-candy track. */
+        juce::File writeEarCandy (const juce::File& folder, const suite::SectionMap& map, double barQ) const
+        {
+            const auto song = suite::SongBus::read();
+            const auto bars = live.read (map.totalBars);
+            std::vector<int> spots;
+            int still = 0;
+            for (size_t b = 1; b < bars.size(); ++b)
+            {
+                const auto& x = bars[b]; const auto& y = bars[b - 1];
+                const auto same = x.heard && y.heard && std::abs (x.db - y.db) < 1.0f && std::abs (x.onsets - y.onsets) < 2.0f;
+                still = same ? still + 1 : 0;
+                if (still == 4) { spots.push_back ((int) b - 1); still = 0; }   // the 4th still bar: a candy hit at its start
+            }
+            juce::MidiMessageSequence seq;
+            const auto root = song.valid ? song.root : suite::KeyBus::read().root;
+            const auto minor = ! (song.valid && (song.scale == 1 || song.scale == 5));
+            for (auto b : spots)
+            {
+                const auto q = (double) b * barQ;
+                int type = 0; for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].startBar <= b + 1) type = (int) map.sections[(size_t) i].type;
+                const auto chordRoot = song.valid && song.chordCount[(size_t) type] > 0 ? juce::jmax (0, song.chordRoots[(size_t) type][0]) : 0;
+                const int tones[] = { 0, minor ? 3 : 4, 7, 12 };
+                for (int k = 0; k < 3; ++k)
+                {
+                    const auto pitch = 72 + (root + chordRoot) % 12 + tones[(b + k) % 4];
+                    const auto t = (q + 0.5 * k) * 960.0;
+                    seq.addEvent (juce::MidiMessage::noteOn (1, pitch, (juce::uint8) (90 - 15 * k)), t);
+                    seq.addEvent (juce::MidiMessage::noteOff (1, pitch), t + 0.25 * 960.0);
+                }
+            }
+            seq.updateMatchedPairs();
+            juce::MidiFile mf;
+            mf.setTicksPerQuarterNote (960);
+            mf.addTrack (seq);
+            folder.createDirectory();
+            const auto f = folder.getChildFile ("Ear candy.mid");
+            f.deleteFile();
+            juce::FileOutputStream os (f);
+            if (os.openedOk()) mf.writeTo (os);
+            earCandySpots = (int) spots.size();
+            return f;
+        }
+        mutable int earCandySpots = 0;
+
+        // ---- prints ----
+        static juce::String songProgressionPrint (const suite::SongBus::Song& song)
+        {
+            std::vector<int> roots;
+            for (int c = 0; c < song.chordCount[(size_t) T::Drop]; ++c)
+                if (const auto r = song.chordRoots[(size_t) T::Drop][(size_t) c]; r >= 0 && (roots.empty() || roots.back() != r)) roots.push_back (r);
+            if (roots.size() > 2 && roots.back() == roots.front()) roots.pop_back();
+            return progressionPrint (roots);
+        }
+        /** The kit's groove (chord stabs and arp accents on the 16ths): "x.x..X" style, 32 steps. */
+        static juce::String groovePrintNow()
+        {
+            const auto r = suite::KitBus::read (600);
+            if (! r.valid) return {};
+            juce::String g;
+            for (auto v : r.chords) g << (v >= 0.9f ? "X" : v >= 0.6f ? "x" : v > 0.0f ? "o" : ".");
+            for (auto v : r.arp) g << (v >= 0.9f ? "X" : v >= 0.6f ? "x" : v > 0.0f ? "o" : ".");
+            return g;
         }
 
         // ---- fixes ----
@@ -231,10 +555,13 @@ namespace lab
             m.recipe = "Milestone - " + m.name + " - " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M");
             m.overall = report.overall;
             m.areas = report.areaScore;
+            if (const auto ms = suite::LabelReadyBus::master(); ms.valid && ms.measuredSeconds > 5.0f) m.lufs = ms.lufs;   // for the level-matched A/B
             suite::RecipeBus::send (suite::RecipeAction::Save, m.recipe);   // every plugin saves its state under that name
             milestones.push_back (m);
             const auto song = suite::SongBus::read();
             if (song.valid && ! song.hook.empty()) suite::StyleLog::add ("hookprint", { { "print", detail::hookPrint (song.hook) }, { "milestone", m.name } });
+            if (song.valid) if (const auto pp = songProgressionPrint (song); pp.isNotEmpty()) suite::StyleLog::add ("progprint", { { "print", pp }, { "milestone", m.name } });
+            if (const auto g = groovePrintNow(); g.isNotEmpty()) suite::StyleLog::add ("grooveprint", { { "print", g }, { "milestone", m.name } });
             suite::MoveLog::add ("Ouroboros", {}, "Milestone saved: " + m.name + " (label-ready " + juce::String (m.overall) + ")", suite::MoveLog::fix);
         }
         void restoreMilestone (int index)
@@ -315,6 +642,11 @@ namespace lab
         {
             juce::ValueTree t ("LabelReady");
             t.setProperty ("profile", profile.name, nullptr);
+            t.setProperty ("steer", steerToLabel, nullptr);
+            t.setProperty ("autoReady", autoReadySaved, nullptr);
+            juce::StringArray lg;
+            for (const auto& e : scoreLog) lg.add (juce::String (e.timeMs) + "|" + e.what.replaceCharacters ("|~", "  ") + "|" + juce::String (e.before) + "|" + juce::String (e.after));
+            t.setProperty ("scoreLog", lg.joinIntoString ("~"), nullptr);
             juce::StringArray h; for (const auto& [ms, v] : history) h.add (juce::String (ms) + ":" + juce::String (v));
             t.setProperty ("history", h.joinIntoString (","), nullptr);
             for (const auto& m : milestones)
@@ -323,6 +655,7 @@ namespace lab
                 c.setProperty ("name", m.name, nullptr); c.setProperty ("recipe", m.recipe, nullptr); c.setProperty ("time", m.timeMs, nullptr); c.setProperty ("overall", m.overall, nullptr);
                 juce::StringArray a; for (auto v : m.areas) a.add (juce::String (v, 3));
                 c.setProperty ("areas", a.joinIntoString (","), nullptr);
+                c.setProperty ("lufs", m.lufs, nullptr);
                 t.appendChild (c, nullptr);
             }
             return t;
@@ -331,6 +664,14 @@ namespace lab
         {
             if (! t.hasType ("LabelReady")) return;
             if (t["profile"].toString().isNotEmpty()) useProfile (t["profile"].toString());
+            steerToLabel = (bool) t.getProperty ("steer", false);
+            autoReadySaved = (bool) t.getProperty ("autoReady", false);
+            scoreLog.clear();
+            for (const auto& e : juce::StringArray::fromTokens (t["scoreLog"].toString(), "~", ""))
+            {
+                const auto f = juce::StringArray::fromTokens (e, "|", "");
+                if (f.size() >= 4) scoreLog.push_back ({ f[0].getLargeIntValue(), f[1], f[2].getIntValue(), f[3].getIntValue(), 2 });
+            }
             history.clear();
             for (const auto& p : juce::StringArray::fromTokens (t["history"].toString(), ",", ""))
                 history.push_back ({ p.upToFirstOccurrenceOf (":", false, false).getLargeIntValue(), p.fromFirstOccurrenceOf (":", false, false).getIntValue() });
@@ -341,6 +682,7 @@ namespace lab
                     Milestone m; m.name = c["name"].toString(); m.recipe = c["recipe"].toString(); m.timeMs = (juce::int64) c["time"]; m.overall = (int) c["overall"];
                     const auto a = juce::StringArray::fromTokens (c["areas"].toString(), ",", "");
                     for (int k = 0; k < numAreas && k < a.size(); ++k) m.areas[(size_t) k] = a[k].getFloatValue();
+                    m.lufs = (float) c.getProperty ("lufs", -100.0f);
                     milestones.push_back (m);
                 }
         }

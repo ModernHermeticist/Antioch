@@ -103,8 +103,53 @@ no blocking check (drop impact, kick/bass phase, mono, premaster readiness) is u
 vocalist", "A&R round 1"), restores it, and compares two (which plugins changed, which areas moved). *Hand-off pack*
 writes the report, the known issues, your session notes, the director's plan and how to render it again exactly.
 
-**Honestly not measured yet** (left out rather than guessed): sidechain recovery time, the phase between layers of one
-part, stereo lows per track, reverb sizes and depth, supersaw stacking, automation leftovers, clip gain.
+**What each track is like:** every Quintessence measures its own track and shares it: how hot it comes in (clip
+gain), how fast it comes back after a duck (sidechain recovery), its stereo under 150 Hz, how long its hits ring (reverb
+size), how spiky and wide it is (depth), its level in each section (a filter or level automation left behind shows up as
+one drop much quieter than the other), and a short copy of its waveform stamped with the song position, so two layers of
+one part are checked against each other (one upside down: *Fix this* flips it; one a millisecond late: the autopilot's
+layer alignment). Checks from it: sidechain recovery, stereo lows per track, layers in phase, reverb sizes, depth (the
+lead in front of the pads), supersaw stacking (wide layers piling into one octave), automation leftovers, clip gain.
+
+**Chords from the audio:** the analyser hears each bar's chord (a 12-note chroma), so a reference track's drop
+progression is stored with it (as steps between the roots, so the key doesn't matter).
+
+**Moving the mix toward the label** (Label-ready > *Tools*):
+- *Match the label: one step*: the furthest-out check with a fix, sent (undo in Mentalism's What changed).
+- *Steer every Quintessence toward the label's tone*: the label's drop tone becomes every Quintessence's reference
+  (a reference loaded in Mentalism takes over), so each role's target follows the label.
+- *Translation loop*: the worst phone / earbuds / car / club problem's fix, tried for about half a minute, kept only if
+  the check improved, otherwise undone, then the next.
+- New checks with one-click fixes: *Kick and bass paired* (the duck as long as the kick's tail, the kick on the root or
+  fifth), the *Mud budget* (the track closest to the bass at 125-250 Hz gives some back), *The lead on top in every
+  section* (its level in the sections where it falls behind, through Quintessence), *Mono-safe width* (only the widest
+  part narrowed, when the mono sum loses).
+
+**Writing for the label:**
+- *Tools > Drop-impact designer*: three ways to make the drops hit harder (a filter opening, a staggered entrance, a
+  kick-only bar - the kick keeps playing, so no silence - the director hitting harder, the builds holding back), each
+  with what it would likely add (an estimate, said as one), ranked by how close it brings the drops to the label.
+- *Tools > Ear candy*: a MIDI clip of one-shots in key wherever four bars go by with nothing new.
+- *Build tension* (a check per build): the level, the number of events and the top end all climbing; the weakest gets
+  the fix (the build's rise, or the director: busier, brighter).
+- Correspondence, *Writing > Write for the label*: scored options, the best three, with Undo, for the breakdown's
+  emotion (where it starts, held chords, a hint of the hook), drop 2 differing from drop 1 (new enough, still the same
+  song), the counter-line's space, the drop's bass fitting the chords, and the hook teased early.
+- Writing checks: *Chord freshness* (the drop's progression against your earlier songs and the label's releases),
+  *The groove is its own* (against your earlier kits), *Singable hook* (range, leaps, breaths), *Room for a vocal* (the
+  quiet sections' mids, the hook's rests), *The key change fits every part* (and the lift that suits them, one click).
+
+**Iterating:** *Score one section only*; *Watch mode* (scores every half second against where you started, while you
+loop); the *Score log* (each change with the score before and after); *Score the label's own tracks* (and set the ready
+threshold so 80% of them pass); a check can be made a *must* for a label (under 80% it blocks the gate); milestone *A/B*
+(two milestones, switching on the bar line, the louder one turned down to match - a monitor trim only, never rendered).
+
+**Confidence:** *Blind spots* (what couldn't be measured and why: which plugin is missing, no references, each
+unmeasured check); the *listen-through* line (as the song plays, what to listen for at each flagged bar, and the next
+one); the first time the gate passes, a milestone is saved by itself.
+
+**Still not measured** (left out rather than guessed): the sound design's own quality, the vocal's performance, and
+whether the idea is good.
 
 ## The suite director: one plan for every transition
 
@@ -2044,7 +2089,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   well-shaped clean song outscores a flat clipping one, which the gate holds back with its
   blockers; the hook score, the song bus, the hand-off pack and the saved history.
   Correspondence's tests check the parts it shares and that *Write the hook stronger* offers
-  only higher-scoring hooks, writes the one picked, and undoes it.
+  only higher-scoring hooks, writes the one picked, and undoes it. **Label-ready 2:** the track meter
+  (a duck's recovery, stereo lows, the input's peak, levels per section, a tail's decay), layers
+  upside down and a millisecond late, A-F-C-G heard from audio as chords, each new check on
+  made-up tracks (a flipped layer, a stereo pad, clipping hats, an automation leftover, a flat
+  build, an unsingable hook, a too-high key change, a repeated progression), a label's must,
+  one section's score, the listen-through queue, the drop-impact designer, the score log, the
+  label's tracks scored, the level-matched A/B and ear candy. Quintessence's: the polarity flip,
+  a section trim, and the traits it shares. Correspondence's: each *Write for the label* goal
+  offers only higher-scoring options, writes them and undoes them.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true
