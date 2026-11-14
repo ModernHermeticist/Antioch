@@ -287,9 +287,9 @@ namespace qn
                     if (is (panLimit))
                     {
                         lrPowL += 0.0002 * ((double) l * l - lrPowL); lrPowR += 0.0002 * ((double) r * r - lrPowR);
-                        if (lrPowL > 1.0e-10 && lrPowR > 1.0e-10)
+                        if (lrPowL + lrPowR > 1.0e-10)   // (one side silent counts as fully panned)
                         {
-                            const auto bal = (float) (10.0 * std::log10 (lrPowL / lrPowR));
+                            const auto bal = (float) (10.0 * std::log10 ((lrPowL + 1.0e-14) / (lrPowR + 1.0e-14)));
                             if (std::abs (bal) > 10.0f)   // past about 70%: some of the loud side into the quiet one
                             {
                                 const auto k = 0.25f * juce::jmin (1.0f, (std::abs (bal) - 10.0f) / 10.0f + 0.3f) * c.strength;

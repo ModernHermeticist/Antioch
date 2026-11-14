@@ -1863,7 +1863,10 @@ int main (int argc, char** argv)
             qn::LabelDsp3::Context cx; cx.role = 4;
             auto d = with4 (qn::LabelDsp4::haas);
             const auto lag = (int) (0.002 * sampleRate);
-            auto delayed = [lag] (int i, int ch) { const auto k = ch == 1 ? i - lag : i; return k < 0 ? 0.0f : 0.3f * std::sin (0.031f * (float) k) * std::sin (0.0007f * (float) k); };
+            auto noise = std::make_shared<std::vector<float>> ((size_t) (3 * sampleRate));
+            juce::Random rnd (7);
+            for (auto& v : *noise) v = 0.3f * (rnd.nextFloat() * 2.0f - 1.0f);
+            auto delayed = [lag, noise] (int i, int ch) { const auto k = ch == 1 ? i - lag : i; return k < 0 || k >= (int) noise->size() ? 0.0f : (*noise)[(size_t) k]; };
             run4 (*d, cx, delayed, 0, 1);
             d->tick();
             check (std::abs (d->haasMs.load() - 2.0f) < 0.4f, "a 2 ms left/right delay found (" + juce::String (d->haasMs.load(), 2) + " ms)");

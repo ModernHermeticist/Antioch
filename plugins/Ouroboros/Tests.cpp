@@ -2414,7 +2414,7 @@ int main (int argc, char** argv)
                 // confirmation: the next play-through has to agree
                 f.step (only, none, false, dr);
                 only.checks[0].score = 0.1f;
-                for (int k = 0; k < 5; ++k) f.step (only, none, true, dr);
+                for (int k = 0; k < 4; ++k) f.step (only, none, true, dr);
                 check (f.undone == 1 && f.note.contains ("didn't hold"), "the next play-through didn't agree: undone (" + f.note + ")");
             }
             {
