@@ -43,7 +43,10 @@ namespace suite
                                     EchoTighter,                                    // every Antioch's echo feedback down a quarter (a busy song)
                                     ReverbDuck,                                     // every Antioch's reverb steps back while the lead plays
                                     PhraseTrim,                                     // one Quintessence's level in one 4-bar phrase (packPhraseTrim)
-                                    TrackPan };                                     // one Quintessence's pan offset (packMasterTone: its id, band 0, pan x 10)
+                                    TrackPan,                                       // one Quintessence's pan offset (packMasterTone: its id, band 0, pan x 10)
+                                    MixFixOff,                                      // one plugin's mix fix off for this song (packMixFix: its id, the feature)
+                                    MixFixReset,                                    // every plugin's mix fixes start again (undoable)
+                                    DeltaListen };                                  // one Quintessence plays only what its fixes change (packMixFix: its id, 1 on / 0 off)
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
@@ -72,7 +75,7 @@ namespace suite
                                        "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
                                        "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact",
                                        "Polarity flip", "Section trim", "Punch", "Pre-delay from the tempo", "Throws at vocal ends", "Vocal onto the grid",
-                                       "Section tone", "Section width", "Tighter echoes", "Reverb steps back", "Phrase ride", "Pan" };
+                                       "Section tone", "Section width", "Tighter echoes", "Reverb steps back", "Phrase ride", "Pan", "Mix fix off", "Mix fixes reset", "Hear what the fixes remove" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -138,6 +141,10 @@ namespace suite
         if (half >= 32) half -= 64;
         db = (float) half / 2.0f;
     }
+
+    /** MixFixOff / DeltaListen: which plugin (the low 12 bits of its id) and a feature (or 1/0), 12 bits. */
+    inline uint32_t packMixFix (uint32_t instanceId, int value) noexcept { return (instanceId & 0xfffu) | ((uint32_t) (value & 0xfff) << 12); }
+    inline void unpackMixFix (uint32_t data, uint32_t& instanceLow, int& value) noexcept { instanceLow = data & 0xfffu; value = (int) ((data >> 12) & 0xfff); }
 
     /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */
     inline uint32_t packTone (float lowDb, float highDb) noexcept

@@ -1,6 +1,7 @@
 // Offline tests for Antioch. Usage: AntiochTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "MixFixBus.h"
 #include "LabelReadyBus.h"
 #include "AutopilotBus.h"
 #include "SuiteUI.h"
@@ -890,7 +891,7 @@ int main (int argc, char** argv)
     {
         auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
         {
-            std::array<uint32_t, 8> n {};
+            suite::LabelReadyBus::Needs n {};
             for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
             suite::LabelReadyBus::publishNeeds (n);
         };
@@ -906,6 +907,29 @@ int main (int argc, char** argv)
         check (p->mixOn[AntiochProcessor::mxSends].load() && p->mixOn[AntiochProcessor::mxGate].load() && ! p->mixOn[AntiochProcessor::mxPadRoom].load(),
                "latched once asked, where it applies (the pads' room only on a pad)");
         suite::LabelReadyBus::reset();
+    }
+
+
+    section ("Mix fixes 2: size, feedback and low cut per section, width by role; the self-check switches one off");
+    {
+        namespace AP = suite::Autopilot;
+        check (AntiochProcessor::sizeScale (4) < 1.0f && AntiochProcessor::sizeScale (2) > 1.0f && AntiochProcessor::feedbackScale (4) < 1.0f
+               && AntiochProcessor::lowCutScale (4) > 1.0f && AntiochProcessor::widthByRole (suite::roleVocal) < AntiochProcessor::widthByRole (suite::rolePads),
+               "a smaller, drier, cleaner space in the drops; the vocal's reverb narrower than the pads'");
+        auto p = make();
+        suite::LabelReadyBus::Needs n {};
+        suite::LabelReadyBus::setBit (n, (int) AP::mx2SizeSectionF); suite::LabelReadyBus::setBit (n, (int) AP::mx2DuckedDelayF);
+        suite::LabelReadyBus::publishNeeds (n);
+        p->mixTick();
+        check (p->mixOn[AntiochProcessor::mxSize].load() && p->mixOn[AntiochProcessor::mxDuckedDelay].load(), "latched once asked");
+        suite::LabelReadyBus::Needs rv {}; suite::LabelReadyBus::setBit (rv, (int) AP::mx2DuckedDelayF);
+        suite::LabelReadyBus::publishRevoked (rv);
+        p->mixTick();
+        check (p->mixOn[AntiochProcessor::mxSize].load() && ! p->mixOn[AntiochProcessor::mxDuckedDelay].load(), "the self-check revoked the ducked delay: off for this song, the size stays");
+        auto e = suite::MixFixBus::all();
+        bool listed = false; for (const auto& x : e) listed = listed || (x.pluginName() == "Antioch" && x.has ((int) AP::mx2SizeSectionF));
+        check (listed, "what's on is in Ouroboros' list");
+        suite::LabelReadyBus::reset(); suite::MixFixBus::reset();
     }
 
     return finish();

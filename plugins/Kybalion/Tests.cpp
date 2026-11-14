@@ -781,7 +781,7 @@ int main (int argc, char** argv)
     {
         auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
         {
-            std::array<uint32_t, 8> n {};
+            suite::LabelReadyBus::Needs n {};
             for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
             suite::LabelReadyBus::publishNeeds (n);
         };
@@ -791,7 +791,7 @@ int main (int argc, char** argv)
         check (! p->pumpPerSection.load(), "off until Ouroboros asks for it");
         ask ({ suite::Autopilot::mxPumpSectionF, suite::Autopilot::mxAutoFitKickF });
         p->mixTick();
-        check (p->pumpPerSection.load() && (bool) p->apvts.state.getProperty ("mixPumpSection", false), "latched once asked (kept with the project)");
+        check (p->pumpPerSection.load() && p->mixLatch.isLatched (suite::Autopilot::mxPumpSectionF), "latched once asked (kept with the project)");
         suite::LabelReadyBus::reset();
         p->mixTick();
         check (p->pumpPerSection.load(), "and stays on after the problem's gone");
@@ -799,6 +799,26 @@ int main (int argc, char** argv)
         p->mixTick();
         check (! p->pumpPerSection.load(), "its switch turns it off");
         suite::Autopilot::set (suite::Autopilot::mxPumpSectionF, true);
+    }
+
+
+    section ("Mix fixes 2: kick and bass phase per section, fit to the kick respects your knobs");
+    {
+        namespace AP = suite::Autopilot;
+        auto p = make (false, true);
+        suite::LabelReadyBus::Needs n {}; suite::LabelReadyBus::setBit (n, (int) AP::mx2PhasePerSectionF);
+        suite::LabelReadyBus::publishNeeds (n);
+        p->sidechainConnected.store (true);
+        // the breakdowns cancel against the kick, the drops add up
+        p->secMS[2] = -0.5; p->secMM[2] = 1.0; p->secSS[2] = 1.0;
+        p->secMS[4] = 0.8; p->secMM[4] = 1.0; p->secSS[4] = 1.0;
+        p->mixTick();
+        check (p->phasePerSection.load() && p->sectionFlip[2].load() && ! p->sectionFlip[4].load(), "flipped in the breakdowns only, where it cancelled");
+        p->mixLatch.setParam (Params::Duck::hold, 40.0f);
+        if (auto* h = p->apvts.getParameter (Params::Duck::hold)) h->setValueNotifyingHost (h->convertTo0to1 (90.0f));
+        p->mixLatch.watchOwnership();
+        check (p->mixLatch.owned (Params::Duck::hold), "you moved the hold after the fix set it: yours");
+        suite::LabelReadyBus::reset(); suite::MixFixBus::reset();
     }
 
     return finish();

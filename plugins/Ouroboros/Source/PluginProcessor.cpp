@@ -122,7 +122,11 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto host = suite::HostInfo::read (getPlayHead(), bpm.load());
     bpm.store (host.bpm);
     barQuarters.store (host.barQuarters());
+    // a loop: the playhead jumping back while it plays (the autopilot doesn't judge a looped section as the song)
+    if (host.playing && ! playing.load()) loopedThisPlay.store (false);
+    if (host.playing && host.hasPpq && host.ppq < ppq.load() - 1.0) loopedThisPlay.store (true);
     playing.store (host.playing);
+    renderingNow.store (isNonRealtime());
     if (host.playing) playedSinceAutosave.store (true);
     if (host.playing && host.hasPpq) suite::MoveLog::setBar ((int) std::floor (host.ppq / host.barQuarters()) + 1);   // What changed: which bar a move happened on
     if (host.hasPpq)

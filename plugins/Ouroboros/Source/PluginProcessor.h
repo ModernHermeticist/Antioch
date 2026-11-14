@@ -90,7 +90,7 @@ public:
 
     // Transport, written by the audio thread, read by the UI.
     std::atomic<double> ppq { 0.0 }, bpm { 138.0 }, barQuarters { 4.0 };
-    std::atomic<bool> playing { false };
+    std::atomic<bool> playing { false }, loopedThisPlay { false }, renderingNow { false };
     std::thread referenceThread;
     juce::CriticalSection notesLock;
     juce::StringArray notes;
@@ -500,6 +500,9 @@ public:
         snippets.tick (playing.load(), ppq.load(), barQuarters.load());
         labelHousekeeping();
         labelReady.playingNow = playing.load();
+        labelReady.loopedNow = loopedThisPlay.load();
+        labelReady.renderingNow = renderingNow.load();
+        labelReady.sectionTypeNow = getMap().typeAt (ppq.load(), barQuarters.load());
         if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
         {
             labelReady.live.expectedSamples = (float) (sampleRate * barQuarters.load() * 60.0 / juce::jmax (1.0, bpm.load()));

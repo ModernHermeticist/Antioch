@@ -53,6 +53,8 @@ namespace suite::Autopilot
         roleTimbreF, journeyF, sectionWidthF, phraseDynamicsF, kickBassPairF, earCandySynthF, goalBreakdownF, goalDrop2F, goalCounterF, goalBassF, goalTeaserF, transitionStyleF, harshExposureF, learnKeptF, learnUndoneF, tasteF, regressionGuardF, preRenderF, subsonicF, pacingF, subPhaseF, bassLengthF, keyMonoF, kickTailF, subHandoverF, echoTighterF, reverbDuckF, motionF, airF, riserTopF, chokeF, grooveLockF, arpOffHookF, chordRhythmF, peaksLateF, fillsPickupsF, sectionEdgesF, finalPeakF, breakdownBedF, driveF, macroRidesF, layerSplitF, subFillF, spaceSceneF, sectionToneF, depthF, counterLaterF, callResponseF, vocalHarmonyF, reExportF, outroGrooveF, breakdownSwellF,
         // mix fixes (the fifth set): Quintessence's LabelDsp3 in its order, then the other plugins'
         mxPhraseTrimF, mxHookLiftF, mxNoteEvenF, mxInputLevellerF, mxChainNeutralF, mxImpactDuckF, mxRiserRoomF, mxAutoLowCutF, mxBackingHighCutF, mxSideAirF, mxSideMudF, mxMatchedLowCutF, mxPadUnderLeadF, mxArpUnderHookF, mxHatsUnderSibilanceF, mxBassLowDuckF, mxFxUnderVocalF, mxClapUnderVocalF, mxBreakdownDrumLowCutF, mxBuildHighPassF, mxChordFollowF, mxDrumParallelF, mxUpwardBreakdownF, mxGluePerSectionF, mxExpanderF, mxVocalPeakF, mxPadSustainF, mxPanLayoutF, mxMonoWidenF, mxBandWidthF, mxCorrelationGuardF, mxBusSatDropF, mxExciterAirF, mxKickClickF, mxBassMidDriveF, mxDropPunchF, mxBreakdownDrumHighCutF, mxPostDropSettleF, mxFinalDropLiftF, mxIntroOutroToneF, mxFillDuckF, mxVocalDoublerF, mxVocalAirF, mxVocalPresenceF, mxHatRidesF, mxClapTailF, mxFxHighPassF, mxRiserEnergyF, mxFxTailDarkF, mxTruePeakF, mxDcBlockF, mxPumpSectionF, mxAutoFitKickF, mxSendsSectionF, mxRolePreDelayF, mxDecaySectionF, mxDelayDivisionF, mxEchoDampF, mxVerbGateF, mxPadRoomF, mxClapVerbF, mxPresenceEaseF, mxDriveSectionF, mxDepthSectionF, mxToneBudgetF, mxArbitrationF, mxStepBudgetF, mxRollbackAreaF, mxProvenanceF, mxLowPolarityF, mxLayerRolesF, mxKickSectionF, mxLfHeadroomF,
+        // the sixth set: Quintessence's LabelDsp4 in its order, its safety, Antioch's, the rest, the autopilot's own behaviours
+        mx2PhaseRotateF, mx2Drop2BrightF, mx2OutroThinF, mx2BreakdownEntryF, mx2BackingVocalsF, mx2VocalProximityF, mx2BoxinessF, mx2CymbalWashF, mx2PercKeyF, mx2BandBalanceF, mx2LaterDropToneF, mx2LowMidDropsF, mx2SubPerNoteF, mx2FillOpenF, mx2LeadEnvelopeF, mx2PadSwellF, mx2KickTailTempoF, mx2GhostEvenF, mx2HaasF, mx2PanLimitF, mx2WidthDrop2F, mx2RiserWidenF, mx2SideLowsSectionF, mx2PickupLiftF, mx2BassChokeF, mx2IntroEaseF, mx2BuildTensionF, mx2PostImpactF, mx2RepeatToneF, mx2VocalVsLeadF, mx2VocalHeldDoubleF, mx2VocalAirSectionF, mx2SubVsKickF, mx2BassHarmonicsSectionF, mx2DownlifterGateF, mx2ImpactEnergyF, mx2SweepToDropF, mx2FxUnderHookF, mx2LevelBudgetF, mx2BuildBudgetF, mx2HeadroomForecastF, mx2BoundarySmoothF, mx2FailSafeF, mx2ReverbToneF, mx2DuckedDelayF, mx2VerbForVocalF, mx2VerbWidthRoleF, mx2SizeSectionF, mx2PreDelayDensityF, mx2FeedbackSectionF, mx2EchoPanRoleF, mx2VerbLowCutSectionF, mx2BreakdownLastBarF, mx2PlosiveSendF, mx2PhasePerSectionF, mx2LeadFizzF, mx2ClapLayersF, mx2SelfCheckF, mx2LearnPluginF, mx2SettleF, mx2CpuBudgetF, mx2FixOrderF, mx2ConfirmF, mx2AreaPriorityF, mx2FadeUndoF, mx2ValidPlaysF, mx2NoiseFloorF, mx2JudgeWhereF, mx2OneAtATimeF, mx2OwnershipF, mx2RenderFreezeF, mx2PlateauF, mx2MilestoneFixesF,
         numFeatures
     };
     inline const char* featureName (int f)
@@ -205,14 +207,94 @@ namespace suite::Autopilot
             "Mix: low-end polarity against the kick (Ouroboros)",
             "Mix: kick and hat layers lined up (Ouroboros)",
             "Mix: kick level per section (Ouroboros)",
-            "Mix: low-end headroom (Ouroboros)" };
+            "Mix: low-end headroom (Ouroboros)",
+            "Mix: lopsided kick and bass peaks evened (phase rotation)",
+            "Mix: drop 2 a touch brighter",
+            "Mix: the outro thins out at its end",
+            "Mix: no drop-out into the breakdown",
+            "Mix: backing vocals under the lead vocal",
+            "Mix: the vocal's proximity boom cut",
+            "Mix: stacked pads' boxiness cut",
+            "Mix: cymbal wash tucked after each hit",
+            "Mix: tonal percussion nudged into the key",
+            "Mix: left/right balance per band",
+            "Mix: each drop's own tone",
+            "Mix: the low-mid boom in drops",
+            "Mix: the sub held steady note to note",
+            "Mix: the drum bus opens up for fills",
+            "Mix: the lead's sustain in busy drops",
+            "Mix: pads swell in breakdowns",
+            "Mix: the kick's tail follows the tempo",
+            "Mix: ghost notes evened",
+            "Mix: left/right delays realigned (mono combing)",
+            "Mix: nothing panned past 70%",
+            "Mix: drop 2 a touch wider",
+            "Mix: the riser widens into the drop",
+            "Mix: the mono cutoff per section",
+            "Mix: the fill's last beat into the drop lifted",
+            "Mix: the bass cut for the last 16th before the drop",
+            "Mix: new parts eased in",
+            "Mix: pad drive rising through builds",
+            "Mix: FX tails tucked after the drop's impact",
+            "Mix: repeated sections not identical in tone",
+            "Mix: the vocal or the lead leads, not both",
+            "Mix: the vocal doubled on held notes",
+            "Mix: more vocal air in breakdowns",
+            "Mix: the bass's sub kept off the kick's body",
+            "Mix: more bass harmonics in breakdowns",
+            "Mix: downlifter tails gated at the next section",
+            "Mix: the impact's level from the drop's energy",
+            "Mix: noise sweeps peak at the drop",
+            "Mix: FX dip under the hook",
+            "Safety: a level budget per track (+-6 dB)",
+            "Safety: a budget for the lows taken out in builds",
+            "Safety: lifts held back when the headroom's short",
+            "Safety: levels ramp across section changes",
+            "Safety: a fix that misbehaves is switched off",
+            "Mix: the reverb's tone follows its track (Antioch)",
+            "Mix: the echo ducks under its own part (Antioch)",
+            "Mix: the reverb steps back for the vocal (Antioch)",
+            "Mix: reverb width by role (Antioch)",
+            "Mix: reverb size per section (Antioch)",
+            "Mix: pre-delay from note density (Antioch)",
+            "Mix: echo feedback per section (Antioch)",
+            "Mix: the echo's pan pattern by role (Antioch)",
+            "Mix: the reverb's low cut per section (Antioch)",
+            "Mix: the space opens in the breakdown's last bar (Antioch)",
+            "Mix: no plosives in the reverb (Antioch)",
+            "Mix: kick and bass phase per section (Kybalion)",
+            "Mix: drive fizz over 12 kHz rolled off (Vibration)",
+            "Mix: clap and snare layers lined up (Ouroboros)",
+            "Autopilot: the plugins' fixes checked, and switched off if no better",
+            "Autopilot: learn from the plugins' fixes too",
+            "Autopilot: wait for the plugins to settle",
+            "Autopilot: the least useful fixes sleep when the CPU is high",
+            "Autopilot: tone first, then level, then stereo",
+            "Autopilot: a fix kept only when two play-throughs agree",
+            "Autopilot: the label's most important area first",
+            "Autopilot: a fix whose gain fades is undone",
+            "Autopilot: loops, solos and partial plays aren't judged",
+            "Autopilot: a fix must beat each check's own wobble",
+            "Autopilot: a fix judged where it acts",
+            "Autopilot: a check's plugin fixes one at a time",
+            "Autopilot: a knob you move is yours",
+            "Autopilot: nothing changes while FL renders",
+            "Autopilot: stop and report when nothing moves",
+            "Autopilot: milestones carry every plugin's fixes" };
         static_assert (sizeof (n) / sizeof (n[0]) == numFeatures, "a name for every fix");
-        static_assert (numFeatures <= 256, "eight words of switches");
+        static_assert (numFeatures <= 384, "twelve words of switches");
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
     inline uint32_t featureGroup (int f)
     {
         if (f == transmuteF) return 4u;
+        if (f >= mx2PhaseRotateF)
+            switch (f)
+            {
+                case mx2CymbalWashF: case mx2LeadFizzF: return 1u;
+                case mx2LevelBudgetF: case mx2BuildBudgetF: case mx2HeadroomForecastF: case mx2BoundarySmoothF: case mx2FailSafeF: case mx2SelfCheckF: case mx2LearnPluginF: case mx2SettleF: case mx2CpuBudgetF: case mx2FixOrderF: case mx2ConfirmF: case mx2AreaPriorityF: case mx2FadeUndoF: case mx2ValidPlaysF: case mx2NoiseFloorF: case mx2JudgeWhereF: case mx2OneAtATimeF: case mx2OwnershipF: case mx2RenderFreezeF: case mx2PlateauF: case mx2MilestoneFixesF: return 2u;
+                default: return 8u;
+            }
         if (f >= mxPhraseTrimF)
             switch (f)
             {
@@ -273,7 +355,7 @@ namespace suite::Autopilot
         struct Shared
         {
             std::atomic<uint32_t> disabled;                 // groups switched off
-            std::atomic<uint32_t> featuresOff[8];           // single fixes switched off (bit per Feature)
+            std::atomic<uint32_t> featuresOff[12];           // single fixes switched off (bit per Feature)
             std::atomic<float> harshAmount;                 // 0..1: how harsh the master is right now
             std::atomic<int32_t> harshBand;                 // octave band of the harshness (6 = 2 kHz, 7 = 4 kHz, 8 = 8 kHz)
             std::atomic<uint32_t> harshIds[maxHarshIds];    // the tracks causing it (low 12 bits of their Quintessence's id)
@@ -290,12 +372,17 @@ namespace suite::Autopilot
             std::atomic<uint32_t> liveOnsetNext[maxLive];
             std::atomic<float> leadHz;
             std::atomic<uint32_t> leadMs;
+            // the mix fixes, suite-wide: their strength (0..1, 1 = as designed; stored as 1 - strength so a fresh block is 1),
+            // a loudness-matched A/B with every fix bypassed, how many to put to sleep for CPU, and a reset (a new number
+            // each time every fix should start again)
+            std::atomic<float> mixWeakness;
+            std::atomic<uint32_t> mixBypassed, cpuSleep, mixResetGen;
         };
         inline Shared& shared() noexcept
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v7", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v8", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -332,19 +419,19 @@ namespace suite::Autopilot
     /** Switches from 64 on (the label-ready ones). */
     inline uint32_t disabledFeaturesHigh() noexcept { return detail::shared().featuresOff[2].load(); }
     inline void setDisabledFeaturesHigh (uint32_t m) noexcept { detail::shared().featuresOff[2].store (m); }
-    /** Every switch's word (from 64 on: words 2..7), as hex "a,b,c" for the project. */
+    /** Every switch's word (from 64 on: words 2..11), as hex "a,b,c" for the project. */
     inline juce::String disabledFeaturesRest()
     {
         auto& s = detail::shared();
         juce::StringArray w;
-        for (int i = 2; i < 8; ++i) w.add (juce::String::toHexString ((int) s.featuresOff[i].load()));
+        for (int i = 2; i < 12; ++i) w.add (juce::String::toHexString ((int) s.featuresOff[i].load()));
         return w.joinIntoString (",");
     }
     inline void setDisabledFeaturesRest (const juce::String& hex)
     {
         auto& s = detail::shared();
         const auto w = juce::StringArray::fromTokens (hex, ",", "");
-        for (int i = 0; i < 6; ++i) s.featuresOff[2 + i].store (i < w.size() ? (uint32_t) w[i].getHexValue64() : 0u);
+        for (int i = 0; i < 10; ++i) s.featuresOff[2 + i].store (i < w.size() ? (uint32_t) w[i].getHexValue64() : 0u);
     }
 
     inline uint32_t disabledGroups() noexcept { return detail::shared().disabled.load(); }   // saved with Ouroboros
@@ -499,6 +586,16 @@ namespace suite::Autopilot
         return detail::nowMs() - s.leadMs.load() > 300u ? 0.0f : s.leadHz.load();
     }
 
+    /** The mix fixes' strength, 0..1 (Ouroboros' knob; 1 = as designed). */
+    inline float mixStrength() noexcept { return 1.0f - juce::jlimit (0.0f, 1.0f, detail::shared().mixWeakness.load()); }
+    inline void setMixStrength (float v) noexcept { detail::shared().mixWeakness.store (1.0f - juce::jlimit (0.0f, 1.0f, v)); }
+    /** The whole-mix A/B: every mix fix bypassed (each track loudness-matched). */
+    inline bool mixBypassed() noexcept { return detail::shared().mixBypassed.load() != 0; }
+    inline void setMixBypassed (bool b) noexcept { detail::shared().mixBypassed.store (b ? 1u : 0u); }
+    /** The CPU budget: 0 = every fix runs; each level puts the next eight least useful to sleep. */
+    inline int cpuSleepLevel() noexcept { return (int) juce::jmin (6u, detail::shared().cpuSleep.load()); }
+    inline void setCpuSleepLevel (int n) noexcept { detail::shared().cpuSleep.store ((uint32_t) juce::jlimit (0, 6, n)); }
+
     inline void reset() noexcept   // tests
     {
         auto& s = detail::shared();
@@ -508,5 +605,6 @@ namespace suite::Autopilot
         for (int i = 0; i < maxResonances; ++i) { s.resonanceId[i].store (0); s.resonanceHz[i].store (0.0f); s.resonanceMs[i].store (0); }
         for (int i = 0; i < maxLive; ++i) { s.liveId[i].store (0); s.liveMs[i].store (0); s.liveOnsetNext[i].store (0); for (auto& o : s.liveOnset[i]) o.store (0.0); }
         s.leadHz.store (0.0f); s.leadMs.store (0);
+        s.mixWeakness.store (0.0f); s.mixBypassed.store (0); s.cpuSleep.store (0);
     }
 }

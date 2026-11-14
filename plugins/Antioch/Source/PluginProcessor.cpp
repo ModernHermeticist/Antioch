@@ -50,10 +50,21 @@ AntiochProcessor::AntiochProcessor()
             if (now >= 0.95f) return {};
             return { { Params::Verb::leadRoom, juce::jmin (1.0f, now + 0.25f) } };
         }
-        if (fix != suite::Fix::ReverbLowCut) return {};
+        if (fix != suite::Fix::ReverbLowCut) return {};   // (the mix fixes' off and reset: setCustom below)
         const auto now = apvts.getRawParameterValue (Params::Verb::lowCut)->load();
         if (now >= 899.0f) return {};
         return { { Params::Verb::lowCut, juce::jmin (900.0f, now * 1.41f) } };
+    });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
+    {
+        if (fix == suite::Fix::MixFixOff)
+        {
+            uint32_t low; int feature;
+            suite::unpackMixFix (data, low, feature);
+            return low == (getInstanceId() & 0xfffu) ? mixLatch.switchOff (feature) : std::function<void()>();
+        }
+        if (fix == suite::Fix::MixFixReset) { divisionSet = padRoomSet = false; return mixLatch.resetAll(); }
+        return {};
     });
     using namespace Params;
     for (int t = 0; t < numTaps; ++t)
@@ -168,6 +179,27 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         buffer.clear (ch, 0, numSamples);
 
     const auto host = suite::HostInfo::read (getPlayHead(), currentBpm.load());
+    // the dry, for the sixth set: its brightness (the share of its energy in sample-to-sample change), how many notes start
+    // a second, and a plosive (a burst under 150 Hz)
+    int secType = -1;
+    if (host.hasPpq && sections.refresh())
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) secType = (int) sec.type;
+    if (numIn > 0 && numSamples > 1)
+    {
+        const auto* x = buffer.getReadPointer (0);
+        double p = 0.0, d = 0.0, lowP = 0.0;
+        const auto la = 1.0f - std::exp (-2.0f * juce::MathConstants<float>::pi * 150.0f / (float) getSampleRate());
+        for (int i = 1; i < numSamples; ++i) { p += (double) x[i] * x[i]; d += (double) (x[i] - x[i - 1]) * (x[i] - x[i - 1]); lowState += la * (x[i] - lowState); lowP += (double) lowState * lowState; }
+        if (p > 1.0e-9) dryBright += 0.05f * (juce::jlimit (0.0f, 2.0f, (float) (d / p)) - dryBright);
+        const auto rms = (float) std::sqrt (p / numSamples), low = (float) std::sqrt (lowP / numSamples);
+        drySlow += 0.02f * (rms - drySlow);
+        dryRunPeak = juce::jmax (rms, dryRunPeak * 0.999f);
+        const auto onset = rms > 2.0f * drySlow && rms > 1.0e-3f;
+        dryDensity += 0.01f * ((onset ? (float) (getSampleRate() / numSamples) : 0.0f) - dryDensity);   // onsets a second
+        if (low > 4.0f * juce::jmax (1.0e-5f, dryLowPrev) && low > 0.01f) plosiveHold = 0.08f;           // 80 ms
+        else plosiveHold = juce::jmax (0.0f, plosiveHold - (float) (numSamples / getSampleRate()));
+        dryLowPrev = 0.9f * dryLowPrev + 0.1f * low;
+    }
     currentBpm.store (host.bpm);
     const auto sr = (float) sampleRate;
     scenes.beginBlock (host, sampleRate, numSamples);
@@ -226,8 +258,10 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             ts.semitones   = p.pitch->load();
             ts.resonatorHz = rootHz * (float) p.harmonic->get();
             ts.feedback    = p.feedback->load();
+            if (mixOn[mxFeedback].load()) ts.feedback = juce::jmin (0.95f, ts.feedback * feedbackScale (secType));
             ts.level       = p.level->load();
             ts.pan         = p.pan->load();
+            if (mixOn[mxEchoPan].load()) { if (arpTrack.load()) ts.pan = (t % 2 == 0 ? -0.6f : 0.6f); else if (trackRole.load() == suite::roleVocal) ts.pan *= 0.3f; }
         }
         echo.update (s);
     }
@@ -237,7 +271,9 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         EuphoricReverb::Settings s;
         s.decay = scenes.plain (sDecay);
         s.size = value (Verb::size);
+        if (mixOn[mxSize].load()) s.size = juce::jlimit (0.0f, 1.0f, s.size * sizeScale (secType));
         s.predelayMs = value (Verb::predelay);
+        if (mixOn[mxPreDelayDensity].load()) s.predelayMs = juce::jmin (300.0f, s.predelayMs + juce::jlimit (0.0f, 20.0f, 5.0f * dryDensity));
         if (mixOn[mxRolePreDelay].load()) s.predelayMs = juce::jmin (300.0f, s.predelayMs + rolePreDelayMs (trackRole.load()));
         if (mixOn[mxDecay].load() && host.hasPpq && sections.refresh())
             if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) s.decay = juce::jlimit (0.5f, 20.0f, s.decay * decayScale ((int) sec.type));
@@ -268,7 +304,10 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         if (! darkened && darkening > 0.3f) { darkened = true; suite::Autopilot::count (suite::Autopilot::tailsDamped); }
         if (darkening < 0.05f) darkened = false;
         s.dampHz = value (Verb::damping) * (1.0f - 0.5f * darkening);
+        if (mixOn[mxReverbTone].load()) s.dampHz = juce::jlimit (500.0f, 20000.0f, s.dampHz * juce::jlimit (0.6f, 1.2f, 0.25f / juce::jmax (0.05f, dryBright)));   // a bright part, a darker reverb
         s.lowCutHz = value (Verb::lowCut);
+        if (mixOn[mxVerbLowCut].load()) s.lowCutHz = juce::jlimit (20.0f, 900.0f, s.lowCutHz * lowCutScale (secType));
+        if (mixOn[mxPlosive].load() && plosiveHold > 0.0f) s.lowCutHz = juce::jmax (s.lowCutHz, 250.0f);   // a plosive: kept out of the reverb
         s.highCutHz = value (Verb::highCut);
         s.shimmer = scenes.plain (sShimmer);
         s.shimmerSemitones = Verb::shimmerSemitones (choiceParam (Verb::shimInt)->getIndex());
@@ -286,6 +325,7 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
             tensionNow.store (tensionNow.load() + 0.3f * (target - tensionNow.load()));
         }
         s.width = juce::jmin (2.0f, value (Verb::width) * (1.0f + 0.5f * value (Verb::tension) * tensionNow.load()));
+        if (mixOn[mxVerbWidthRole].load()) s.width = juce::jmin (2.0f, s.width * widthByRole (trackRole.load()));
         reverbWidthNow.store (s.width);
         s.modulation = value (Verb::mod);
         reverb.update (s);
@@ -374,8 +414,14 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         float send = 1.0f;
         if (mixOn[mxSends].load() && host.hasPpq && sections.refresh())
             if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) send = sendScale ((int) sec.type);
-        echoGain.setTargetValue (scenes.plain (sEcho) * send);
-        verbGain.setTargetValue (scenes.plain (sVerb) * send);
+        float echoK = 1.0f, verbK = 1.0f;
+        if (mixOn[mxDuckedDelay].load() && dryRunPeak > 1.0e-4f) echoK *= 1.0f - 0.5f * juce::jlimit (0.0f, 1.0f, drySlow / dryRunPeak);   // the echo blooms in the gaps
+        if (mixOn[mxVerbForVocal].load() && trackRole.load() != suite::roleVocal) verbK *= 1.0f - 0.2f * suite::ActivityBus::read (suite::ActivityBus::vocal);
+        if (mixOn[mxBreakdownLastBar].load() && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid && sec.type == suite::SectionType::Breakdown && sec.endQ - host.ppq < host.barQuarters())
+            { echoK *= 1.3f; verbK *= 1.3f; }
+        echoGain.setTargetValue (scenes.plain (sEcho) * send * echoK);
+        verbGain.setTargetValue (scenes.plain (sVerb) * send * verbK);
     }
     throwGain.setTargetValue (scenes.plain (sThrow));
     outGain.setTargetValue (out);
@@ -791,37 +837,45 @@ void AntiochProcessor::mixTick()
 {
     namespace AP = suite::Autopilot;
     static const AP::Feature features[numMix] = { AP::mxSendsSectionF, AP::mxRolePreDelayF, AP::mxDecaySectionF, AP::mxDelayDivisionF, AP::mxEchoDampF,
-                                                  AP::mxVerbGateF, AP::mxPadRoomF, AP::mxClapVerbF };
-    static const char* keys[numMix] = { "mixSends", "mixRolePreDelay", "mixDecay", "mixDivision", "mixDamp", "mixGate", "mixPadRoom", "mixClapVerb" };
+                                                  AP::mxVerbGateF, AP::mxPadRoomF, AP::mxClapVerbF,
+                                                  AP::mx2ReverbToneF, AP::mx2DuckedDelayF, AP::mx2VerbForVocalF, AP::mx2VerbWidthRoleF, AP::mx2SizeSectionF,
+                                                  AP::mx2PreDelayDensityF, AP::mx2FeedbackSectionF, AP::mx2EchoPanRoleF, AP::mx2VerbLowCutSectionF,
+                                                  AP::mx2BreakdownLastBarF, AP::mx2PlosiveSendF };
+    static const char* oldKeys[8] = { "mixSends", "mixRolePreDelay", "mixDecay", "mixDivision", "mixDamp", "mixGate", "mixPadRoom", "mixClapVerb" };
+    if (! mixLatch.log) mixLatch.log = [this] (const juce::String& s) { suite::MoveLog::add ("Antioch", getTrackName(), s); };
+    // the fixes kept the old way (a property each) carried over once
+    for (int i = 0; i < 8; ++i)
+        if ((bool) apvts.state.getProperty (oldKeys[i], false)) { mixLatch.force (features[i]); apvts.state.removeProperty (oldKeys[i], nullptr); }
     const auto role = trackRole.load();
     const auto name = getTrackName().toLowerCase();
     clapTrack.store (name.contains ("clap") || name.contains ("snare"));
+    arpTrack.store (name.contains ("arp") || name.contains ("pluck"));
+    mixLatch.beginTick (isNonRealtime());
     for (int i = 0; i < numMix; ++i)
     {
         const auto applies = i == mxRolePreDelay ? rolePreDelayMs (role) > 0.0f : i == mxDivision ? (role == suite::roleLead || role == suite::roleVocal)
-                           : i == mxPadRoom ? role == suite::rolePads : i == mxClapVerb ? clapTrack.load() : true;
-        if (! (bool) apvts.state.getProperty (keys[i], false) && applies && AP::on (features[i]) && suite::LabelReadyBus::needed ((int) features[i]))
-            apvts.state.setProperty (keys[i], true, nullptr);
-        mixOn[(size_t) i].store ((bool) apvts.state.getProperty (keys[i], false) && applies && AP::on (features[i]));
+                           : i == mxPadRoom ? role == suite::rolePads : i == mxClapVerb ? clapTrack.load()
+                           : i == mxEchoPan ? (arpTrack.load() || role == suite::roleVocal) : i == mxPlosive ? role == suite::roleVocal
+                           : i == mxVerbForVocal ? role != suite::roleVocal : i == mxVerbWidthRole ? widthByRole (role) != 1.0f : true;
+        mixOn[(size_t) i].store (mixLatch.update (features[i], applies, i == mxEchoPan || i == mxPreDelayDensity || i == mxReverbTone));
     }
-    auto setParam = [this] (const juce::String& id, float plain)
-    {
-        if (auto* p = apvts.getParameter (id)) { p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (plain)); p->endChangeGesture(); }
-    };
     // the delay's division by role: on a lead or vocal, straight 16ths become dotted 8ths (the echoes fall between the notes)
     if (mixOn[mxDivision].load() && ! divisionSet)
     {
         divisionSet = true;
         const auto from = suite::music::divisionIndex ("1/16"), to = suite::music::divisionIndex ("1/8D");
+        bool moved = false;
         for (int t = 0; t < Params::numTaps; ++t)
-            if (from >= 0 && to >= 0 && tapPtrs[(size_t) t].division != nullptr && tapPtrs[(size_t) t].division->getIndex() == from)
-                setParam (Params::tapId (t, Params::Tap::division), (float) to);
-        suite::MoveLog::add ("Antioch", getTrackName(), "Echo 1/16 -> 1/8D (the echoes fall between the lead's notes)");
+            if (tapPtrs[(size_t) t].division != nullptr && tapPtrs[(size_t) t].division->getIndex() == from)
+                moved = mixLatch.setParam (Params::tapId (t, Params::Tap::division), (float) to) || moved;
+        if (moved) suite::MoveLog::add ("Antioch", getTrackName(), "Echo 1/16 -> 1/8D (the echoes fall between the lead's notes)");
     }
     // the pads' own room: their reverb steps back while the lead plays
     if (mixOn[mxPadRoom].load() && ! padRoomSet)
     {
         padRoomSet = true;
-        if (apvts.getRawParameterValue (Params::Verb::leadRoom)->load() < 0.5f) setParam (Params::Verb::leadRoom, 0.5f);
+        if (apvts.getRawParameterValue (Params::Verb::leadRoom)->load() < 0.5f) mixLatch.setParam (Params::Verb::leadRoom, 0.5f);
     }
+    mixLatch.watchOwnership();
+    mixLatch.publish (getInstanceId(), "Antioch", getTrackName());
 }

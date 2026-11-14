@@ -2,6 +2,8 @@
 #include "MoveLog.h"
 #include "AutopilotBus.h"
 #include "LabelReadyBus.h"
+#include "MixLatch.h"
+#include "FixBus.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -73,6 +75,8 @@ public:
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
     /** Mix fix: deeper unmasking in the drops (everything plays), lighter in breakdowns and the intro. */
     std::atomic<bool> depthPerSection { false };
+    suite::MixLatch mixLatch { apvts };
+    std::unique_ptr<suite::FixReceiver> fixes;
     static float depthScale (int t) noexcept { static const float v[6] = { 0.7f, 1.0f, 0.6f, 1.0f, 1.25f, 0.7f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
     void pollTick() override
     {
@@ -81,9 +85,24 @@ public:
         {
             // the mix fix: the unmasking depth per section (latched once Ouroboros' checks ask; saved)
             namespace AP = suite::Autopilot;
-            if (! (bool) apvts.state.getProperty ("mixDepthSection", false) && AP::on (AP::mxDepthSectionF) && suite::LabelReadyBus::needed ((int) AP::mxDepthSectionF))
-                apvts.state.setProperty ("mixDepthSection", true, nullptr);
-            depthPerSection.store ((bool) apvts.state.getProperty ("mixDepthSection", false) && AP::on (AP::mxDepthSectionF));
+            if (! mixLatch.log) mixLatch.log = [this] (const juce::String& s) { suite::MoveLog::add ("Solve et Coagula", getTrackName(), s); };
+            if ((bool) apvts.state.getProperty ("mixDepthSection", false)) { mixLatch.force (AP::mxDepthSectionF); apvts.state.removeProperty ("mixDepthSection", nullptr); }
+            if (fixes == nullptr)
+            {
+                // Ouroboros' list: this plugin's fix off for this song, or every fix reset
+                fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix, uint32_t) { return std::vector<suite::FixReceiver::Change> {}; });
+                fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
+                {
+                    uint32_t low; int feature;
+                    suite::unpackMixFix (data, low, feature);
+                    if (fix == suite::Fix::MixFixOff && low == (getInstanceId() & 0xfffu)) return mixLatch.switchOff (feature);
+                    if (fix == suite::Fix::MixFixReset) return mixLatch.resetAll();
+                    return {};
+                });
+            }
+            mixLatch.beginTick (isNonRealtime());
+            depthPerSection.store (mixLatch.update (AP::mxDepthSectionF, true));
+            mixLatch.publish (getInstanceId(), "Solve et Coagula", getTrackName());
         }
         float swing = 0.0f;
         for (const auto& e : suite::Registry::list())

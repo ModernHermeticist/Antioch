@@ -36,6 +36,14 @@ KybalionProcessor::KybalionProcessor()
             return { { Params::Duck::flip, value (Params::Duck::flip) > 0.5f ? 0.0f : 1.0f } };
         return {};
     });
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
+    {
+        uint32_t low; int feature;
+        suite::unpackMixFix (data, low, feature);
+        if (fix == suite::Fix::MixFixOff && low == (getInstanceId() & 0xfffu)) return mixLatch.switchOff (feature);
+        if (fix == suite::Fix::MixFixReset) { autoFitted = false; return mixLatch.resetAll(); }
+        return {};
+    });
 
     // Your favourite gate pattern, for a new Kybalion (a saved project's own pattern replaces it as it loads).
     const auto favourites = favouritePatterns (suite::StyleLog::read());
@@ -267,6 +275,11 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
 
     // Kick and bass phase (sidechain kick): the low end of this track against the kick, while it sounds.
     const auto flip = value (Params::Duck::flip) > 0.5f;
+    int phaseType = -1;
+    if (host.hasPpq && sections.refresh())
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) phaseType = juce::jlimit (0, 5, (int) sec.type);
+    const auto sectionFlipNow = phasePerSection.load() && phaseType >= 0 && sectionFlip[(size_t) phaseType].load();
+    const auto polTarget = (flip != sectionFlipNow) ? -1.0f : 1.0f;
     if (scActive)
     {
         const auto lowCoeff = 1.0f - std::exp (-juce::MathConstants<float>::twoPi * 120.0f / (float) sampleRate);
@@ -285,6 +298,12 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
                 phaseMS = phaseMS * decay + (double) phaseLowM * phaseLowS;
                 phaseMM = phaseMM * decay + (double) phaseLowM * phaseLowM;
                 phaseSS = phaseSS * decay + (double) phaseLowS * phaseLowS;
+                if (phaseType >= 0)
+                {
+                    secMS[(size_t) phaseType] = secMS[(size_t) phaseType] * decay + (double) phaseLowM * phaseLowS;
+                    secMM[(size_t) phaseType] = secMM[(size_t) phaseType] * decay + (double) phaseLowM * phaseLowM;
+                    secSS[(size_t) phaseType] = secSS[(size_t) phaseType] * decay + (double) phaseLowS * phaseLowS;
+                }
             }
         }
         if (phaseMM > 1.0e-3 && phaseSS > 1.0e-3)
@@ -296,8 +315,9 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
 
     for (int n = 0; n < numSamples; ++n)
     {
-        auto l = flip ? -left[n] : left[n];
-        auto r = flip ? -(right != nullptr ? right[n] : left[n]) : (right != nullptr ? right[n] : left[n]);
+        polGain += 0.005f * (polTarget - polGain);   // a polarity change cross-fades over a few ms
+        auto l = polGain * left[n];
+        auto r = polGain * (right != nullptr ? right[n] : left[n]);
         const auto lowIn = overlapLow.lowpass (0.5f * (l + r));   // this track's low end, before anything (ducking depth fit)
         if (kickNoteBandHz > 0.0f)
         {
@@ -607,15 +627,25 @@ float KybalionProcessor::depthForOverlap (float db)
 void KybalionProcessor::mixTick()
 {
     namespace AP = suite::Autopilot;
-    auto latched = [this] (const char* key, AP::Feature f)
-    {
-        if (! (bool) apvts.state.getProperty (key, false) && AP::on (f) && suite::LabelReadyBus::needed ((int) f))
-            apvts.state.setProperty (key, true, nullptr);
-        return (bool) apvts.state.getProperty (key, false) && AP::on (f);
-    };
-    pumpPerSection.store (latched ("mixPumpSection", AP::mxPumpSectionF));
-    if (latched ("mixAutoFit", AP::mxAutoFitKickF) && ! autoFitted && sidechainConnected.load() && kick.hits() >= kicksNeeded)
+    if (! mixLatch.log) mixLatch.log = [this] (const juce::String& s) { suite::MoveLog::add ("Kybalion", getTrackName(), s); };
+    // the fixes kept the old way (a property each) carried over once
+    if ((bool) apvts.state.getProperty ("mixPumpSection", false)) { mixLatch.force (AP::mxPumpSectionF); apvts.state.removeProperty ("mixPumpSection", nullptr); }
+    if ((bool) apvts.state.getProperty ("mixAutoFit", false)) { mixLatch.force (AP::mxAutoFitKickF); apvts.state.removeProperty ("mixAutoFit", nullptr); }
+    mixLatch.beginTick (isNonRealtime());
+    pumpPerSection.store (mixLatch.update (AP::mxPumpSectionF, true));
+    if (mixLatch.update (AP::mxAutoFitKickF, true) && ! autoFitted && sidechainConnected.load() && kick.hits() >= kicksNeeded
+        && ! mixLatch.owned (Params::Duck::hold) && ! mixLatch.owned (Params::Duck::release))
         autoFitted = fitToKick();
+    phasePerSection.store (mixLatch.update (AP::mx2PhasePerSectionF, sidechainConnected.load()));
+    for (size_t t = 0; t < 6; ++t)
+        if (secMM[t] > 1.0e-3 && secSS[t] > 1.0e-3)
+        {
+            const auto corr = secMS[t] / std::sqrt (secMM[t] * secSS[t]);
+            if (corr < -0.3 && ! sectionFlip[t].load()) { sectionFlip[t].store (true); if (phasePerSection.load()) suite::MoveLog::add ("Kybalion", getTrackName(), "Polarity flipped in the " + juce::String (suite::sectionName ((suite::SectionType) t)).toLowerCase() + "s (the low end cancelled the kick there)"); }
+            else if (corr > 0.3 && sectionFlip[t].load()) sectionFlip[t].store (false);
+        }
+    mixLatch.watchOwnership();
+    mixLatch.publish (getInstanceId(), "Kybalion", getTrackName());
 }
 
 bool KybalionProcessor::fitToKick()
@@ -624,8 +654,8 @@ bool KybalionProcessor::fitToKick()
         return false;
     // Hold through the kick's punch, then recover as its tail dies away.
     const auto length = kick.lengthMs();
-    setParam (Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * length));
-    setParam (Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * length));
+    mixLatch.setParam (Params::Duck::hold, juce::jlimit (0.0f, 200.0f, 0.15f * length));
+    mixLatch.setParam (Params::Duck::release, juce::jlimit (20.0f, 1000.0f, 0.85f * length));
     return true;
 }
 

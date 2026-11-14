@@ -15,6 +15,7 @@
 #include "AutopilotBus.h"
 #include "FixBus.h"
 #include "LabelReadyBus.h"
+#include "MixLatch.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
 {
@@ -73,9 +74,22 @@ public:
         switch is on; saved with the project): sends, decay and echo damping per section, pre-delay
         by role, the delay's division by role, the space tightening into each drop, the pads' own
         room, a clap's reverb from the tempo. */
-    enum MixFix { mxSends, mxRolePreDelay, mxDecay, mxDivision, mxDamp, mxGate, mxPadRoom, mxClapVerb, numMix };
+    enum MixFix { mxSends, mxRolePreDelay, mxDecay, mxDivision, mxDamp, mxGate, mxPadRoom, mxClapVerb,
+                  // the sixth set: the reverb's tone from its track, the echo ducking under its part, the reverb stepping back for
+                  // the vocal, reverb width by role, size per section, pre-delay from note density, echo feedback per section,
+                  // the echo's pan by role, the reverb's low cut per section, the space opening in a breakdown's last bar, no
+                  // plosives in the reverb
+                  mxReverbTone, mxDuckedDelay, mxVerbForVocal, mxVerbWidthRole, mxSize, mxPreDelayDensity, mxFeedback, mxEchoPan,
+                  mxVerbLowCut, mxBreakdownLastBar, mxPlosive, numMix };
     std::array<std::atomic<bool>, numMix> mixOn {};
-    std::atomic<bool> clapTrack { false };
+    std::atomic<bool> clapTrack { false }, arpTrack { false };
+    suite::MixLatch mixLatch { apvts };
+    // measured on the audio thread for the sixth set: the dry's brightness and note density, a plosive's hold
+    float dryBright = 0.2f, dryDensity = 0.0f, dryRunPeak = 1.0e-4f, dryLowPrev = 0.0f, plosiveHold = 0.0f, drySlow = 0.0f, lowState = 0.0f;
+    static float sizeScale (int t) noexcept { static const float v[6] = { 1.0f, 1.0f, 1.15f, 1.0f, 0.85f, 1.1f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    static float feedbackScale (int t) noexcept { static const float v[6] = { 1.0f, 1.0f, 1.15f, 1.0f, 0.8f, 1.1f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    static float lowCutScale (int t) noexcept { static const float v[6] = { 1.0f, 1.0f, 0.8f, 1.0f, 1.5f, 1.0f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    static float widthByRole (int role) noexcept { return role == suite::roleVocal ? 0.6f : role == suite::roleLead ? 0.8f : role == suite::rolePads ? 1.1f : 1.0f; }
     bool divisionSet = false, padRoomSet = false;
     void mixTick();
     /** Per section type (Intro, Groove, Breakdown, Build, Drop, Outro): send, decay and damping scales. */

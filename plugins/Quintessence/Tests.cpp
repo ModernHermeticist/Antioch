@@ -8,6 +8,7 @@
 #include "MoveLog.h"
 #include "StyleLog.h"
 #include "LabelReadyBus.h"
+#include "MixFixBus.h"
 #include "TestUtils.h"
 #include "ConductorBus.h"
 #include "ReferenceBus.h"
@@ -1508,7 +1509,7 @@ int main (int argc, char** argv)
         // latched where Ouroboros' checks ask: a pad that never moves gets pad motion
         suite::SectionBus::withdraw();
         auto pad = make (4);
-        std::array<uint32_t, 8> needs {};
+        suite::LabelReadyBus::Needs needs {};
         needs[(size_t) suite::Autopilot::padMotionF / 32] |= 1u << (suite::Autopilot::padMotionF % 32);
         suite::LabelReadyBus::publishNeeds (needs);
         FakePlayHead head; head.bpm = 120.0; head.ppq = 0.0;
@@ -1629,7 +1630,7 @@ int main (int argc, char** argv)
         check (std::abs (q2->labelDsp3.phraseTrimDb[3].load() - 1.5f) < 0.01f && std::abs (q2->labelDsp3.panOffset.load() - 0.2f) < 0.01f, "kept with the project");
         // latched once Ouroboros asks, only where it applies (a bass fix on a bass, not on a pad)
         {
-            std::array<uint32_t, 8> needs {};
+            suite::LabelReadyBus::Needs needs {};
             needs[(size_t) AP::mxBassLowDuckF / 32] |= 1u << (AP::mxBassLowDuckF % 32);
             suite::LabelReadyBus::publishNeeds (needs);
             auto bass = make (2);
@@ -1745,6 +1746,250 @@ int main (int argc, char** argv)
             check (std::abs (ratioDb (rode, flat) + 6.0f) < 0.5f, "a phrase ride moves its phrase (" + juce::String (ratioDb (rode, flat), 1) + " dB)");
         }
         suite::FixBus::reset();
+    }
+
+
+    section ("Mix fixes 2: the shared latch, LabelDsp4, the budgets, the fail-safe, and the stack test");
+    {
+        namespace AP = suite::Autopilot;
+        AP::reset(); suite::LabelReadyBus::reset(); suite::FixBus::reset(); suite::MixFixBus::reset();
+        // the band-pass at unity at its centre (the keyed dips were cutting far deeper than they said)
+        {
+            suite::Svf f; f.set (1000.0f, 4.0f, (float) sampleRate);
+            double in = 0.0, out = 0.0;
+            for (int i = 0; i < (int) sampleRate; ++i)
+            {
+                const auto x = std::sin (2.0f * juce::MathConstants<float>::pi * 1000.0f * (float) i / (float) sampleRate);
+                const auto y = f.bandpassNorm (x);
+                if (i > (int) sampleRate / 2) { in += (double) x * x; out += (double) y * y; }
+            }
+            check (std::abs (juce::Decibels::gainToDecibels ((float) std::sqrt (out / in))) < 0.2f, "the normalised band-pass is unity at its centre");
+        }
+        // the shared latch: asked for, applies, latched; revoked by the self-check; off for a song; reset and undo; frozen while rendering
+        {
+            auto q = make (2);
+            suite::MixLatch& ml = q->mixLatch;
+            suite::LabelReadyBus::Needs n {};
+            suite::LabelReadyBus::setBit (n, (int) AP::mx2SubPerNoteF);
+            suite::LabelReadyBus::publishNeeds (n);
+            ml.beginTick (true);
+            check (! ml.update (AP::mx2SubPerNoteF, true), "nothing switches on while FL renders");
+            ml.beginTick (false);
+            check (ml.update (AP::mx2SubPerNoteF, true) && ml.isLatched (AP::mx2SubPerNoteF), "asked for and it applies: latched");
+            check (! ml.update (AP::mx2BassChokeF, true), "not asked for: off");
+            suite::LabelReadyBus::publishRevoked (n);
+            ml.beginTick (false);
+            check (! ml.update (AP::mx2SubPerNoteF, true) && ml.stateOf (AP::mx2SubPerNoteF) == suite::MixLatch::offForSong, "revoked by the self-check: off for this song");
+            suite::LabelReadyBus::publishRevoked ({});
+            ml.beginTick (false);
+            check (! ml.update (AP::mx2SubPerNoteF, true), "and stays off (asked again or not)");
+            auto undo = ml.resetAll();
+            check (ml.stateOf (AP::mx2SubPerNoteF) == suite::MixLatch::idle, "reset: every fix starts again");
+            undo();
+            check (ml.stateOf (AP::mx2SubPerNoteF) == suite::MixLatch::offForSong, "undo puts them back");
+            suite::FixBus::send (suite::Fix::MixFixReset);
+            q->fixes->poll();
+            ml.beginTick (false);
+            check (ml.update (AP::mx2SubPerNoteF, true), "a reset from Ouroboros: it latches again where it's asked for");
+            suite::FixBus::send (suite::Fix::MixFixOff, suite::packMixFix (q->getInstanceId(), (int) AP::mx2SubPerNoteF));
+            q->fixes->poll();
+            ml.beginTick (false);
+            check (! ml.update (AP::mx2SubPerNoteF, true), "switched off for this track from Ouroboros' list");
+            ml.beginTick (false);
+            AP::setMixBypassed (true);
+            suite::LabelReadyBus::Needs n2 {}; suite::LabelReadyBus::setBit (n2, (int) AP::mx2BassChokeF); suite::LabelReadyBus::publishNeeds (n2);
+            check (! ml.update (AP::mx2BassChokeF, true) && ml.isLatched (AP::mx2BassChokeF), "the whole-mix A/B: latched but bypassed");
+            AP::setMixBypassed (false);
+            ml.publish (q->getInstanceId(), "Quintessence", "Bass");
+            const auto all = suite::MixFixBus::all();
+            check (! all.empty() && all.front().trackName() == "Bass", "what's on is published for Ouroboros' list");
+            suite::LabelReadyBus::reset();
+        }
+        // ownership: a knob a fix set and you then moved is yours
+        {
+            auto q = make (4);
+            q->mixLatch.setParam (qn::widthId, 1.3f);
+            q->mixLatch.watchOwnership();
+            check (! q->mixLatch.owned (qn::widthId), "a knob the fix set is still the fix's");
+            set (*q, qn::widthId, 0.8f);
+            q->mixLatch.watchOwnership();
+            check (q->mixLatch.owned (qn::widthId) && ! q->mixLatch.setParam (qn::widthId, 1.5f), "moved by you: yours, the fix leaves it alone");
+        }
+        // the DSP
+        const auto sr = (int) sampleRate;
+        auto run4 = [] (qn::LabelDsp4& d, qn::LabelDsp3::Context cx, std::function<float (int, int)> sig, int from, int to, int channel = -1, std::function<void (int)> each = {})
+        {
+            juce::AudioBuffer<float> b (2, 512);
+            double p = 0.0; int n = 0, pos = 0;
+            qn::LabelDsp4::Extra x;
+            for (int blk = 0; blk < (int) (2.0 * sampleRate / 512); ++blk)
+            {
+                for (int i = 0; i < 512; ++i) { b.setSample (0, i, sig (pos + i, 0)); b.setSample (1, i, sig (pos + i, 1)); }
+                cx.ppq = (double) pos / sampleRate * 2.0;
+                if (each) each (pos);
+                d.process (b.getArrayOfWritePointers(), 2, 512, cx, x);
+                for (int i = 0; i < 512; ++i)
+                    if (pos + i >= from && pos + i < to)
+                        for (int c = 0; c < 2; ++c) if (channel < 0 || channel == c) { p += (double) b.getSample (c, i) * b.getSample (c, i); ++n; }
+                pos += 512;
+            }
+            return n > 0 ? (float) std::sqrt (p / n) : 0.0f;
+        };
+        auto sine = [] (float hz, float a) { return [hz, a] (int i, int) { return a * std::sin (2.0f * juce::MathConstants<float>::pi * hz * (float) i / (float) sampleRate); }; };
+        auto with4 = [] (int fix) { auto d = std::make_unique<qn::LabelDsp4>(); d->prepare (sampleRate); d->on[(size_t) fix].store (true); return d; };
+        auto ratioDb = [] (float a, float b) { return juce::Decibels::gainToDecibels (a / juce::jmax (1.0e-9f, b)); };
+        {
+            qn::LabelDsp3::Context cx; cx.role = 2;
+            auto lop = [] (int i, int) { const auto w = 2.0f * juce::MathConstants<float>::pi * 60.0f * (float) i / (float) sampleRate; return 0.3f * (std::sin (w) + 0.5f * std::cos (2.0f * w)); };
+            auto flat = std::make_unique<qn::LabelDsp4>(); flat->prepare (sampleRate);
+            const auto rotated = run4 (*with4 (qn::LabelDsp4::phaseRotate), cx, lop, sr, 2 * sr), plain = run4 (*flat, cx, lop, sr, 2 * sr);
+            check (std::abs (ratioDb (rotated, plain)) < 0.3f, "phase rotation keeps the level (an all-pass: " + juce::String (ratioDb (rotated, plain), 2) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 2; cx.playing = true; cx.nextIsDrop = true; cx.sectionType = 3; cx.sectionEndQ = 3.0;   // the drop at 1.5 s
+            const auto choked = run4 (*with4 (qn::LabelDsp4::bassChoke), cx, sine (50.0f, 0.3f), (int) (1.45 * sampleRate), (int) (1.49 * sampleRate));
+            check (choked < 0.3f * 0.707f * 0.2f && choked > 0.0f, "the bass steps out for the last 16th before the drop (never silent: " + juce::String (ratioDb (choked, 0.3f * 0.707f), 1) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 7; cx.sectionType = 3; cx.buildProgress = 1.0f;
+            auto wide = [] (int i, int ch) { const auto v = 0.2f * std::sin (0.03f * (float) i); return ch == 0 ? v : 0.5f * v; };
+            auto side = [&] (qn::LabelDsp4& d) { juce::ignoreUnused (d); return 0.0f; };
+            juce::ignoreUnused (side);
+            auto flat = std::make_unique<qn::LabelDsp4>(); flat->prepare (sampleRate);
+            const auto w = run4 (*with4 (qn::LabelDsp4::riserWiden), cx, wide, sr, 2 * sr, 0), p = run4 (*flat, cx, wide, sr, 2 * sr, 0);
+            check (w > p * 1.05f, "the riser widens toward the end of the build");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto d = with4 (qn::LabelDsp4::haas);
+            const auto lag = (int) (0.002 * sampleRate);
+            auto delayed = [lag] (int i, int ch) { const auto k = ch == 1 ? i - lag : i; return k < 0 ? 0.0f : 0.3f * std::sin (0.031f * (float) k) * std::sin (0.0007f * (float) k); };
+            run4 (*d, cx, delayed, 0, 1);
+            d->tick();
+            check (std::abs (d->haasMs.load() - 2.0f) < 0.4f, "a 2 ms left/right delay found (" + juce::String (d->haasMs.load(), 2) + " ms)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            const auto right = run4 (*with4 (qn::LabelDsp4::panLimit), cx, [] (int i, int ch) { return ch == 0 ? 0.3f * std::sin (0.05f * (float) i) : 0.0f; }, sr, 2 * sr, 1);
+            check (right > 0.01f, "a part panned hard left gets some of itself on the right (nothing past 70%)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 6; cx.sectionType = 4; cx.leadActivity = 1.0f;
+            auto flat = std::make_unique<qn::LabelDsp4>(); flat->prepare (sampleRate);
+            const auto dipped = run4 (*with4 (qn::LabelDsp4::vocalVsLead), cx, sine (500.0f, 0.2f), sr, 2 * sr), p = run4 (*flat, cx, sine (500.0f, 0.2f), sr, 2 * sr);
+            check (std::abs (ratioDb (dipped, p) + 1.5f) < 0.3f, "in the drop the lead leads: the vocal 1.5 dB under it (" + juce::String (ratioDb (dipped, p), 2) + " dB)");
+            cx.strength = 0.5f;
+            const auto half = run4 (*with4 (qn::LabelDsp4::vocalVsLead), cx, sine (500.0f, 0.2f), sr, 2 * sr);
+            check (std::abs (ratioDb (half, p) + 0.75f) < 0.3f, "at 50% strength, half the move (" + juce::String (ratioDb (half, p), 2) + " dB)");
+        }
+        // the budgets and the headroom forecast (LabelDsp3)
+        {
+            qn::LabelDsp3 d; d.prepare (sampleRate);
+            d.on[qn::LabelDsp3::phraseTrim].store (true);
+            d.phraseTrimDb[0].store (-6.0f);
+            qn::LabelDsp3::Context cx; cx.role = 4; cx.playing = true; cx.levelBudgetDb = 2.0f;
+            juce::AudioBuffer<float> b (2, 512);
+            for (int k = 0; k < 200; ++k) { for (int c = 0; c < 2; ++c) for (int i = 0; i < 512; ++i) b.setSample (c, i, 0.1f); d.process (b.getArrayOfWritePointers(), 2, 512, cx); }
+            check (std::abs (d.lastDb + 2.0f) < 0.01f && d.budgetHit, "the level budget holds a -6 dB ride to the 2 dB left");
+            qn::LabelDsp3 h; h.prepare (sampleRate);
+            h.on[qn::LabelDsp3::hookLift].store (true);
+            qn::LabelDsp3::Context hx; hx.role = 5; hx.sectionType = 4; hx.liftsAllowed = 0.0f;
+            h.process (b.getArrayOfWritePointers(), 2, 512, hx);
+            check (std::abs (h.lastDb) < 0.01f, "with the headroom short, no lift");
+        }
+        // the fail-safe: a runaway level puts the dry signal back and switches the fixes off
+        {
+            auto q = make (4);
+            q->labelDsp3.truePeakTrimDb.store (40.0f);   // a fix gone wrong: +40 dB
+            juce::AudioBuffer<float> out;
+            const auto st = render (*q, 1.0, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.1f * std::sin (0.03f * (float) (pos + i))); }, &out);
+            check (q->failsafeOff.load() && st.peak < 0.5f, "a runaway fix: caught, the dry signal back (peak " + juce::String (st.peak, 2) + "), the fixes off for this song");
+            q->latchMixFixes (q->traits.snapshot (q->getInstanceId(), 4, "Pad"));
+            suite::FixBus::send (suite::Fix::MixFixReset);
+            q->fixes->poll();
+            check (! q->failsafeOff.load(), "a reset from Ouroboros lets them back on");
+        }
+        // hear what the fixes remove: with nothing changing it, silence
+        {
+            auto q = make (4);
+            suite::FixBus::send (suite::Fix::DeltaListen, suite::packMixFix (q->getInstanceId(), 1));
+            q->fixes->poll();
+            juce::AudioBuffer<float> out;
+            render (*q, 1.0, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.1f * std::sin (0.03f * (float) (pos + i))); }, &out);
+            check (q->deltaListen.load() && rmsBetween (out, 0.5, 1.0) < 1.0e-4f, "hear what the fixes remove: nothing to hear when they change nothing");
+            suite::FixBus::send (suite::Fix::DeltaListen, suite::packMixFix (0, 0));
+            q->fixes->poll();
+            check (! q->deltaListen.load(), "and off again");
+        }
+        // the stack test: a made-up song, every part through every mix fix at once, at three sample rates
+        for (const auto rate : { 44100.0, 48000.0, 96000.0 })
+        {
+            struct Part { int role; float hz; float amp; bool hits; };
+            const Part parts[] = { { 1, 55.0f, 0.5f, true }, { 2, 45.0f, 0.3f, false }, { 3, 9000.0f, 0.1f, true }, { 4, 330.0f, 0.15f, false },
+                                   { 5, 880.0f, 0.15f, false }, { 6, 440.0f, 0.15f, false }, { 7, 3000.0f, 0.08f, false } };
+            const auto bpm = 128.0, barQ = 4.0, secs = 4.0 * 2.0 * barQ * 60.0 / bpm;   // four sections of two bars
+            const auto total = (int) (secs * rate);
+            const int types[4] = { 0, 3, 4, 2 };   // intro, build, drop, breakdown
+            juce::AudioBuffer<float> sumIn (2, total), sumOut (2, total);
+            sumIn.clear(); sumOut.clear();
+            bool finite = true; float worstLevel = 0.0f; int worstRole = 0;
+            for (const auto& part : parts)
+            {
+                qn::LabelDsp3 d3; d3.prepare (rate);
+                qn::LabelDsp4 d4; d4.prepare (rate);
+                for (auto& o : d3.on) o.store (true);
+                for (auto& o : d4.on) o.store (true);
+                d3.isBus = false; d3.monoInput = part.role == 4; d3.expThreshold = 0.0f; d3.lowCutHz.store (30.0f);
+                juce::AudioBuffer<float> b (2, 512);
+                double pin = 0.0, pout = 0.0;
+                for (int pos = 0; pos < total; pos += 512)
+                {
+                    const auto n = juce::jmin (512, total - pos);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const auto t = (double) (pos + i) / rate;
+                        auto env = 1.0f;
+                        if (part.hits) { const auto beat = std::fmod (t * bpm / 60.0, 1.0); env = (float) std::exp (-beat * 8.0); }
+                        const auto v = part.amp * env * (float) std::sin (2.0 * juce::MathConstants<double>::pi * part.hz * t);
+                        b.setSample (0, i, v); b.setSample (1, i, part.role >= 4 ? v * 0.8f : v);
+                        sumIn.addSample (0, pos + i, v); sumIn.addSample (1, pos + i, part.role >= 4 ? v * 0.8f : v);
+                        pin += (double) v * v;
+                    }
+                    qn::LabelDsp3::Context cx;
+                    cx.ppq = (double) pos / rate * bpm / 60.0; cx.bpm = bpm; cx.barQ = barQ; cx.role = part.role; cx.playing = true;
+                    const auto sec = juce::jlimit (0, 3, (int) (cx.ppq / (2.0 * barQ)));
+                    cx.sectionType = types[sec]; cx.sectionStartQ = sec * 2.0 * barQ; cx.sectionEndQ = (sec + 1) * 2.0 * barQ;
+                    cx.nextIsDrop = sec == 1; cx.buildProgress = sec == 1 ? (float) ((cx.ppq - cx.sectionStartQ) / (2.0 * barQ)) : 0.0f;
+                    cx.leadActivity = 0.8f; cx.vocalActivity = 0.6f; cx.dropHit = sec == 2 && cx.ppq - cx.sectionStartQ < 1.0 ? 1.0f : 0.0f; cx.dropCount = 1;
+                    cx.leadHz = 880.0f; cx.sibilance = 0.3f; cx.phraseEnd = 0.0f;
+                    qn::LabelDsp4::Extra x; x.pitchHz = d3.pitchHz(); x.kickBodyHz = 55.0f;
+                    float* chp[2] = { b.getWritePointer (0), b.getWritePointer (1) };
+                    d3.process (chp, 2, n, cx);
+                    d4.process (chp, 2, n, cx, x);
+                    for (int i = 0; i < n; ++i)
+                        for (int c = 0; c < 2; ++c)
+                        {
+                            const auto v = b.getSample (c, i);
+                            if (! std::isfinite (v)) finite = false;
+                            sumOut.addSample (c, pos + i, v);
+                            if (c == 0) pout += (double) v * v;
+                        }
+                }
+                const auto change = (float) (10.0 * std::log10 ((pout + 1.0e-12) / (pin + 1.0e-12)));
+                if (std::abs (change) > std::abs (worstLevel)) { worstLevel = change; worstRole = part.role; }
+            }
+            const auto peakIn = juce::jmax (sumIn.getMagnitude (0, 0, total), sumIn.getMagnitude (1, 0, total));
+            const auto peakOut = juce::jmax (sumOut.getMagnitude (0, 0, total), sumOut.getMagnitude (1, 0, total));
+            double st = 0.0, mono = 0.0;
+            for (int i = 0; i < total; ++i) { const auto l = sumOut.getSample (0, i), r = sumOut.getSample (1, i); st += 0.5 * ((double) l * l + (double) r * r); mono += 0.25 * (double) (l + r) * (l + r); }
+            const auto monoDb = (float) (10.0 * std::log10 ((mono + 1.0e-12) / (st + 1.0e-12)));
+            const auto label = juce::String ((int) (rate / 1000.0)) + " kHz: ";
+            check (finite, label + "every fix at once stays finite");
+            check (std::abs (worstLevel) < 9.0f, label + "no part moved more than 9 dB in all (the most: role " + juce::String (worstRole) + ", " + juce::String (worstLevel, 1) + " dB)");
+            check (juce::Decibels::gainToDecibels (peakOut / peakIn) < 3.0f, label + "the mix's peak stays within 3 dB of the dry mix's (" + juce::String (juce::Decibels::gainToDecibels (peakOut / peakIn), 1) + " dB)");
+            check (monoDb > -3.0f, label + "it stays mono-safe (the mono sum " + juce::String (monoDb, 1) + " dB against stereo)");
+        }
+        AP::reset(); suite::LabelReadyBus::reset(); suite::FixBus::reset(); suite::MixFixBus::reset();
     }
 
     return finish();

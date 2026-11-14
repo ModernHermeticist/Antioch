@@ -29,9 +29,12 @@ namespace qn
             float buildProgress = 0.0f;
             bool nextIsDrop = false, playing = false;
             double sectionEndQ = 0.0;
+            int occurrence = 0;   // which drop this is (0 = the first)
         };
+        // the mix fixes' share here: each drop's own tone (row 6 of toneDb: the later drops), the kick's tail following the tempo
+        std::atomic<bool> laterDropTone { false }, kickTailTempo { false };
         std::atomic<bool> sectionTone { false }, sectionWidth { false }, drive { false }, kickTail { false }, subHandover { false }, choke { false }, subsonic { false };
-        std::array<std::array<std::atomic<float>, 10>, 6> toneDb {};   // per kind of section, per octave band (dB, +-6)
+        std::array<std::array<std::atomic<float>, 10>, 7> toneDb {};   // per kind of section, per octave band (dB, +-6); row 6: the later drops
         std::array<std::atomic<float>, 6> widthOffset {};              // per kind of section: -0.5 .. +0.5 (side gain - 1)
 
         void prepare (double sampleRate)
@@ -52,18 +55,21 @@ namespace qn
         void process (float* const* ch, int chs, int n, const Context& c) noexcept
         {
             const auto t = juce::jlimit (-1, 5, c.sectionType);
-            // the section's tone (coefficients when the section or its gains change)
+            // the section's tone (coefficients when the section or its gains change); a later drop has its own row once it's set
+            auto toneRow = t;
+            if (laterDropTone.load() && t == 4 && c.occurrence >= 1)
+                for (auto& v : toneDb[6]) if (std::abs (v.load()) > 0.01f) { toneRow = 6; break; }
             if (sectionTone.load() && t >= 0)
             {
-                bool changed = t != appliedType;
+                bool changed = toneRow != appliedType;
                 for (int b = 0; b < 10; ++b)
                 {
-                    const auto want = juce::jlimit (-6.0f, 6.0f, toneDb[(size_t) t][(size_t) b].load());
+                    const auto want = juce::jlimit (-6.0f, 6.0f, toneDb[(size_t) toneRow][(size_t) b].load());
                     auto& now = appliedDb[(size_t) 0][(size_t) b];
                     const auto next = now + juce::jlimit (-0.25f, 0.25f, want - now);   // a quarter dB per block at most: no clicks
                     if (std::abs (next - now) > 1.0e-4f || changed) { now = next; setPeak (b, now); changed = true; }
                 }
-                appliedType = t;
+                appliedType = toneRow;
                 for (int c2 = 0; c2 < juce::jmin (2, chs); ++c2)
                     for (int b = 0; b < 10; ++b)
                         if (std::abs (appliedDb[0][(size_t) b]) > 0.01f)
@@ -78,6 +84,7 @@ namespace qn
             const auto subCut = 1.0f - juce::Decibels::decibelsToGain (-6.0f * handover);
             const auto chokeOn = choke.load() && (c.role == 3 || c.role == 7) && c.nextIsDrop && c.playing;
             const auto tailOn = kickTail.load() && c.role == 1 && t == 4;
+            const auto tempoScale = kickTailTempo.load() ? juce::jlimit (0.6, 1.5, 128.0 / juce::jmax (60.0, c.bpm)) : 1.0;   // the tail times set at 128 BPM
             for (int i = 0; i < n; ++i)
             {
                 // the kick's tail: after 120 ms from each hit, down to -6 dB until the next one
@@ -85,8 +92,8 @@ namespace qn
                 {
                     const auto a = chs > 1 ? 0.5f * (std::abs (ch[0][i]) + std::abs (ch[1][i])) : std::abs (ch[0][i]);
                     envFast += fastA * (a - envFast); envSlow += slowA * (a - envSlow);
-                    if (envFast > 2.0f * envSlow && envFast > 1.0e-3f && sinceHit > (int) (0.08 * fs)) sinceHit = 0; else ++sinceHit;
-                    const auto target = sinceHit > (int) (0.12 * fs) ? 0.5f : 1.0f;
+                    if (envFast > 2.0f * envSlow && envFast > 1.0e-3f && sinceHit > (int) (0.08 * tempoScale * fs)) sinceHit = 0; else ++sinceHit;
+                    const auto target = sinceHit > (int) (0.12 * tempoScale * fs) ? 0.5f : 1.0f;
                     tailGain += (target > tailGain ? 0.02f : 0.0005f) * (target - tailGain);
                 }
                 else tailGain += 0.01f * (1.0f - tailGain);

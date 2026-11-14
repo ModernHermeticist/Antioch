@@ -24,6 +24,7 @@ namespace lab
         bool heard = false;
         float db = -100.0f, sideDb = -100.0f, onsets = 0.0f, lowFlux = 0.0f;
         float peakDb = -100.0f, leanDb = 0.0f;   // its loudest sample; left over right (dB)
+        float asymDb = 0.0f;                     // its positive peak against its negative one (dB: lopsided peaks)
         float lowCorr = 1.0f; int lowCorrCount = 0;   // the correlation of left and right under 120 Hz (1 = in phase), counted when there's low end
         Bands band {};
         std::array<float, 12> chroma {};   // the pitch classes' share of the bar's tonal energy (C = 0), sums to 1 (or all 0)
@@ -34,7 +35,7 @@ namespace lab
     struct Accumulator
     {
         double full = 0.0, side = 0.0, low = 0.0, left = 0.0, right = 0.0, lowLR = 0.0, lowLL = 0.0, lowRR = 0.0;
-        float peak = 0.0f;
+        float peak = 0.0f, posPeak = 0.0f, negPeak = 0.0f;
         std::array<double, numBands> band {};
         std::array<double, 12> chroma {};
         int samples = 0, onsets = 0;
@@ -49,6 +50,7 @@ namespace lab
             b.onsets = (float) onsets;
             b.lowFlux = (float) low;
             b.peakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
+            if (posPeak > 1.0e-5f && negPeak > 1.0e-5f) b.asymDb = std::abs (juce::Decibels::gainToDecibels (posPeak / negPeak));
             if (lowLL > 1.0e-6 * samples && lowRR > 1.0e-6 * samples) { b.lowCorr = (float) (lowLR / std::sqrt (lowLL * lowRR)); b.lowCorrCount = 1; }
             b.leanDb = left > 1.0e-12 && right > 1.0e-12 ? (float) (10.0 * std::log10 (left / right)) : 0.0f;
             double c = 0.0;
@@ -121,6 +123,7 @@ namespace lab
             acc.left += (double) l * l; acc.right += (double) r * r;
             { const auto a = lowLeft.lowpass (l), b = lowRight.lowpass (r); acc.lowLR += (double) a * b; acc.lowLL += (double) a * a; acc.lowRR += (double) b * b; }
             acc.peak = std::max (acc.peak, std::max (std::abs (l), std::abs (r)));
+            acc.posPeak = std::max (acc.posPeak, 0.5f * (l + r)); acc.negPeak = std::max (acc.negPeak, -0.5f * (l + r));
             acc.full += (double) mono * mono;
             acc.side += (double) side * side;
             for (int b = 0; b < numBands; ++b) { const auto y = filters[(size_t) b].bandpass (mono); acc.band[(size_t) b] += (double) y * y; }

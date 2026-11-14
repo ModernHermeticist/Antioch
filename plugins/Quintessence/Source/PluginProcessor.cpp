@@ -74,6 +74,29 @@ QuintessenceProcessor::QuintessenceProcessor()
         if (fix == suite::Fix::SectionTrim) return sectionTrim (data);
         if (fix == suite::Fix::PhraseTrim) return phraseTrimStep (data);
         if (fix == suite::Fix::TrackPan) return trackPan (data);
+        if (fix == suite::Fix::MixFixOff)
+        {
+            uint32_t low; int feature;
+            suite::unpackMixFix (data, low, feature);
+            if (low != (getInstanceId() & 0xfffu)) return {};
+            return mixLatch.switchOff (feature);
+        }
+        if (fix == suite::Fix::MixFixReset)
+        {
+            const auto beforeFailsafe = failsafeOff.load();
+            failsafeOff.store (false);
+            auto undo = mixLatch.resetAll();
+            return [this, undo, beforeFailsafe] { undo(); failsafeOff.store (beforeFailsafe); };
+        }
+        if (fix == suite::Fix::DeltaListen)
+        {
+            uint32_t low; int v;
+            suite::unpackMixFix (data, low, v);
+            if (low != (getInstanceId() & 0xfffu)) { deltaListen.store (false); return {}; }   // only one track at a time
+            const auto before = deltaListen.load();
+            deltaListen.store (v != 0);
+            return [this, before] { deltaListen.store (before); };
+        }
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
             relearn();
@@ -117,6 +140,8 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     labelDsp.prepare (sampleRate);
     labelDsp2.prepare (sampleRate);
     labelDsp3.prepare (sampleRate);
+    labelDsp4.prepare (sampleRate);
+    dryCopy.setSize (2, juce::jmax (512, getBlockSize()), false, false, true);
     sr = sampleRate;
     const auto fs = (float) sr;
     for (auto& f : lowCuts) f.reset();
@@ -215,7 +240,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     int group = 0;
     float buildProgress = 0.0f, energyRatio = 1.0f;
     double sectionStartQ = 0.0;
-    int sectionType = -1, sectionIndexNow = -1, sectionOccurrence = 0, dropCount = 0;
+    int sectionType = -1, sectionIndexNow = -1, sectionOccurrence = 0, dropCount = 0, sectionNextType = -1;
     bool nextIsDrop = false;
     double sectionEndQ = 0.0;
     const auto cpuStart = juce::Time::getHighResolutionTicks();
@@ -228,7 +253,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (pos.valid && (pos.type == suite::SectionType::Groove || pos.type == suite::SectionType::Intro || pos.type == suite::SectionType::Outro)
             && suite::Autopilot::on (suite::Autopilot::sectionEqF)) group = 3;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
-        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; sectionIndexNow = pos.index; nextIsDrop = pos.hasNext && pos.next == suite::SectionType::Drop; sectionEndQ = pos.endQ; sectionOccurrence = pos.occurrence; }
+        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; sectionIndexNow = pos.index; nextIsDrop = pos.hasNext && pos.next == suite::SectionType::Drop; sectionEndQ = pos.endQ; sectionOccurrence = pos.occurrence; sectionNextType = pos.hasNext ? (int) pos.next : -1; }
         for (int s = 0; s < follower.getMap().count; ++s) dropCount += follower.getMap().sections[(size_t) s].type == suite::SectionType::Drop ? 1 : 0;
     }
     if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
@@ -670,7 +695,11 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     }
     live.endBlock();
     {
-        const auto target = sectionType >= 0 && sectionType < 6 ? juce::Decibels::decibelsToGain (sectionTrimDb[(size_t) sectionType].load()) : 1.0f;
+        auto trimDb = sectionType >= 0 && sectionType < 6 ? sectionTrimDb[(size_t) sectionType].load() : 0.0f;
+        // levels ramp across a section change: through the last beat toward the next section's trim
+        if (suite::Autopilot::on (suite::Autopilot::mx2BoundarySmoothF) && sectionNextType >= 0 && sectionNextType < 6 && info.hasPpq && sectionEndQ - info.ppq < 1.0 && sectionEndQ > info.ppq)
+            trimDb += (float) (1.0 - (sectionEndQ - info.ppq)) * (sectionTrimDb[(size_t) sectionNextType].load() - trimDb);
+        const auto target = juce::Decibels::decibelsToGain (trimDb);
         if (std::abs (target - trimGain) > 1.0e-5f || std::abs (trimGain - 1.0f) > 1.0e-5f)
         {
             for (int c = 0; c < chs; ++c) buffer.applyGainRamp (c, 0, n, trimGain, target);
@@ -678,12 +707,20 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
     }
     labelDsp.output (buffer.getArrayOfWritePointers(), chs, n, info.ppq, info.bpm > 0.0 ? info.bpm : 120.0, info.barQuarters(), sectionType, roleNow, info.playing);
+    // the label and mix fixes' input, kept: the fail-safe puts it back, "hear what it removes" subtracts from it
+    if (dryCopy.getNumChannels() < chs || dryCopy.getNumSamples() < n) dryCopy.setSize (chs, n, false, false, true);
+    for (int c = 0; c < chs; ++c) dryCopy.copyFrom (c, 0, buffer, c, 0, n);
+    const auto bypassMix = suite::Autopilot::mixBypassed();
+    double preMixPow = 0.0;
     {
         qn::LabelDsp2::Context cx;
         cx.ppq = info.ppq; cx.bpm = info.bpm > 0.0 ? info.bpm : 120.0; cx.barQ = info.barQuarters(); cx.sectionType = sectionType; cx.role = roleNow;
-        cx.buildProgress = buildProgress; cx.nextIsDrop = nextIsDrop; cx.playing = info.playing; cx.sectionEndQ = sectionEndQ;
+        cx.buildProgress = buildProgress; cx.nextIsDrop = nextIsDrop; cx.playing = info.playing; cx.sectionEndQ = sectionEndQ; cx.occurrence = sectionOccurrence;
         labelDsp2.process (buffer.getArrayOfWritePointers(), chs, n, cx);
+        for (int c = 0; c < chs; ++c) for (int i = 0; i < n; ++i) preMixPow += (double) buffer.getSample (c, i) * buffer.getSample (c, i);
     }
+    const auto kick = suite::KickBus::read();
+    if (! bypassMix && ! failsafeOff.load())
     {
         namespace AB = suite::ActivityBus;
         qn::LabelDsp3::Context cx;
@@ -693,7 +730,6 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         cx.leadActivity = AB::read (AB::lead); cx.vocalActivity = AB::read (AB::vocal); cx.riserActivity = AB::read (AB::riser);
         cx.sibilance = AB::read (AB::sibilance); cx.dropHit = AB::read (AB::dropHit); cx.phraseEnd = AB::read (AB::phraseEnd);
         cx.vocalOverMusicDb = AB::readValue (AB::vocalOverMusic, 99.0f); cx.leadHz = suite::Autopilot::leadPitch();
-        const auto kick = suite::KickBus::read();
         cx.kick = kick.valid ? &kick : nullptr;
         if (sectionType >= 0 && info.hasPpq)
             if (suite::Progression prog; suite::ChordBus::read (prog) && prog.valid && prog.count > 0)
@@ -705,9 +741,61 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
                 cx.previousChordRootHz = suite::music::midiToHz ((float) (36 + (prog.root + prog.chordRoots[(size_t) (prevIdx & 7)]) % 12));
                 cx.sinceChordChangeQ = idx != prevIdx ? 0.0f : 99.0f;
             }
+        namespace AP = suite::Autopilot;
+        cx.strength = AP::mixStrength();
+        cx.liftsAllowed = AP::on (AP::mx2HeadroomForecastF) && suite::premaster::headroom::trimDb() < -0.25f ? 0.0f : 1.0f;   // the keeper's pulling down: no lifts
+        const auto trimNow = sectionType >= 0 && sectionType < 6 ? std::abs (sectionTrimDb[(size_t) sectionType].load()) : 0.0f;
+        const auto budgetOn = AP::on (AP::mx2LevelBudgetF);
+        cx.levelBudgetDb = budgetOn ? juce::jmax (0.0f, 6.0f - trimNow) : 60.0f;
+        cx.buildBudget = AP::on (AP::mx2BuildBudgetF) && labelDsp2.subHandover.load();
+        cx.fillOpen = labelDsp4.on[qn::LabelDsp4::fillOpen].load();
         labelDsp3.process (buffer.getArrayOfWritePointers(), chs, n, cx);
         if (roleNow == 6) AB::write (AB::sibilance, labelDsp3.sibilanceShare.load());
+        qn::LabelDsp4::Extra x;
+        x.nextType = sectionNextType; x.kickBodyHz = kick.valid ? kick.bodyHz : 0.0f; x.pitchHz = labelDsp3.pitchHz();
+        labelDsp4.process (buffer.getArrayOfWritePointers(), chs, n, cx, x, budgetOn ? juce::jmax (0.0f, 6.0f - trimNow - std::abs (labelDsp3.lastDb)) : 60.0f);
+        mixBudgetHit.store (labelDsp3.budgetHit || labelDsp4.budgetHit);
+        mixLevelDb.store (labelDsp3.lastDb + labelDsp4.lastDb);
     }
+    // the fail-safe: a fix producing NaN, inf or a runaway level is switched off, and the dry signal put back
+    {
+        bool bad = false;
+        float inPk = 0.0f, outPk = 0.0f;
+        for (int c = 0; c < chs && ! bad; ++c)
+        {
+            const auto* o = buffer.getReadPointer (c);
+            for (int i = 0; i < n; ++i) { if (! std::isfinite (o[i])) { bad = true; break; } outPk = juce::jmax (outPk, std::abs (o[i])); }
+            inPk = juce::jmax (inPk, dryCopy.getMagnitude (c, 0, n));
+        }
+        if (! bad && outPk > 0.01f && outPk > 4.0f * juce::jmax (1.0e-3f, inPk)) bad = true;   // over 12 dB louder than it came in
+        if (bad && suite::Autopilot::on (suite::Autopilot::mx2FailSafeF))
+        {
+            for (int c = 0; c < chs; ++c) buffer.copyFrom (c, 0, dryCopy, c, 0, n);
+            labelDsp3.prepare (sr); labelDsp4.prepare (sr);   // their filters start again
+            failsafeOff.store (true);
+            failsafeTripped.store (true);
+        }
+    }
+    // the whole-mix A/B: with the fixes bypassed, this track at the level it has with them
+    {
+        double post = 0.0;
+        for (int c = 0; c < chs; ++c) for (int i = 0; i < n; ++i) post += (double) buffer.getSample (c, i) * buffer.getSample (c, i);
+        if (! bypassMix && preMixPow > 1.0e-9 && post > 1.0e-9) bypassMatch += 0.02f * (juce::jlimit (0.5f, 2.0f, (float) std::sqrt (post / preMixPow)) - bypassMatch);
+        const auto want = bypassMix ? bypassMatch : 1.0f;
+        if (std::abs (want - matchGainNow) > 1.0e-5f || std::abs (matchGainNow - 1.0f) > 1.0e-5f)
+        {
+            for (int c = 0; c < chs; ++c) buffer.applyGainRamp (c, 0, n, matchGainNow, want);
+            matchGainNow = want;
+        }
+    }
+    // hear what the fixes change: the input minus the output
+    if (deltaListen.load())
+        for (int c = 0; c < chs; ++c)
+        {
+            auto* o = buffer.getWritePointer (c);
+            const auto* d = dryCopy.getReadPointer (c);
+            for (int i = 0; i < n; ++i) o[i] = d[i] - o[i];
+        }
     traits.output (buffer.getReadPointer (0), chs > 1 ? buffer.getReadPointer (1) : nullptr, n, info.playing && info.hasPpq ? info.ppq : -1.0,
                    info.bpm > 0.0 ? info.bpm : 120.0, sectionIndexNow, isNonRealtime());
     {
@@ -1259,7 +1347,7 @@ std::function<void()> QuintessenceProcessor::sectionTone (uint32_t data)
 {
     uint32_t low; int type, band; float db;
     suite::unpackSectionTone (data, low, type, band, db);
-    if (low != (getInstanceId() & 0xfffu) || type < 0 || type >= 6 || band < 0 || band >= 10) return {};
+    if (low != (getInstanceId() & 0xfffu) || type < 0 || type >= 7 || band < 0 || band >= 10) return {};
     auto& v = labelDsp2.toneDb[(size_t) type][(size_t) band];
     const auto before = v.load(), after = juce::jlimit (-6.0f, 6.0f, before + db);
     if (std::abs (after - before) < 0.01f) return {};
@@ -1356,7 +1444,7 @@ void QuintessenceProcessor::loadLabelFixes()
     {
         const auto tone = juce::StringArray::fromTokens (apvts.state.getProperty ("labelSectionTone", "").toString(), ",", "");
         bool any = false;
-        for (int t = 0; t < 6; ++t) for (int b = 0; b < 10; ++b)
+        for (int t = 0; t < 7; ++t) for (int b = 0; b < 10; ++b)
         {
             const auto v = t * 10 + b < tone.size() ? juce::jlimit (-6.0f, 6.0f, tone[t * 10 + b].getFloatValue()) : 0.0f;
             labelDsp2.toneDb[(size_t) t][(size_t) b].store (v); any = any || std::abs (v) > 0.01f;
@@ -2017,21 +2105,42 @@ void QuintessenceProcessor::latchMixFixes (const suite::TrackTraits::Traits& t)
     namespace AP = suite::Autopilot;
     const auto role = effectiveRole();
     const auto name = getTrackName().toLowerCase();
-    bool changed = false;
+    if (! mixLog) { mixLog = true; mixLatch.log = [this] (const juce::String& s) { addLog (s); }; }
+    // the fixes kept the old way (a hex mask) carried over once
+    if (mixLatched != 0)
+    {
+        for (int i = 0; i < qn::LabelDsp3::numFixes; ++i) if ((mixLatched >> i) & 1u) mixLatch.force ((AP::Feature) ((int) AP::mxPhraseTrimF + i));
+        mixLatched = 0;
+        apvts.state.removeProperty ("mixLatched", nullptr);
+    }
+    if (failsafeTripped.exchange (false)) addLog ("Safety: a mix fix misbehaved (NaN or a runaway level): the fixes are off for this song (reset them in Ouroboros)");
+    mixLatch.beginTick (isNonRealtime());
+    // the cheap, high-value ones keep running when the CPU is high; these sleep first
+    auto lowValue3 = [] (int i) { using F = qn::LabelDsp3; return i == F::vocalDoubler || i == F::monoWiden || i == F::bandWidth || i == F::exciterAir || i == F::fxTailDark || i == F::noteEven || i == F::chordFollow || i == F::upwardBreakdown; };
     for (int i = 0; i < qn::LabelDsp3::numFixes; ++i)
     {
         const auto f = (AP::Feature) ((int) AP::mxPhraseTrimF + i);
-        const auto applies = mixApplies (i, role, name, t);
-        const auto bit = (uint64_t) 1 << i;
+        const auto applies = mixApplies (i, role, name, t) && ! failsafeOff.load();
         // the phrase rides need no asking: they're Ouroboros' own moves (zero until it makes one)
-        if ((mixLatched & bit) == 0 && applies && AP::on (f) && (i == qn::LabelDsp3::phraseTrim || suite::LabelReadyBus::needed ((int) f)))
-        {
-            mixLatched |= bit; changed = true;
-            addLog ("Mix: " + juce::String (AP::featureName ((int) f)).fromFirstOccurrenceOf ("Mix: ", false, false));
-        }
-        labelDsp3.on[(size_t) i].store ((mixLatched & bit) != 0 && applies && AP::on (f));
+        const auto runs = i == qn::LabelDsp3::phraseTrim ? applies && AP::on (f) && ! AP::mixBypassed() : mixLatch.update (f, applies, lowValue3 (i));
+        labelDsp3.on[(size_t) i].store (runs);
     }
-    if (changed) apvts.state.setProperty ("mixLatched", juce::String::toHexString ((juce::int64) mixLatched), nullptr);
+    auto lowValue4 = [] (int i) { using F = qn::LabelDsp4; return i == F::vocalHeldDouble || i == F::bandBalance || i == F::percKey || i == F::haas || i == F::repeatTone || i == F::buildTension || i == F::ghostEven; };
+    for (int i = 0; i < qn::LabelDsp4::numFixes; ++i)
+    {
+        const auto f = (AP::Feature) ((int) AP::mx2PhaseRotateF + i);
+        labelDsp4.on[(size_t) i].store (mixLatch.update (f, mixApplies4 (i, role, name, t) && ! failsafeOff.load(), lowValue4 (i)));
+    }
+    {
+        // each drop's own tone: Ouroboros sends the later drops' steps itself; they apply once there are any
+        bool anyLater = false;
+        for (auto& v : labelDsp2.toneDb[6]) anyLater = anyLater || std::abs (v.load()) > 0.01f;
+        labelDsp2.laterDropTone.store (labelDsp4.on[qn::LabelDsp4::laterDropTone].load() || (anyLater && AP::on (AP::mx2LaterDropToneF) && ! AP::mixBypassed()));
+        if (anyLater) labelDsp2.sectionTone.store (labelDsp2.sectionTone.load() || AP::on (AP::sectionToneF));
+    }
+    labelDsp2.kickTailTempo.store (labelDsp4.on[qn::LabelDsp4::kickTailTempo].load());
+    mixLatch.watchOwnership();
+    mixLatch.publish (getInstanceId(), "Quintessence", getTrackName(), mixLevelDb.load(), pending.kind != Pending::none, mixBudgetHit.load());
     labelDsp3.isArp = name.contains ("arp") || name.contains ("pluck");
     labelDsp3.isClap = name.contains ("clap") || name.contains ("snare");
     labelDsp3.isBus = role == qn::targets::musicBus || name.contains ("bus") || name.contains ("group");
@@ -2042,6 +2151,56 @@ void QuintessenceProcessor::latchMixFixes (const suite::TrackTraits::Traits& t)
     // the low cut from the lowest note: an octave under it, never over 150 Hz
     if (const auto low = labelDsp3.lowestNote.load(); low > 0)
         labelDsp3.lowCutHz.store (juce::jlimit (20.0f, 150.0f, 0.5f * suite::music::midiToHz ((float) low)));
+    // a backing vocal: 6 dB under the loudest vocal (the lead vocal), from what every vocal measures
+    {
+        float loudest = -100.0f;
+        for (const auto& o : suite::TrackTraits::list()) if (o.role == 6 && o.id != getInstanceId()) loudest = juce::jmax (loudest, o.outRmsDb);
+        const auto mine = t.outRmsDb - labelDsp4.backingOffsetDb.load();   // its level before the offset
+        const auto want = role == 6 && loudest > -60.0f && mine < loudest - 1.0f ? juce::jlimit (-9.0f, 0.0f, (loudest - 6.0f) - mine) : 0.0f;
+        labelDsp4.backingOffsetDb.store (labelDsp4.backingOffsetDb.load() + 0.25f * (want - labelDsp4.backingOffsetDb.load()));
+    }
+    // the key, for tonal percussion
+    if (const auto key = suite::KeyBus::read(); key.valid)
+    {
+        labelDsp4.keyRoot.store (key.root);
+        uint32_t mask = 0;
+        for (const auto st : suite::music::scales()[(size_t) juce::jlimit (0, (int) suite::music::scales().size() - 1, key.scale)].steps) mask |= 1u << ((key.root + st) % 12);
+        labelDsp4.scaleMask.store (mask);
+    }
+}
+
+bool QuintessenceProcessor::mixApplies4 (int fix, int r, const juce::String& name, const suite::TrackTraits::Traits& t) const
+{
+    using F = qn::LabelDsp4;
+    const auto bus = r == qn::targets::musicBus || name.contains ("bus") || name.contains ("group");
+    const auto heard = t.outRmsDb > -90.0f;
+    switch (fix)
+    {
+        case F::phaseRotate: return (r == 1 || r == 2 || bus) && t.asymDb > 1.5f;
+        case F::drop2Bright: case F::repeatTone: return r >= 3 && r <= 7;
+        case F::outroThin: return r >= 3 && r <= 7;
+        case F::breakdownEntry: return r == 4 || r == 5 || r == 6;
+        case F::backingVocals: case F::vocalProximity: case F::vocalHeldDouble: case F::vocalAirSection: return r == 6;
+        case F::boxiness: case F::padSwell: case F::buildTension: return r == 4;
+        case F::cymbalWash: case F::ghostEven: return r == 3;
+        case F::percKey: return r == 3 && (name.contains ("perc") || name.contains ("tom") || name.contains ("conga") || name.contains ("bongo") || name.contains ("clap"));
+        case F::bandBalance: return heard && r != 1 && r != 2 && std::abs (t.lrBalanceDb) > 1.5f;
+        case F::laterDropTone: return r >= 2 && r <= 7;
+        case F::lowMidDrops: return r == 2 || r == 4 || r == 5;
+        case F::subPerNote: case F::bassChoke: case F::subVsKick: case F::bassHarmonicsSection: return r == 2;
+        case F::fillOpen: return bus;
+        case F::leadEnvelope: return r == 5;
+        case F::kickTailTempo: return r == 1;
+        case F::haas: return heard && std::abs (t.haasMs) > 0.2f;
+        case F::panLimit: return heard && std::abs (t.lrBalanceDb) > 10.0f;
+        case F::widthDrop2: return r == 4 || r == 5;
+        case F::riserWiden: case F::postImpact: case F::downlifterGate: case F::impactEnergy: case F::sweepToDrop: case F::fxUnderHook: return r == 7;
+        case F::sideLowsSection: return r != 0 && r != 1 && r != 2;
+        case F::pickupLift: return r == 1 || r == 3;
+        case F::introEase: return r >= 2 && r <= 7;
+        case F::vocalVsLead: return r == 5 || r == 6;
+        default: return false;
+    }
 }
 
 std::function<void()> QuintessenceProcessor::phraseTrimStep (uint32_t data)

@@ -64,6 +64,11 @@ namespace qn
             float vocalOverMusicDb = 99.0f, leadHz = 0.0f;
             const suite::KickPatternSet* kick = nullptr;   // the kick's pattern (Kybalion), nullptr = on the beats
             float chordRootHz = 0.0f, previousChordRootHz = 0.0f, sinceChordChangeQ = 99.0f;
+            // the safety round: the mix fixes' strength (Ouroboros' knob), lifts allowed by the headroom (0..1),
+            // the level budget left for these fixes (dB, both ways), a build budget (another fix already takes the
+            // lows out through the builds), the drum bus opening up for fills
+            float strength = 1.0f, liftsAllowed = 1.0f, levelBudgetDb = 6.0f;
+            bool buildBudget = false, fillOpen = false;
         };
 
         void prepare (double sampleRate)
@@ -136,7 +141,13 @@ namespace qn
             if (on[fillDuck].load() && (role == 4 || role == 5 || role == 7)) db -= 1.0f * c.phraseEnd;
             if (on[riserEnergy].load() && role == 7 && inBuild) db += juce::jlimit (-3.0f, 3.0f, 6.0f * (std::sqrt (juce::jmax (0.1f, c.energyRatio)) - 1.0f));
             if (on[dropPunch].load() && (role == 1 || role == 2) && inDrop && c.occurrence >= 0 && inSection < 1.0) db += 1.5f;
-            db = juce::jlimit (-6.0f, 3.0f, db + truePeakTrimDb.load());
+            db *= c.strength;
+            if (db > 0.0f) db *= c.liftsAllowed;   // the headroom's short: no lifts
+            const auto unclamped = db;
+            db = juce::jlimit (-c.levelBudgetDb, juce::jmin (3.0f, c.levelBudgetDb), db);
+            budgetHit = std::abs (db - unclamped) > 0.05f;
+            lastDb = db;
+            db += truePeakTrimDb.load();
             const auto targetGain = juce::Decibels::decibelsToGain (db) * chainGain;
 
             // per-block settings
@@ -147,7 +158,7 @@ namespace qn
             const auto lc = lowCutHz.load();
             if (on[autoLowCut].load() && role != 1 && role != 2 && lc > 25.0f && std::abs (lc - hpHz) > 1.0f) { hpHz = lc; hp[0].set (lc, 0.707f, fs); hp[1].set (lc, 0.707f, fs); }
             const auto buildHp = on[buildHighPass].load() && role != 1 && role != 7 && inBuild && c.buildProgress > 0.5f;
-            if (buildHp) { const auto hz = 20.0f + 460.0f * (c.buildProgress - 0.5f); if (std::abs (hz - buildHz) > 2.0f) { buildHz = hz; buildHpf[0].set (hz, 0.707f, fs); buildHpf[1].set (hz, 0.707f, fs); } }
+            if (buildHp) { const auto hz = 20.0f + (c.buildBudget ? 230.0f : 460.0f) * (c.buildProgress - 0.5f); if (std::abs (hz - buildHz) > 2.0f) { buildHz = hz; buildHpf[0].set (hz, 0.707f, fs); buildHpf[1].set (hz, 0.707f, fs); } }
             // the kick's pattern: where the bass's lows duck
             const auto msPerQ = 60000.0 / juce::jmax (1.0, c.bpm);
             const auto msSinceKick = [&c, msPerQ] (double q) -> double
@@ -180,8 +191,8 @@ namespace qn
                 const auto mono = 0.5f * (l + r);
                 auto dipBand = [&] (suite::Svf& f, float amountDb)
                 {
-                    const auto band = f.bandpass (mono);
-                    const auto k = 1.0f - juce::Decibels::decibelsToGain (-amountDb);
+                    const auto band = f.bandpassNorm (mono);
+                    const auto k = 1.0f - juce::Decibels::decibelsToGain (-amountDb * c.strength);
                     l -= k * band; r -= k * band;
                 };
                 if (on[padUnderLead].load() && role == 4 && leadOn && leadNotchHz > 60.0f) dipBand (leadNotch, 2.5f * c.leadActivity);
@@ -232,13 +243,14 @@ namespace qn
                     if (++clickPhase > (int) (0.002f * fs)) clickPhase = -1;
                 }
                 // drum bus parallel, glue per section, upward compression in breakdowns, an expander, the vocal's peaks
-                if (on[drumParallel].load() && nameBus && isDrum)
+                const auto fillNow = c.fillOpen && c.phraseEnd > 0.5f;   // the drums open up for the fill
+                if (on[drumParallel].load() && nameBus && isDrum && ! fillNow)
                 {
                     parEnv += (a > parEnv ? 0.3f : 0.0005f) * (a - parEnv);
                     const auto g = juce::jlimit (0.1f, 1.0f, 0.1f / juce::jmax (1.0e-4f, parEnv));   // a heavy squash
                     l += 0.2f * l * g; r += 0.2f * r * g;
                 }
-                if (on[gluePerSection].load() && nameBus)
+                if (on[gluePerSection].load() && nameBus && ! fillNow)
                 {
                     glueEnv += (a > glueEnv ? 0.01f : 0.0003f) * (a - glueEnv);
                     const auto thr = inDrop ? 0.25f : inBreak ? 0.5f : 0.35f;
@@ -366,6 +378,10 @@ namespace qn
         // what the message thread knows about this track
         bool isArp = false, isClap = false, isBus = false, monoInput = false;
         float expThreshold = 0.0f, layoutPan = 0.0f;
+        float lastDb = 0.0f;      // this block's level move (dB, before the true-peak trim), for the level budget
+        bool budgetHit = false;   // the budget held a move back this block
+        float pitchHz() const noexcept { return pitchNowHz; }   // the note now (its own estimate; 0 = none)
+        float pitchMedian() const noexcept { return pitchMedianHz; }
 
     private:
         float fs = 44100.0f, gain = 1.0f, levEnv = 0.0f, levGain = 1.0f, chainGain = 1.0f, duckGain = 1.0f;

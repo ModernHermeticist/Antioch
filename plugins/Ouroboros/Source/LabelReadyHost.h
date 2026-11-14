@@ -18,6 +18,7 @@
 #include "ReferenceBus.h"
 #include "KeyBus.h"
 #include "KitBus.h"
+#include "MixFixBus.h"
 #include <optional>
 #include <thread>
 
@@ -72,7 +73,7 @@ namespace lab
         bool profileFromCatalogue = false;
         Report report;
         std::vector<std::pair<juce::int64, int>> history;      // (time, overall), a point a minute
-        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; float lufs = -100.0f; int stage = -1; };
+        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; float lufs = -100.0f; int stage = -1; juce::String fixes; };
         std::vector<Milestone> milestones;
         std::map<int, std::array<double, numTypes>> rolePower;   // per role, per kind of section: summed power
         std::map<int, std::array<int, numTypes>> roleCount;
@@ -256,8 +257,29 @@ namespace lab
                 for (int a = 0; a < numAreas; ++a)
                     if (report.areaMeasured[(size_t) a] && ! signOff.count (a)) { report.ready = false; report.blockers.add (juce::String (areaName (a)) + ": not signed off yet"); }
             // the label-ready autopilot: the plugins' fixes told where they're needed; Ouroboros' own fixes, one at a time
-            suite::LabelReadyBus::publishNeeds (AutoFixer::needsFrom (report));
-            if (autoFixOn) autoFix.step (report, lastTraits, playingNow);
+            const auto cx = stepContext();
+            namespace AP = suite::Autopilot;
+            if (AP::on (AP::mx2SelfCheckF) || AP::on (AP::mx2OneAtATimeF))
+            {
+                judge.sentByOuroboros = [] (int f) { return sentByOuroboros (f); };
+                judge.allowed = [this] (const Check& c) { return autoFix.allowedByMode (c); };
+                judge.learning = &autoFix.learning; judge.noise = &autoFix.noise;
+                if (! (cx.rendering && AP::on (AP::mx2RenderFreezeF))) judge.step (report, cx.judgeable, cx.settling);
+                suite::LabelReadyBus::publishNeeds (judge.needs());
+                suite::LabelReadyBus::publishRevoked (judge.revokedMask());
+            }
+            else { suite::LabelReadyBus::publishNeeds (AutoFixer::needsFrom (report)); suite::LabelReadyBus::publishRevoked ({}); }
+            if (autoFixOn) autoFix.step (report, lastTraits, playingNow, cx);
+            // the CPU budget: the suite's Quintessences over 60% of the audio thread put their least useful fixes to sleep
+            {
+                float cpu = 0.0f;
+                for (const auto& t : lastTraits) cpu += t.cpuPercent;
+                AP::setCpuSleepLevel (AP::on (AP::mx2CpuBudgetF) ? (cpu > 80.0f ? 4 : cpu > 60.0f ? 1 : 0) : 0);
+            }
+            // milestones carry every plugin's fixes: a loaded milestone's fixes checked against what it saved
+            if (milestoneCheckIn > 0 && --milestoneCheckIn == 0 && AP::on (AP::mx2MilestoneFixesF))
+                milestoneFixNote = activeFixesSignature() == milestoneFixes ? juce::String ("the milestone's mix fixes are all back")
+                                                                          : juce::String ("the milestone's mix fixes didn't all come back (a plugin missing, or changed since)");
             const auto now = juce::Time::currentTimeMillis();
             if (report.overall > 0 && (history.empty() || now - history.back().first > 60000))
             {
@@ -352,6 +374,69 @@ namespace lab
         AutoFixer autoFix;
         bool autoFixOn = true;                    // its fixes run (each switch on the Autopilot page decides its own)
         bool playingNow = false;                  // the processor says before each update
+        bool loopedNow = false, renderingNow = false;   // ... a loop in this play-through, FL rendering
+        int sectionTypeNow = -1;                  // ... where the playhead is
+        int heardMax = 0;                         // the most tracks heard in this play-through (a solo shows as fewer)
+        PluginFixJudge judge;                     // the plugins' fixes, judged
+        juce::String milestoneFixes;              // the fixes on when the last milestone was loaded (checked a few updates later)
+        int milestoneCheckIn = -1;
+        juce::String milestoneFixNote;
+        /** What every plugin has on now: "plugin|track|feature,feature,...", sorted (for the milestone check). */
+        static juce::String activeFixesSignature()
+        {
+            juce::StringArray lines;
+            for (const auto& e : suite::MixFixBus::all())
+            {
+                juce::StringArray fs;
+                for (int f = 0; f < suite::Autopilot::numFeatures; ++f) if (e.has (f)) fs.add (juce::String (f));
+                lines.add (e.pluginName() + "|" + e.trackName() + "|" + fs.joinIntoString (","));
+            }
+            lines.sort (true);
+            return lines.joinIntoString ("\n");
+        }
+        /** The mix fixes on every track, in words (Ouroboros' list). */
+        static juce::String activeFixesText()
+        {
+            juce::StringArray l;
+            for (const auto& e : suite::MixFixBus::all())
+            {
+                if (e.count == 0) continue;
+                juce::StringArray fs;
+                for (int f = 0; f < suite::Autopilot::numFeatures; ++f) if (e.has (f)) fs.add (juce::String (suite::Autopilot::featureName (f)).fromFirstOccurrenceOf (": ", false, false));
+                l.add (e.trackName() + " (" + e.pluginName() + "): " + juce::String (e.count) + " on" + (std::abs (e.levelDb) > 0.05f ? ", moving it " + juce::String (e.levelDb, 1) + " dB" : juce::String())
+                       + (e.budgetHit ? ", held back by its budget" : juce::String()) + "\n    " + fs.joinIntoString ("; "));
+            }
+            return l.isEmpty() ? juce::String ("No mix fix is on yet: they switch on where the checks find a problem.") : l.joinIntoString ("\n");
+        }
+        /** The plugins' fixes as judged: kept, being tried, switched off for this song. */
+        juce::String judgedText() const
+        {
+            juce::StringArray kept, trying, off;
+            for (const auto& [f, e] : judge.entries)
+            {
+                const auto n = juce::String (suite::Autopilot::featureName (f)) + " (" + e.check + ")";
+                if (e.state == PluginFixJudge::kept) kept.add (n); else if (e.state == PluginFixJudge::trying) trying.add (n); else if (e.state == PluginFixJudge::revoked) off.add (n);
+            }
+            return "Kept:\n  " + (kept.isEmpty() ? juce::String ("none yet") : kept.joinIntoString ("\n  "))
+                 + "\n\nBeing tried:\n  " + (trying.isEmpty() ? juce::String ("none") : trying.joinIntoString ("\n  "))
+                 + "\n\nSwitched off for this song (no better):\n  " + (off.isEmpty() ? juce::String ("none") : off.joinIntoString ("\n  "));
+        }
+
+        /** The update's context for the autopilot: a real play-through, plugins settling, FL rendering. */
+        AutoFixer::Context stepContext()
+        {
+            AutoFixer::Context cx;
+            int heard = 0;
+            for (const auto& t : lastTraits) heard += t.outRmsDb > -60.0f ? 1 : 0;
+            if (! playingNow) heardMax = 0;
+            heardMax = juce::jmax (heardMax, heard);
+            const auto soloed = heardMax >= 3 && heard < (heardMax * 6) / 10;
+            cx.judgeable = playingNow && ! loopedNow && ! soloed;
+            cx.settling = suite::MixFixBus::anyBusy();
+            cx.rendering = renderingNow;
+            cx.sectionType = sectionTypeNow;
+            return cx;
+        }
         std::vector<suite::TrackTraits::Traits> lastTraits;
         Inputs lastInputs;                        // the last snapshot (for scoring against one reference at a time)
 
@@ -870,6 +955,7 @@ namespace lab
             m.recipe = "Milestone - " + m.name + " - " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M");
             m.overall = report.overall;
             m.areas = report.areaScore;
+            m.fixes = activeFixesSignature();
             autoFix.milestone (report);   // the autopilot: areas that fall from here roll back
             m.stage = stageOf (m.name);
             // your taste: this song's drop tone against the label's, for the taste offset
@@ -896,6 +982,7 @@ namespace lab
         {
             if (index < 0 || index >= (int) milestones.size()) return;
             suite::RecipeBus::send (suite::RecipeAction::Load, milestones[(size_t) index].recipe);
+            milestoneFixes = milestones[(size_t) index].fixes; milestoneCheckIn = milestoneFixes.isNotEmpty() ? 3 : -1; milestoneFixNote = {};
             suite::MoveLog::add ("Ouroboros", {}, "Back to the milestone " + milestones[(size_t) index].name, suite::MoveLog::fix);
         }
         /** Which plugins' settings differ between two milestones. */
@@ -973,6 +1060,12 @@ namespace lab
             t.setProperty ("steer", steerToLabel, nullptr);
             t.setProperty ("autoReady", autoReadySaved, nullptr);
             t.setProperty ("autoFix", autoFixOn, nullptr);
+            {
+                juce::StringArray modes;
+                for (auto m : autoFix.areaMode) modes.add (juce::String (m));
+                t.setProperty ("areaModes", modes.joinIntoString (","), nullptr);
+                t.setProperty ("mixStrength", suite::Autopilot::mixStrength(), nullptr);
+            }
             t.setProperty ("requireSignOff", requireSignOff, nullptr);
             juce::StringArray so;
             for (const auto& [a, note] : signOff) so.add (juce::String (a) + "|" + note.replaceCharacters ("|~", "  ") + "|" + juce::String (signOffScore.count (a) ? signOffScore.at (a) : 0.0f, 3));
@@ -985,6 +1078,7 @@ namespace lab
             for (const auto& m : milestones)
             {
                 juce::ValueTree c ("Milestone");
+                c.setProperty ("fixes", m.fixes, nullptr);
                 c.setProperty ("name", m.name, nullptr); c.setProperty ("recipe", m.recipe, nullptr); c.setProperty ("time", m.timeMs, nullptr); c.setProperty ("overall", m.overall, nullptr);
                 juce::StringArray a; for (auto v : m.areas) a.add (juce::String (v, 3));
                 c.setProperty ("areas", a.joinIntoString (","), nullptr);
@@ -1001,6 +1095,11 @@ namespace lab
             steerToLabel = (bool) t.getProperty ("steer", false);
             autoReadySaved = (bool) t.getProperty ("autoReady", false);
             autoFixOn = (bool) t.getProperty ("autoFix", true);
+            {
+                const auto modes = juce::StringArray::fromTokens (t.getProperty ("areaModes", "").toString(), ",", "");
+                for (int a = 0; a < numAreas; ++a) autoFix.areaMode[(size_t) a] = a < modes.size() ? juce::jlimit (0, 2, modes[a].getIntValue()) : 0;
+                suite::Autopilot::setMixStrength ((float) t.getProperty ("mixStrength", 1.0f));
+            }
             requireSignOff = (bool) t.getProperty ("requireSignOff", false);
             signOff.clear();
             for (const auto& e : juce::StringArray::fromTokens (t["signOff"].toString(), "~", ""))
@@ -1023,7 +1122,7 @@ namespace lab
             for (const auto& c : t)
                 if (c.hasType ("Milestone"))
                 {
-                    Milestone m; m.name = c["name"].toString(); m.recipe = c["recipe"].toString(); m.timeMs = (juce::int64) c["time"]; m.overall = (int) c["overall"];
+                    Milestone m; m.name = c["name"].toString(); m.recipe = c["recipe"].toString(); m.fixes = c["fixes"].toString(); m.timeMs = (juce::int64) c["time"]; m.overall = (int) c["overall"];
                     const auto a = juce::StringArray::fromTokens (c["areas"].toString(), ",", "");
                     for (int k = 0; k < numAreas && k < a.size(); ++k) m.areas[(size_t) k] = a[k].getFloatValue();
                     m.lufs = (float) c.getProperty ("lufs", -100.0f);

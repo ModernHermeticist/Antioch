@@ -532,7 +532,7 @@ int main (int argc, char** argv)
     {
         auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
         {
-            std::array<uint32_t, 8> n {};
+            suite::LabelReadyBus::Needs n {};
             for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
             suite::LabelReadyBus::publishNeeds (n);
         };
@@ -544,6 +544,17 @@ int main (int argc, char** argv)
         const auto after = p->effective();
         check (p->presenceEase.load() && after.presence < before.presence - 1.0f, "the presence eases under heavy drive (" + juce::String (after.presence - before.presence, 1) + " dB)");
         check (VibrationProcessor::driveSectionDb (2) < -3.0f && VibrationProcessor::driveSectionDb (4) == 0.0f, "less drive in the breakdowns, all of it in the drops");
+        suite::LabelReadyBus::reset();
+    }
+
+
+    section ("Mix fixes 2: heavy drive's fizz rolled off");
+    {
+        auto p = std::make_unique<VibrationProcessor>();
+        suite::LabelReadyBus::Needs n {}; suite::LabelReadyBus::setBit (n, (int) suite::Autopilot::mx2LeadFizzF);
+        suite::LabelReadyBus::publishNeeds (n);
+        p->pollTick();
+        check (p->leadFizz.load(), "latched once Ouroboros asks for it");
         suite::LabelReadyBus::reset();
     }
 

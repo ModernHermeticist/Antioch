@@ -35,6 +35,8 @@
 #include "LabelDsp.h"
 #include "LabelDsp2.h"
 #include "LabelDsp3.h"
+#include "LabelDsp4.h"
+#include "MixLatch.h"
 #include "LabelReadyBus.h"
 #include "LiveMix.h"
 #include "DirectorStage.h"
@@ -78,6 +80,7 @@ public:
         applyLocks();
         autoPass();
         labelDsp3.tick();
+        if (++haasTick % 10 == 0) labelDsp4.tick();
         // where the master's peaks come from: this track's last 2 s
         const auto pk = peakHold.exchange (0.0f);
         peakWindow[(size_t) (peakTick++ % peakWindow.size())] = pk;
@@ -89,6 +92,7 @@ public:
         {
             auto t = traits.snapshot (getInstanceId(), effectiveRole(), getTrackName());
             t.lowestNote = labelDsp3.lowestNote.load();
+            t.haasMs = labelDsp4.haasMs.load();
             suite::TrackTraits::publish (t);
             latchLabelFixes (t);
         }
@@ -139,7 +143,7 @@ public:
     }
     /** What this track is like (clip gain, recovery, stereo lows, tails, levels per section...). */
     suite::TrackTraits::TraitsMeter traits;
-    int traitsTick = 0;
+    int traitsTick = 0, haasTick = 0;
     /** The label-ready fixes for this track: its polarity flipped (a layer cancelling another), and
         its level in each kind of section (the lead kept on top, a section matched to the label).
         Saved with the project. */
@@ -154,7 +158,16 @@ public:
     // The mix fixes (LabelDsp3): each latched once Ouroboros' checks ask for it and it applies to
     // this track (its role, its name, what it measures); saved with the project.
     qn::LabelDsp3 labelDsp3;
-    uint64_t mixLatched = 0;
+    qn::LabelDsp4 labelDsp4;
+    uint64_t mixLatched = 0;   // (the old way of keeping them: carried over into mixLatch once)
+    suite::MixLatch mixLatch { apvts };
+    bool mixApplies4 (int fix, int role, const juce::String& name, const suite::TrackTraits::Traits& t) const;
+    // safety: the fail-safe (a misbehaving fix off for this song), hear what the fixes remove, the A/B's level match
+    juce::AudioBuffer<float> dryCopy;
+    std::atomic<bool> failsafeOff { false }, failsafeTripped { false }, deltaListen { false }, mixBudgetHit { false };
+    std::atomic<float> mixLevelDb { 0.0f };
+    bool mixLog = false;
+    float bypassMatch = 1.0f, matchGainNow = 1.0f;
     bool mixApplies (int fix, int role, const juce::String& name, const suite::TrackTraits::Traits& t) const;
     void latchMixFixes (const suite::TrackTraits::Traits& t);
     std::function<void()> phraseTrimStep (uint32_t data);

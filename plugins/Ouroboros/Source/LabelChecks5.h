@@ -83,7 +83,8 @@ namespace lab
                 if (ph.valid && ph.correlation < -0.3f)
                     add (aLowEnd, "The bass against the kick", true, ramp (ph.correlation, 0.0f, -0.6f), trackLabel (*bass) + " against the kick: correlation " + juce::String (ph.correlation, 2),
                          "the bass's polarity flipped (one click, or the autopilot)", -1, suite::Fix::TrackPolarity, bass->id & 0xfffu, false,
-                         features ({ AP::mxLowPolarityF, AP::mxMatchedLowCutF, AP::mxBassLowDuckF, AP::mxDropPunchF, AP::mxKickClickF, AP::mxBassMidDriveF }));
+                         features ({ AP::mxLowPolarityF, AP::mxMatchedLowCutF, AP::mxBassLowDuckF, AP::mxDropPunchF, AP::mxKickClickF, AP::mxBassMidDriveF,
+                                     AP::mx2SubVsKickF, AP::mx2PhasePerSectionF }));
                 else
                 {
                     // the bass's lows under the kick: the kick's hits stand out of the low end?
@@ -91,7 +92,8 @@ namespace lab
                     add (aLowEnd, "The bass against the kick", ph.valid || kick->hitCount >= 8, ramp (overlap, 6.0f, 12.0f),
                          overlap > 6.0f ? trackLabel (*bass) + "'s lows sit " + db (overlap) + " over the kick's" : juce::String ("the kick and bass share the lows"),
                          "the bass's lows duck under each kick, kick and bass low cuts matched (the autopilot)", -1, suite::Fix::None, 0, false,
-                         features ({ AP::mxBassLowDuckF, AP::mxMatchedLowCutF, AP::mxDropPunchF, AP::mxKickClickF, AP::mxBassMidDriveF, AP::mxAutoFitKickF, AP::mxPumpSectionF }));
+                         features ({ AP::mxBassLowDuckF, AP::mxMatchedLowCutF, AP::mxDropPunchF, AP::mxKickClickF, AP::mxBassMidDriveF, AP::mxAutoFitKickF, AP::mxPumpSectionF,
+                                     AP::mx2SubVsKickF, AP::mx2PhasePerSectionF }));
                 }
             }
             else add (aLowEnd, "The bass against the kick", false, 1.0f, haveTraits ? juce::String ("no kick and bass both measured yet") : noTraits);
@@ -152,7 +154,7 @@ namespace lab
                 add (aMids, "Parts side by side", true, 0.5f, trackLabel (*a) + " and " + trackLabel (*b) + " both sit in the centre",
                      "one panned a little aside, mono parts widened mono-safely (one click, or the autopilot)", -1, suite::Fix::TrackPan,
                      suite::packMasterTone (b->id, 0, 2.0f), true,
-                     features ({ AP::mxPanLayoutF, AP::mxMonoWidenF, AP::mxBandWidthF, AP::mxCorrelationGuardF, AP::mxSideAirF, AP::mxSideMudF }));
+                     features ({ AP::mxPanLayoutF, AP::mxMonoWidenF, AP::mxBandWidthF, AP::mxCorrelationGuardF, AP::mxSideAirF, AP::mxSideMudF, AP::mx2BandBalanceF }));
             else add (aMids, "Parts side by side", haveTraits, 1.0f, haveTraits ? juce::String ("no two parts of one kind collide in the centre") : noTraits);
         }
 
@@ -171,7 +173,9 @@ namespace lab
                      "the backing parts make room around the lead's note, the hook's rhythm and the vocal's presence (the autopilot)", -1, suite::Fix::None, 0, false,
                      features ({ AP::mxPadUnderLeadF, AP::mxArpUnderHookF, AP::mxBackingHighCutF, AP::mxChordFollowF, AP::mxFxUnderVocalF, AP::mxClapUnderVocalF,
                                  AP::mxHatsUnderSibilanceF, AP::mxVocalPresenceF, AP::mxVocalAirF, AP::mxVocalPeakF, AP::mxVocalDoublerF, AP::mxHookLiftF,
-                                 AP::mxPresenceEaseF, AP::mxDepthSectionF }));
+                                 AP::mxPresenceEaseF, AP::mxDepthSectionF, AP::mx2VocalVsLeadF, AP::mx2BackingVocalsF, AP::mx2VocalProximityF,
+                                 AP::mx2VocalHeldDoubleF, AP::mx2FxUnderHookF, AP::mx2VerbForVocalF, AP::mx2LeadEnvelopeF, AP::mx2PlosiveSendF, AP::mx2DuckedDelayF,
+                                 AP::mx2LeadFizzF }));
             }
             else add (aMids, "Room for the lead and vocal", false, 1.0f, "no lead or vocal measured in the drop yet");
         }
@@ -188,7 +192,8 @@ namespace lab
                 add (aAR, "The drop lands", true, ramp (jump, 3.0f, 0.0f), "the drop's first bars " + db (jump) + " over the end of the " + juce::String (sectionName (before->type)).toLowerCase(),
                      "the space tightens and the high-pass rises into the drop, the riser gets room, the drop's first beat hits (the autopilot)", d->startBar, suite::Fix::None, 0, false,
                      features ({ AP::mxImpactDuckF, AP::mxDropPunchF, AP::mxVerbGateF, AP::mxBuildHighPassF, AP::mxRiserRoomF, AP::mxRiserEnergyF,
-                                 AP::mxFinalDropLiftF, AP::mxPostDropSettleF }));
+                                 AP::mxFinalDropLiftF, AP::mxPostDropSettleF, AP::mx2PickupLiftF, AP::mx2BassChokeF, AP::mx2PostImpactF, AP::mx2ImpactEnergyF,
+                                 AP::mx2SweepToDropF, AP::mx2RiserWidenF, AP::mx2Drop2BrightF, AP::mx2WidthDrop2F, AP::mx2DownlifterGateF }));
             }
             else add (aAR, "The drop lands", false, 1.0f, "no section heard before the first drop yet");
         }
@@ -203,7 +208,9 @@ namespace lab
                 add (aAR, "The breakdowns open up", true, ramp (contrast, 4.0f, 1.0f), "the breakdown sits " + db (-contrast) + " against the drop",
                      "drums thinned, sends and decay up, the pump and drive eased in the breakdowns (the autopilot)", b->startBar, suite::Fix::None, 0, false,
                      features ({ AP::mxBreakdownDrumLowCutF, AP::mxBreakdownDrumHighCutF, AP::mxUpwardBreakdownF, AP::mxSendsSectionF, AP::mxDecaySectionF,
-                                 AP::mxEchoDampF, AP::mxDepthSectionF, AP::mxPumpSectionF, AP::mxDriveSectionF, AP::mxIntroOutroToneF }));
+                                 AP::mxEchoDampF, AP::mxDepthSectionF, AP::mxPumpSectionF, AP::mxDriveSectionF, AP::mxIntroOutroToneF, AP::mx2PadSwellF,
+                                 AP::mx2VocalAirSectionF, AP::mx2BassHarmonicsSectionF, AP::mx2SizeSectionF, AP::mx2FeedbackSectionF, AP::mx2VerbLowCutSectionF,
+                                 AP::mx2BreakdownLastBarF }));
             }
         }
 
@@ -215,7 +222,7 @@ namespace lab
                 add (aMids, "The drums hold together", true, ramp (worst->hitSpreadDb, 4.0f, 9.0f), trackLabel (*worst) + "'s hits spread " + juce::String (worst->hitSpreadDb, 1) + " dB",
                      "parallel compression and glue on the drum bus, clap tails and pad sustain held back in the drops (the autopilot)", -1, suite::Fix::None, 0, false,
                      features ({ AP::mxDrumParallelF, AP::mxGluePerSectionF, AP::mxBusSatDropF, AP::mxClapTailF, AP::mxPadSustainF, AP::mxHatRidesF, AP::mxFillDuckF,
-                                 AP::mxExpanderF }));
+                                 AP::mxExpanderF, AP::mx2FillOpenF, AP::mx2CymbalWashF, AP::mx2KickTailTempoF, AP::mx2GhostEvenF, AP::mx2PercKeyF }));
             else add (aMids, "The drums hold together", false, 1.0f, haveTraits ? juce::String ("not enough drum hits heard yet") : noTraits);
         }
 
@@ -263,7 +270,8 @@ namespace lab
             if (worst != nullptr)
                 add (aMids, "The space by role", true, ramp (over, 0.8f, 1.5f), trackLabel (*worst) + "'s tail rings " + juce::String (over, 1) + "x its room",
                      "pre-delay and the echo's division by role, the pads' own room, a clap's reverb from the tempo (the autopilot)", -1, suite::Fix::None, 0, false,
-                     features ({ AP::mxRolePreDelayF, AP::mxDelayDivisionF, AP::mxPadRoomF, AP::mxClapVerbF, AP::mxSendsSectionF }));
+                     features ({ AP::mxRolePreDelayF, AP::mxDelayDivisionF, AP::mxPadRoomF, AP::mxClapVerbF, AP::mxSendsSectionF, AP::mx2ReverbToneF,
+                                 AP::mx2VerbWidthRoleF, AP::mx2PreDelayDensityF, AP::mx2EchoPanRoleF }));
         }
     }
 }

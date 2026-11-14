@@ -253,6 +253,47 @@ what it found, the rest are the plugins' fixes for the same kind of problem.
   play-through, rolls back an area's fixes when it falls under where it was at the last milestone, and records who
   changed each track.
 
+**Making the automation trustworthy** (the sixth set: 73 more switches, "Mix:", "Safety:" and "Autopilot:"):
+- **The plugins' fixes are judged.** A check names the plugin fixes for its problem; Ouroboros tries them one at a
+  time and listens to a real play-through. A fix is kept only if its check rose by more than that check's own wobble
+  between plain play-throughs. A fix that didn't help is revoked: its plugin switches it off for this song. Kept and
+  revoked fixes feed the learning (smaller steps, then left alone, across songs).
+- **What counts as a real play-through:** no loop (the playhead jumping back), no solo (fewer tracks heard than
+  earlier in the play), nothing still settling (a fix just switched, a Quintessence mid-pass), and for the noise floor
+  at least 60% of the song heard. While FL renders, nothing switches and nothing is tried.
+- **Ouroboros' own fixes:** tone first, then level, then stereo; the label's heaviest areas first; judged in the kind
+  of section they act on; kept only when the next play-through agrees; undone when their gain fades over three
+  play-throughs. When three play-throughs move nothing, the autopilot stops and lists the three things left that only
+  you can fix, with what each is worth.
+- **Budgets:** the level fixes on one track stay within +-6 dB in all (section trims included), the lows taken out in
+  builds are capped when two fixes do it, and no lift is applied while the headroom keeper is pulling the mix down.
+  Section trims ramp through the last beat into the next section. A fix producing NaN or a runaway level is caught:
+  the dry signal goes back and that track's fixes stop for this song.
+- **You stay in charge:** *Tools > The mix fixes* lists what's on track by track (and what each moves); switch one off
+  for this song; reset them all (undoable); set their strength (25-100%); A/B the whole mix with every fix bypassed,
+  each track level-matched; hear only what a track's fixes remove; put each area on auto, propose (you approve each
+  fix) or off. A knob a fix set that you then move is yours: the fix leaves it alone. Milestones carry every plugin's
+  fixes, and loading one checks they all came back.
+- **New fixes:** Quintessence: phase rotation for lopsided kick and bass peaks (headroom without compression), drop 2
+  brighter and wider, each drop's own tone, the outro thinning, no drop-out into the breakdown, backing vocals under
+  the lead vocal, the vocal's proximity boom, pads' boxiness, cymbal wash, tonal percussion nudged into the key,
+  left/right balance per band, the low-mid boom in drops, the sub steady note to note, the drum bus opening for fills,
+  the lead's sustain in busy drops, pads swelling in breakdowns, the kick's tail following the tempo, ghost notes,
+  left/right delays realigned, nothing panned past 70%, the riser widening, the mono cutoff per section, the fill's
+  last beat lifted, the bass out for the last 16th (never silent), new parts eased in, pad drive through builds, FX
+  tails after the impact, repeated sections not identical, the vocal or the lead leading, the vocal doubled on held
+  notes, vocal air in breakdowns, the sub off the kick's body, bass harmonics in breakdowns, downlifter tails gated,
+  the impact's level from the energy, sweeps peaking at the drop, FX under the hook. Antioch: the reverb's tone from
+  its track, the echo ducking under its own part, the reverb stepping back for the vocal, width by role, size,
+  feedback and low cut per section, pre-delay from note density, the echo's pan by role, the space opening in a
+  breakdown's last bar, no plosives in the reverb. Kybalion: kick and bass phase per section (cross-faded). Vibration:
+  heavy drive's fizz over 12 kHz rolled off.
+- **New checks:** lopsided peaks (a track, the master), each drop's tone, clap layers, the lows mono in every
+  section, the drops' dynamics, the mix's movement, transients like the label, left/right delays, earbuds, a car, a
+  club, smooth section changes, fixes piling up.
+- **A fix to an earlier round:** the keyed dips (pads under the lead's note, the arp under the hook, hats under the
+  "s", the clap under the vocal) cut far deeper than designed (tens of dB at narrow widths); they now cut what they say.
+
 **What stays manual, and why:** vocal tuning (the suite has no pitch correction: the notes are listed for a pitch
 editor), a late vocal (a plugin can't play audio before it arrives: slide the clip), cutting a long drop (a plugin
 can't edit FL's playlist), and a plugin that renders differently (it's named; its setting is yours to change). Sample
@@ -2228,6 +2269,15 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   (saved), latching per role, and the DSP (the bass's lows ducking after each kick, DC, breakdown drums, the build's
   high-pass, the impact dip, the correlation guard, pan, the pad under the lead's note, inter-sample peaks, the riser's
   energy, the expander, a phrase ride). Kybalion's, Antioch's, Vibration's and Solve et Coagula's latches and tables.
+- **Mix fixes 2:** the shared latch (asked for, revoked by the self-check, off for a song, reset and undo, frozen
+  while rendering, bypassed in the A/B, published), knob ownership, the normalised band-pass, LabelDsp4 (phase
+  rotation keeps the level, the bass out for the last 16th but never silent, the riser widening, a 2 ms left/right
+  delay found, the pan limit, the vocal under the lead in drops, half the move at 50%), the level budget and the
+  headroom forecast, the fail-safe catching a runaway fix and a reset clearing it, hearing what the fixes remove, and
+  the stack test: a made-up song, every part through every fix at once, at 44.1, 48 and 96 kHz (finite, no part
+  moved more than 9 dB, peaks within 3 dB of the dry mix, mono-safe). Ouroboros: the judge (one at a time, not on
+  loops or while settling, kept, revoked, learned), the noise floor, nothing while rendering, tone before level,
+  propose mode, judged where it acts, confirmation, the plateau report, the sixth checks, every new fix named by a check.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true

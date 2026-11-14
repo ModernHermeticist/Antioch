@@ -1,6 +1,8 @@
 // Offline tests for Ouroboros and the SectionBus. Usage: OuroborosTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "MixFixBus.h"
+#include "LabelPluginJudge.h"
 #include "PluginEditor.h"
 #include "AutopilotBus.h"
 #include "PlanBus.h"
@@ -2272,7 +2274,7 @@ int main (int argc, char** argv)
             const auto needs = lab::AutoFixer::needsFrom (rep);
             auto has = [&needs] (AP::Feature f) { return (needs[(size_t) f / 32] & (1u << (f % 32))) != 0; };
             check (has (AP::mxMonoWidenF) && has (AP::mxVocalPresenceF) && has (AP::mxTruePeakF) && has (AP::mxChainNeutralF), "a check's companion fixes are needed too (mono widening, vocal presence, true peak, loudness-neutral chain)");
-            check (lab::featuresOf (*find ("Parts side by side")).size() == 6, "one check, six switches");
+            check (lab::featuresOf (*find ("Parts side by side")).size() == 7, "one check, seven switches");
         }
         check (lab::detail::isLayerRole (1) && lab::detail::isLayerRole (3), "kick and hat layers are lined up as layers too");
         // the autopilot: a tone step tried and kept, its track's provenance and tone budget
@@ -2323,6 +2325,173 @@ int main (int argc, char** argv)
         }
         suite::FixBus::reset();
         AP::reset();
+    }
+
+
+    section ("Mix fixes 2: the plugins' fixes judged, the autopilot's manners, the sixth checks");
+    {
+        using T = suite::SectionType;
+        namespace AP = suite::Autopilot;
+        AP::reset(); suite::FixBus::reset(); suite::LabelReadyBus::reset(); suite::MixFixBus::reset();
+        lab::Learning::fileForTests().deleteFile();
+        // the judge: a check naming two plugin fixes; one at a time, kept when the check moves, switched off when it doesn't
+        {
+            lab::Report r;
+            lab::Check c; c.area = lab::aMids; c.name = "Room for the lead and vocal"; c.measured = true; c.score = 0.4f;
+            c.action = "autopilot:" + juce::String ((int) AP::mxPadUnderLeadF) + "," + juce::String ((int) AP::mxArpUnderHookF);
+            r.checks = { c };
+            lab::PluginFixJudge j;
+            lab::Learning learning; j.learning = &learning;
+            j.sentByOuroboros = [] (int f) { return lab::sentByOuroboros (f); };
+            j.step (r, true, false);
+            check (j.stateOf (AP::mxPadUnderLeadF) == lab::PluginFixJudge::trying && j.stateOf (AP::mxArpUnderHookF) == lab::PluginFixJudge::untried,
+                   "one at a time: the first fix tried, the second waits");
+            check (suite::LabelReadyBus::hasBit (j.needs(), (int) AP::mxPadUnderLeadF) && ! suite::LabelReadyBus::hasBit (j.needs(), (int) AP::mxArpUnderHookF), "only the one being tried is asked for");
+            for (int k = 0; k < 6; ++k) j.step (r, false, false);
+            check (j.stateOf (AP::mxPadUnderLeadF) == lab::PluginFixJudge::trying, "a loop or a solo isn't judged");
+            for (int k = 0; k < 6; ++k) j.step (r, true, true);
+            check (j.stateOf (AP::mxPadUnderLeadF) == lab::PluginFixJudge::trying, "nor while the plugins settle");
+            r.checks[0].score = 0.6f;
+            for (int k = 0; k < 5; ++k) j.step (r, true, false);
+            check (j.stateOf (AP::mxPadUnderLeadF) == lab::PluginFixJudge::kept, "the check moved up: kept");
+            for (int k = 0; k < 7; ++k) j.step (r, true, false);
+            check (j.stateOf (AP::mxArpUnderHookF) == lab::PluginFixJudge::revoked && suite::LabelReadyBus::hasBit (j.revokedMask(), (int) AP::mxArpUnderHookF),
+                   "the next one didn't move it: switched off for this song");
+            check (learning.all().size() >= 2, "both remembered (the learning)");
+            AP::set (AP::mx2OneAtATimeF, false); AP::set (AP::mx2SelfCheckF, false);
+            lab::PluginFixJudge all; all.sentByOuroboros = j.sentByOuroboros;
+            r.checks[0].score = 0.4f;
+            all.step (r, true, false);
+            check (all.countOf (lab::PluginFixJudge::kept) == 2, "with both switches off: every fix the check names, as before");
+            AP::reset();
+        }
+        // the noise floor: a check that wobbles by itself needs a bigger move
+        {
+            lab::CheckNoise noise;
+            lab::Report r; lab::Check c; c.name = "Wobbly"; c.measured = true;
+            for (float v : { 0.5f, 0.6f, 0.45f, 0.62f }) { c.score = v; r.checks = { c }; noise.playEnded (r, {}); }
+            check (noise.of ("Wobbly") > 0.1f && std::abs (noise.of ("Unknown") - 0.03f) < 1.0e-6f, "a fix has to beat the check's own wobble (" + juce::String (noise.of ("Wobbly"), 3) + ")");
+        }
+        // the autopilot's manners
+        {
+            lab::Report r;
+            lab::Check level; level.area = lab::aBalance; level.name = "A level check"; level.measured = true; level.score = 0.1f;
+            level.fix = suite::Fix::SectionTrim; level.fixData = suite::packSectionTrim (0x601, (int) T::Drop, 1.0f); level.action = "autopilot:" + juce::String ((int) AP::mxKickSectionF);
+            lab::Check tone = level; tone.name = "A tone check"; tone.area = lab::aMids; tone.score = 0.5f;
+            tone.fix = suite::Fix::MasterTone; tone.fixData = suite::packMasterTone (0x602, 5, -1.0f); tone.action = "autopilot:" + juce::String ((int) AP::roleTimbreF);
+            r.checks = { level, tone };
+            std::vector<suite::TrackTraits::Traits> none;
+            {
+                lab::AutoFixer f;
+                lab::AutoFixer::Context cx; cx.rendering = true;
+                f.step (r, none, true, cx);
+                check (f.note.contains ("rendering") && suite::FixBus::latest() == 0, "nothing changes while FL renders");
+                f.step (r, none, true, {});
+                check (f.note.contains ("A tone check"), "tone before level, though the level check scores lower (" + f.note + ")");
+            }
+            {
+                lab::AutoFixer f;
+                f.areaMode[(size_t) lab::aMids] = 1;
+                f.areaMode[(size_t) lab::aBalance] = 2;
+                f.step (r, none, true, {});
+                check (f.proposals.size() == 1 && f.proposals[0].check == "A tone check" && f.note == "nothing to do", "propose mode: the tone fix waits for you; an area that's off is left alone");
+                f.approve ("A tone check");
+                f.step (r, none, true, {});
+                check (f.note.contains ("A tone check") && f.proposals.empty(), "approved: tried");
+            }
+            {
+                // judged where it acts: a drop fix isn't judged while the breakdown plays
+                lab::AutoFixer f;
+                lab::Report only; only.checks = { level };
+                f.step (only, none, true, {});
+                lab::AutoFixer::Context bd; bd.sectionType = (int) T::Breakdown;
+                for (int k = 0; k < 6; ++k) f.step (only, none, true, bd);
+                check (f.note.contains ("trying"), "a fix for the drops is judged in the drops (still listening in the breakdown)");
+                lab::AutoFixer::Context dr; dr.sectionType = (int) T::Drop;
+                only.checks[0].score = 0.5f;
+                for (int k = 0; k < 4; ++k) f.step (only, none, true, dr);
+                check (f.kept == 1, "heard in the drop: kept");
+                // confirmation: the next play-through has to agree
+                f.step (only, none, false, dr);
+                only.checks[0].score = 0.1f;
+                for (int k = 0; k < 5; ++k) f.step (only, none, true, dr);
+                check (f.undone == 1 && f.note.contains ("didn't hold"), "the next play-through didn't agree: undone (" + f.note + ")");
+            }
+            {
+                // the plateau: three real play-throughs, nothing moving: stop, and say what's left for you
+                lab::AutoFixer f;
+                lab::Report rr; rr.overall = 60; rr.coverage = 1.0f;
+                lab::Check manual; manual.area = lab::aAR; manual.name = "Something only you can fix"; manual.measured = true; manual.score = 0.3f; manual.detail = "the idea";
+                rr.checks = { manual };
+                for (int k = 0; k < 3; ++k) { f.step (rr, none, true, {}); f.step (rr, none, false, {}); }
+                check (f.plateau && ! f.plateauReport.isEmpty() && f.plateauReport[0].contains ("Something only you can fix"), "nothing's moved for three play-throughs: what's left for you (" + f.plateauReport.joinIntoString (" | ") + ")");
+            }
+        }
+        // the sixth checks
+        {
+            suite::SectionMap map;
+            const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+            for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+            map.totalBars = 96;
+            std::vector<lab::Bar> bars ((size_t) map.totalBars);
+            for (int b = 0; b < map.totalBars; ++b)
+            {
+                auto& x = bars[(size_t) b];
+                x.heard = true; x.db = (b >= 40 && b < 56) ? -16.0f : -12.0f; x.sideDb = -16.0f; x.onsets = 4.0f; x.peakDb = -6.5f; x.asymDb = 2.5f;
+                x.lowCorrCount = 1; x.lowCorr = (b >= 40 && b < 56) ? 0.4f : 0.95f;
+                for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = x.db - 3.0f * (float) std::abs (k - 3);
+            }
+            lab::Inputs in;
+            in.map = map; in.bpm = 138.0; in.bars = bars; in.sections = lab::sections (bars, map);
+            auto track = [] (uint32_t id, int role, const char* name)
+            {
+                suite::TrackTraits::Traits t;
+                t.id = id; t.role = role; juce::String (name).copyToUTF8 (t.track, sizeof (t.track) - 1);
+                t.outRmsDb = -20.0f; t.sideDb = -35.0f; t.lowMidDb = -30.0f; t.inRmsDb = -20.0f; t.inPeakDb = -8.0f;
+                for (auto& v : t.sectionDb) v = -20.0f;
+                for (auto& v : t.sectionPeakDb) v = -15.0f;
+                for (auto& v : t.sectionDbOffline) v = -100.0f;
+                for (auto& v : t.phraseDb) v = -100.0f;
+                return t;
+            };
+            auto kick = track (0x701, 1, "Kick"), pad = track (0x702, 4, "Pad"), fx = track (0x703, 7, "FX"), bass = track (0x704, 2, "Bass"), lead = track (0x705, 5, "Lead"), vox = track (0x706, 6, "Vocal");
+            kick.asymDb = 3.0f;          // lopsided
+            kick.hitCount = 20; kick.hitSpreadDb = 8.0f;   // uneven hits
+            lead.sectionDb[2] = -21.0f;  // under the pad in the drop
+            pad.decayCount = 6; pad.decayMs = 2500.0f;     // a long tail
+            pad.haasMs = 1.5f;           // one side late
+            fx.lrBalanceDb = 14.0f;      // panned hard
+            in.traits = { kick, pad, fx, bass, lead, vox };
+            suite::MixFixBus::Entry e; e.id = 0x702; juce::String ("Quintessence").copyToUTF8 (e.plugin, 15); juce::String ("Pad").copyToUTF8 (e.track, 47); e.count = 30; e.budgetHit = true;
+            suite::MixFixBus::publish (e);
+            const auto rep = lab::evaluate (in);
+            auto find = [&rep] (const juce::String& name) -> const lab::Check* { for (const auto& c : rep.checks) if (c.name == name) return &c; return nullptr; };
+            auto flagged = [&] (const juce::String& name, AP::Feature first)
+            {
+                const auto* c = find (name);
+                check (c != nullptr && c->measured && c->score < 0.75f && c->action.startsWith ("autopilot:" + juce::String ((int) first)),
+                       name + " flagged, with its switches (" + (c == nullptr ? juce::String ("missing") : c->detail) + ")");
+            };
+            flagged ("Lopsided peaks", AP::mx2PhaseRotateF);
+            flagged ("The master's peaks even", AP::mx2PhaseRotateF);
+            flagged ("No left/right delays", AP::mx2HaasF);
+            flagged ("Earbuds", AP::mx2PanLimitF);
+            flagged ("The lows mono in every section", AP::mx2SideLowsSectionF);
+            flagged ("Fixes piling up", AP::mx2LevelBudgetF);
+            const auto* dyn = find ("Dynamics in the drops");
+            check (dyn != nullptr && dyn->measured && dyn->score < 0.75f, "the drops' dynamics: squashed at 5.5 dB of crest (" + (dyn == nullptr ? juce::String ("missing") : dyn->detail) + ")");
+            const auto* mv = find ("The mix moves");
+            check (mv != nullptr && mv->measured && mv->score < 0.75f, "a drop that never changes tone is flagged");
+            // every new mix fix is named by some check (or it would never switch on)
+            std::set<int> named;
+            for (const auto& c : rep.checks) for (auto f : lab::featuresOf (c)) named.insert (f);
+            juce::StringArray missing;
+            for (int f = (int) AP::mx2PhaseRotateF; f <= (int) AP::mx2FxUnderHookF; ++f)
+                if (! named.count (f) && f != (int) AP::mx2LaterDropToneF) missing.add (AP::featureName (f));
+            check (missing.size() <= 4, "the new mix fixes are named by the checks (left for the song's details: " + missing.joinIntoString (", ") + ")");
+            suite::MixFixBus::reset();
+        }
+        AP::reset(); suite::FixBus::reset(); suite::LabelReadyBus::reset();
     }
 
     return finish();

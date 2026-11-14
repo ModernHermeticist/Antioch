@@ -316,6 +316,25 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
   milestone and says so.
 - [ ] **6i.10** CPU: with every mix fix latched on a 20-track project, FL's CPU stays reasonable (note it).
 
+### 6j. Trusting the automation
+
+- [ ] **6j.1** *Tools > The mix fixes > What's on*: each track's fixes, and how far they move it.
+- [ ] **6j.2** Play the song through twice: *The plugins' fixes, judged* shows some kept and some switched off; the
+  plugins' What changed says "Off for this song (no better)" for those.
+- [ ] **6j.3** Loop 4 bars for a minute: nothing is kept or switched off while it loops (the dashboard says it's not
+  judging a loop).
+- [ ] **6j.4** Solo one track for half a minute: nothing judged.
+- [ ] **6j.5** *A/B: every mix fix bypassed*: the mix sounds different but about as loud, track by track.
+- [ ] **6j.6** *Hear what a track's fixes remove* on the pad: you hear only the difference; *Off* comes back.
+- [ ] **6j.7** *Strength 50%*: the moves get smaller (the What's on dB figures halve).
+- [ ] **6j.8** Move a Kybalion's hold after the autopilot fitted it: its What changed says the knob is yours; a later
+  fit doesn't touch it.
+- [ ] **6j.9** Put Mids & space on *Propose*: its fixes wait under *Proposals*; approve one, it's tried.
+- [ ] **6j.10** Render the song: the fixes on during the render match what you heard (nothing switches mid-render).
+- [ ] **6j.11** Save a milestone, change fixes, restore it: the dashboard says the milestone's fixes all came back.
+- [ ] **6j.12** Leave it playing until nothing moves: the dashboard points to *what's left for you*, three items with
+  their points.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

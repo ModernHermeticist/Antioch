@@ -79,6 +79,15 @@ namespace suite
             return s.energy >= 0 ? (float) s.energy / 100.0f : defaultEnergy (s.type);
         }
 
+        /** The kind of section at a song position (quarters), -1 = none. */
+        int typeAt (double ppq, double barQuarters) const noexcept
+        {
+            if (count == 0 || barQuarters <= 0.0) return -1;
+            const auto bar = (int) std::floor (ppq / barQuarters) + 1;
+            int t = -1;
+            for (int i = 0; i < count; ++i) if (sections[(size_t) i].startBar <= bar) t = (int) sections[(size_t) i].type;
+            return t;
+        }
         /** Index of the last Drop, or -1. */
         int lastDropIndex() const noexcept
         {

@@ -15,6 +15,7 @@
 #include "Music.h"
 #include "AutopilotBus.h"
 #include "LabelReadyBus.h"
+#include "MixLatch.h"
 #include <map>
 
 class KybalionProcessor : public suite::SuiteProcessor
@@ -61,8 +62,14 @@ public:
         and fit to the kick by itself once a sidechained kick has been heard. Each latched once
         Ouroboros' checks ask for it, while its autopilot switch is on; saved with the project. */
     void mixTick();
-    std::atomic<bool> pumpPerSection { false };
+    std::atomic<bool> pumpPerSection { false }, phasePerSection { false };
     bool autoFitted = false;
+    suite::MixLatch mixLatch { apvts };
+    /** Kick and bass phase per section: the low end against the kick in each kind of section (with the knob's
+        polarity), and the sections where it cancels flipped on their own (cross-faded, no click). */
+    std::array<double, 6> secMS {}, secMM {}, secSS {};
+    std::array<std::atomic<bool>, 6> sectionFlip {};
+    float polGain = 1.0f;
     static float pumpScale (int sectionType) noexcept
     {
         switch (sectionType) { case 4: return 1.1f; case 2: return 0.6f; case 3: return 0.85f; case 0: case 5: return 0.8f; default: return 1.0f; }

@@ -156,6 +156,8 @@ namespace lab
         std::vector<int> rows;   // check indices, by area then score
         int selectedRow = -1;
         std::unique_ptr<juce::FileChooser> chooser;
+        std::vector<std::pair<uint32_t, int>> mixFixList;   // the "switch one off" menu: track id, feature
+        std::vector<uint32_t> mixDeltaList;                 // the "hear what it removes" menu: Quintessence ids
         std::unique_ptr<juce::AlertWindow> ask;
 
         const Check* selected() const
@@ -191,6 +193,8 @@ namespace lab
                 if (processor.monitor.playingReference.load()) line = "HEARING THE REFERENCE: " + processor.monitor.referenceName() + ".  " + line;
                 if (processor.monitor.preview.load() != lab::Monitor::none) line = juce::String ("PREVIEW (") + (processor.monitor.preview.load() == lab::Monitor::mono ? "mono" : processor.monitor.preview.load() == lab::Monitor::phone ? "phone" : "car") + ").  " + line;
                 if (lr.regressionNote.isNotEmpty()) line << "  |  " << lr.regressionNote;
+                if (lr.milestoneFixNote.isNotEmpty()) line << "  |  " << lr.milestoneFixNote;
+                if (lr.autoFix.plateau) line << "  |  nothing moving: Tools > The mix fixes > what's left for you";
                 if (lr.preRenderNote.isNotEmpty() && processor.monitor.rendering.load()) line = lr.preRenderNote;
                 if (lr.freshEars && lr.minutesListening() > 0 && lr.minutesListening() % 45 == 0) line = "FRESH EARS: " + juce::String (lr.minutesListening()) + " minutes in. Rest your ears for ten minutes, then listen again.  " + line;
                 if (lr.abOn && lr.abBlind) line = line.replace (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("~~"), lr.abShowing == lr.abA ? "A" : "B");
@@ -390,6 +394,43 @@ namespace lab
             more.addItem (83, "Start new projects like my last song", true, lab::LabelReadyHost::startLikeLast());
             more.addItem (84, "What the autopilot has learned...");
             m.addSubMenu ("More", more);
+            // the mix fixes: what's on, one off, reset, strength, the whole-mix A/B, hear what a track's fixes remove,
+            // each area auto / propose / off, the proposals, the plateau, the judged list
+            juce::PopupMenu mixm, offm, strength, deltam, modes, props;
+            mixFixList.clear();
+            for (const auto& e : suite::MixFixBus::all())
+                for (int f = 0; f < suite::Autopilot::numFeatures && mixFixList.size() < 400; ++f)
+                    if (e.has (f)) { offm.addItem (1000 + (int) mixFixList.size(), e.trackName() + ": " + juce::String (suite::Autopilot::featureName (f))); mixFixList.push_back ({ e.id, f }); }
+            mixDeltaList.clear();
+            deltam.addItem (1499, "Off (hear the mix)");
+            for (const auto& e : suite::MixFixBus::all())
+                if (e.pluginName() == "Quintessence" && mixDeltaList.size() < 90) { deltam.addItem (1500 + (int) mixDeltaList.size(), e.trackName()); mixDeltaList.push_back (e.id); }
+            for (int v : { 25, 50, 75, 100 }) strength.addItem (910 + v / 25, juce::String (v) + "%", true, std::abs (suite::Autopilot::mixStrength() * 100.0f - (float) v) < 1.0f);
+            for (int a = 0; a < numAreas; ++a)
+            {
+                juce::PopupMenu one;
+                static const char* names[3] = { "Auto (the autopilot fixes it)", "Propose (you approve each fix)", "Off" };
+                for (int k = 0; k < 3; ++k) one.addItem (1600 + a * 3 + k, names[k], true, lr.autoFix.areaMode[(size_t) a] == k);
+                modes.addSubMenu (areaName (a), one);
+            }
+            for (int i = 0; i < (int) lr.autoFix.proposals.size() && i < 90; ++i)
+            {
+                juce::PopupMenu one;
+                one.addItem (1700 + i, "Approve: try it");
+                one.addItem (1800 + i, "Reject: leave it alone this song");
+                props.addSubMenu (lr.autoFix.proposals[(size_t) i].check + " (" + areaName (lr.autoFix.proposals[(size_t) i].area) + ")", one);
+            }
+            mixm.addItem (900, "What's on, track by track...");
+            mixm.addItem (904, "The plugins' fixes, judged (kept, being tried, switched off)...");
+            mixm.addSubMenu ("Switch one off for this song", offm, ! mixFixList.empty());
+            mixm.addItem (901, "Reset every mix fix for this song (undoable)");
+            mixm.addItem (902, "A/B: every mix fix bypassed, each track level-matched", true, suite::Autopilot::mixBypassed());
+            mixm.addSubMenu ("Strength", strength);
+            mixm.addSubMenu ("Hear what a track's fixes remove", deltam);
+            mixm.addSubMenu ("Each area: auto, propose or off", modes);
+            mixm.addSubMenu ("Proposals waiting (" + juce::String ((int) lr.autoFix.proposals.size()) + ")", props, ! lr.autoFix.proposals.empty());
+            mixm.addItem (903, juce::String (lr.autoFix.plateau ? "Nothing's moving: what's left for you..." : "What's left for you (once nothing moves)..."));
+            m.addSubMenu ("The mix fixes", mixm);
             m.addItem (64, "The label autopilot (" + juce::String (lr.autoFix.kept) + " kept, " + juce::String (lr.autoFix.undone) + " undone; each fix has its switch on the Autopilot page)", true, lr.autoFixOn);
             m.addItem (40, "Blind spots: what couldn't be measured, and why...");
             m.addItem (41, "The listen-through queue (every flagged bar, in order)...");
@@ -416,6 +457,24 @@ namespace lab
                 else if (r == 31) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Score log", host.scoreLogText());
                 else if (r == 32 || r == 33) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "The label's tracks, scored", host.scoreReferences (r == 33));
                 else if (r == 34) if (const auto* c = selected()) { const auto must = host.profile.minScore.count (c->name) > 0; host.setMinimum (c->name, must ? 0.0f : 0.8f); }
+                if (r == 900) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "The mix fixes on", host.activeFixesText());
+                else if (r == 904) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "The plugins' fixes, judged", host.judgedText());
+                else if (r == 901) { suite::FixBus::send (suite::Fix::MixFixReset); note ("Every mix fix starts again for this song (undo puts them back)."); }
+                else if (r == 902) { suite::Autopilot::setMixBypassed (! suite::Autopilot::mixBypassed()); note (suite::Autopilot::mixBypassed() ? "A/B: every mix fix bypassed, each track at the level it has with them. Again to come back." : "The mix fixes are back."); }
+                else if (r >= 911 && r <= 914) { suite::Autopilot::setMixStrength ((float) (r - 910) * 0.25f); note ("The mix fixes at " + juce::String ((r - 910) * 25) + "%."); }
+                else if (r == 903) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "What's left for you",
+                                                                           host.autoFix.plateauReport.isEmpty() ? juce::String ("The score's still moving (or nothing's left without a fix): play it through a few times.") : host.autoFix.plateauReport.joinIntoString ("\n\n"));
+                else if (r >= 1000 && r < 1000 + (int) mixFixList.size())
+                {
+                    const auto& [id, f] = mixFixList[(size_t) (r - 1000)];
+                    suite::FixBus::send (suite::Fix::MixFixOff, suite::packMixFix (id, f));
+                    note ("Off for this song: " + juce::String (suite::Autopilot::featureName (f)));
+                }
+                else if (r == 1499) suite::FixBus::send (suite::Fix::DeltaListen, suite::packMixFix (0, 0));
+                else if (r >= 1500 && r < 1500 + (int) mixDeltaList.size()) { suite::FixBus::send (suite::Fix::DeltaListen, suite::packMixFix (mixDeltaList[(size_t) (r - 1500)], 1)); note ("Hearing only what that track's fixes change. Hear what... > Off to come back."); }
+                else if (r >= 1600 && r < 1600 + numAreas * 3) host.autoFix.areaMode[(size_t) ((r - 1600) / 3)] = (r - 1600) % 3;
+                else if (r >= 1700 && r < 1790 && r - 1700 < (int) host.autoFix.proposals.size()) host.autoFix.approve (host.autoFix.proposals[(size_t) (r - 1700)].check);
+                else if (r >= 1800 && r < 1890 && r - 1800 < (int) host.autoFix.proposals.size()) host.autoFix.reject (host.autoFix.proposals[(size_t) (r - 1800)].check);
                 if (r == 50) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Today's plan", host.sessionPlan());
                 else if (r == 51) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Why not 100", host.whyNot100());
                 else if (r == 52) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "A&R notes", host.arSummary());

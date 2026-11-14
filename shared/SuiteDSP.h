@@ -243,6 +243,8 @@ namespace suite
         float lowpass (float x) noexcept  { return process (x).lp; }
         float highpass (float x) noexcept { return process (x).hp; }
         float bandpass (float x) noexcept { return process (x).bp; }
+        /** The band-pass at unity gain at its centre (bandpass() peaks at Q times the input). */
+        float bandpassNorm (float x) noexcept { return k * process (x).bp; }
 
     private:
         float g = 0.5f, k = 1.4f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;

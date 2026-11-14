@@ -13,8 +13,15 @@ VibrationProcessor::VibrationProcessor()
     // The problem watcher's harshness ladder: the master is harsh at 2-8 kHz: the drive 3 dB
     // softer, and the richness target 3 dB lower so the automation doesn't drive it back
     fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix, uint32_t) { return std::vector<suite::FixReceiver::Change> {}; });
-    fixes->setCustom ([this] (suite::Fix fix, uint32_t) -> std::function<void()>
+    fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
     {
+        if (fix == suite::Fix::MixFixOff || fix == suite::Fix::MixFixReset)
+        {
+            uint32_t low; int feature;
+            suite::unpackMixFix (data, low, feature);
+            if (fix == suite::Fix::MixFixReset) return mixLatch.resetAll();
+            return low == (getInstanceId() & 0xfffu) ? mixLatch.switchOff (feature) : std::function<void()>();
+        }
         if (fix != suite::Fix::DriveSofter || value (Params::drive) + value (Params::driveTrim) <= 0.5f) return {};
         const auto trim = value (Params::driveTrim), offset = richOffset();
         const auto next = juce::jmax (-12.0f, trim - 3.0f);
@@ -337,6 +344,17 @@ void VibrationProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, ju
                 x[i] += mix * (std::tanh (g * x[i]) / norm - x[i]);
         }
         oversampler->processSamplesDown (block);
+        if (leadFizz.load() && e.drive > 12.0f)
+        {
+            const auto amt = juce::jlimit (0.0f, 1.0f, (e.drive - 12.0f) / 12.0f) * suite::Autopilot::mixStrength();
+            const auto a = 1.0f - std::exp (-2.0f * juce::MathConstants<float>::pi * 13000.0f / (float) sr);
+            for (int c = 0; c < juce::jmin (2, buffer.getNumChannels()); ++c)
+            {
+                auto* x = buffer.getWritePointer (c);
+                auto& z = fizzState[(size_t) c];
+                for (int i = 0; i < n; ++i) { z += a * (x[i] - z); x[i] += amt * (z - x[i]); }
+            }
+        }
         if (levelIn != 1.0f) buffer.applyGain (0, n, 1.0f / levelIn);
         driveLevelDb.store (juce::Decibels::gainToDecibels (levelIn));
     }

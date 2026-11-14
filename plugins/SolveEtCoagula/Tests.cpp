@@ -479,7 +479,7 @@ int main (int argc, char** argv)
     {
         auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
         {
-            std::array<uint32_t, 8> n {};
+            suite::LabelReadyBus::Needs n {};
             for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
             suite::LabelReadyBus::publishNeeds (n);
         };

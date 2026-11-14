@@ -50,6 +50,9 @@ namespace suite::TrackTraits
         std::array<float, maxPhrases> phraseDb {};         // its level in each 4-bar phrase (16 quarters; -100 = silent there)
         float dcDb = -100.0f;                              // its DC offset against its level (dB)
         int lowestNote = -1;                               // its lowest note (MIDI, Quintessence's pitch estimate; -1 = unknown)
+        float asymDb = 0.0f;                               // how lopsided its peaks are: the larger of the positive and negative peaks over the smaller (dB)
+        float lrBalanceDb = 0.0f;                          // left over right (dB): how far it's panned
+        float haasMs = 0.0f;                               // a delay between left and right (Quintessence; 0 = none found)
         // the waveform copy (mono, 250..1500 Hz, 4 kHz), newest sample at ring[(ringPos - 1) % ringSize]
         std::array<float, ringSize> ring {};
         int ringPos = 0;
@@ -73,7 +76,7 @@ namespace suite::TrackTraits
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v4", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v5", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -218,7 +221,7 @@ namespace suite::TrackTraits
             // a new play-through: measure afresh (the waveform copy carries on)
             if (ppq >= 0.0 && ! wasPlaying) { inPeak = 0.0f; inPow = 0.0; inN = 0; outPow = sidePow = lowMidPow = lowSidePow = 0.0; outN = 0; peakOut = 0.0f;
                                               sectionPow.fill (0.0); sectionN.fill (0); sectionPeak.fill (0.0f); nDecays.store (0); nRecoveries.store (0); nHits.store (0);
-                                              moveSum = 0.0; moveN = 0; floorHist.fill (0); phrasePow.fill (0.0); phraseN.fill (0); dcSum = 0.0; }
+                                              moveSum = 0.0; moveN = 0; floorHist.fill (0); phrasePow.fill (0.0); phraseN.fill (0); dcSum = 0.0; posPeak = negPeak = 0.0f; leftPow = rightPow = 0.0; }
             wasPlaying = ppq >= 0.0;
             for (int i = 0; i < n; ++i)
             {
@@ -232,6 +235,8 @@ namespace suite::TrackTraits
                 const auto a = std::abs (mid);
                 peakOut = std::max (peakOut, a);
                 dcSum += (double) mid;
+                posPeak = std::max (posPeak, mid); negPeak = std::max (negPeak, -mid);
+                leftPow += (double) L * L; rightPow += (double) R * R;
                 if (ppq >= 0.0)
                 {
                     const auto ph = (int) ((ppq + (double) i * qPerSample) / 16.0);
@@ -338,6 +343,8 @@ namespace suite::TrackTraits
                 }
             }
             for (int p = 0; p < Traits::maxPhrases; ++p) t.phraseDb[(size_t) p] = phraseN[(size_t) p] > (int) fs ? db (phrasePow[(size_t) p], phraseN[(size_t) p]) : -100.0f;
+            if (posPeak > 1.0e-5f && negPeak > 1.0e-5f) t.asymDb = std::abs (juce::Decibels::gainToDecibels (posPeak / negPeak));
+            if (leftPow > 1.0e-12 && rightPow > 1.0e-12) t.lrBalanceDb = (float) (10.0 * std::log10 (leftPow / rightPow));
             if (outN > 0 && t.outRmsDb > -90.0f) t.dcDb = juce::Decibels::gainToDecibels ((float) std::abs (dcSum / outN), -120.0f) - t.outRmsDb;
             t.ring = ring; t.ringPos = ringPos; t.ringPpq = ringPpq; t.ringBpm = ringBpm;
             return t;
@@ -410,7 +417,8 @@ namespace suite::TrackTraits
         std::array<int, 200> floorHist {};
         std::array<double, Traits::maxPhrases> phrasePow {};
         std::array<int, Traits::maxPhrases> phraseN {};
-        double dcSum = 0.0;
+        double dcSum = 0.0, leftPow = 0.0, rightPow = 0.0;
+        float posPeak = 0.0f, negPeak = 0.0f;
         static constexpr int maxEvents = 256;
         std::array<float, maxEvents> decays {}, recoveries {};
         std::atomic<int> nDecays { 0 }, nRecoveries { 0 };

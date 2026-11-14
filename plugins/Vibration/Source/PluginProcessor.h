@@ -14,6 +14,7 @@
 #include "AutopilotBus.h"
 #include "FixBus.h"
 #include "LabelReadyBus.h"
+#include "MixLatch.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
 {
@@ -111,14 +112,19 @@ public:
         isLeadTrack.store (role == suite::roleLead || role < 0);   // lead-aware space: this is the lead (or most likely is)
         // the mix fixes (latched once Ouroboros' checks ask for them; saved with the project)
         namespace AP = suite::Autopilot;
-        auto latched = [this] (const char* key, AP::Feature f)
-        {
-            if (! (bool) apvts.state.getProperty (key, false) && AP::on (f) && suite::LabelReadyBus::needed ((int) f)) apvts.state.setProperty (key, true, nullptr);
-            return (bool) apvts.state.getProperty (key, false) && AP::on (f);
-        };
-        presenceEase.store (latched ("mixPresenceEase", AP::mxPresenceEaseF));
-        drivePerSection.store (latched ("mixDriveSection", AP::mxDriveSectionF));
+        if (! mixLatch.log) mixLatch.log = [this] (const juce::String& s) { suite::MoveLog::add ("Vibration", getTrackName(), s); };
+        if ((bool) apvts.state.getProperty ("mixPresenceEase", false)) { mixLatch.force (AP::mxPresenceEaseF); apvts.state.removeProperty ("mixPresenceEase", nullptr); }
+        if ((bool) apvts.state.getProperty ("mixDriveSection", false)) { mixLatch.force (AP::mxDriveSectionF); apvts.state.removeProperty ("mixDriveSection", nullptr); }
+        mixLatch.beginTick (isNonRealtime());
+        presenceEase.store (mixLatch.update (AP::mxPresenceEaseF, true));
+        drivePerSection.store (mixLatch.update (AP::mxDriveSectionF, true));
+        leadFizz.store (mixLatch.update (AP::mx2LeadFizzF, true));
+        mixLatch.publish (getInstanceId(), "Vibration", getTrackName());
     }
+    suite::MixLatch mixLatch { apvts };
+    /** Mix fix: heavy drive's fizz over 12 kHz rolled off (a gentle low-pass blended in with the drive). */
+    std::atomic<bool> leadFizz { false };
+    std::array<float, 2> fizzState {};
     /** Mix fixes: the presence eased before heavy drive (the drive adds its own bite, up to 2 dB),
         and the drive per section (less in breakdowns, intro and outro). */
     std::atomic<bool> presenceEase { false }, drivePerSection { false };
