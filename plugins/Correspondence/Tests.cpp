@@ -2425,7 +2425,7 @@ int main (int argc, char** argv)
             p->regenerate ("Melody", false);
             const auto after = p->clipNow ("Melody");
             bool same = true;
-            for (const auto& n : before) if (n.start < 4.0) { bool found = false; for (const auto& m : after) if (m.start == n.start && m.pitch == n.pitch) found = true; same = same && found; }
+            for (const auto& n : before) if (n.start < 4.0) { bool found = false; for (const auto& m : after) if (std::abs (m.start - n.start) < 1.0e-5 && m.pitch == n.pitch) found = true; same = same && found; }
             check (same && p->takes["Melody"].takes.size() == 2, "the melody regenerated with bar 1 locked: bar 1 unchanged, two takes");
             check (p->takeBack ("Melody") && p->takes["Melody"].current == 0, "take back to the first");
             p->rateTake ("Melody", true);

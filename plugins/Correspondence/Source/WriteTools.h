@@ -98,7 +98,7 @@ namespace chords::tools
     {
         juce::StringArray bars, notes;
         for (auto b : l.bars) bars.add (juce::String (b));
-        for (const auto& n : l.notes) notes.add (juce::String (n.pitch) + ":" + juce::String (n.start, 4) + ":" + juce::String (n.length, 4) + ":" + juce::String (n.velocity));
+        for (const auto& n : l.notes) notes.add (juce::String (n.pitch) + ":" + juce::String (n.start, 6) + ":" + juce::String (n.length, 6) + ":" + juce::String (n.velocity));
         return bars.joinIntoString (",") + "|" + notes.joinIntoString (";");
     }
     inline Lock lockFromText (const juce::String& t)
