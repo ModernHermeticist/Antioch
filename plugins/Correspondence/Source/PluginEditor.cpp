@@ -399,8 +399,12 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                                                              &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile,
                                                              &arpTile, &songChordTile, &songBassTile, &songArpTile,
                                                              &melodyTile, &songLeadTile, &melodyStyle, &newMelodyButton,
-                                                             &playButton, &saveButton, &songButton, &colourButton, &varyButton })
+                                                             &playButton, &saveButton, &songButton, &colourButton, &varyButton, &writeButton })
         addAndMakeVisible (c);
+    writeButton.setTooltip ("Write: lock bars and regenerate the rest, step through takes and keep the best bars, hear a part in context, "
+                            "the hook doctor, hum a hook, a topline from lyrics, the originality check, the emotional arc, trance harmony moves, "
+                            "a reference's feel, the shared rhythm, and why it works");
+    writeButton.onClick = [this] { showWriteMenu(); };
 
     // Two pages: Chords and Song
     songGrid = makeSongGrid (processor.apvts, [this] (juce::Component& c) { showStrongerHooks (c); }, [this] (juce::Component& c, int goal) { showLabelOptions (c, goal); });
@@ -952,7 +956,7 @@ std::vector<juce::Component*> CorrespondenceEditor::chordsPageParts()
 {
     std::vector<juce::Component*> v { &roll, &voicing, &chordPattern, &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
                                       &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile, &arpTile, &melodyTile,
-                                      &melodyStyle, &newMelodyButton, &playButton, &saveButton, &songButton, &colourButton, &varyButton };
+                                      &melodyStyle, &newMelodyButton, &playButton, &saveButton, &songButton, &colourButton, &varyButton, &writeButton };
     for (auto& s : slots) v.push_back (s.get());
     return v;
 }
@@ -1224,10 +1228,11 @@ void CorrespondenceEditor::resized()
     auto ex = inner (exportArea);
     auto buttons = ex.removeFromBottom (34);
     placeTiles (ex.withTrimmedBottom (6), { &chordTile, &bassTile, &arpTile, &melodyTile });
-    const auto bw = buttons.getWidth() / 5;
+    const auto bw = buttons.getWidth() / 6;
     playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     colourButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     varyButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
+    writeButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     saveButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     songButton.setBounds (buttons.reduced (3, 0));
 }
@@ -1249,4 +1254,220 @@ void CorrespondenceEditor::layoutKeyRow()
     broadcast.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2).reduced (3, 4));
     acceptDetected.setBounds (toggles.reduced (3, 4));
     broadcastStatus.setBounds (bc.reduced (4, 0));
+}
+
+//==============================================================================
+// The Write menu: locks and takes, hearing a part in context, the hook doctor, humming, toplines,
+// originality, the emotional arc, harmony moves, a reference's feel, the shared rhythm, why it works
+void CorrespondenceEditor::showWriteMenu()
+{
+    auto& p = processor;
+    static const juce::StringArray kinds { "Song Lead", "Song Bass", "Song Arp", "Song Chords", "Melody" };
+    suite::SectionMap map;
+    const auto haveMap = suite::SectionBus::read (map) && map.count > 0;
+    juce::PopupMenu m;
+    for (int k = 0; k < kinds.size(); ++k)
+    {
+        const auto& kind = kinds[k];
+        if (kind.startsWith ("Song ") && ! haveMap) continue;
+        const auto base = 10000 + k * 1000;
+        juce::PopupMenu part, lock, keep;
+        const auto& h = p.takes[kind];
+        part.addItem (base + 1, "Regenerate (locked bars kept)");
+        if (kind.startsWith ("Song ")) part.addItem (base + 2, "Regenerate only this part (the others locked as they are)");
+        part.addItem (base + 3, "Take back" + (h.current > 0 ? " (to take " + juce::String (h.current) + ")" : juce::String()), h.current > 0);
+        part.addItem (base + 4, "Take forward", h.current + 1 < (int) h.takes.size());
+        part.addItem (base + 5, "I like this take", true, h.now() != nullptr && h.now()->rating > 0);
+        part.addItem (base + 6, "Not this one", true, h.now() != nullptr && h.now()->rating < 0);
+        // locks: by section (song parts) or the whole loop
+        const auto lk = p.lockOf (kind);
+        if (haveMap && kind.startsWith ("Song "))
+            for (int i = 0; i < map.count && i < 40; ++i)
+            {
+                const auto a = map.sections[(size_t) i].startBar - 1, b = map.endBar (i) - 2;
+                const auto locked = lk.bars.count (a) > 0;
+                lock.addItem (base + 100 + i, (locked ? "Unlock " : "Lock ") + juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " (bars " + juce::String (a + 1) + "-" + juce::String (b + 1) + ")", true, locked);
+            }
+        else for (int b = 0; b < 4; ++b) lock.addItem (base + 100 + b, (lk.bars.count (b) ? "Unlock bar " : "Lock bar ") + juce::String (b + 1), true, lk.bars.count (b) > 0);
+        lock.addItem (base + 99, "Unlock everything", ! lk.empty());
+        part.addSubMenu ("Lock bars (" + juce::String ((int) lk.bars.size()) + " locked)", lock);
+        for (int t = 0; t < (int) h.takes.size() && t < 12; ++t)
+        {
+            juce::PopupMenu which;
+            if (haveMap && kind.startsWith ("Song "))
+                for (int i = 0; i < map.count && i < 40; ++i)
+                    which.addItem (base + 200 + t * 50 + i, juce::String (suite::sectionName (map.sections[(size_t) i].type)) + " at bar " + juce::String (map.sections[(size_t) i].startBar));
+            else which.addItem (base + 200 + t * 50, "Bars 1-2");
+            keep.addSubMenu ("Take " + juce::String (t + 1) + (h.takes[(size_t) t].rating > 0 ? " (liked)" : h.takes[(size_t) t].rating < 0 ? " (not this)" : ""), which);
+        }
+        part.addSubMenu ("Keep bars from a take", keep, ! h.takes.empty());
+        part.addItem (base + 7, "Hear it in context (in time with FL, under the song)", true, p.contextKind == kind);
+        part.addItem (base + 8, "Why it works...");
+        m.addSubMenu (kind, part);
+    }
+    m.addItem (2, "Stop hearing in context", p.contextKind.isNotEmpty());
+    m.addSeparator();
+    juce::PopupMenu doctor;
+    const auto report = p.hookReport();
+    doctor.addItem (20, "The hook doctor's report (" + juce::String (juce::roundToInt (report.score * 100.0f)) + "/100)...");
+    for (size_t i = 0; i < report.edits.size(); ++i)
+        doctor.addItem (21 + (int) i, "Change note " + juce::String (report.edits[i].index + 1) + " to " + suite::music::noteNames()[(report.edits[i].to % 12 + 12) % 12]
+                        + ": +" + juce::String (juce::roundToInt (report.edits[i].gain * 100.0f)) + " (" + report.edits[i].why + ")");
+    m.addSubMenu ("Hook doctor", doctor);
+    m.addItem (30, p.hum.armed.load() ? "Hum a hook: stop and use it" : "Hum a hook (into this track's input)...");
+    m.addItem (31, "Topline from lyrics...");
+    m.addItem (32, "Originality check (your hooks and the library)...");
+    juce::PopupMenu arc;
+    const auto plans = chords::tools::arcPlans (p.currentSettings());
+    for (size_t i = 0; i < plans.size(); ++i) arc.addItem (40 + (int) i, plans[i].name + ": " + plans[i].story);
+    arc.addItem (49, "Undo the arc", ! p.beforeVariation.empty() || p.beforeIdea.has_value());
+    m.addSubMenu ("Emotional arc", arc);
+    juce::PopupMenu moves;
+    const auto mv = chords::tools::harmonyMoves (p.currentSettings());
+    for (size_t i = 0; i < mv.size() && i < 20; ++i) moves.addItem (50 + (int) i, mv[i].name);
+    moves.addItem (79, "Undo the last harmony change", p.beforeIdea.has_value());
+    m.addSubMenu ("Trance harmony moves", moves);
+    m.addSeparator();
+    m.addItem (80, "One motif, the whole song (every section's lead from the hook)", true, p.option ("motifPlan"));
+    m.addItem (81, "Shared rhythm (the bass and arp lean on the hook's rhythm)", true, p.option ("rhythmCell"));
+    m.addItem (82, "Feel from a reference (swing and accents from an audio file)...");
+    m.addItem (83, "The reference's feel on the bass, arp and drums", p.feel().valid, p.option ("feelOn"));
+
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writeButton), [this, map, haveMap, report, plans, mv] (int id)
+    {
+        auto& p = processor;
+        auto note = [this] (const juce::String& text) { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Write", text); };
+        if (id >= 10000)
+        {
+            const auto k = (id - 10000) / 1000, sub = (id - 10000) % 1000;
+            if (k < 0 || k >= kinds.size()) return;
+            const auto& kind = kinds[k];
+            if (sub == 1 || sub == 2) { const auto t = p.regenerate (kind, sub == 2); setTooltipNote (t); }
+            else if (sub == 3) p.takeBack (kind);
+            else if (sub == 4) p.takeForward (kind);
+            else if (sub == 5 || sub == 6) p.rateTake (kind, sub == 5);
+            else if (sub == 7) p.playInContext (p.contextKind == kind ? juce::String() : kind);
+            else if (sub == 8)
+            {
+                const auto notes = kind.endsWith ("Lead") || kind == "Melody" ? p.currentHook() : chords::tools::window (p.clipNow (kind), 0.0, 32.0);
+                const auto why = chords::tools::explain (notes, p.currentSettings());
+                note (why.isEmpty() ? juce::String ("Not enough notes to say.") : "Why it works:\n\n- " + why.joinIntoString ("\n- "));
+            }
+            else if (sub == 99) p.setLock (kind, {});
+            else if (sub >= 100 && sub < 200)
+            {
+                const auto i = sub - 100;
+                int a = i, b = i;
+                if (haveMap && kind.startsWith ("Song ") && i < map.count) { a = map.sections[(size_t) i].startBar - 1; b = map.endBar (i) - 2; }
+                if (p.lockOf (kind).bars.count (a)) p.unlockBars (kind, a, b); else p.lockBars (kind, a, b);
+            }
+            else if (sub >= 200)
+            {
+                const auto t = (sub - 200) / 50, i = (sub - 200) % 50;
+                int a = 0, b = 1;
+                if (haveMap && kind.startsWith ("Song ") && i < map.count) { a = map.sections[(size_t) i].startBar - 1; b = map.endBar (i) - 2; }
+                p.keepBarsFrom (kind, t, a, b);
+            }
+            return;
+        }
+        if (id == 2) p.playInContext ({});
+        else if (id == 20)
+        {
+            juce::String text = "Hook score: " + juce::String (juce::roundToInt (report.score * 100.0f)) + "/100\n\n- " + report.notes.joinIntoString ("\n- ");
+            if (! report.edits.empty())
+            {
+                text << "\n\nOne-note changes that would help (Write > Hook doctor to apply):";
+                for (const auto& e : report.edits) text << "\n- note " << (e.index + 1) << " to " << suite::music::noteNames()[(e.to % 12 + 12) % 12] << ": " << e.why;
+            }
+            note (text);
+        }
+        else if (id >= 21 && id < 21 + (int) report.edits.size()) p.applyHookEdit (report.edits[(size_t) (id - 21)]);
+        else if (id == 30)
+        {
+            if (p.hum.armed.load()) note (p.finishHum());
+            else { p.startHum(); note ("Listening to this track's input. Play the song (or not) and hum or sing the hook clearly, one note at a time. "
+                                      "Then Write > Hum a hook: stop and use it (it stops by itself after 30 seconds)."); }
+        }
+        else if (id == 31) showToplineDialog();
+        else if (id == 32)
+        {
+            const auto near = p.originality();
+            if (near.empty()) note ("The hook doesn't come close to any of your saved hooks or the library's leads: it's yours.");
+            else
+            {
+                juce::StringArray l;
+                for (size_t i = 0; i < near.size() && i < 6; ++i) l.add (near[i].name + ": " + juce::String (juce::roundToInt (near[i].similarity * 100.0f)) + "% alike");
+                note ("Close to:\n\n- " + l.joinIntoString ("\n- ") + "\n\nChange the rhythm or a few intervals (the hook doctor can suggest one-note changes) to make it its own.");
+            }
+        }
+        else if (id >= 40 && id < 40 + (int) plans.size())
+        {
+            p.applyArc (plans[(size_t) (id - 40)]);
+            note (plans[(size_t) (id - 40)].name + "\n\n" + chords::tools::arcChords (p.currentSettings(), plans[(size_t) (id - 40)]) + "\n\nWhy:\n- " + plans[(size_t) (id - 40)].why.joinIntoString ("\n- "));
+        }
+        else if (id == 49) { p.undoVariation(); p.undoHarmonyIdea(); }
+        else if (id >= 50 && id < 50 + (int) mv.size())
+        {
+            p.applyMove (mv[(size_t) (id - 50)]);
+            note (mv[(size_t) (id - 50)].name + "\n\n" + mv[(size_t) (id - 50)].why + "\n\n(Play to hear it; Write > Trance harmony moves > Undo to put it back.)");
+        }
+        else if (id == 79) p.undoHarmonyIdea();
+        else if (id == 80) p.setOption ("motifPlan", ! p.option ("motifPlan"));
+        else if (id == 81) p.setOption ("rhythmCell", ! p.option ("rhythmCell"));
+        else if (id == 82)
+        {
+            chooser = std::make_unique<juce::FileChooser> ("A reference track (audio)", juce::File::getSpecialLocation (juce::File::userMusicDirectory), "*.wav;*.aif;*.aiff;*.flac;*.mp3");
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& fc)
+            {
+                if (fc.getResult().existsAsFile())
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Feel from a reference", processor.loadFeel (fc.getResult()));
+            });
+        }
+        else if (id == 83) p.setOption ("feelOn", ! p.option ("feelOn"));
+    });
+}
+
+void CorrespondenceEditor::setTooltipNote (const juce::String& text)
+{
+    writeButton.setTooltip (text);
+    writeButton.setButtonText ("Write...");
+    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Write", text + "\n\nWrite > the part > Hear it in context, to hear it in the song.");
+}
+
+void CorrespondenceEditor::showToplineDialog()
+{
+    auto* aw = new juce::AlertWindow ("Topline from lyrics", "Type a line or two of lyrics. Three melodies come back, each fitted to the syllables and stresses over your chords.", juce::MessageBoxIconType::NoIcon);
+    aw->addTextEditor ("lyric", "", "Lyrics:");
+    aw->addComboBox ("bars", { "2 bars", "4 bars", "8 bars" }, "Length:");
+    if (auto* c = aw->getComboBoxComponent ("bars")) c->setSelectedItemIndex (1);
+    aw->addButton ("Write", 1); aw->addButton ("Cancel", 0);
+    aw->enterModalState (true, juce::ModalCallbackFunction::create ([this, aw] (int r)
+    {
+        if (r != 1) return;
+        const auto lyric = aw->getTextEditorContents ("lyric");
+        const auto barsIdx = aw->getComboBoxComponent ("bars") != nullptr ? aw->getComboBoxComponent ("bars")->getSelectedItemIndex() : 1;
+        const auto bars = barsIdx == 0 ? 2 : barsIdx == 2 ? 8 : 4;
+        lastToplines = processor.toplines (lyric, bars);
+        if (lastToplines.empty()) { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Topline", "No syllables found in that."); return; }
+        juce::PopupMenu pick;
+        for (size_t i = 0; i < lastToplines.size(); ++i)
+        {
+            const auto& t = lastToplines[i];
+            pick.addItem (1 + (int) i, "Topline " + juce::String ((int) i + 1) + ": " + t.shape + ", singable " + juce::String (juce::roundToInt (t.singable * 100.0f)) + "% - save as MIDI (with the lyrics)...");
+            pick.addItem (11 + (int) i, "Topline " + juce::String ((int) i + 1) + ": use it as Melodia's hook");
+        }
+        pick.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&writeButton), [this] (int k)
+        {
+            if (k >= 11 && k - 11 < (int) lastToplines.size()) { processor.useHook (lastToplines[(size_t) (k - 11)].notes); return; }
+            if (k < 1 || k > (int) lastToplines.size()) return;
+            const auto t = lastToplines[(size_t) (k - 1)];
+            chooser = std::make_unique<juce::FileChooser> ("Where to save the topline", juce::File::getSpecialLocation (juce::File::userMusicDirectory));
+            chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this, t] (const juce::FileChooser& fc)
+            {
+                if (! fc.getResult().isDirectory()) return;
+                const auto f = processor.exportTopline (t, fc.getResult(), "Topline - " + t.lyric.joinIntoString ("").replace ("-", "").substring (0, 40));
+                f.revealToUser();
+            });
+        });
+    }), true);
 }

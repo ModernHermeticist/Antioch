@@ -115,7 +115,11 @@ private:
     std::vector<chords::Note> melodyNotes;
     size_t nextMelodyNote = 0;
     juce::TextButton playButton { "Play" }, saveButton { "Export all..." }, songButton { "Song patterns..." },
-                     colourButton { "Colour..." }, varyButton { "Vary..." };
+                     colourButton { "Colour..." }, varyButton { "Vary..." }, writeButton { "Write..." };
+    void showWriteMenu();
+    void showToplineDialog();
+    void setTooltipNote (const juce::String& text);
+    std::vector<chords::tools::Topline> lastToplines;
     void showSongPatterns();
     void showStrongerHooks (juce::Component& target);
     void showLabelOptions (juce::Component& target, int goal);

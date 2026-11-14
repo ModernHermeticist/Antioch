@@ -1,3 +1,4 @@
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <set>
 #include "PluginProcessor.h"
 #include "DirectorWriting.h"
@@ -19,6 +20,7 @@ CorrespondenceProcessor::CorrespondenceProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CorrespondenceState", Params::createLayout())
 {
+    loadTaste();
     // Ignore suggestions made before we loaded (loading a project shouldn't change its key).
     lastSuggestion = suite::KeyBus::readSuggestion().sequence;
     publishKey();
@@ -55,6 +57,8 @@ bool CorrespondenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts
 
 void CorrespondenceProcessor::prepareToPlay (double sampleRate, int)
 {
+    contextPlayer.prepare (sampleRate);
+    hum.prepare (sampleRate);
     preview.prepare (sampleRate);
 }
 
@@ -64,7 +68,13 @@ void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     for (auto ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
-    currentBpm.store (suite::HostInfo::read (getPlayHead(), currentBpm.load()).bpm);
+    const auto host = suite::HostInfo::read (getPlayHead(), currentBpm.load());
+    currentBpm.store (host.bpm);
+    // Hum a hook: the input, before anything is added
+    if (buffer.getNumChannels() > 0) hum.push (buffer.getReadPointer (0), buffer.getNumSamples());
+    // Hear it in context: the part at the playhead
+    contextPlayer.render (buffer.getWritePointer (0), buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr, buffer.getNumSamples(),
+                          host.playing && host.hasPpq, host.ppq, host.bpm / 60.0 / juce::jmax (1.0, getSampleRate()));
 
     // Audio passes straight through; only the audition voice is added.
     preview.render (buffer.getWritePointer (0), buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr,
@@ -1017,6 +1027,14 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
               : kind == "Melody" ? chords::melody (s, melodySettings())
               : kind == "Counter" ? chords::counterMelody (chords::melody (s, melodySettings()), s) : chords::chordClip (s);
     }
+    // The writing tools: one motif for the whole song, the shared rhythm, a reference's feel
+    if (kind == "Song Lead" && option ("motifPlan"))
+        if (suite::SectionMap plan; suite::SectionBus::read (plan))
+            if (const auto hook = currentHook(); hook.size() >= 3) notes = chords::tools::motifPlan (hook, s, plan);
+    if (option ("rhythmCell") && (kind.endsWith ("Bass") || kind.endsWith ("Arp")))
+        notes = chords::tools::lockToCell (notes, chords::tools::rhythmCell (currentHook()));
+    if (option ("feelOn") && (kind.endsWith ("Bass") || kind.endsWith ("Arp") || kind == "Song Drums"))
+        notes = chords::tools::applyFeel (notes, feel());
     // The suite director: the parts leave room for its silences and carry its arrangement edits and harmony moves
     if (kind.startsWith ("Song ") && kind != "Song Transitions" && kind != "Song Fills")
     {
@@ -1044,8 +1062,11 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
                             : (patterns::Part) juce::jmax (0, patterns::partFiles().indexOf (kind.fromFirstOccurrenceOf ("Song ", false, false).toLowerCase()));
             notes = chords::writing::microTiming (notes, part, (patterns::Style) juce::jlimit (0, 6, sp.libStyle));
         }
-    return chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
-                             apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
+    auto shaped = chords::humanise (chords::applyGroove (notes, Params::grooveSwing ((int) apvts.getRawParameterValue (Params::groove)->load())),
+                                    apvts.getRawParameterValue (Params::humanise)->load(), kind.hashCode());
+    // locked bars: put back exactly as they were kept
+    if (const auto lock = lockOf (kind); ! lock.empty()) shaped = chords::tools::mergeLocks (shaped, lock);
+    return shaped;
 }
 
 juce::Array<juce::File> CorrespondenceProcessor::sendToPianoRoll() const
@@ -1473,4 +1494,286 @@ void CorrespondenceProcessor::setPluginState (const void* data, int sizeInBytes)
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new CorrespondenceProcessor();
+}
+
+//==============================================================================
+// The writing tools (WriteTools.h)
+namespace
+{
+    const juce::StringArray& songPartKinds() { static const juce::StringArray k { "Song Chords", "Song Bass", "Song Arp", "Song Lead", "Song Harmony", "Song Counter" }; return k; }
+    double clipEndQ (const std::vector<chords::Note>& v) { double e = 0.0; for (const auto& n : v) e = std::max (e, n.start + n.length); return e; }
+}
+
+std::vector<chords::Note> CorrespondenceProcessor::clipNow (const juce::String& kind) const
+{
+    std::vector<std::pair<double, bool>> pedal;
+    bool available = false;
+    auto notes = clipNotes (kind, pedal, available);
+    return available ? notes : std::vector<chords::Note> {};
+}
+
+void CorrespondenceProcessor::lockBars (const juce::String& kind, int fromBar, int toBar)
+{
+    setLock (kind, chords::tools::lockBars (clipNow (kind), lockOf (kind), fromBar, toBar));
+    suite::MoveLog::add ("Correspondence", getTrackName(), kind + ": bars " + juce::String (fromBar + 1) + "-" + juce::String (toBar + 1) + " locked");
+}
+
+void CorrespondenceProcessor::unlockBars (const juce::String& kind, int fromBar, int toBar)
+{
+    setLock (kind, chords::tools::unlockBars (lockOf (kind), fromBar, toBar));
+}
+
+std::vector<chords::Note> CorrespondenceProcessor::currentHook() const
+{
+    if (const auto m = getMotif(); m.size() >= 3) return chords::tools::window (chords::tools::rebased (m), 0.0, 8.0);
+    const auto s = currentSettings();
+    if (suite::SectionMap map; suite::SectionBus::read (map) && map.count > 0)
+    {
+        const auto lead = chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead);
+        for (int i = 0; i < map.count; ++i)
+            if (map.sections[(size_t) i].type == suite::SectionType::Drop)
+            {
+                const auto from = 4.0 * (map.sections[(size_t) i].startBar - 1);
+                return chords::tools::window (chords::tools::rebased (chords::tools::window (lead, from, from + 8.0)), 0.0, 8.0);
+            }
+    }
+    return chords::tools::window (chords::melody (s, melodySettings()), 0.0, 8.0);
+}
+
+bool CorrespondenceProcessor::applyHookEdit (const chords::tools::HookEdit& e)
+{
+    const auto edited = chords::tools::applyEdit (currentHook(), e);
+    if (edited.size() < 3) return false;
+    useHook (edited);
+    suite::MoveLog::add ("Correspondence", getTrackName(), "Hook doctor: note " + juce::String (e.index + 1) + " " + suite::music::noteNames()[(e.from % 12 + 12) % 12]
+                         + " -> " + suite::music::noteNames()[(e.to % 12 + 12) % 12] + " (" + e.why + ")");
+    if (contextKind.isNotEmpty()) playInContext (contextKind);
+    return true;
+}
+
+juce::String CorrespondenceProcessor::regenerate (const juce::String& kind, bool onlyThis)
+{
+    auto& hist = takes[kind];
+    auto seedOf = [this] (const juce::String& id) { return (int) apvts.getRawParameterValue (id)->load(); };
+    const auto melSeed = seedOf (Params::melodySeed), melStyle = seedOf (Params::melodyStyle);
+    const auto libSeed = (uint32_t) seedOf (Params::libSeed);
+    // the first regenerate keeps what was there as take 1
+    if (hist.takes.empty()) { chords::tools::Take t; t.melodySeed = melSeed; t.melodyStyle = melStyle; t.libSeed = libSeed; t.notes = clipNow (kind); hist.push (t); }
+    // only this part: every other song part locked as it is
+    if (onlyThis && kind.startsWith ("Song "))
+        for (const auto& other : songPartKinds())
+            if (other != kind)
+                if (const auto notes = clipNow (other); ! notes.empty())
+                    setLock (other, chords::tools::lockBars (notes, lockOf (other), 0, (int) std::ceil (clipEndQ (notes) / 4.0)));
+    // candidates: one new seed, or the best of eight for your taste once it knows you
+    auto& rng = juce::Random::getSystemRandom();
+    int bestMel = rng.nextInt ({ 1, 1000 });
+    uint32_t bestLib = (uint32_t) rng.nextInt ({ 1, 10000 });
+    juce::String chosenBy = "a new take";
+    if (taste.ready())
+    {
+        const auto s = currentSettings();
+        suite::SectionMap map; const auto haveMap = suite::SectionBus::read (map);
+        float best = 1.0e9f;
+        for (int k = 0; k < 8; ++k)
+        {
+            const auto m = rng.nextInt ({ 1, 1000 });
+            const auto l = (uint32_t) rng.nextInt ({ 1, 10000 });
+            auto sp = currentSongPatterns(); sp.melody.seed = m; sp.libSeed = l;
+            auto mel = melodySettings(); mel.seed = m;
+            const auto part = kind.endsWith ("Bass") ? chords::SongPart::Bass : kind.endsWith ("Arp") ? chords::SongPart::Arp : kind.endsWith ("Chords") ? chords::SongPart::Chords : chords::SongPart::Lead;
+            const auto notes = kind.startsWith ("Song ") && haveMap ? chords::tools::window (chords::songClip (s, map, sp, part), 0.0, 64.0) : chords::melody (s, mel);
+            const auto d = taste.distance (chords::tools::featuresOf (notes));
+            if (d < best) { best = d; bestMel = m; bestLib = l; }
+        }
+        chosenBy = "the closest of eight to your taste";
+    }
+    setParameterPlain (apvts, Params::melodySeed, (float) bestMel);
+    if (kind.startsWith ("Song ")) setParameterPlain (apvts, Params::libSeed, (float) bestLib);
+    chords::tools::Take t;
+    t.melodySeed = bestMel; t.melodyStyle = melStyle; t.libSeed = kind.startsWith ("Song ") ? bestLib : libSeed;
+    t.notes = clipNow (kind);
+    t.why = chords::tools::explain (kind.endsWith ("Lead") || kind == "Melody" ? currentHook() : chords::tools::window (t.notes, 0.0, 32.0), currentSettings()).joinIntoString ("; ");
+    hist.push (t);
+    if (contextKind == kind) playInContext (kind);
+    const auto lock = lockOf (kind);
+    return kind + ": take " + juce::String (hist.current + 1) + " (" + chosenBy + ")" + (lock.empty() ? juce::String() : ", " + juce::String ((int) lock.bars.size()) + " locked bar(s) kept");
+}
+
+void CorrespondenceProcessor::applyTake (const juce::String& kind, const chords::tools::Take& t)
+{
+    setParameterPlain (apvts, Params::melodySeed, (float) t.melodySeed);
+    setParameterPlain (apvts, Params::melodyStyle, (float) t.melodyStyle);
+    if (kind.startsWith ("Song ")) setParameterPlain (apvts, Params::libSeed, (float) t.libSeed);
+}
+
+bool CorrespondenceProcessor::takeBack (const juce::String& kind)
+{
+    const auto* t = takes[kind].back();
+    if (t == nullptr) return false;
+    applyTake (kind, *t);
+    if (contextKind == kind) playInContext (kind);
+    return true;
+}
+
+bool CorrespondenceProcessor::takeForward (const juce::String& kind)
+{
+    const auto* t = takes[kind].forward();
+    if (t == nullptr) return false;
+    applyTake (kind, *t);
+    if (contextKind == kind) playInContext (kind);
+    return true;
+}
+
+bool CorrespondenceProcessor::keepBarsFrom (const juce::String& kind, int takeIndex, int fromBar, int toBar)
+{
+    auto& h = takes[kind];
+    if (takeIndex < 0 || takeIndex >= (int) h.takes.size()) return false;
+    setLock (kind, chords::tools::lockBars (h.takes[(size_t) takeIndex].notes, lockOf (kind), fromBar, toBar));
+    if (contextKind == kind) playInContext (kind);
+    return true;
+}
+
+juce::File CorrespondenceProcessor::tasteFile() { return tasteFileOverride() != juce::File() ? tasteFileOverride() : suite::Alias::file ("Writing taste.txt"); }
+void CorrespondenceProcessor::loadTaste() { taste = chords::tools::Taste::fromText (tasteFile().loadFileAsString().trim()); }
+void CorrespondenceProcessor::saveTaste() const { tasteFile().getParentDirectory().createDirectory(); tasteFile().replaceWithText (taste.toText()); }
+
+void CorrespondenceProcessor::rateTake (const juce::String& kind, bool liked)
+{
+    auto& h = takes[kind];
+    const auto notes = h.now() != nullptr ? h.now()->notes : clipNow (kind);
+    taste.rate (chords::tools::featuresOf (kind.endsWith ("Lead") || kind == "Melody" ? currentHook() : chords::tools::window (notes, 0.0, 64.0)), liked);
+    if (h.current >= 0 && h.current < (int) h.takes.size()) h.takes[(size_t) h.current].rating = liked ? 1 : -1;
+    saveTaste();
+}
+
+void CorrespondenceProcessor::playInContext (const juce::String& kind)
+{
+    contextKind = kind;
+    if (kind.isEmpty()) { contextPlayer.enabled.store (false); contextPlayer.clear(); return; }
+    contextPlayer.setNotes (clipNow (kind));
+    contextPlayer.enabled.store (true);
+}
+
+void CorrespondenceProcessor::startHum()
+{
+    humAudio.clear();
+    std::vector<float> discard;
+    hum.drain (discard);
+    hum.armed.store (true);
+    humNote = "listening: hum or sing the hook (up to 30 seconds), then Stop and use it";
+}
+
+juce::String CorrespondenceProcessor::finishHum()
+{
+    hum.armed.store (false);
+    hum.drain (humAudio);
+    const auto rate = hum.rate();
+    const auto win = 1024, hop = 512;
+    std::vector<chords::tools::PitchFrame> frames;
+    for (int i = 0; i + win <= (int) humAudio.size(); i += hop)
+    {
+        chords::tools::PitchFrame f;
+        double e = 0.0;
+        for (int k = 0; k < win; ++k) e += (double) humAudio[(size_t) (i + k)] * humAudio[(size_t) (i + k)];
+        f.rms = (float) std::sqrt (e / win);
+        f.hz = f.rms > 0.005f ? chords::tools::detectPitch (humAudio.data() + i, win, rate) : 0.0f;
+        frames.push_back (f);
+    }
+    const auto s = currentSettings();
+    const auto notes = chords::tools::notesFromFrames (frames, hop / rate, currentBpm.load(), s.root, s.scale, 2);
+    humAudio.clear();
+    if (notes.size() < 3) return humNote = "not enough clear notes heard (" + juce::String ((int) notes.size()) + "): hum louder, one note at a time";
+    useHook (notes);
+    if (contextKind.isNotEmpty()) playInContext (contextKind);
+    return humNote = juce::String ((int) notes.size()) + " notes heard, in key: Melodia's hook now (drag Melody, or Song Lead with a map)";
+}
+
+std::vector<chords::tools::Topline> CorrespondenceProcessor::toplines (const juce::String& lyric, int bars) const
+{
+    std::vector<chords::tools::Topline> out;
+    const auto syl = chords::tools::syllables (lyric);
+    if (syl.empty()) return out;
+    const auto s = currentSettings();
+    for (uint32_t seed : { 1u, 2u, 3u }) out.push_back (chords::tools::topline (syl, s, bars, seed));
+    return out;
+}
+
+juce::File CorrespondenceProcessor::exportTopline (const chords::tools::Topline& t, const juce::File& dir, const juce::String& name) const
+{
+    dir.createDirectory();
+    const auto f = dir.getChildFile (juce::File::createLegalFileName (name) + ".mid");
+    f.deleteFile();
+    if (auto out = f.createOutputStream()) chords::tools::toplineMidi (t, currentBpm.load()).writeTo (*out);
+    return f;
+}
+
+std::vector<chords::tools::NearRepeat> CorrespondenceProcessor::originality() const
+{
+    std::vector<std::pair<juce::String, std::vector<chords::Note>>> candidates;
+    for (const auto& [name, notes] : identity::loadHooks()) candidates.push_back ({ "your hook \"" + name + "\"", notes });
+    const auto s = currentSettings();
+    for (const auto& f : patterns::library())
+        if (f.part == patterns::Part::Lead)
+            candidates.push_back ({ "the library's " + juce::String (f.name), chords::lib::render (f, 2, false, s, 8.0) });
+    return chords::tools::nearRepeats (currentHook(), candidates, 0.75f);
+}
+
+bool CorrespondenceProcessor::applyArc (const chords::tools::ArcPlan& p)
+{
+    beforeVariation.clear();
+    for (const auto& [id, v] : p.params)
+        if (auto* param = apvts.getParameter (id))
+        {
+            beforeVariation.push_back ({ id, param->convertFrom0to1 (param->getValue()) });
+            param->beginChangeGesture(); param->setValueNotifyingHost (param->convertTo0to1 (v)); param->endChangeGesture();
+        }
+    if (! p.qualities.empty())
+    {
+        beforeIdea = currentSettings();
+        auto s = currentSettings();
+        for (const auto& [slot, q] : p.qualities) if (slot >= 0 && slot < chords::maxSlots) s.slots[(size_t) slot].quality = q;
+        applySlots (s);
+    }
+    suite::MoveLog::add ("Correspondence", getTrackName(), "Emotional arc: " + p.name + " (" + p.story + ")");
+    return true;
+}
+
+bool CorrespondenceProcessor::applyMove (const chords::tools::Move& m)
+{
+    beforeIdea = currentSettings();
+    applySlots (m.result);
+    suite::MoveLog::add ("Correspondence", getTrackName(), "Harmony move: " + m.name);
+    return true;
+}
+
+juce::String CorrespondenceProcessor::loadFeel (const juce::File& file)
+{
+    juce::AudioFormatManager fm;
+    fm.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (fm.createReaderFor (file));
+    if (reader == nullptr) return "couldn't read that file";
+    const auto len = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (reader->sampleRate * 90.0));
+    juce::AudioBuffer<float> buf ((int) juce::jmin (2u, reader->numChannels), len);
+    reader->read (&buf, 0, len, juce::jmax<juce::int64> (0, reader->lengthInSamples / 3), true, true);   // from a third in: past the intro
+    const auto f = chords::tools::feelFromAudio (buf, reader->sampleRate, currentBpm.load());
+    if (! f.valid) return "no clear groove found in that file";
+    juce::StringArray a;
+    a.add (juce::String (f.swing, 3));
+    for (auto v : f.accent) a.add (juce::String (v, 3));
+    apvts.state.setProperty ("feel", a.joinIntoString (","), nullptr);
+    setOption ("feelOn", true);
+    return "the feel of " + file.getFileNameWithoutExtension() + ": swing " + juce::String (juce::roundToInt (f.swing * 100.0f)) + "% of a 16th, at about "
+           + juce::String (f.bpm, 1) + " BPM; on for the bass, arp and drums";
+}
+
+chords::tools::Feel CorrespondenceProcessor::feel() const
+{
+    chords::tools::Feel f;
+    const auto a = juce::StringArray::fromTokens (apvts.state.getProperty ("feel", "").toString(), ",", "");
+    if (a.size() != 17) return f;
+    f.swing = a[0].getFloatValue();
+    for (int k = 0; k < 16; ++k) f.accent[(size_t) k] = a[k + 1].getFloatValue();
+    f.valid = true;
+    return f;
 }

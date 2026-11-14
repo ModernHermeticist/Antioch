@@ -405,7 +405,7 @@ namespace chords::tools
         for (int w = 0; w < words.size(); ++w)
         {
             const auto raw = words[w];
-            const auto phraseEnd = raw.endsWithAnyOf (",.;!?") || w == words.size() - 1;
+            const auto phraseEnd = juce::String (",.;!?").containsChar (raw.getLastCharacter()) || w == words.size() - 1;
             const auto word = raw.retainCharacters ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'");
             if (word.isEmpty()) continue;
             const auto lower = word.toLowerCase();

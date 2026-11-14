@@ -2270,5 +2270,178 @@ int main (int argc, char** argv)
         AP::reset();
     }
 
+
+    section ("Writing tools: locks, takes, the whole-song motif, the hook doctor, humming, toplines, originality, arcs, moves, feel, rhythm, taste, why");
+    {
+        namespace T = chords::tools;
+        chords::Settings s; s.root = 9; s.scale = 0; s.count = 4;   // A minor: i VI III VII
+        s.slots[0] = { 1 }; s.slots[1] = { 6 }; s.slots[2] = { 3 }; s.slots[3] = { 7 };
+        auto note = [] (int p, double st, double len) { return chords::Note { p, st, len, 100 }; };
+        // locks
+        {
+            std::vector<chords::Note> a { note (60, 0.0, 1.0), note (62, 4.0, 1.0), note (64, 8.0, 1.0), note (65, 12.0, 6.0) };
+            std::vector<chords::Note> b { note (70, 0.0, 1.0), note (71, 4.0, 1.0), note (72, 8.0, 1.0), note (74, 12.0, 1.0) };
+            auto lock = T::lockBars (a, {}, 1, 2);
+            const auto merged = T::mergeLocks (b, lock);
+            bool kept = false, freshKept = false, cut = true;
+            for (const auto& n : merged) { if (n.pitch == 62 || n.pitch == 64) kept = true; if (n.pitch == 70 || n.pitch == 74) freshKept = true; if (n.pitch == 71 || n.pitch == 72) cut = false; }
+            check (kept && freshKept && cut && merged.size() == 4, "locked bars 2-3 kept through a regenerate, the rest new");
+            check (T::lockFromText (T::toText (lock)).bars == lock.bars && T::lockFromText (T::toText (lock)).notes.size() == 2, "a lock survives the project (text round trip)");
+            const auto un = T::unlockBars (lock, 2, 2);
+            check (un.bars.size() == 1 && un.notes.size() == 1, "unlocking a bar lets it regenerate");
+        }
+        // takes
+        {
+            T::TakeHistory h;
+            for (int i = 0; i < 3; ++i) { T::Take t; t.melodySeed = i; h.push (t); }
+            check (h.back() != nullptr && h.now()->melodySeed == 1 && h.forward()->melodySeed == 2 && h.forward() == nullptr, "takes: back, forward, and the end");
+            h.back(); h.back();
+            T::Take t; t.melodySeed = 9; h.push (t);
+            check (h.takes.size() == 2 && h.now()->melodySeed == 9, "a new take after stepping back starts a new branch");
+        }
+        const std::vector<chords::Note> hook { note (69, 0.0, 0.75), note (72, 0.75, 0.75), note (76, 1.5, 0.5), note (74, 2.0, 1.0), note (72, 3.0, 1.0),
+                                               note (69, 4.0, 0.75), note (72, 4.75, 0.75), note (77, 5.5, 0.5), note (76, 6.0, 1.0), note (72, 7.0, 1.0) };
+        // one motif, the whole song
+        {
+            suite::SectionMap map;
+            const std::pair<suite::SectionType, int> form[] = { { suite::SectionType::Intro, 1 }, { suite::SectionType::Breakdown, 17 }, { suite::SectionType::Build, 25 },
+                                                                { suite::SectionType::Drop, 33 }, { suite::SectionType::Drop, 49 }, { suite::SectionType::Outro, 65 } };
+            for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+            map.totalBars = 80;
+            const auto plan = T::motifPlan (hook, s, map);
+            auto in = [&plan] (double from, double to) { int k = 0; for (const auto& n : plan) k += n.start >= from && n.start < to ? 1 : 0; return k; };
+            auto longest = [&plan] (double from, double to) { double l = 0.0; for (const auto& n : plan) if (n.start >= from && n.start < to) l = std::max (l, n.length); return l; };
+            const auto dropNotes = in (128.0, 192.0), introNotes = in (0.0, 64.0);
+            const auto bdLong = longest (64.0, 96.0), dropLong = longest (128.0, 192.0);
+            check (dropNotes > 3 * introNotes && introNotes > 0, "the drop states the hook in full, the intro only teases it (" + juce::String (introNotes) + " vs " + juce::String (dropNotes) + " notes)");
+            check (bdLong > dropLong * 1.5, "the breakdown has it slow (notes up to " + juce::String (bdLong, 2) + " quarters against " + juce::String (dropLong, 2) + ")");
+            bool drop2Differs = false;
+            for (const auto& a : plan) if (a.start >= 192.0 && a.start < 256.0) for (const auto& b : plan) if (b.start == a.start - 64.0 && b.pitch != a.pitch) drop2Differs = true;
+            check (drop2Differs, "drop 2 moves the hook on (a sequence), not a copy");
+        }
+        // the hook doctor
+        {
+            const auto r = T::hookDoctor (hook, s);
+            check (r.score > 0.5f && r.notes.size() >= 5, "the hook doctor scores it (" + juce::String (juce::roundToInt (r.score * 100.0f)) + ") and explains why");
+            std::vector<chords::Note> flat;
+            for (int i = 0; i < 8; ++i) flat.push_back (note (69, i * 1.0, 1.0));
+            const auto rf = T::hookDoctor (flat, s);
+            check (rf.score < r.score && ! rf.edits.empty() && rf.edits.front().gain > 0.0f, "a flat hook scores lower and gets one-note edits that help (+" + juce::String (juce::roundToInt (rf.edits.empty() ? 0.0f : rf.edits.front().gain * 100.0f)) + ")");
+            const auto edited = T::applyEdit (flat, rf.edits.front());
+            check (T::hookDoctor (edited, s, false).score > rf.score, "and applying one raises the score");
+        }
+        // hum: a sung A4 then C5 then E5, a beat each at 120 BPM
+        {
+            const double sr = 22050.0;
+            std::vector<float> audio;
+            for (const auto hz : { 440.0, 523.25, 659.25 })
+                for (int i = 0; i < (int) (0.5 * sr); ++i) audio.push_back (0.3f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * hz * i / sr));
+            check (std::abs (T::detectPitch (audio.data() + 2000, 1024, sr) - 440.0f) < 4.0f, "pitch tracking hears A4 (" + juce::String (T::detectPitch (audio.data() + 2000, 1024, sr), 1) + " Hz)");
+            std::vector<T::PitchFrame> frames;
+            for (int i = 0; i + 1024 <= (int) audio.size(); i += 512) frames.push_back ({ T::detectPitch (audio.data() + i, 1024, sr), 0.2f });
+            const auto notes = T::notesFromFrames (frames, 512.0 / sr, 120.0, 9, 0, 2);
+            check (notes.size() == 3 && notes[0].pitch == 69 && notes[1].pitch == 72 && notes[2].pitch == 76, "three hummed notes become A, C, E in the key, on the grid ("
+                   + juce::String ((int) notes.size()) + " notes)");
+        }
+        // topline from lyrics
+        {
+            const auto syl = T::syllables ("I will follow you into the light");
+            int stressed = 0; for (const auto& x : syl) stressed += x.stressed ? 1 : 0;
+            check (syl.size() == 9 && stressed >= 3 && ! syl[0].stressed, "syllables and stresses: " + juce::String ((int) syl.size()) + " syllables, " + juce::String (stressed) + " stressed");
+            const auto t = T::topline (syl, s, 4, 1);
+            bool beatsOnStress = true;
+            for (size_t i = 0; i < t.notes.size() && i < syl.size(); ++i) if (syl[i].stressed && std::abs (t.notes[i].start - std::round (t.notes[i].start)) > 0.01) beatsOnStress = false;
+            check (t.notes.size() == syl.size() && beatsOnStress && t.notes.back().start + t.notes.back().length <= 16.0 + 1.0e-6, "a topline: one note a syllable, the stresses on the beat, inside 4 bars");
+            juce::MidiFile f = T::toplineMidi (t, 138.0);
+            int lyrics = 0;
+            for (const auto& e : *f.getTrack (0)) lyrics += e->message.isTextMetaEvent() && e->message.getMetaEventType() == 5 ? 1 : 0;
+            check (lyrics == (int) syl.size(), "the MIDI carries the lyrics");
+        }
+        // originality
+        {
+            auto shifted = hook; for (auto& n : shifted) n.pitch += 5;
+            const auto near = T::nearRepeats (hook, { { "old hook", shifted }, { "other", { note (60, 0.0, 2.0), note (55, 2.0, 2.0), note (67, 4.0, 4.0) } } });
+            check (near.size() == 1 && near[0].name == "old hook" && near[0].similarity > 0.9f, "the same hook in another key is caught; a different one isn't");
+        }
+        // the emotional arc and harmony moves
+        {
+            const auto plans = T::arcPlans (s);
+            check (plans.size() >= 4 && T::arcChords (s, plans[0]).contains ("breakdowns: VI"), "arcs: the uplifting one opens the breakdown on VI (" + T::arcChords (s, plans[0]) + ")");
+            const auto moves = T::harmonyMoves (s);
+            bool lift = false;
+            for (const auto& m : moves) if (m.name.contains ("VI - VII - i") && m.result.slots[2].degree == 6 && m.result.slots[3].degree == 7) lift = true;
+            check (lift && moves.size() >= 4, "harmony moves: the VI-VII-i lift and others (" + juce::String ((int) moves.size()) + ")");
+        }
+        // a reference's feel: a shuffled hat pattern
+        {
+            const double sr = 44100.0, bpm = 128.0;
+            const auto sixteenth = 60.0 / bpm / 4.0;
+            juce::AudioBuffer<float> audio (1, (int) (sr * 12.0));
+            audio.clear();
+            juce::Random rnd (3);
+            for (int k = 0; k * sixteenth * sr < audio.getNumSamples() - 2000; ++k)
+            {
+                const auto late = k % 2 == 1 ? 0.3 * sixteenth : 0.0;
+                const auto at = (int) ((k * sixteenth + late) * sr);
+                const auto amp = k % 4 == 2 ? 0.8f : 0.3f;   // accented offbeat 8ths
+                for (int i = 0; i < 600 && at + i < audio.getNumSamples(); ++i) audio.setSample (0, at + i, amp * (rnd.nextFloat() * 2.0f - 1.0f) * std::exp (-(float) i / 120.0f));
+            }
+            const auto f = T::feelFromAudio (audio, sr, bpm);
+            check (f.valid && std::abs (f.bpm - bpm) < 1.5 && f.swing > 0.15f && f.swing < 0.45f, "a reference's swing found (" + juce::String (f.swing, 2) + " of a 16th at " + juce::String (f.bpm, 1) + " BPM)");
+            std::vector<chords::Note> part { note (45, 0.0, 0.25), note (45, 0.25, 0.25) };
+            const auto felt = T::applyFeel (part, f);
+            check (felt[1].start > 0.25 + 0.02 && std::abs (felt[0].start) < 1.0e-9, "applied: the off 16th moves late, the downbeat stays");
+        }
+        // the shared rhythm
+        {
+            const auto cell = T::rhythmCell (hook);
+            std::vector<chords::Note> bass { note (45, 0.0, 0.25), note (45, 0.5, 0.25) };
+            const auto locked = T::lockToCell (bass, cell);
+            check ((cell & 1u) != 0 && locked[0].velocity > bass[0].velocity && locked[1].velocity < bass[1].velocity, "the bass leans on the hook's rhythm: its notes there accented, the rest softer");
+        }
+        // taste
+        {
+            T::Taste taste;
+            std::vector<chords::Note> busy, sparse;
+            for (int i = 0; i < 16; ++i) busy.push_back (note (72 + (i % 3), i * 0.5, 0.25));
+            for (int i = 0; i < 4; ++i) sparse.push_back (note (69 + i, i * 2.0, 2.0));
+            taste.rate (T::featuresOf (busy), true); taste.rate (T::featuresOf (busy), true); taste.rate (T::featuresOf (sparse), false);
+            check (taste.ready() && taste.distance (T::featuresOf (busy)) < taste.distance (T::featuresOf (sparse)), "taste: what you liked ranks ahead of what you didn't");
+            check (T::Taste::fromText (taste.toText()).ups == 2, "and it's remembered");
+        }
+        // why it works
+        {
+            const auto why = T::explain (hook, s);
+            check (why.size() >= 3 && why.joinIntoString (" ").contains ("chord tones"), "why it works: " + why[0]);
+        }
+        // the processor: locks through an export, the take history, the context player, the hum capture
+        {
+            auto p = std::make_unique<CorrespondenceProcessor>();
+            prepare (*p);
+            CorrespondenceProcessor::tasteFileOverride() = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrTasteTest.txt");
+            CorrespondenceProcessor::tasteFileOverride().deleteFile();
+            const auto before = p->clipNow ("Melody");
+            p->lockBars ("Melody", 0, 0);
+            p->regenerate ("Melody", false);
+            const auto after = p->clipNow ("Melody");
+            bool same = true;
+            for (const auto& n : before) if (n.start < 4.0) { bool found = false; for (const auto& m : after) if (m.start == n.start && m.pitch == n.pitch) found = true; same = same && found; }
+            check (same && p->takes["Melody"].takes.size() == 2, "the melody regenerated with bar 1 locked: bar 1 unchanged, two takes");
+            check (p->takeBack ("Melody") && p->takes["Melody"].current == 0, "take back to the first");
+            p->rateTake ("Melody", true);
+            check (CorrespondenceProcessor::tasteFileOverride().existsAsFile(), "a rating is remembered across projects");
+            p->playInContext ("Melody");
+            juce::AudioBuffer<float> b (2, 512); b.clear();
+            p->contextPlayer.render (b.getWritePointer (0), b.getWritePointer (1), 512, true, 0.0, 138.0 / 60.0 / 44100.0);
+            check (b.getMagnitude (0, 512) > 1.0e-4f, "heard in context: the part plays at the playhead");
+            p->playInContext ({});
+            juce::MemoryBlock mb; p->getStateInformation (mb);
+            auto q = std::make_unique<CorrespondenceProcessor>();
+            q->setStateInformation (mb.getData(), (int) mb.getSize());
+            check (q->lockOf ("Melody").bars.count (0) == 1, "locks kept with the project");
+            CorrespondenceProcessor::tasteFileOverride().deleteFile();
+        }
+    }
+
     return finish();
 }

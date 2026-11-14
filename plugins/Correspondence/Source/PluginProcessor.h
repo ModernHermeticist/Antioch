@@ -17,6 +17,8 @@
 #include "SongBus.h"
 #include "LabelReadyBus.h"
 #include "AutopilotBus.h"
+#include "WriteTools.h"
+#include "ContextPlayer.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -167,6 +169,62 @@ public:
     bool applyHarmonyIdea (int index);
     bool undoHarmonyIdea();
     std::optional<chords::Settings> beforeIdea;
+
+    //==============================================================================
+    // The writing tools (WriteTools.h; the Write menu)
+    /** Locks: bars of a clip ("Song Lead"...) kept through every regenerate (saved with the project). */
+    chords::tools::Lock lockOf (const juce::String& kind) const { return chords::tools::lockFromText (apvts.state.getProperty ("lock_" + kind.replaceCharacter (' ', '_')).toString()); }
+    void setLock (const juce::String& kind, const chords::tools::Lock& l)
+    {
+        const juce::Identifier key ("lock_" + kind.replaceCharacter (' ', '_'));
+        if (l.empty()) apvts.state.removeProperty (key, nullptr); else apvts.state.setProperty (key, chords::tools::toText (l), nullptr);
+    }
+    void lockBars (const juce::String& kind, int fromBar, int toBar);
+    void unlockBars (const juce::String& kind, int fromBar, int toBar);
+    /** A clip as it would export now (with its locks). */
+    std::vector<chords::Note> clipNow (const juce::String& kind) const;
+    /** Regenerate: new seeds (the closest of eight to your taste once it knows you), the locked bars
+        kept; `onlyThis` locks every other song part first. Each regenerate is a take. */
+    juce::String regenerate (const juce::String& kind, bool onlyThis);
+    mutable std::map<juce::String, chords::tools::TakeHistory> takes;
+    bool takeBack (const juce::String& kind);
+    bool takeForward (const juce::String& kind);
+    void applyTake (const juce::String& kind, const chords::tools::Take& t);
+    bool keepBarsFrom (const juce::String& kind, int takeIndex, int fromBar, int toBar);
+    void rateTake (const juce::String& kind, bool liked);
+    chords::tools::Taste taste;
+    static juce::File& tasteFileOverride() { static juce::File f; return f; }   // tests
+    static juce::File tasteFile();
+    void loadTaste();
+    void saveTaste() const;
+    /** Hear it in context: the part played in time with FL under the song (empty kind: off). */
+    chords::ContextPlayer contextPlayer;
+    juce::String contextKind;
+    void playInContext (const juce::String& kind);
+    /** Switches saved with the project: one motif for the whole song, the shared rhythm, the reference's feel. */
+    bool option (const char* key) const { return (bool) apvts.state.getProperty (key, false); }
+    void setOption (const char* key, bool on) { apvts.state.setProperty (key, on, nullptr); }
+    /** The hook the tools work on: the motif (learned, hummed, from the bank) or the first drop's first two bars. */
+    std::vector<chords::Note> currentHook() const;
+    chords::tools::HookReport hookReport() const { return chords::tools::hookDoctor (currentHook(), currentSettings()); }
+    bool applyHookEdit (const chords::tools::HookEdit& e);
+    /** Hum a hook: listen to this track's input; finishing turns it into the motif. */
+    chords::HumCapture hum;
+    std::vector<float> humAudio;
+    juce::String humNote;
+    void startHum();
+    juce::String finishHum();
+    /** Topline from lyrics: three candidates; one saved as MIDI with its lyrics. */
+    std::vector<chords::tools::Topline> toplines (const juce::String& lyric, int bars) const;
+    juce::File exportTopline (const chords::tools::Topline& t, const juce::File& dir, const juce::String& name) const;
+    /** Originality: the hook against your hook bank and the library's leads. */
+    std::vector<chords::tools::NearRepeat> originality() const;
+    /** The emotional arc and the trance harmony moves (Undo: the variation and harmony Undos). */
+    bool applyArc (const chords::tools::ArcPlan& p);
+    bool applyMove (const chords::tools::Move& m);
+    /** Feel from a reference: analyse an audio file; on from then (saved). */
+    juce::String loadFeel (const juce::File& audio);
+    chords::tools::Feel feel() const;
     /** Variation engine: alternatives for a kind of section; applying one keeps what was there, for Undo. */
     std::vector<harmony::Variation> sectionVariations (suite::SectionType type) const { return harmony::variations (currentSongPatterns(), type); }
     bool applyVariation (suite::SectionType type, int index);
@@ -238,7 +296,15 @@ public:
     }
 
 private:
-    void timerCallback() override { publishKey(); exportDraftIfDue(); }
+    void timerCallback() override
+    {
+        publishKey(); exportDraftIfDue();
+        if (hum.armed.load())
+        {
+            hum.drain (humAudio);
+            if ((double) humAudio.size() > hum.rate() * 30.0) finishHum();   // 30 seconds at most
+        }
+    }
 
     bool wasBroadcasting = false;
     int64_t hookRestsHash = 0;
