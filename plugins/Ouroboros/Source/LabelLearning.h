@@ -77,7 +77,8 @@ namespace lab
         {
             std::array<float, 10> sum {};
             count = 0;
-            for (const auto& e : suite::StyleLog::read())
+            const auto styleLog = suite::StyleLog::readShared();
+            for (const auto& e : *styleLog)
             {
                 if (e.kind != "taste") continue;
                 const auto v = juce::StringArray::fromTokens (e.get ("offset"), ",", "");

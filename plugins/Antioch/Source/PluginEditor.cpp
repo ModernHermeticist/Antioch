@@ -429,6 +429,7 @@ AntiochEditor::~AntiochEditor()
 
 void AntiochEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     auto& state = processor.apvts;
     const auto synced = state.getRawParameterValue (Params::sync)->load() > 0.5f;
     bpmLabel.setText (synced ? juce::String (processor.currentBpm.load(), 1) + " BPM" : "Free time", juce::dontSendNotification);

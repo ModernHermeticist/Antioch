@@ -162,6 +162,7 @@ void AzothEditor::showSamplesMenu()
 
 void AzothEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     const auto type = processor.nextType.load();
     const auto bars = processor.barsToNext.load();
     juce::String what;

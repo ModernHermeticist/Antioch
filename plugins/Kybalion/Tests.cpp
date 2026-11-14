@@ -59,6 +59,7 @@ namespace
 
 int main (int argc, char** argv)
 {
+    suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
     juce::ScopedJuceInitialiser_GUI init;
     // Never the real style log (Kybalion logs the gate patterns you keep there).
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("KybalionTestsStyleLog.txt");

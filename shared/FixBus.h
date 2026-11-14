@@ -7,6 +7,7 @@
 //
 // Lock-free ring of 16 messages in shared memory; one sender (Mentalism) at a time.
 
+#include "Watchdog.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <cstdint>
 #include <functional>
@@ -236,7 +237,7 @@ namespace suite
         }
 
     private:
-        void timerCallback() override { poll(); }
+        void timerCallback() override { suite::Watchdog::Scope w ("Fix receiver", "fixes"); poll(); }
 
         // Each applied fix remembers, per parameter, the value before and after (last 16 fixes).
         struct Saved { juce::RangedAudioParameter* param; float before, after; };

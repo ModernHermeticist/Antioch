@@ -9,6 +9,8 @@
 #include <juce_core/juce_core.h>
 #include <algorithm>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <vector>
 
 namespace suite::StyleLog
@@ -29,6 +31,8 @@ namespace suite::StyleLog
         juce::String get (const juce::String& k) const { const auto it = fields.find (k); return it != fields.end() ? it->second : juce::String(); }
     };
 
+    inline void forgetCache();
+
     /** Appends an entry (tabs and line breaks in values are replaced). */
     inline bool add (const juce::String& kind, const std::map<juce::String, juce::String>& fields)
     {
@@ -37,13 +41,15 @@ namespace suite::StyleLog
             parts.add (k + "=" + v.replaceCharacters ("\t\r\n", "   "));
         const auto f = file();
         f.getParentDirectory().createDirectory();
-        return f.appendText (parts.joinIntoString ("\t") + "\n");
+        const auto ok = f.appendText (parts.joinIntoString ("\t") + "\n");
+        forgetCache();
+        return ok;
     }
 
-    inline std::vector<Entry> read()
+    inline std::vector<Entry> parse (const juce::String& text)
     {
         std::vector<Entry> out;
-        for (const auto& line : juce::StringArray::fromLines (file().loadFileAsString()))
+        for (const auto& line : juce::StringArray::fromLines (text))
         {
             const auto parts = juce::StringArray::fromTokens (line, "\t", "");
             if (parts.size() < 2) continue;
@@ -56,6 +62,47 @@ namespace suite::StyleLog
         }
         return out;
     }
+
+    namespace detail
+    {
+        struct Cache
+        {
+            std::mutex m;
+            juce::File file;
+            juce::int64 size = -1;
+            juce::Time modified;
+            double checkedAt = -1.0e9;
+            std::shared_ptr<const std::vector<Entry>> entries = std::make_shared<const std::vector<Entry>>();
+        };
+        inline Cache& cache() { static Cache c; return c; }
+    }
+
+    /** The log, parsed: kept in memory and re-read only when the file changes (looked at no more
+        than once a second), so asking for it is cheap on any thread. */
+    inline std::shared_ptr<const std::vector<Entry>> readShared()
+    {
+        auto& c = detail::cache();
+        const std::lock_guard<std::mutex> g (c.m);
+        const auto f = file();
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+        if (f != c.file || now - c.checkedAt > (fileOverride() != juce::File() ? 0.0 : 1000.0))
+        {
+            c.checkedAt = now;
+            const auto size = f.getSize();
+            const auto modified = f.getLastModificationTime();
+            if (f != c.file || size != c.size || modified != c.modified)
+            {
+                c.file = f; c.size = size; c.modified = modified;
+                c.entries = std::make_shared<const std::vector<Entry>> (size > 0 ? parse (f.loadFileAsString()) : std::vector<Entry>());
+            }
+        }
+        return c.entries;
+    }
+    /** Forgets the cached copy (after writing to the log). */
+    inline void forgetCache() { const std::lock_guard<std::mutex> g (detail::cache().m); detail::cache().checkedAt = -1.0e9; detail::cache().size = -2; }
+
+    /** A copy of the log (see readShared). */
+    inline std::vector<Entry> read() { return *readShared(); }
 
     /** "Am (5), Em (3), F#m (1)": the most common values of a field, with counts. */
     inline juce::String topValues (const std::vector<Entry>& entries, const juce::String& kind, const juce::String& field, int howMany = 3)

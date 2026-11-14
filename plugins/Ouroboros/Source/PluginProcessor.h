@@ -503,10 +503,13 @@ public:
         labelReady.loopedNow = loopedThisPlay.load();
         labelReady.renderingNow = renderingNow.load();
         labelReady.sectionTypeNow = getMap().typeAt (ppq.load(), barQuarters.load());
-        if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
+        if (labelReady.pending->ready.load())   // a score came back: apply it now, not at the next update
+            labelReady.updateAsync (getMap(), bpm.load(), barQuarters.load(), director.havePlan ? &director.plan : nullptr);
+        else if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
         {
             labelReady.live.expectedSamples = (float) (sampleRate * barQuarters.load() * 60.0 / juce::jmax (1.0, bpm.load()));
-            labelReady.update (getMap(), bpm.load(), barQuarters.load(), director.havePlan ? &director.plan : nullptr);
+            // scored on the worker thread: the result is picked up on a later tick (below)
+            labelReady.updateAsync (getMap(), bpm.load(), barQuarters.load(), director.havePlan ? &director.plan : nullptr);
         }
     }
 
@@ -522,17 +525,21 @@ public:
     }
     std::atomic<bool> directorDirty { true };
     std::atomic<bool> directorPublished { false };   // the audio thread keeps the plan alive (an offline render runs faster than the timer)
-    int directorTicks = 0, lastSampledBar = -1;
+    int directorTicks = 0, lastSampledBar = -1, lastReplanTick = 0;
+    bool liveSinceReplan = false;
     void tickDirector()
     {
         if (++directorTicks % 5 == 0 && playing.load())   // the rehearsal pass: how loud and busy each bar is
         {
             const auto bar = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load()) + 1.0e-9) + 1;
             director.sampleLive (bar);
+            if (bar != lastSampledBar) liveSinceReplan = true;
             lastSampledBar = bar;
         }
         if (auto r = takeReferenceStyle(); r.valid) { director.reference = r; directorDirty = true; }
-        if (directorDirty.load() || directorTicks % 20 == 0) replan();
+        // re-plan after an edit, or (at most every few seconds) when the rehearsal pass heard new bars;
+        // not every second regardless, as it did
+        if (directorDirty.load() || (liveSinceReplan && directorTicks - lastReplanTick >= 60)) { replan(); liveSinceReplan = false; lastReplanTick = directorTicks; }
     }
     suite::director::ReferenceStyle takeReferenceStyle() { const juce::ScopedLock sl (lock); auto r = referenceStyleResult; referenceStyleResult = {}; return r; }
     suite::director::ReferenceStyle referenceStyleResult;
@@ -541,7 +548,20 @@ public:
     static int snapBars (int index) { static const int s[] = { 1, 4, 8, 16 }; return s[juce::jlimit (0, 3, index)]; }
 
 private:
-    void timerCallback() override { applyRide(); publish(); logActivity(); checkAutosave(); followSectionSnapshots(); continueDraft(); continueLearningPass(); tickDirector(); tickLabelReady(); }
+    void timerCallback() override
+    {
+        using W = suite::Watchdog::Scope;
+        const auto n = getName();
+        { W w (n, "ride"); applyRide(); }
+        { W w (n, "publish"); publish(); }
+        { W w (n, "activity log"); logActivity(); }
+        { W w (n, "autosave"); checkAutosave(); }
+        { W w (n, "section snapshots"); followSectionSnapshots(); }
+        { W w (n, "song draft"); continueDraft(); }
+        { W w (n, "learning pass"); continueLearningPass(); }
+        { W w (n, "director"); tickDirector(); }
+        { W w (n, "label-ready"); tickLabelReady(); }
+    }
 
     static constexpr int maxListenBars = 1024;
     struct BarData

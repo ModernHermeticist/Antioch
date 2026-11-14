@@ -41,6 +41,7 @@ namespace
 
 int main (int argc, char** argv)
 {
+    suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
     juce::ScopedJuceInitialiser_GUI init;
     // Never write the real style log from tests.
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("SuiteTestsStyleLog.txt");

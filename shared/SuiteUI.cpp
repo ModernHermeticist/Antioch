@@ -1,4 +1,5 @@
 #include "SuiteUI.h"
+#include "Watchdog.h"
 
 namespace suite::ui
 {
@@ -704,6 +705,8 @@ namespace suite::ui
         if (hasAdvanced)
             list.push_back ({ advancedOn ? "Hide the advanced controls" : "Show the advanced controls", "the manual controls under the simple view", "View",
                               [safe = juce::Component::SafePointer<HeaderBar> (this)] { if (safe != nullptr) safe->setAdvanced (! safe->advancedOn); } });
+        list.push_back ({ "Freeze log", "anything in the suite that held FL's interface for more than 50 ms this session", "Help",
+                          [] { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Freeze log", suite::Watchdog::text()); } });
         CommandPalette::show (std::move (list), searchButton, accent);
     }
 

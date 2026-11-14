@@ -307,6 +307,7 @@ void TransmutationEditor::showSelected()
 
 void TransmutationEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     timeline.refresh();
     const auto plan = timeline.shownPlan();
     const auto in = processor.lastInput();

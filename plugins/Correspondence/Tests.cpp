@@ -71,6 +71,7 @@ namespace
 
 int main (int argc, char** argv)
 {
+    suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
     juce::ScopedJuceInitialiser_GUI init;
     suite::WritingBus::clearSung();   // nothing left over from another plugin's tests
     suite::WritingBus::publishThin (0);

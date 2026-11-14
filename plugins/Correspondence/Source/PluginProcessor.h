@@ -298,7 +298,8 @@ public:
 private:
     void timerCallback() override
     {
-        publishKey(); exportDraftIfDue();
+        { suite::Watchdog::Scope w (getName(), "key"); publishKey(); }
+        { suite::Watchdog::Scope w (getName(), "song draft export"); exportDraftIfDue(); }
         if (hum.armed.load())
         {
             hum.drain (humAudio);

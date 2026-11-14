@@ -132,6 +132,7 @@ QuintessenceEditor::~QuintessenceEditor()
 
 void QuintessenceEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     const auto moves = processor.kept.load();
     if (processor.failsafeTripped.load()) header.setStatus ("Failsafe: it stepped back (something went wrong)", Colours::ember);
     else if (processor.deltaListen.load()) header.setStatus ("Delta listen: hearing only what it changes", Colours::ember);

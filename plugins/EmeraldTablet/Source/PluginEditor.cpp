@@ -45,6 +45,7 @@ EmeraldTabletEditor::~EmeraldTabletEditor()
 
 void EmeraldTabletEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     const auto best = processor.detector.best.load();
     const auto sent = processor.lastSent.load();
     header.setStatus (best < 0 ? juce::String ("Listening...") : sent >= 0 ? "Sent: " + keyLabel (sent) : "Heard: " + keyLabel (best),

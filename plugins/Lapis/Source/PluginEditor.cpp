@@ -44,6 +44,7 @@ LapisEditor::~LapisEditor()
 
 void LapisEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     if (processor.lastNotes != juce::File() && processor.lastNotes != notesShown)
     {
         notesShown = processor.lastNotes;

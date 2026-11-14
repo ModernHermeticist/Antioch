@@ -145,6 +145,7 @@ void PrimaMateriaEditor::showSuggestions()
 
 void PrimaMateriaEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     {
         const auto isVocal = processor.getRole() == 6;
         rideVocal->setVisible (isVocal && header.advanced());

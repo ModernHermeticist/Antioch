@@ -1016,6 +1016,7 @@ void CorrespondenceEditor::togglePlay()
 
 void CorrespondenceEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     settings = processor.currentSettings();
     voiced = chords::voiceProgression (settings);
 

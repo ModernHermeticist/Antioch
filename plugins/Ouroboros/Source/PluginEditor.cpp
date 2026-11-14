@@ -1660,6 +1660,7 @@ void OuroborosEditor::propose()
 
 void OuroborosEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     refreshSnapshots();
     if (++suiteTicks % 10 == 0)
     {

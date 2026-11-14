@@ -483,6 +483,7 @@ void MentalismEditor::layoutFixButtons()
 
 void MentalismEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     {
         const auto n = (int) processor.problems().size();
         problemsButton.setButtonText (n > 0 ? "Problems (" + juce::String (n) + ")" : "Problems");

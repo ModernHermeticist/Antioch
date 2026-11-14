@@ -111,6 +111,7 @@ MentalismProcessor::MentalismProcessor()
 
 void MentalismProcessor::timerCallback()
 {
+    suite::Watchdog::Scope watch (getName(), "mix assistant tick");
     refreshProjectTarget();
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();

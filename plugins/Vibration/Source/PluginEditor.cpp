@@ -92,6 +92,7 @@ VibrationEditor::~VibrationEditor()
 
 void VibrationEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     spectrum.setSampleRate (processor.getSampleRate() > 0.0 ? processor.getSampleRate() : 48000.0);
     spectrum.update();
 

@@ -15,6 +15,8 @@
 #include "MorphBus.h"
 #include "Session.h"
 #include "Recipes.h"
+#include "Watchdog.h"
+#include "Worker.h"
 #include <array>
 
 namespace suite
@@ -323,12 +325,17 @@ namespace suite
                 }
                 if (action == RecipeAction::Save)
                 {
-                    juce::MemoryBlock own;
-                    getPluginState (own);
+                    // the state is taken here; the file is written on the worker thread (an autosave
+                    // makes every plugin write at once: on a slow or synced disk that froze FL)
+                    auto own = std::make_shared<juce::MemoryBlock>();
+                    getPluginState (*own);
                     const auto file = Recipes::fileFor (name, getName(), trackKey);
-                    file.getParentDirectory().createDirectory();
-                    if (file.replaceWithData (own.getData(), own.getSize()))
-                        RecipeBus::acknowledge (seq);
+                    suite::Worker::post ([file, own, seq]
+                    {
+                        file.getParentDirectory().createDirectory();
+                        if (file.replaceWithData (own->getData(), own->getSize()))
+                            RecipeBus::acknowledge (seq);
+                    });
                 }
                 else if (action == RecipeAction::Load)
                 {
@@ -435,7 +442,7 @@ namespace suite
         struct Morpher : juce::Timer
         {
             explicit Morpher (SuiteProcessor& p) : owner (p) {}
-            void timerCallback() override { owner.updateMorph(); }
+            void timerCallback() override { if (owner.morphing) { suite::Watchdog::Scope w (owner.getName(), "morph"); owner.updateMorph(); } else owner.updateMorph(); }
             SuiteProcessor& owner;
         };
 
@@ -444,15 +451,19 @@ namespace suite
             explicit Poller (SuiteProcessor& p) : owner (p) {}
             void timerCallback() override
             {
-                if (ticks == 0 && owner.loadedVersion < 0) owner.captureFreshValues();
-                if (ticks % 5 == 3) owner.tryRoleSetup();
-                owner.pollTick();
-                owner.pollSnapshots();
-                owner.pollRecipes();   // before sessions: a new song can load your signature, then set its key
-                owner.pollSession();
-                if (++ticks % 5 == 1) owner.announce();
+                const auto name = owner.getName();
+                if (first) { first = false; if (owner.loadedVersion < 0) owner.captureFreshValues(); }
+                if (ticks % 5 == 3) { suite::Watchdog::Scope w (name, "role setup"); owner.tryRoleSetup(); }
+                { suite::Watchdog::Scope w (name, "poll tick"); owner.pollTick(); }
+                { suite::Watchdog::Scope w (name, "snapshots"); owner.pollSnapshots(); }
+                { suite::Watchdog::Scope w (name, "recipes"); owner.pollRecipes(); }   // before sessions: a new song can load your signature, then set its key
+                { suite::Watchdog::Scope w (name, "session"); owner.pollSession(); }
+                if (++ticks % 5 == 1) { suite::Watchdog::Scope w (name, "suite status"); owner.announce(); }
             }
-            int ticks = 0;
+            // each instance starts at a different point of the cycle, so a project's plugins don't all
+            // announce (and set themselves up) on the same tick
+            int ticks = juce::Random::getSystemRandom().nextInt (5);
+            bool first = true;
             SuiteProcessor& owner;
         };
 

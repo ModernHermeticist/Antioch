@@ -226,7 +226,7 @@ private:
     std::atomic<int> pendingAudition { 0 };
 
     // Reverse swells: fixed lookahead (when on), dry delay, and the swell engine.
-    void timerCallback() override { updateLatency(); logTransitionsOnce(); }
+    void timerCallback() override { suite::Watchdog::Scope w (getName(), "latency and transitions"); updateLatency(); logTransitionsOnce(); }
     ReverseSwell swell;
     std::array<std::vector<float>, 2> dryDelay;
     int dryDelayPos = 0;

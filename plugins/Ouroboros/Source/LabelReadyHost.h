@@ -7,6 +7,8 @@
 // the score's history and the milestones (the whole suite's state at "sent to vocalist",
 // "A&R round 1"...), and writes the hand-off pack.
 
+#include "Worker.h"
+#include <optional>
 #include "LabelReady.h"
 #include "LabelAutoFix.h"
 #include "AutopilotBus.h"
@@ -218,7 +220,8 @@ namespace lab
                 }
                 in.roleLevelPerType[role] = lv;
             }
-            for (const auto& e : suite::StyleLog::read()) if (e.kind == "hookprint" && e.get ("print").isNotEmpty()) in.otherHooks.push_back (e.get ("print"));
+            const auto styleLog = suite::StyleLog::readShared();   // cached: the file is only read again when it changes
+            for (const auto& e : *styleLog) if (e.kind == "hookprint" && e.get ("print").isNotEmpty()) in.otherHooks.push_back (e.get ("print"));
             if (in.song.valid && ! in.song.hook.empty())   // this song's own hook isn't an "earlier" one
             {
                 const auto mine = detail::hookPrint (in.song.hook);
@@ -227,7 +230,7 @@ namespace lab
             in.traits = suite::TrackTraits::list();
             const auto myProg = in.song.valid ? songProgressionPrint (in.song) : juce::String();
             in.groovePrint = groovePrintNow();
-            for (const auto& e : suite::StyleLog::read())
+            for (const auto& e : *styleLog)
             {
                 if (e.kind == "progprint" && e.get ("print").isNotEmpty() && e.get ("print") != myProg) in.otherProgressions.push_back (e.get ("print"));
                 if (e.kind == "grooveprint" && e.get ("print").isNotEmpty() && e.get ("print") != in.groovePrint) in.otherGrooves.push_back (e.get ("print"));
@@ -252,6 +255,65 @@ namespace lab
                 lastInputs = in;
                 lastInputs.profile = nullptr;
             }
+            afterEvaluate();
+        }
+
+        /** The same, without holding the host's message thread: the inputs are gathered here (quick),
+            the scoring runs on the suite's worker thread on its own copies, and the rest (the
+            autopilot, the bus, the history) happens on a later call, once the score is back. */
+        struct PendingEvaluation
+        {
+            std::atomic<bool> busy { false }, ready { false };
+            Inputs in;
+            Profile profile;
+            std::optional<suite::director::Plan> plan;
+            Report report;
+            const suite::director::Plan* livePlan = nullptr;
+        };
+        std::shared_ptr<PendingEvaluation> pending = std::make_shared<PendingEvaluation>();
+        /** True if a score came back and was applied by this call. */
+        bool updateAsync (const suite::SectionMap& map, double bpm, double barQ, const suite::director::Plan* plan)
+        {
+            auto p = pending;
+            bool applied = false;
+            if (p->ready.load (std::memory_order_acquire))
+            {
+                {
+                    const juce::ScopedLock sl (lock);
+                    report = std::move (p->report);
+                    lastSections = p->in.sections;
+                    lastTraits = p->in.traits;
+                    lastInputs = std::move (p->in);
+                    lastInputs.profile = nullptr;
+                    lastInputs.plan = p->livePlan;
+                }
+                p->ready.store (false, std::memory_order_release);
+                afterEvaluate();
+                applied = true;
+            }
+            if (p->busy.load (std::memory_order_acquire) || p->ready.load (std::memory_order_acquire)) return applied;
+            {
+                const juce::ScopedLock sl (lock);
+                p->in = gather (map, bpm, barQ, plan);
+                p->profile = profile;
+                p->in.profile = &p->profile;
+                p->livePlan = plan;
+                if (plan != nullptr) { p->plan = *plan; p->in.plan = &*p->plan; }
+                else { p->plan.reset(); p->in.plan = nullptr; }
+            }
+            p->busy.store (true, std::memory_order_release);
+            suite::Worker::post ([p]
+            {
+                p->report = evaluate (p->in);
+                p->ready.store (true, std::memory_order_release);
+                p->busy.store (false, std::memory_order_release);
+            });
+            return applied;
+        }
+
+        /** Everything after the score: the gate, the autopilot, the bus, the history (message thread). */
+        void afterEvaluate()
+        {
             // sign-off: the gate also waits for every measured area to be signed off, when asked
             if (requireSignOff)
                 for (int a = 0; a < numAreas; ++a)

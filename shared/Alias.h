@@ -8,6 +8,7 @@
 // (switch it in Ouroboros: Recipes... > Artist alias).
 
 #include <juce_core/juce_core.h>
+#include <mutex>
 
 namespace suite::Alias
 {
@@ -19,8 +20,28 @@ namespace suite::Alias
     }
     inline juce::File currentFile() { return suiteRoot().getChildFile ("Current alias.txt"); }
 
-    /** The current alias ("" = your main name). */
-    inline juce::String current() { return currentFile().loadFileAsString().trim(); }
+    namespace detail
+    {
+        struct Cache { std::mutex m; juce::String name; juce::File root; double readAt = -1.0e9; };
+        inline Cache& cache() { static Cache c; return c; }
+    }
+    /** The current alias ("" = your main name). Read from disk at most every 2 seconds (it's asked
+        for by nearly every suite file path, often on the host's message thread). */
+    inline juce::String current()
+    {
+        auto& c = detail::cache();
+        const std::lock_guard<std::mutex> g (c.m);
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+        const auto root = suiteRoot();
+        if (now - c.readAt > 2000.0 || root != c.root)
+        {
+            c.name = currentFile().loadFileAsString().trim();
+            c.readAt = now;
+            c.root = root;
+        }
+        return c.name;
+    }
+    inline void forgetCachedAlias() { const std::lock_guard<std::mutex> g (detail::cache().m); detail::cache().readAt = -1.0e9; }
 
     /** Switches every plugin to an alias ("" = main); a new name starts a new, empty alias. */
     inline bool setCurrent (const juce::String& name)
@@ -28,7 +49,9 @@ namespace suite::Alias
         const auto clean = juce::File::createLegalFileName (name.trim());
         suiteRoot().createDirectory();
         if (clean.isNotEmpty()) suiteRoot().getChildFile ("Aliases").getChildFile (clean).createDirectory();
-        return currentFile().replaceWithText (clean);
+        const auto ok = currentFile().replaceWithText (clean);
+        forgetCachedAlias();
+        return ok;
     }
 
     /** Your aliases (besides the main one). */

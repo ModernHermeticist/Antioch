@@ -13,6 +13,8 @@
 #include "TempoBus.h"
 #include "KeyBus.h"
 #include "MorphBus.h"
+#include "Watchdog.h"
+#include "Worker.h"
 
 using namespace suite::test;
 using suite::SectionType;
@@ -20,6 +22,7 @@ using T = suite::SectionType;
 
 int main (int argc, char** argv)
 {
+    suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
     juce::ScopedJuceInitialiser_GUI init;
     // Never the real style log (Make versions reads your version lengths from it).
     const auto testStyleLog = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroborosTestsStyleLog.txt");
@@ -2492,6 +2495,81 @@ int main (int argc, char** argv)
             suite::MixFixBus::reset();
         }
         AP::reset(); suite::FixBus::reset(); suite::LabelReadyBus::reset();
+    }
+
+    section ("Freezes: nothing slow on FL's interface thread");
+    {
+        // a style log the size of years of songs
+        {
+            juce::String big;
+            for (int i = 0; i < 6000; ++i)
+                big << juce::String (1700000000000LL + i) << "\t" << (i % 3 == 0 ? "hookprint" : i % 3 == 1 ? "progprint" : "grooveprint")
+                    << "\tprint=" << juce::String (i * 7919 % 100000) << "\tkey=Am\tbpm=138\n";
+            testStyleLog.replaceWithText (big);
+        }
+        auto t0 = juce::Time::getMillisecondCounterHiRes();
+        const auto first = suite::StyleLog::readShared();
+        const auto parseMs = juce::Time::getMillisecondCounterHiRes() - t0;
+        t0 = juce::Time::getMillisecondCounterHiRes();
+        const auto again = suite::StyleLog::readShared();
+        const auto cachedMs = juce::Time::getMillisecondCounterHiRes() - t0;
+        check (first->size() == 6000 && again.get() == first.get() && cachedMs < 5.0,
+               "the style log is parsed once and kept (" + juce::String (parseMs, 1) + " ms the first time, " + juce::String (cachedMs, 2) + " ms after)");
+        suite::StyleLog::add ("song", { { "key", "Am" } });
+        check (suite::StyleLog::readShared()->size() == 6001, "... and read again once something is added to it");
+
+        // the label-ready score: gathered on the message thread, scored on the worker
+        auto p = std::make_unique<OuroborosProcessor>();
+        p->setMap (arrangement::fromTemplate (arrangement::templates().front()));
+        p->replan();
+        auto& lr = p->labelReady;
+        t0 = juce::Time::getMillisecondCounterHiRes();
+        lr.update (p->getMap(), 138.0, 4.0, p->director.havePlan ? &p->director.plan : nullptr);
+        const auto syncMs = juce::Time::getMillisecondCounterHiRes() - t0;
+        const auto syncScore = lr.report.overall;
+
+        auto& worker = suite::Worker::detail::thread();
+        worker.inlineMode = false;
+        lr.report = {};
+        t0 = juce::Time::getMillisecondCounterHiRes();
+        lr.updateAsync (p->getMap(), 138.0, 4.0, p->director.havePlan ? &p->director.plan : nullptr);
+        const auto asyncMs = juce::Time::getMillisecondCounterHiRes() - t0;
+        suite::Worker::finish();
+        const auto applied = lr.updateAsync (p->getMap(), 138.0, 4.0, p->director.havePlan ? &p->director.plan : nullptr);
+        suite::Worker::finish();
+        check (applied && lr.report.overall == syncScore,
+               "the score from the worker thread is the same as scoring in place (" + juce::String (syncScore) + ")");
+        check (asyncMs < juce::jmax (25.0, syncMs * 0.5),
+               "FL's thread only gathers the inputs: " + juce::String (asyncMs, 1) + " ms, against " + juce::String (syncMs, 1) + " ms to score in place");
+
+        t0 = juce::Time::getMillisecondCounterHiRes();
+        p->replan();
+        const auto replanMs = juce::Time::getMillisecondCounterHiRes() - t0;
+        check (replanMs < 50.0, "the director's plan takes " + juce::String (replanMs, 1) + " ms (only re-made after a change now)");
+
+        // recipe and autosave files are written on the worker thread
+        {
+            const auto threadOfJob = std::make_shared<std::atomic<void*>> (nullptr);
+            suite::Worker::post ([threadOfJob] { threadOfJob->store (juce::Thread::getCurrentThreadId()); });
+            suite::Worker::finish();
+            check (threadOfJob->load() != nullptr && threadOfJob->load() != juce::Thread::getCurrentThreadId(), "slow jobs run on the suite's worker thread");
+        }
+        worker.inlineMode = true;
+
+        // the watchdog names anything that holds the thread
+        const auto log = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("OuroFreezeLog.txt");
+        log.deleteFile();
+        suite::Watchdog::setFileForTests (log);
+        suite::Watchdog::clear();
+        { suite::Watchdog::Scope w ("Ouroboros", "a slow job"); juce::Thread::sleep (70); }
+        { suite::Watchdog::Scope w ("Ouroboros", "a quick job"); }
+        const auto events = suite::Watchdog::recent();
+        check (events.size() == 1 && events[0].what == "a slow job" && events[0].ms >= 60.0 && log.loadFileAsString().contains ("Ouroboros: a slow job took"),
+               "the freeze log names the slow job and how long it took (and not the quick one)");
+        check (suite::Watchdog::text().contains ("a slow job"), "... and the search box's Freeze log shows it");
+        suite::Watchdog::setFileForTests (juce::File());
+        log.deleteFile();
+        testStyleLog.deleteFile();
     }
 
     return finish();

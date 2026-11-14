@@ -457,7 +457,7 @@ juce::String OuroborosProcessor::autosaveNow()
     const auto name = autosavePrefix + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M-%S");
     suite::RecipeBus::send (suite::RecipeAction::Save, name);
     pollRecipes();   // this plugin saves straight away; the others on their next poll
-    pruneAutosaves();
+    suite::Worker::post ([] { pruneAutosaves(); });   // the folder listing and deleting, off FL's interface thread
     lastAutosave = juce::Time::getCurrentTime();
     playedSinceAutosave.store (false);
     return name;

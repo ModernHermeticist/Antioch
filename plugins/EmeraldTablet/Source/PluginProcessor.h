@@ -58,7 +58,7 @@ public:
     std::atomic<bool> broadcastingAlone { false };
 
 private:
-    void timerCallback() override { update(); }
+    void timerCallback() override { suite::Watchdog::Scope w (getName(), "key detection"); update(); }
 
     std::atomic<bool> resetRequested { false };
     int stableCandidate = -1;

@@ -66,6 +66,7 @@ SolveEtCoagulaEditor::~SolveEtCoagulaEditor()
 
 void SolveEtCoagulaEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     for (int b = 0; b < Unmasker::numBands; ++b)
     {
         cutShown[(size_t) b] = processor.unmasker.getCutDb (b);

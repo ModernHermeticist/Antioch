@@ -291,6 +291,7 @@ KybalionEditor::~KybalionEditor()
 
 void KybalionEditor::timerCallback()
 {
+    suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     {
         const auto sec = processor.currentSection.load();
         const auto on = processor.apvts.getRawParameterValue (Params::gateOn)->load() > 0.5f || processor.apvts.getRawParameterValue (Params::duckOn)->load() > 0.5f;
