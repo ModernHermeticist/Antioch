@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "AzothEditor.h"
 
 using namespace suite::ui;
 

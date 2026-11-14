@@ -216,6 +216,8 @@ namespace suite::ui
         /** Buttons or boxes of the plugin's own, right-aligned before the search box. */
         void addRight (juce::Component& c, int width);
         void setTagline (const juce::String& t) { tagline = t; repaint(); }
+        /** While a module's page is open its own header answers Ctrl/Cmd+K, not this one. */
+        bool keysSuppressed = false;
         void openSearch();
 
         void paint (juce::Graphics&) override;
@@ -234,6 +236,36 @@ namespace suite::ui
         int buttonsLeft = 0;   // where the buttons on the right start (the status pill stops before it)
         bool keyPressed (const juce::KeyPress&, juce::Component*) override;
         using juce::Component::keyPressed;
+    };
+
+    /** Pages for the plugins merged into this one (modules): a header button opens the module's own
+        window under the host's header (the host grows to fit), and goes back again. */
+    class ModulePages : private juce::ComponentListener
+    {
+    public:
+        ModulePages (juce::AudioProcessorEditor& host, HeaderBar& header);
+        ~ModulePages() override;
+        /** A page: `make` creates the module's editor when it opens. */
+        void add (const juce::String& name, const juce::String& tooltip, std::function<juce::AudioProcessorEditor*()> make);
+        void open (int index);
+        void close();
+        bool showing() const noexcept { return editor != nullptr; }
+        int current() const noexcept { return currentIndex; }
+        /** Call at the end of the host's resized(). */
+        void layout();
+        /** Search entries for opening each page. */
+        void addActions (std::vector<Action>& into);
+    private:
+        struct Page { juce::String name; std::function<juce::AudioProcessorEditor*()> make; std::unique_ptr<juce::TextButton> button; };
+        juce::AudioProcessorEditor& host;
+        HeaderBar& header;
+        std::vector<Page> pages;
+        std::unique_ptr<juce::AudioProcessorEditor> editor;
+        int currentIndex = -1;
+        juce::Point<int> hostSize;
+        void componentMovedOrResized (juce::Component&, bool, bool wasResized) override;
+        void fitHost();
+        void close (bool restoreSize);
     };
 
     /** Actions from a popup menu, recursively (each item becomes a search entry that picks it). */

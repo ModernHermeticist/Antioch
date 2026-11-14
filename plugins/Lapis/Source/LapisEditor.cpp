@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "LapisEditor.h"
 
 using namespace suite::ui;
 

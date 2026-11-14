@@ -1,6 +1,6 @@
 // Offline tests for Prima Materia. Usage: PrimaMateriaTests [output-dir]
 
-#include "PluginProcessor.h"
+#include "PrimaMateriaProcessor.h"
 #include "ActivityBus.h"
 #include "TestUtils.h"
 #include "StyleLog.h"

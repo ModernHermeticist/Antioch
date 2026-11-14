@@ -20,6 +20,7 @@ CorrespondenceProcessor::CorrespondenceProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "CorrespondenceState", Params::createLayout())
 {
+    addModule ("Emerald Tablet", std::make_unique<EmeraldTabletProcessor>());
     loadTaste();
     // Ignore suggestions made before we loaded (loading a project shouldn't change its key).
     lastSuggestion = suite::KeyBus::readSuggestion().sequence;
@@ -55,15 +56,17 @@ bool CorrespondenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts
     return in == out || in == juce::AudioChannelSet::mono();
 }
 
-void CorrespondenceProcessor::prepareToPlay (double sampleRate, int)
+void CorrespondenceProcessor::prepareToPlay (double sampleRate, int blockSizeForModules)
 {
+    prepareModules (sampleRate, blockSizeForModules);
     contextPlayer.prepare (sampleRate);
     hum.prepare (sampleRate);
     preview.prepare (sampleRate);
 }
 
-void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto runModules = modulesAfter (buffer, midiForModules);   // Emerald Tablet runs on the way out
     juce::ScopedNoDenormals noDenormals;
     for (auto ch = getTotalNumInputChannels(); ch < getTotalNumOutputChannels(); ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
@@ -1755,7 +1758,7 @@ juce::String CorrespondenceProcessor::loadFeel (const juce::File& file)
     if (reader == nullptr) return "couldn't read that file";
     const auto len = (int) std::min<juce::int64> (reader->lengthInSamples, (juce::int64) (reader->sampleRate * 90.0));
     juce::AudioBuffer<float> buf ((int) juce::jmin (2u, reader->numChannels), len);
-    reader->read (&buf, 0, len, juce::jmax<juce::int64> (0, reader->lengthInSamples / 3), true, true);   // from a third in: past the intro
+    reader->read (&buf, 0, len, std::max<juce::int64> (0, reader->lengthInSamples / 3), true, true);   // from a third in: past the intro
     const auto f = chords::tools::feelFromAudio (buf, reader->sampleRate, currentBpm.load());
     if (! f.valid) return "no clear groove found in that file";
     juce::StringArray a;

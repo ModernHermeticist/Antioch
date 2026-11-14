@@ -1,6 +1,6 @@
 // Offline tests for Emerald Tablet. Usage: EmeraldTabletTests [output-dir]
 
-#include "PluginProcessor.h"
+#include "EmeraldTabletProcessor.h"
 #include "TestUtils.h"
 
 using namespace suite::test;
@@ -49,6 +49,7 @@ namespace
 
 int main (int argc, char** argv)
 {
+    suite::MasterKeyBus::withdraw();   // these tests listen to their own audio, not a master
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
     juce::ScopedJuceInitialiser_GUI init;
     const juce::File outDir = argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]) : juce::File();

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
-#include "PluginProcessor.h"
+#include "EmeraldTabletProcessor.h"
 #include "SuiteUI.h"
 
 class EmeraldTabletEditor : public juce::AudioProcessorEditor, private juce::Timer

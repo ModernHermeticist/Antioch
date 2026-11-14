@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AzothProcessor.h"   // merged into Transmutation: runs inside it (a module)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "FixBus.h"
@@ -35,10 +36,13 @@ public:
     ~TransmutationProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override { releaseModules(); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
+
+    /** Azoth, merged into Transmutation: it runs here, after Transmutation's own processing. */
+    AzothProcessor& azoth() const { return *static_cast<AzothProcessor*> (module ("Azoth")); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }

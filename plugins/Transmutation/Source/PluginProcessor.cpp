@@ -56,6 +56,7 @@ TransmutationProcessor::TransmutationProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "TransmutationState", TParams::createLayout())
 {
+    addModule ("Azoth", std::make_unique<AzothProcessor>());
     // Mentalism's fixes: a build that doesn't rise -> the builds work harder; a drop that doesn't
     // jump out of its build (data 0) -> the drops do more
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t data) -> std::vector<suite::FixReceiver::Change>
@@ -81,8 +82,9 @@ bool TransmutationProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
     return in == out || in == juce::AudioChannelSet::mono();
 }
 
-void TransmutationProcessor::prepareToPlay (double newSampleRate, int)
+void TransmutationProcessor::prepareToPlay (double newSampleRate, int blockSizeForModules)
 {
+    prepareModules (newSampleRate, blockSizeForModules);
     sampleRate = newSampleRate;
     engine.prepare (sampleRate);
     outGain.reset (sampleRate, 0.03);
@@ -141,8 +143,9 @@ trm::Ctx TransmutationProcessor::contextFor (const trm::Move& mv, double posQ, c
     return c;
 }
 
-void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void TransmutationProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto runModules = modulesAfter (buffer, midiForModules);   // Azoth runs on the way out
     juce::ScopedNoDenormals noDenormals;
     const auto numSamples = buffer.getNumSamples();
     const auto numIn = getTotalNumInputChannels(), numOut = getTotalNumOutputChannels();

@@ -1,6 +1,6 @@
 // Offline tests for Azoth. Usage: AzothTests [output-dir]
 
-#include "PluginProcessor.h"
+#include "AzothProcessor.h"
 #include "StyleLog.h"
 #include "Registry.h"
 #include "KickBus.h"

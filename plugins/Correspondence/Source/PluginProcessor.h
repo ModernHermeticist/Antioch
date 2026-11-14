@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EmeraldTabletProcessor.h"   // merged into Correspondence: runs inside it (a module)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "Parameters.h"
@@ -27,10 +28,13 @@ public:
     ~CorrespondenceProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override { releaseModules(); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
+
+    /** Emerald Tablet, merged into Correspondence: it runs here, after Correspondence's own processing. */
+    EmeraldTabletProcessor& emerald() const { return *static_cast<EmeraldTabletProcessor*> (module ("Emerald Tablet")); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }

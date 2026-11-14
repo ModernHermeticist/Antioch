@@ -1,5 +1,5 @@
-#include "PluginProcessor.h"
-#include "PluginEditor.h"
+#include "EmeraldTabletProcessor.h"
+#include "EmeraldTabletEditor.h"
 
 EmeraldTabletProcessor::EmeraldTabletProcessor()
     : SuiteProcessor (BusesProperties()
@@ -40,7 +40,9 @@ void EmeraldTabletProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     if (resetRequested.exchange (false))
         detector.reset();
 
-    // Listen only: the audio passes through untouched.
+    // Listen only: the audio passes through untouched. With Mentalism on the master, the key comes
+    // from the whole mix instead (update()), and this track's own audio isn't needed.
+    if (fromMaster.load()) return;
     const auto n = buffer.getNumSamples();
     if ((int) mono.size() < n) mono.resize ((size_t) n);
     const auto* l = buffer.getReadPointer (0);
@@ -52,6 +54,12 @@ void EmeraldTabletProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
 void EmeraldTabletProcessor::update()
 {
+    if (const auto master = suite::MasterKeyBus::read(); master.valid)
+    {
+        fromMaster.store (true);
+        detector.setChroma (master.chroma, master.seconds);
+    }
+    else fromMaster.store (false);
     const auto best = detector.best.load();
     const auto seconds = detector.seconds.load();
     const auto confident = best >= 0 && detector.confidence.load() >= minConfidence && seconds >= minSeconds;
@@ -108,7 +116,3 @@ void EmeraldTabletProcessor::setPluginState (const void* data, int sizeInBytes)
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new EmeraldTabletProcessor();
-}

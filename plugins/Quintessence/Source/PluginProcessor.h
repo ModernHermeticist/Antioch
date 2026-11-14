@@ -11,6 +11,7 @@
 // here instead of to Prima Materia, with dips that open only while the vocal or lead plays.
 // Touch a band and it's yours: it locks, and the automation leaves it alone.
 
+#include "PrimaMateriaProcessor.h"   // merged into Quintessence: runs inside it (a module)
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "SuiteDSP.h"
@@ -51,10 +52,13 @@ public:
     ~QuintessenceProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override { releaseModules(); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
+
+    /** Prima Materia, merged into Quintessence: it runs here, after Quintessence's own processing. */
+    PrimaMateriaProcessor& prima() const { return *static_cast<PrimaMateriaProcessor*> (module ("Prima Materia")); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }

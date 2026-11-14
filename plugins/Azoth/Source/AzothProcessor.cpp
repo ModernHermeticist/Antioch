@@ -1,6 +1,6 @@
-#include "PluginProcessor.h"
+#include "AzothProcessor.h"
 #include "ActivityBus.h"
-#include "PluginEditor.h"
+#include "AzothEditor.h"
 #include "KeyBus.h"
 #include "KickBus.h"
 #include "Music.h"
@@ -743,7 +743,3 @@ juce::String AzothProcessor::sampleName (int slot) const
     return juce::isPositiveAndBelow (slot, (int) numSampleSlots) ? juce::File (samplePaths[(size_t) slot]).getFileNameWithoutExtension() : juce::String();
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new AzothProcessor();
-}

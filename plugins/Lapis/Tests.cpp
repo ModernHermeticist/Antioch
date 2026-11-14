@@ -1,6 +1,6 @@
 // Offline tests for Lapis. Usage: LapisTests [output-dir]
 
-#include "PluginProcessor.h"
+#include "LapisProcessor.h"
 #include "TestUtils.h"
 #include "FixBus.h"
 

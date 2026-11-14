@@ -11,7 +11,9 @@ permissions:
   contents: write  # needed to attach builds to releases on version tags
 
 env:
-  PLUGINS: Antioch Transmutation Correspondence Kybalion Vibration Mentalism Ouroboros Lapis EmeraldTablet Azoth PrimaMateria SolveEtCoagula Quintessence
+  PLUGINS: Antioch Transmutation Correspondence Kybalion Vibration Mentalism Ouroboros SolveEtCoagula Quintessence
+  # Former plugins merged into another (module:host): built into the host, tested on their own
+  MODULES: Lapis:Mentalism EmeraldTablet:Correspondence PrimaMateria:Quintessence Azoth:Transmutation
 
 jobs:
   build:
@@ -60,6 +62,11 @@ jobs:
           for p in $PLUGINS; do
             cmake --build build --config Release --target ${p}Tests --parallel
             xvfb-run -a build/plugins/$p/${p}Tests_artefacts/Release/${p}Tests test-output
+          done
+          for mh in $MODULES; do
+            m=${mh%%:*}; h=${mh##*:}
+            cmake --build build --config Release --target ${m}Tests --parallel
+            xvfb-run -a build/plugins/$h/${m}Tests_artefacts/Release/${m}Tests test-output
           done
 
       - name: Package

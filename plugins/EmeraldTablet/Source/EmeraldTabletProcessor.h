@@ -1,5 +1,6 @@
 #pragma once
 
+#include "MasterKeyBus.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
 #include "KeyDetector.h"
@@ -20,7 +21,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return JucePlugin_Name; }
+    const juce::String getName() const override { return "Emerald Tablet"; }   // a module inside another plugin: keeps its own name for the suite
     bool acceptsMidi() const override  { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -48,7 +49,9 @@ public:
     /** Message thread (called on a timer): sends a stable, confident key to the suite. */
     void update();
     void sendNow();
-    void resetDetection() { resetRequested.store (true); }
+    void resetDetection() { resetRequested.store (true); suite::MasterKeyBus::requestReset(); }
+    /** True while the key comes from the master (Mentalism's), not this track's own audio. */
+    std::atomic<bool> fromMaster { false };
 
     static int scaleIndexFor (bool minor) { return minor ? 0 : 1; }   // suite scales: 0 = Minor, 1 = Major
 

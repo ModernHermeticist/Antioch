@@ -66,6 +66,7 @@ private:
     TransmutationProcessor& processor;
     suite::ui::LookAndFeel lnf;
     suite::ui::HeaderBar header;
+    std::unique_ptr<suite::ui::ModulePages> pages;   // the plugins merged into this one
     std::vector<suite::ui::Action> actions();
     juce::TooltipWindow tooltips { this, 400 };
 

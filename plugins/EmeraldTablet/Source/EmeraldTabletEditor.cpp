@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "EmeraldTabletEditor.h"
 #include "Music.h"
 
 using namespace suite::ui;
@@ -48,7 +48,8 @@ void EmeraldTabletEditor::timerCallback()
     suite::Watchdog::Scope watch (processor.getName(), "editor refresh");
     const auto best = processor.detector.best.load();
     const auto sent = processor.lastSent.load();
-    header.setStatus (best < 0 ? juce::String ("Listening...") : sent >= 0 ? "Sent: " + keyLabel (sent) : "Heard: " + keyLabel (best),
+    const juce::String where = processor.fromMaster.load() ? " (the master)" : " (this track)";
+    header.setStatus (best < 0 ? "Listening" + where : (sent >= 0 ? "Sent: " + keyLabel (sent) : "Heard: " + keyLabel (best)) + where,
                       best < 0 ? Colours::faintText : sent >= 0 ? Colours::moss : Colours::brass);
     repaint();
 }

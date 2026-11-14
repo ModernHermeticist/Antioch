@@ -1,4 +1,4 @@
-#include "PluginEditor.h"
+#include "PrimaMateriaEditor.h"
 #include "FixBus.h"
 
 using namespace suite::ui;

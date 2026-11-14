@@ -45,6 +45,8 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
     header.addRight (tipsButton, 110);
     header.addRight (relearnButton, 100);
     header.actions = [this] { return actions(); };
+    pages = std::make_unique<suite::ui::ModulePages> (*this, header);
+    pages->add ("Section mixer", "Per-section level and filter suggestions for this track, previews and the automation export: what Prima Materia did", [this] { return processor.prima().createEditor(); });
     header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     relearnButton.onClick = [this] { processor.relearn(); };
     tipsButton.onClick = [this]
@@ -295,6 +297,7 @@ void QuintessenceEditor::paint (juce::Graphics& g)
 
 void QuintessenceEditor::resized()
 {
+    struct PagesLast { suite::ui::ModulePages* p; ~PagesLast() { if (p != nullptr) p->layout(); } } pagesLast { pages.get() };
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
@@ -380,6 +383,7 @@ void QuintessenceEditor::resized()
 std::vector<suite::ui::Action> QuintessenceEditor::actions()
 {
     std::vector<suite::ui::Action> a;
+    if (pages != nullptr) pages->addActions (a);
     a.push_back ({ "Re-learn", "forget what it learned on this track and listen again", "Learning", [this] { processor.relearn(); } });
     a.push_back ({ "Spire tips", "what to change in Spire for this sound", "Tips", [this] { tipsButton.triggerClick(); } });
     a.push_back ({ deltaButton.getToggleState() ? "Stop delta listen" : "Hear what it changes (delta listen)", "only what it takes out and adds", "Listen",

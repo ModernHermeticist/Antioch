@@ -10,3 +10,6 @@ suite_add_plugin(Mentalism
 
 # Let reference tracks be MP3 as well as WAV/AIFF/FLAC/Ogg.
 target_compile_definitions(Mentalism PUBLIC JUCE_USE_MP3AUDIOFORMAT=1)
+
+# Lapis lives inside Mentalism now (merged)
+suite_add_module(Mentalism Lapis)

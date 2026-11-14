@@ -6,3 +6,6 @@ suite_add_plugin(Transmutation
     SOURCES     Source/PluginProcessor.cpp
                 Source/PluginEditor.cpp
     TESTS       Tests.cpp)
+
+# Azoth lives inside Transmutation now (merged)
+suite_add_module(Transmutation Azoth)

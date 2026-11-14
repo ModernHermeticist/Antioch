@@ -85,6 +85,10 @@ private:
     MentalismProcessor& processor;
     suite::ui::LookAndFeel lnf;
     suite::ui::HeaderBar header;
+    std::unique_ptr<suite::ui::ModulePages> pages;   // the plugins merged into this one
+public:
+    suite::ui::ModulePages* modulePages() const noexcept { return pages.get(); }   // tests
+private:
     std::vector<suite::ui::Action> actions();
 
     suite::ui::Choice loudTarget, tonalTarget;

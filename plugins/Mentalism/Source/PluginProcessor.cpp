@@ -95,6 +95,7 @@ MentalismProcessor::MentalismProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "MentalismState", Params::createLayout())
 {
+    addModule ("Lapis", std::make_unique<LapisProcessor>());
     mySound = MySound::load (MySound::file());
     refreshCoachThresholds();
     learnReceiver = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
@@ -112,6 +113,7 @@ MentalismProcessor::MentalismProcessor()
 void MentalismProcessor::timerCallback()
 {
     suite::Watchdog::Scope watch (getName(), "mix assistant tick");
+    if (masterKey.seconds.load() > 0.0f) suite::MasterKeyBus::publish (masterKey.chromaNow(), masterKey.seconds.load());
     refreshProjectTarget();
     // Tell Lapis (and anything else listening) which loudness target we're measuring against.
     const auto r = report();
@@ -1479,16 +1481,19 @@ bool MentalismProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 
 void MentalismProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 {
+    prepareModules (newSampleRate, samplesPerBlock);
     sampleRate = newSampleRate;
     loudness.prepare (sampleRate);
     truePeak.reset();
     stereo.prepare (sampleRate);
     bands.prepare (sampleRate);
     mono.assign ((size_t) samplesPerBlock, 0.0f);
+    masterKey.prepare (sampleRate);
 }
 
-void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto runModules = modulesAfter (buffer, midiForModules);   // Lapis runs on the way out
     juce::ScopedNoDenormals noDenormals;
 
     if (resetRequested.exchange (false))
@@ -1579,6 +1584,9 @@ void MentalismProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (blockPeak > windowPeak.load()) windowPeak.store (blockPeak);
     if (blockPeak > headroomPeak.load()) headroomPeak.store (blockPeak);
     spectrumTap.push (mono.data(), n);
+    // The master's key, for the key detector inside Correspondence (MasterKeyBus, published on the timer)
+    if (const auto r = suite::MasterKeyBus::resetRequests(); r != masterKeyResets) { masterKeyResets = r; masterKey.reset(); }
+    masterKey.process (mono.data(), n);
 
     // A/B: the reference's loudest part, looped, at the loudness the mix had when you switched.
     const auto ab = apvts.getRawParameterValue (Params::compareAB)->load() > 0.5f;

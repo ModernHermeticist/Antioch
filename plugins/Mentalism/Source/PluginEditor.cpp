@@ -158,6 +158,8 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     header.addRight (roughMixButton, 110);
     header.addRight (historyButton, 90);
     header.actions = [this] { return actions(); };
+    pages = std::make_unique<suite::ui::ModulePages> (*this, header);
+    pages->add ("Premaster", "The premaster check and the master preview (A/B): what Lapis did, now inside Mentalism", [this] { return processor.lapis().createEditor(); });
     header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
 
     resetButton.onClick = [this] { processor.resetMeasurements(); };
@@ -804,6 +806,7 @@ void MentalismEditor::paintAdvice (juce::Graphics& g, juce::Rectangle<int> area)
 
 void MentalismEditor::resized()
 {
+    struct PagesLast { suite::ui::ModulePages* p; ~PagesLast() { if (p != nullptr) p->layout(); } } pagesLast { pages.get() };
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
@@ -866,6 +869,7 @@ void MentalismEditor::resized()
 std::vector<suite::ui::Action> MentalismEditor::actions()
 {
     std::vector<suite::ui::Action> a;
+    if (pages != nullptr) pages->addActions (a);
     a.push_back ({ "Finish the song", "gain staging, rough mix, coaching", "Finish", [this] { processor.finishSong(); } });
     a.push_back ({ "Mix it", "everything automatic (also masking, mud, harshness and translation)", "Finish", [this] { processor.mixIt(); } });
     a.push_back ({ "Undo Mix it", "", "Finish", [this] { processor.undoMixIt(); } });

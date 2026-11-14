@@ -242,6 +242,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     setLookAndFeel (&lnf);
     addAndMakeVisible (header);
     header.actions = [this] { return actions(); };
+    pages = std::make_unique<suite::ui::ModulePages> (*this, header);
+    pages->add ("Key detect", "Detects the song's key from the master (what Mentalism hears) and offers it here: what Emerald Tablet did", [this] { return processor.emerald().createEditor(); });
     for (const auto& name : Params::layerNames())
     {
         layerTiles.push_back (std::make_unique<DragTile> (p, "Song " + name, name == "Piano" || name == "Strings" || name == "Brass" || name == "Choir" || name == "Timpani"
@@ -1150,8 +1152,12 @@ void CorrespondenceEditor::paint (juce::Graphics& g)
 
 void CorrespondenceEditor::resized()
 {
-    processor.apvts.state.setProperty ("uiWidth", getWidth(), nullptr);
-    processor.apvts.state.setProperty ("uiHeight", getHeight(), nullptr);
+    struct PagesLast { suite::ui::ModulePages* p; ~PagesLast() { if (p != nullptr) p->layout(); } } pagesLast { pages.get() };
+    if (pages == nullptr || ! pages->showing())   // a page open makes the window bigger for a while: not the size to keep
+    {
+        processor.apvts.state.setProperty ("uiWidth", getWidth(), nullptr);
+        processor.apvts.state.setProperty ("uiHeight", getHeight(), nullptr);
+    }
     directorStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
     header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
@@ -1487,6 +1493,7 @@ void CorrespondenceEditor::showToplineDialog()
 std::vector<suite::ui::Action> CorrespondenceEditor::actions()
 {
     std::vector<suite::ui::Action> a;
+    if (pages != nullptr) pages->addActions (a);
     a.push_back ({ "Write...", "locks and takes, hear it in context, the hook doctor, hum a hook, topline from lyrics, originality, the arc, harmony moves, feel",
                    "Write", [this] { showWriteMenu(); } });
     a.push_back ({ "Chords page", "key, progression, voicing and rhythm, the loop clips", "View", [this] { showPage (0); } });

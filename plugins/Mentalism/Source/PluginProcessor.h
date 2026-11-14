@@ -1,5 +1,8 @@
 #pragma once
 
+#include "KeyDetector.h"
+#include "MasterKeyBus.h"
+#include "LapisProcessor.h"   // merged into Mentalism: runs inside it (a module)
 #include "Alias.h"
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -47,10 +50,17 @@ public:
     ~MentalismProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override { releaseModules(); }
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     using AudioProcessor::processBlock;
+
+    /** The master's key (pitch classes), shared with the key detector in Correspondence. */
+    KeyDetector masterKey;
+    uint32_t masterKeyResets = suite::MasterKeyBus::resetRequests();
+
+    /** Lapis, merged into Mentalism: it runs here, after Mentalism's own processing. */
+    LapisProcessor& lapis() const { return *static_cast<LapisProcessor*> (module ("Lapis")); }
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }

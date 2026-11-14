@@ -1477,5 +1477,51 @@ int main (int argc, char** argv)
         check (brief.contains ("MASTERING BRIEF") && brief.contains ("Song - Stem - Drums.wav") && brief.contains ("-6 dBFS"), "the mastering brief, with the label profile's files and stems");
     }
 
+    section ("Lapis lives inside Mentalism now (a module)");
+    {
+        auto m = std::make_unique<MentalismProcessor>();
+        auto& lapis = m->lapis();
+        check (lapis.getName() == "Lapis" && m->getModules().size() == 1, "Mentalism carries Lapis, under its own name for the suite");
+        if (auto* hear = lapis.apvts.getParameter (LapisProcessor::hearMasterId)) hear->setValueNotifyingHost (1.0f);
+        juce::MemoryBlock saved;
+        m->getStateInformation (saved);
+        auto again = std::make_unique<MentalismProcessor>();
+        again->setStateInformation (saved.getData(), (int) saved.getSize());
+        check (again->lapis().apvts.getRawParameterValue (LapisProcessor::hearMasterId)->load() > 0.5f,
+               "Lapis' settings are saved inside Mentalism's and come back with the project");
+        m->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        for (int b = 0; b < 40; ++b)
+        {
+            for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) buf.setSample (ch, i, 0.3f * std::sin (0.05f * (float) (b * 512 + i)));
+            m->processBlock (buf, midi);
+        }
+        check (lapis.getLatencySamples() == 0 || m->getLatencySamples() == lapis.getLatencySamples(),
+               "Mentalism reports Lapis' latency (" + juce::String (lapis.getLatencySamples()) + " samples)");
+        m->announce();
+        bool announced = false;
+        for (const auto& e : suite::Registry::list()) if (e.plugin == "Lapis") announced = true;
+        lapis.announce();
+        for (const auto& e : suite::Registry::list()) if (e.plugin == "Lapis") announced = true;
+        check (announced, "the suite still sees Lapis (the suite overview, the label-ready checks)");
+
+        // its window: a page under Mentalism's header
+        std::unique_ptr<juce::AudioProcessorEditor> ed (m->createEditor());
+        const auto before = ed->getBounds();
+        suite::ui::ModulePages* pages = nullptr;
+        if (auto* me = dynamic_cast<MentalismEditor*> (ed.get())) pages = me->modulePages();
+        check (pages != nullptr, "Mentalism's header has a Premaster button");
+        if (pages != nullptr)
+        {
+            pages->open (0);
+            check (pages->showing() && ed->getHeight() > 100, "Premaster opens Lapis' page inside Mentalism");
+            pages->close();
+            check (! pages->showing() && ed->getBounds() == before, "... and Back returns to Mentalism at its own size");
+        }
+        ed.reset();
+        m->releaseResources();
+    }
+
     return finish();
 }

@@ -54,6 +54,7 @@ QuintessenceProcessor::QuintessenceProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "QuintessenceState", qn::layout())
 {
+    addModule ("Prima Materia", std::make_unique<PrimaMateriaProcessor>());
     for (const auto& [id, bit] : lockBits()) apvts.addParameterListener (id, this);
 
     // Mentalism's masking, mud and harshness fixes for this track land here (Prima Materia leaves
@@ -133,8 +134,9 @@ bool QuintessenceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) 
         && layouts.getMainInputChannelSet() == out;
 }
 
-void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
+void QuintessenceProcessor::prepareToPlay (double sampleRate, int blockSizeForModules)
 {
+    prepareModules (sampleRate, blockSizeForModules);
     directorStage.prepare (sampleRate);
     traits.prepare (sampleRate);
     labelDsp.prepare (sampleRate);
@@ -210,8 +212,9 @@ void QuintessenceProcessor::resetMeasurement() noexcept
     settle = (int) (sr * 0.15);   // let the filters settle after a change before measuring
 }
 
-void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiForModules)
 {
+    const auto runModules = modulesAfter (buffer, midiForModules);   // Prima Materia runs on the way out
     juce::ScopedNoDenormals noDenormals;
     if (resetRequested.exchange (false)) resetMeasurement();
     if (suite::AutomationBus::bypassed())

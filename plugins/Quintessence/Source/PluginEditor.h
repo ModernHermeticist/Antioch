@@ -21,6 +21,7 @@ private:
     QuintessenceProcessor& processor;
     suite::ui::LookAndFeel lnf;
     suite::ui::HeaderBar header;
+    std::unique_ptr<suite::ui::ModulePages> pages;   // the plugins merged into this one
     juce::TextButton deltaButton { "Hear what it changes" };
     std::vector<suite::ui::Action> actions();
     suite::ui::Toggle autoEq, autoMb;

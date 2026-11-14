@@ -771,8 +771,83 @@ namespace suite::ui
 
     bool HeaderBar::keyPressed (const juce::KeyPress& k, juce::Component*)
     {
-        if (k.getKeyCode() == 'K' && k.getModifiers().isCommandDown()) { openSearch(); return true; }
+        if (k.getKeyCode() == 'K' && k.getModifiers().isCommandDown() && ! keysSuppressed && isShowing()) { openSearch(); return true; }
         return false;
+    }
+
+    //==============================================================================
+    ModulePages::ModulePages (juce::AudioProcessorEditor& h, HeaderBar& hb) : host (h), header (hb) {}
+    ModulePages::~ModulePages() { if (editor != nullptr) editor->removeComponentListener (this); }
+
+    void ModulePages::add (const juce::String& name, const juce::String& tooltip, std::function<juce::AudioProcessorEditor*()> make)
+    {
+        Page p { name, std::move (make), std::make_unique<juce::TextButton> (name) };
+        p.button->setTooltip (tooltip);
+        const auto index = (int) pages.size();
+        p.button->onClick = [this, index] { if (currentIndex == index) close(); else open (index); };
+        header.addRight (*p.button, juce::jmax (110, (int) std::ceil (juce::GlyphArrangement::getStringWidth (juce::Font (juce::FontOptions (Type::button + 1.0f)), name)) + 36));
+        pages.push_back (std::move (p));
+    }
+
+    void ModulePages::open (int index)
+    {
+        if (! juce::isPositiveAndBelow (index, (int) pages.size())) return;
+        if (editor == nullptr) hostSize = { host.getWidth(), host.getHeight() };
+        close (false);
+        editor.reset (pages[(size_t) index].make());
+        if (editor == nullptr) return;
+        currentIndex = index;
+        host.addAndMakeVisible (*editor);
+        editor->addComponentListener (this);
+        header.keysSuppressed = true;
+        for (size_t i = 0; i < pages.size(); ++i)
+        {
+            pages[i].button->setButtonText (i == (size_t) index ? juce::String ("Back") : pages[i].name);
+            pages[i].button->setToggleState (i == (size_t) index, juce::dontSendNotification);
+        }
+        fitHost();
+    }
+
+    void ModulePages::close() { close (true); }
+
+    void ModulePages::close (bool restoreSize)
+    {
+        if (editor != nullptr) { editor->removeComponentListener (this); editor.reset(); }
+        currentIndex = -1;
+        header.keysSuppressed = false;
+        for (auto& p : pages) { p.button->setButtonText (p.name); p.button->setToggleState (false, juce::dontSendNotification); }
+        if (restoreSize && hostSize.x > 0) host.setSize (hostSize.x, hostSize.y);
+    }
+
+    void ModulePages::fitHost()
+    {
+        if (editor == nullptr) return;
+        const auto top = header.getBottom() + 4;
+        host.setSize (juce::jmax (hostSize.x, editor->getWidth()), top + editor->getHeight());
+        layout();
+    }
+
+    void ModulePages::layout()
+    {
+        if (editor == nullptr) return;
+        const auto top = header.getBottom() + 4;
+        editor->setTopLeftPosition (0, top);
+        editor->setSize (host.getWidth(), editor->getHeight());
+        editor->toFront (false);
+    }
+
+    void ModulePages::componentMovedOrResized (juce::Component&, bool, bool wasResized)
+    {
+        if (! wasResized || editor == nullptr) return;
+        const auto top = header.getBottom() + 4;
+        if (host.getHeight() != top + editor->getHeight()) host.setSize (host.getWidth(), top + editor->getHeight());
+    }
+
+    void ModulePages::addActions (std::vector<Action>& into)
+    {
+        for (size_t i = 0; i < pages.size(); ++i)
+            into.push_back ({ "Open " + pages[i].name, pages[i].button->getTooltip(), "Pages", [this, i] { open ((int) i); } });
+        if (showing()) into.push_back ({ "Back", "close the page", "Pages", [this] { close(); } });
     }
 
     void addMenuActions (std::vector<Action>& into, const juce::PopupMenu& menu, const juce::String& group, std::function<void (int)> pick)

@@ -1,8 +1,8 @@
-#include "PluginProcessor.h"
+#include "PrimaMateriaProcessor.h"
 #include "ActivityBus.h"
 #include "StyleLog.h"
 #include "Recipes.h"
-#include "PluginEditor.h"
+#include "PrimaMateriaEditor.h"
 
 PrimaMateriaProcessor::PrimaMateriaProcessor()
     : SuiteProcessor (BusesProperties()
@@ -973,7 +973,3 @@ void PrimaMateriaProcessor::setPluginState (const void* data, int sizeInBytes)
         }
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new PrimaMateriaProcessor();
-}

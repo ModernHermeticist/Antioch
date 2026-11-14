@@ -85,6 +85,7 @@ private:
     CorrespondenceProcessor& processor;
     suite::ui::LookAndFeel lnf;
     suite::ui::HeaderBar header { "CORRESPONDENCE", "key & chord engine", suite::ui::Colours::verdigris };
+    std::unique_ptr<suite::ui::ModulePages> pages;   // the plugins merged into this one
     std::vector<suite::ui::Action> actions();
 
     suite::ui::Choice root, scale, perChord;

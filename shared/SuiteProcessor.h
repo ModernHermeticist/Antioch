@@ -123,6 +123,7 @@ namespace suite
                 trackName = name;
             }
             trackNameChanged (name);
+            for (auto& m : modules) m.proc->updateTrackProperties (properties);
         }
 
         juce::String getTrackName() const { const juce::ScopedLock sl (nameLock); return trackName; }
@@ -171,6 +172,14 @@ namespace suite
                 for (auto v : morphBase) values.add (juce::String (v, 6));
                 xml.createNewChildElement ("MorphBase")->setAttribute ("params", values.joinIntoString (","));
             }
+            for (auto& m : modules)   // the plugins merged into this one keep their own settings, inside it
+            {
+                juce::MemoryBlock block;
+                m.proc->getStateInformation (block);
+                auto* e = xml.createNewChildElement ("Module");
+                e->setAttribute ("key", m.key);
+                e->addTextElement (block.toBase64Encoding());
+            }
             copyXmlToBinary (xml, dest);
         }
 
@@ -214,6 +223,70 @@ namespace suite
                         params[i]->setValueNotifyingHost (values[i].getFloatValue());
             }
             morphing = false;
+            for (auto* e : xml->getChildWithTagNameIterator ("Module"))
+                if (auto* m = module (e->getStringAttribute ("key")))
+                {
+                    juce::MemoryBlock block;
+                    if (block.fromBase64Encoding (e->getAllSubText()))
+                        m->setStateInformation (block.getData(), (int) block.getSize());
+                }
+        }
+
+        //==============================================================================
+        // Modules: plugins merged into this one (Lapis in Mentalism, Emerald Tablet in Correspondence,
+        // Prima Materia in Quintessence, Azoth in Transmutation). Each runs inside its host: the host's
+        // audio passes through it after the host's own processing, its settings are saved inside the
+        // host's, and it still tells the suite about itself under its own name.
+        struct Module { juce::String key; std::unique_ptr<SuiteProcessor> proc; };
+        SuiteProcessor* addModule (const juce::String& key, std::unique_ptr<SuiteProcessor> p)
+        {
+            auto* raw = p.get();
+            raw->setPlayConfigDetails (2, 2, 44100.0, 512);
+            modules.push_back ({ key, std::move (p) });
+            return raw;
+        }
+        SuiteProcessor* module (const juce::String& key) const
+        {
+            for (const auto& m : modules) if (m.key == key) return m.proc.get();
+            return nullptr;
+        }
+        const std::vector<Module>& getModules() const noexcept { return modules; }
+
+        void prepareModules (double sampleRate, int blockSize)
+        {
+            for (auto& m : modules)
+            {
+                m.proc->setPlayConfigDetails (2, 2, sampleRate, blockSize);
+                m.proc->setNonRealtime (isNonRealtime());
+                m.proc->prepareToPlay (sampleRate, blockSize);
+            }
+            updateModuleLatency();
+        }
+        void releaseModules() { for (auto& m : modules) m.proc->releaseResources(); }
+        /** Runs the modules on the host's main (stereo) channels, in order, after the host's own processing. */
+        void processModules (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+        {
+            if (modules.empty() || buffer.getNumChannels() < 2) return;
+            juce::AudioBuffer<float> main (buffer.getArrayOfWritePointers(), 2, buffer.getNumSamples());
+            for (auto& m : modules)
+            {
+                m.proc->setPlayHead (getPlayHead());
+                m.proc->processBlock (main, midi);
+            }
+        }
+        /** Put at the top of the host's processBlock: the modules run when it returns, whichever way it does. */
+        struct ModulesAfter
+        {
+            SuiteProcessor& host; juce::AudioBuffer<float>& buffer; juce::MidiBuffer& midi;
+            ~ModulesAfter() { host.processModules (buffer, midi); }
+        };
+        ModulesAfter modulesAfter (juce::AudioBuffer<float>& b, juce::MidiBuffer& m) { return { *this, b, m }; }
+        int modulesLatency() const { int l = 0; for (const auto& m : modules) l += m.proc->getLatencySamples(); return l; }
+        void updateModuleLatency() { if (! modules.empty() && getLatencySamples() != modulesLatency()) setLatencySamples (modulesLatency()); }
+        void setNonRealtime (bool offline) noexcept override
+        {
+            juce::AudioProcessor::setNonRealtime (offline);
+            for (auto& m : modules) m.proc->setNonRealtime (offline);
         }
 
         //==============================================================================
@@ -459,6 +532,7 @@ namespace suite
                 { suite::Watchdog::Scope w (name, "recipes"); owner.pollRecipes(); }   // before sessions: a new song can load your signature, then set its key
                 { suite::Watchdog::Scope w (name, "session"); owner.pollSession(); }
                 if (++ticks % 5 == 1) { suite::Watchdog::Scope w (name, "suite status"); owner.announce(); }
+                owner.updateModuleLatency();
             }
             // each instance starts at a different point of the cycle, so a project's plugins don't all
             // announce (and set themselves up) on the same tick
@@ -467,6 +541,7 @@ namespace suite
             SuiteProcessor& owner;
         };
 
+        std::vector<Module> modules;
         std::vector<float> freshValues;
         juce::CriticalSection slotLock, nameLock;
         juce::String trackName;

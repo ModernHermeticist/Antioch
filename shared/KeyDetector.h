@@ -88,6 +88,22 @@ public:
         return out;
     }
 
+    /** Takes chroma heard elsewhere (the master, via Mentalism) instead of its own input: the same
+        ranking, best key and confidence follow from it. */
+    void setChroma (const std::array<float, 12>& c, float heardSeconds) noexcept
+    {
+        float maxValue = 0.0f;
+        for (auto v : c) maxValue = std::max (maxValue, v);
+        if (maxValue <= 0.0f) return;
+        for (int i = 0; i < 12; ++i) chroma[(size_t) i].store (c[(size_t) i] / maxValue);
+        seconds.store (heardSeconds);
+        const auto r = ranked();
+        best.store (r[0].root + (r[0].minor ? 12 : 0));
+        confidence.store (juce::jlimit (0.0f, 1.0f, (r[0].score - r[1].score) / 0.08f) * juce::jlimit (0.0f, 1.0f, (r[0].score - 0.4f) / 0.4f));
+    }
+    /** The long-term chroma as plain numbers (for publishing). */
+    std::array<float, 12> chromaNow() const noexcept { std::array<float, 12> c {}; for (int i = 0; i < 12; ++i) c[(size_t) i] = chroma[(size_t) i].load(); return c; }
+
     std::array<std::atomic<float>, 12> chroma {};   // normalised long-term chroma (for display)
     std::atomic<float> seconds { 0.0f };            // seconds of audible music analysed
     std::atomic<int> best { -1 };                   // root + (minor ? 12 : 0), or -1

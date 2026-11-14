@@ -7,3 +7,6 @@ suite_add_plugin(Quintessence
                 Source/PluginEditor.cpp
                 Source/Parameters.cpp
     TESTS       Tests.cpp)
+
+# PrimaMateria lives inside Quintessence now (merged)
+suite_add_module(Quintessence PrimaMateria)

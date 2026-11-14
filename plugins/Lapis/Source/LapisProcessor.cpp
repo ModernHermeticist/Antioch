@@ -1,6 +1,6 @@
-#include "PluginProcessor.h"
+#include "LapisProcessor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
-#include "PluginEditor.h"
+#include "LapisEditor.h"
 
 namespace
 {
@@ -541,10 +541,6 @@ void LapisProcessor::setPluginState (const void* data, int sizeInBytes)
         }
 }
 
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
-{
-    return new LapisProcessor();
-}
 
 juce::String LapisProcessor::checkRenderedFile (const juce::File& file)
 {

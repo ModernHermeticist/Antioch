@@ -13,3 +13,6 @@ file(GLOB CORRESPONDENCE_PATTERNS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/
 juce_add_binary_data(CorrespondencePatterns HEADER_NAME PatternData.h NAMESPACE PatternData SOURCES ${CORRESPONDENCE_PATTERNS})
 set_target_properties(CorrespondencePatterns PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(Correspondence PUBLIC CorrespondencePatterns)
+
+# EmeraldTablet lives inside Correspondence now (merged)
+suite_add_module(Correspondence EmeraldTablet)

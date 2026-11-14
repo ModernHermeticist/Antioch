@@ -204,6 +204,8 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
     header.addRight (exportButton, 160);
     header.addRight (rerollAllButton, 190);
     header.actions = [this] { return actions(); };
+    pages = std::make_unique<suite::ui::ModulePages> (*this, header);
+    pages->add ("Transitions", "Impacts, crashes, risers, rolls and reverse swells into each section: what Azoth did", [this] { return processor.azoth().createEditor(); });
     header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     autopilot.director = [] { return suite::DirectorBus::cue (suite::director::pTransmute); };
     for (auto* c : std::initializer_list<juce::Component*> { &spice, &builds, &drops, &amount, &output, &genre, &role, &director, &status, &nowPlaying,
@@ -357,6 +359,7 @@ void TransmutationEditor::paint (juce::Graphics& g)
 
 void TransmutationEditor::resized()
 {
+    struct PagesLast { suite::ui::ModulePages* p; ~PagesLast() { if (p != nullptr) p->layout(); } } pagesLast { pages.get() };
     autopilot.setBounds (getLocalBounds().removeFromBottom (AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (AutopilotStrip::height + 4).reduced (16);
     header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
@@ -403,6 +406,7 @@ void TransmutationEditor::resized()
 std::vector<suite::ui::Action> TransmutationEditor::actions()
 {
     std::vector<suite::ui::Action> a;
+    if (pages != nullptr) pages->addActions (a);
     a.push_back ({ "Re-roll the whole track", "a new plan for this track", "Plan", [this] { rerollAllButton.triggerClick(); } });
     a.push_back ({ "Export plan (MIDI)", "a note and a marker per move, for FL", "Plan", [this] { exportButton.triggerClick(); } });
     const auto sel = lockButton.isEnabled();
