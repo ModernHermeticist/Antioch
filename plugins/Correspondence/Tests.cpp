@@ -14,6 +14,9 @@
 #include "LabelReadyBus.h"
 #include "AutopilotBus.h"
 #include "TestUtils.h"
+#include "Worker.h"
+#include "SongBus.h"
+#include "SectionBus.h"
 #include "Audition.h"
 #include "Drums.h"
 #include "Identity.h"
@@ -2442,6 +2445,35 @@ int main (int argc, char** argv)
             check (q->lockOf ("Melody").bars.count (0) == 1, "locks kept with the project");
             CorrespondenceProcessor::tasteFileOverride().deleteFile();
         }
+    }
+
+    section ("The label work runs on the worker thread (FL's interface never waits for it)");
+    {
+        auto p = make();
+        p->applyPreset (0);
+        if (auto* b = p->apvts.getParameter (Params::broadcast)) b->setValueNotifyingHost (1.0f);
+        suite::SectionMap map;
+        map.totalBars = 64; map.count = 4;
+        map.sections[0] = { 1, suite::SectionType::Intro }; map.sections[1] = { 17, suite::SectionType::Breakdown };
+        map.sections[2] = { 33, suite::SectionType::Build }; map.sections[3] = { 41, suite::SectionType::Drop };
+        suite::SectionBus::publish (map);
+        suite::SongBus::withdraw();
+        auto& worker = suite::Worker::detail::thread();
+        worker.inlineMode = false;
+        double worst = 0.0;
+        for (int i = 0; i < 12; ++i)
+        {
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            p->publishKey();
+            worst = juce::jmax (worst, juce::Time::getMillisecondCounterHiRes() - t0);
+        }
+        suite::Worker::finish();
+        p->publishKey();   // picks the result up
+        worker.inlineMode = true;
+        check (worst < 50.0, "the key timer stays quick while the song is rendered elsewhere (worst " + juce::String (worst, 1) + " ms)");
+        check (! suite::SongBus::read().hook.empty(), "and the song still reaches Ouroboros' checks");
+        suite::SongBus::withdraw();
+        suite::SectionBus::withdraw();
     }
 
     return finish();

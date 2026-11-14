@@ -65,6 +65,7 @@ private:
     void paintMasking (juce::Graphics&, juce::Rectangle<int>);
     void updateCarveButtons();
     std::vector<masking::Clash> clashes;
+    int maskingTick = 0;
     std::array<juce::TextButton, 5> carveButtons;
     juce::Rectangle<int> arrangementContent, arrangementNotes;
 

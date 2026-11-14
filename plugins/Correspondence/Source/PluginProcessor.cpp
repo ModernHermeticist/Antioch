@@ -43,6 +43,7 @@ CorrespondenceProcessor::CorrespondenceProcessor()
 CorrespondenceProcessor::~CorrespondenceProcessor()
 {
     stopTimer();
+    if (labelJob->busy.load()) suite::Worker::finish();   // the label job reads this processor
     if (wasBroadcasting)
         suite::KeyBus::withdraw();
 }
@@ -84,7 +85,47 @@ void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
                     buffer.getNumSamples(), apvts.getRawParameterValue (Params::preview)->load());
 }
 
-void CorrespondenceProcessor::latchLabelWriting()
+CorrespondenceProcessor::LabelAnalysis CorrespondenceProcessor::analyseLabel (uint32_t latched) const
+{
+    namespace AP = suite::Autopilot;
+    using T = suite::SectionType;
+    LabelAnalysis out;
+    const auto map = songMapOrDefault();
+    const auto sp = currentSongPatterns();
+    const auto s = currentSettings();
+    double from = 0.0, to = 0.0;
+    bool haveDrop = false;
+    for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].type == T::Drop) { from = 4.0 * (map.sections[(size_t) i].startBar - 1); to = 4.0 * (map.endBar (i) - 1); haveDrop = true; break; }
+    if (haveDrop)
+    {
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead), arp = chords::songClip (s, map, sp, chords::SongPart::Arp);
+        int on = 0, n = 0;
+        for (const auto& a : arp) if (a.start >= from && a.start < to) { ++n; for (const auto& l : lead) if (std::abs (l.start - a.start) < 0.01) { ++on; break; } }
+        out.arpOnHook = n > 8 && (float) on / (float) n > 0.5f;
+        int phrases = 0, early = 0;
+        for (auto ph = from; ph + 32.0 <= to + 1.0e-6; ph += 32.0)
+        {
+            int peak = 0; double at = ph;
+            for (const auto& x : lead) if (x.start >= ph && x.start < ph + 32.0 && x.pitch > peak) { peak = x.pitch; at = x.start; }
+            if (peak > 0) { ++phrases; early += at < ph + 16.0 ? 1 : 0; }
+        }
+        out.peaksEarly = phrases > 0 && early * 2 > phrases;
+        out.noPickup = from >= 1.0;
+        for (const auto& x : lead) if (x.start >= from - 1.0 && x.start < from) { out.noPickup = false; break; }
+    }
+    static const AP::Feature goalFeature[] = { AP::goalBreakdownF, AP::goalDrop2F, AP::goalCounterF, AP::goalBassF, AP::goalTeaserF };
+    for (int g = 0; g < 5; ++g)
+    {
+        if ((latched & (1u << (23 + g))) != 0 || ! AP::on (goalFeature[g])) continue;
+        float current = 1.0f;
+        out.goalOptions[(size_t) g] = labelOptions ((LabelGoal) g, current);
+        out.goalScore[(size_t) g] = current;
+        out.goalScored[(size_t) g] = true;
+    }
+    return out;
+}
+
+void CorrespondenceProcessor::latchLabelWriting (const LabelAnalysis& analysis)
 {
     namespace AP = suite::Autopilot;
     struct Fix { int bit; AP::Feature f; const char* what; std::vector<std::pair<juce::String, float>> params; };
@@ -110,36 +151,9 @@ void CorrespondenceProcessor::latchLabelWriting()
         for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].type == T::Drop) { from = 4.0 * (map.sections[(size_t) i].startBar - 1); to = 4.0 * (map.endBar (i) - 1); return true; }
         return false;
     };
-    auto arpOnHook = [&]
-    {
-        double from = 0.0, to = 0.0;
-        if (! firstDropWindow (from, to)) return false;
-        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead), arp = chords::songClip (s, map, sp, chords::SongPart::Arp);
-        int on = 0, n = 0;
-        for (const auto& a : arp) if (a.start >= from && a.start < to) { ++n; for (const auto& l : lead) if (std::abs (l.start - a.start) < 0.01) { ++on; break; } }
-        return n > 8 && (float) on / (float) n > 0.5f;
-    };
-    auto peaksEarly = [&]
-    {
-        double from = 0.0, to = 0.0;
-        if (! firstDropWindow (from, to)) return false;
-        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
-        int phrases = 0, early = 0;
-        for (auto ph = from; ph + 32.0 <= to + 1.0e-6; ph += 32.0)
-        {
-            int peak = 0; double at = ph;
-            for (const auto& n : lead) if (n.start >= ph && n.start < ph + 32.0 && n.pitch > peak) { peak = n.pitch; at = n.start; }
-            if (peak > 0) { ++phrases; early += at < ph + 16.0 ? 1 : 0; }
-        }
-        return phrases > 0 && early * 2 > phrases;
-    };
-    auto noPickup = [&]
-    {
-        double from = 0.0, to = 0.0;
-        if (! firstDropWindow (from, to) || from < 1.0) return false;
-        for (const auto& n : chords::songClip (s, map, sp, chords::SongPart::Lead)) if (n.start >= from - 1.0 && n.start < from) return false;
-        return true;
-    };
+    auto arpOnHook = [&analysis] { return analysis.arpOnHook; };
+    auto peaksEarly = [&analysis] { return analysis.peaksEarly; };
+    auto noPickup = [&analysis] { return analysis.noPickup; };
     auto needed = [] (AP::Feature f) { return suite::LabelReadyBus::needed ((int) f); };
     const auto drop = (int) T::Drop, bd = (int) T::Breakdown, outro = (int) T::Outro;
     struct Fix2 { int bit; AP::Feature f; std::function<bool()> trigger; const char* what; std::vector<std::pair<juce::String, float>> params; };
@@ -176,8 +190,9 @@ void CorrespondenceProcessor::latchLabelWriting()
     {
         const auto bit = 23 + g;
         if ((labelLatched & (1u << bit)) != 0 || ! AP::on (goalFeature[g])) continue;
-        float current = 1.0f;
-        const auto options = labelOptions ((LabelGoal) g, current);
+        if (! analysis.goalScored[(size_t) g]) continue;   // (switched on since the analysis: next time)
+        const auto current = analysis.goalScore[(size_t) g];
+        const auto& options = analysis.goalOptions[(size_t) g];
         if (current >= 0.6f || options.empty()) continue;
         labelLatched |= 1u << bit;
         latchedNow = true;
@@ -212,7 +227,10 @@ void CorrespondenceProcessor::latchLabelWriting()
 
 void CorrespondenceProcessor::publishKey()
 {
-    if (++labelTick % 25 == 0) latchLabelWriting();   // every few seconds (it renders the parts to measure them)
+    // The label-ready work renders the song (seconds of it): every 2 s, if anything changed, it's done
+    // on the worker thread from a copy; the result is applied here when it's ready.
+    if (labelTick++ % 8 == 0) startLabelJob();
+    finishLabelJob();
     // Adopt a key detected by Emerald Tablet, if allowed.
     const auto suggestion = suite::KeyBus::readSuggestion();
     if (suggestion.valid && suggestion.sequence != lastSuggestion)
@@ -241,40 +259,14 @@ void CorrespondenceProcessor::publishKey()
         prog.quartersPerChord = s.quartersPerChord;
         for (int i = 0; i < prog.count; ++i) prog.chordRoots[(size_t) i] = ((chords::chordRootPitchClass (s, i) - s.root) % 12 + 12) % 12;
         suite::ChordBus::publish (prog);
-        // The song's kit rhythm (Kybalion's gate can take it)
-        if (const auto sp = currentSongPatterns(); sp.library)
+        // The kit rhythm, where the hook rests and the song's parts (for Ouroboros' checks): worked out
+        // on the worker (finishLabelJob), shared again every few seconds from here
+        if (haveLastSong && juce::Time::getMillisecondCounter() - labelPublishMs > 4000u)
         {
-            const auto rhythm = chords::kitRhythm (sp);
-            if (rhythm.valid) suite::KitBus::publish (rhythm);
-        }
-        // Where the hook rests (Transmutation puts its phrase-end moves there): worked out again
-        // when the map or the song's settings change, shared every few seconds
-        if (suite::SectionMap map; suite::SectionBus::read (map))
-        {
-            juce::MemoryBlock stateNow;
-            if (auto xml = apvts.copyState().createXml()) stateNow.append (xml->toString().toRawUTF8(), xml->toString().getNumBytesAsUTF8());
-            auto h = (int64_t) stateNow.toBase64Encoding().hashCode64();
-            for (int i = 0; i < map.count; ++i) h = h * 31 + map.sections[(size_t) i].startBar * 7 + (int) map.sections[(size_t) i].type;
-            if (h != hookRestsHash || juce::Time::getMillisecondCounter() - hookRestsMs > 5000u)
-            {
-                if (h != hookRestsHash)
-                {
-                    hookRestsHash = h;
-                    hookRests.clear();
-                    auto lead = chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead);
-                    std::sort (lead.begin(), lead.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
-                    double soundingTo = 0.0;
-                    for (const auto& n : lead)
-                    {
-                        if (n.start - soundingTo >= 1.0 - 1.0e-6) hookRests.push_back ({ (float) soundingTo, (float) n.start });
-                        soundingTo = std::max (soundingTo, n.start + n.length);
-                    }
-                }
-                hookRestsMs = juce::Time::getMillisecondCounter();
-                suite::KitBus::publishRests (hookRests);
-                // the song's parts for Ouroboros' label-ready checks
-                suite::SongBus::publish (songForLabel (map));
-            }
+            labelPublishMs = juce::Time::getMillisecondCounter();
+            if (lastKitRhythm.valid) suite::KitBus::publish (lastKitRhythm);
+            suite::KitBus::publishRests (hookRests);
+            suite::SongBus::publish (lastSong);
         }
         suite::KeyBus::publish ((int) apvts.getRawParameterValue (Params::rootNote)->load(),
                                 (int) apvts.getRawParameterValue (Params::scale)->load());
@@ -343,6 +335,7 @@ bool CorrespondenceProcessor::applyHarmonyIdea (int index)
 
 suite::SectionMap CorrespondenceProcessor::songMapOrDefault()
 {
+    if (const auto* w = workerSnapshot()) return w->map;
     suite::SectionMap map;
     if (suite::SectionBus::read (map) && map.count > 0) return map;
     map = {};
@@ -1159,6 +1152,7 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
 
 chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
 {
+    if (const auto* w = workerSnapshot()) return w->sp;
     auto patterns = Params::readSongPatterns (apvts);
     patterns.melody = melodySettings();
     patterns.vocalBars = suite::VocalBus::read();
@@ -1779,4 +1773,70 @@ chords::tools::Feel CorrespondenceProcessor::feel() const
     for (int k = 0; k < 16; ++k) f.accent[(size_t) k] = a[k + 1].getFloatValue();
     f.valid = true;
     return f;
+}
+
+//==============================================================================
+void CorrespondenceProcessor::startLabelJob()
+{
+    auto job = labelJob;
+    if (job->busy.load() || job->ready.load()) return;
+    namespace AP = suite::Autopilot;
+    // what it depends on: every setting, the map, what Ouroboros' checks need, the switches
+    suite::SectionMap busMap;
+    const auto haveMap = suite::SectionBus::read (busMap) && busMap.count > 0;
+    int64_t h = 17;
+    for (auto* p : getParameters()) h = h * 31 + (int64_t) std::lround (p->getValue() * 100000.0f);
+    h = h * 31 + (int64_t) apvts.state.toXmlString().hashCode64();
+    if (haveMap) for (int i = 0; i < busMap.count; ++i) h = h * 31 + busMap.sections[(size_t) i].startBar * 7 + (int) busMap.sections[(size_t) i].type;
+    for (int f = 0; f < AP::numFeatures; ++f) if (suite::LabelReadyBus::needed (f)) h = h * 31 + f;
+    h = h * 31 + (int64_t) AP::disabledGroups() + (int64_t) AP::disabledFeatures() * 7 + (int64_t) AP::disabledFeaturesHigh() * 13 + (int64_t) labelLatched * 3;
+    h = h * 31 + (int64_t) suite::VocalBus::read().size();
+    const auto now = juce::Time::getMillisecondCounter();
+    if (h == labelInputsHash && now - labelRunMs < 30000u) return;   // nothing changed (and checked within 30 s)
+    labelInputsHash = h;
+    labelRunMs = now;
+    job->snapshot = { currentSettings(), currentSongPatterns(), songMapOrDefault() };
+    job->haveMap = haveMap;
+    job->busy.store (true);
+    const auto latched = labelLatched;
+    suite::Worker::post ([this, job, latched]
+    {
+        workerSnapshot() = &job->snapshot;
+        const auto& snap = job->snapshot;
+        job->analysis = analyseLabel (latched);
+        job->kitRhythm = snap.sp.library ? chords::kitRhythm (snap.sp) : suite::KitBus::Rhythm {};
+        job->rests.clear();
+        if (job->haveMap)
+        {
+            auto lead = chords::songClip (snap.s, snap.map, snap.sp, chords::SongPart::Lead);
+            std::sort (lead.begin(), lead.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
+            double soundingTo = 0.0;
+            for (const auto& n : lead)
+            {
+                if (n.start - soundingTo >= 1.0 - 1.0e-6) job->rests.push_back ({ (float) soundingTo, (float) n.start });
+                soundingTo = std::max (soundingTo, n.start + n.length);
+            }
+            job->song = songForLabel (snap.map, snap.sp);
+        }
+        workerSnapshot() = nullptr;
+        job->ready.store (true);
+        job->busy.store (false);
+    });
+}
+
+void CorrespondenceProcessor::finishLabelJob()
+{
+    auto job = labelJob;
+    if (! job->ready.load()) return;
+    lastKitRhythm = job->kitRhythm;
+    if (job->haveMap)
+    {
+        hookRests = job->rests;
+        lastSong = job->song;
+        haveLastSong = true;
+        labelPublishMs = 0;   // shared on this tick
+    }
+    const auto analysis = job->analysis;
+    job->ready.store (false);
+    latchLabelWriting (analysis);
 }

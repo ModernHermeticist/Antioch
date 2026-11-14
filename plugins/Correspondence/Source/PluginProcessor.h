@@ -137,8 +137,13 @@ public:
     void forgetDna() { const juce::ScopedLock sl (motifLock); dna = {}; bassDna = {}; }
     chords::BassDna getBassDna() const { const juce::ScopedLock sl (motifLock); return bassDna; }
     /** The parameters' settings plus what was learned (your bassline). */
+    /** A copy of what the song is made from, for the worker thread: while a worker job runs with it,
+        currentSettings / currentSongPatterns / songMapOrDefault return it instead of reading the plugin. */
+    struct Snapshot { chords::Settings s; chords::SongPatterns sp; suite::SectionMap map; };
+    static const Snapshot*& workerSnapshot() { static thread_local const Snapshot* p = nullptr; return p; }
     chords::Settings currentSettings() const
     {
+        if (const auto* w = workerSnapshot()) return w->s;
         auto s = Params::readSettings (apvts);
         s.bassDna = getBassDna();
         return s;
@@ -256,7 +261,36 @@ public:
         and switched on; the rest set a setting once (yours to change back). */
     uint32_t labelLatched = 0;
     int labelTick = 0;
-    void latchLabelWriting();
+    /** The label-ready work that renders the song (seconds of it): done on the suite's worker thread
+        from a Snapshot, its results applied here on the next tick. */
+    struct LabelAnalysis
+    {
+        bool arpOnHook = false, peaksEarly = false, noPickup = false;
+        std::array<float, 5> goalScore {};
+        std::array<std::vector<LabelOption>, 5> goalOptions;
+        std::array<bool, 5> goalScored {};
+    };
+    struct LabelJob
+    {
+        std::atomic<bool> busy { false }, ready { false };
+        Snapshot snapshot;
+        LabelAnalysis analysis;
+        std::vector<std::pair<float, float>> rests;
+        suite::SongBus::Song song;
+        suite::KitBus::Rhythm kitRhythm;
+        bool haveMap = false;
+    };
+    suite::KitBus::Rhythm lastKitRhythm;
+    std::shared_ptr<LabelJob> labelJob = std::make_shared<LabelJob>();
+    int64_t labelInputsHash = 0;
+    juce::uint32 labelRunMs = 0, labelPublishMs = 0;
+    suite::SongBus::Song lastSong;
+    bool haveLastSong = false;
+    void startLabelJob();
+    void finishLabelJob();
+    LabelAnalysis analyseLabel (uint32_t latched) const;   // the worker (with the snapshot set)
+    void latchLabelWriting (const LabelAnalysis&);
+    void latchLabelWriting() { latchLabelWriting (analyseLabel (labelLatched)); }   // in place (tests)
     /** The map the song is written against: Ouroboros' when it shares one, else a standard trance form. */
     static suite::SectionMap songMapOrDefault();
     /** Clash check: parts in the song clips that sit in the same register, each with a fix. */

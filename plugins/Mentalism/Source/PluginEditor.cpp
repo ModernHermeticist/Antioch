@@ -502,7 +502,7 @@ void MentalismEditor::timerCallback()
                                         ? (coachText.isNotEmpty() ? coachText : juce::String ("Auto-coach on: play the whole song through."))
                                         : juce::String(), juce::dontSendNotification);
     }
-    clashes = masking::find (suite::Registry::list());
+    if (maskingTick++ % 10 == 0) clashes = masking::find (suite::Registry::list());   // once a second (every track's spectrum against every other)
     updateCarveButtons();
     layoutFixButtons();
     updateFixStatus();
