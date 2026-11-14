@@ -299,6 +299,23 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6h.31** *Tools > More > What the autopilot has learned*: kept and undone counts, your taste after three milestones.
 - [ ] **6h.32** Sign off Low end, then make a change that hurts it: it's undone, and the line says so.
 
+### 6i. The mix fixes
+
+- [ ] **6i.1** The Autopilot page lists switches starting "Mix:" (73); turning one off stops it in every plugin.
+- [ ] **6i.2** A pad that sags for a phrase: Ouroboros' *Every phrase at its level* rides it up; its Quintessence's
+  What changed says "Phrase ride: bars ..."; undo puts it back.
+- [ ] **6i.3** Bass and kick: once *The bass against the kick* is flagged, the bass's lows dip just after each kick
+  (only the lows: its top keeps going).
+- [ ] **6i.4** Two centred hat tracks: *Parts side by side* pans one a little; What changed says "Pan ...".
+- [ ] **6i.5** A build into a drop: the pads' high-pass rises through the build's second half, the reverb tightens in
+  the last beat, the music dips briefly on the drop's first beat. No full silence anywhere.
+- [ ] **6i.6** Breakdowns: the drums thin out (lows and top), Antioch's sends and decay open up, Kybalion pumps lighter.
+- [ ] **6i.7** A sample with DC (or a hot inter-sample peak): *A clean signal* flags it; its Quintessence removes it.
+- [ ] **6i.8** Save, close and reopen the project: the latched mix fixes, phrase rides and pan steps are still there.
+- [ ] **6i.9** Make a milestone, then let a fix pull its area down: the autopilot undoes that area's fixes since the
+  milestone and says so.
+- [ ] **6i.10** CPU: with every mix fix latched on a 20-track project, FL's CPU stays reasonable (note it).
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is

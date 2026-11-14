@@ -870,6 +870,7 @@ namespace lab
             m.recipe = "Milestone - " + m.name + " - " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M");
             m.overall = report.overall;
             m.areas = report.areaScore;
+            autoFix.milestone (report);   // the autopilot: areas that fall from here roll back
             m.stage = stageOf (m.name);
             // your taste: this song's drop tone against the label's, for the taste offset
             for (const auto& s : lastSections)

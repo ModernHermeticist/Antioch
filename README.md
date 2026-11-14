@@ -221,6 +221,38 @@ it), and before/after snippets of every fix (the same bar heard before and after
   structure proposed as a map, whether a milestone's stage ("sketch", "arrangement", "mix", "premaster" in its name) is
   done. A heat map of each section's score sits under the area bars.
 
+**The mix fixes** (73 more switches, each starting "Mix:" on the Autopilot page). Each one is latched in its plugin once
+one of Ouroboros' checks asks for it, and only on the tracks it applies to (by role, name and what the track measures).
+It stays on, saved with the project, while its switch is on. A check can now name several switches: the first acts on
+what it found, the rest are the plugins' fixes for the same kind of problem.
+- **Quintessence, levels:** phrase rides (a 4-bar phrase sagging under its section is ridden up, one step at a time,
+  undoable), the hook's entry lifted, high notes evened out, an input leveller, the chain kept loudness-neutral, a dip
+  under each drop's first beat, room for the riser in builds, the final drop lifted, the drop settling after 8 bars, hat
+  rides into phrase ends, a dip under fills, the riser's level from the build's energy.
+- **Quintessence, tone:** a low cut an octave under the part's lowest note (from its own pitch estimate), matched low
+  cuts on kick and bass, backing parts' top under the lead, air and a mud cut in the sides only, pads dipping at the
+  lead's note, the arp under the hook, hats under the vocal's "s", the clap and FX under the vocal, drums low- and
+  high-cut in breakdowns, a high-pass rising through each build, the old chord's root dipped at each change, darker
+  intros and outros, the vocal's presence ridden, FX high-passed with their tails darkening.
+- **Quintessence, dynamics and colour:** parallel compression and per-section glue on drum and music buses, upward
+  compression in breakdowns, an expander on noisy parts, the vocal's peaks caught, pad sustain and clap tails held back
+  in drops, the bass's lows (only its lows) ducking under each kick from Kybalion's pattern, bus saturation in drops, an
+  exciter for air, a click on a dull kick, drive on the bass's mids only, a doubler and air on the vocal.
+- **Quintessence, stereo and safety:** a pan layout for centred percussion, a pan step when two parts collide in the
+  centre, mono-safe widening of mono pads (side only), width split by band, a correlation guard, inter-sample peaks
+  trimmed at the source, DC removed.
+- **Kybalion:** the pump's depth per section; fit to the kick by itself once a sidechained kick has been heard.
+- **Antioch:** sends, decay and echo damping per section; pre-delay by role; dotted-8th echoes on a lead or vocal set
+  to 16ths; the space tightening through the last beat before each drop; the pads' own room; a clap's reverb at most
+  two beats.
+- **Vibration:** the presence eased before heavy drive; the drive per section. **Solve et Coagula:** the unmasking
+  depth per section.
+- **Ouroboros:** drop-hit and phrase-end cues for every track; the bass's polarity against the kick, the kick's level
+  per section, the low end's headroom, kick and hat layers lined up; and the autopilot itself keeps a tone budget (no
+  track moved more than 6 dB in all), refuses a fix that fights one it kept, tries at most twelve fixes per
+  play-through, rolls back an area's fixes when it falls under where it was at the last milestone, and records who
+  changed each track.
+
 **What stays manual, and why:** vocal tuning (the suite has no pitch correction: the notes are listed for a pitch
 editor), a late vocal (a plugin can't play audio before it arrives: slide the clip), cutting a long drop (a plugin
 can't edit FL's playlist), and a plugin that renders differently (it's named; its setting is yours to change). Sample
@@ -2190,7 +2222,12 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   proposal. Quintessence's: a tone and a width per section (saved), and its DSP: the tone step, the
   kick's tail, the choke, subsonics, the sub hand-over, drive keeping the level. Antioch's: tighter
   echoes, the reverb stepping back. Correspondence's: pickups, fills, the counter from drop 2, a goal
-  applied by itself.
+  applied by itself. **Mix fixes:** the fifth checks flagged with their switches (a sagging phrase ridden, the kick per
+  section, parts collided, DC, room for the lead), companions told they're needed, kick and hat layers; the autopilot's
+  provenance, tone budget, arbitration, rollback by area and step budget. Quintessence's: phrase rides and pan steps
+  (saved), latching per role, and the DSP (the bass's lows ducking after each kick, DC, breakdown drums, the build's
+  high-pass, the impact dip, the correlation guard, pan, the pad under the lead's note, inter-sample peaks, the riser's
+  energy, the expander, a phrase ride). Kybalion's, Antioch's, Vibration's and Solve et Coagula's latches and tables.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true

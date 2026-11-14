@@ -13,6 +13,7 @@
 #include "AutomationBus.h"
 #include "AutopilotBus.h"
 #include "FixBus.h"
+#include "LabelReadyBus.h"
 
 class VibrationProcessor : public suite::SuiteProcessor
 {
@@ -108,7 +109,21 @@ public:
         scenes.watchTweaks (isMorphing());
         const auto role = roleForTrack();
         isLeadTrack.store (role == suite::roleLead || role < 0);   // lead-aware space: this is the lead (or most likely is)
+        // the mix fixes (latched once Ouroboros' checks ask for them; saved with the project)
+        namespace AP = suite::Autopilot;
+        auto latched = [this] (const char* key, AP::Feature f)
+        {
+            if (! (bool) apvts.state.getProperty (key, false) && AP::on (f) && suite::LabelReadyBus::needed ((int) f)) apvts.state.setProperty (key, true, nullptr);
+            return (bool) apvts.state.getProperty (key, false) && AP::on (f);
+        };
+        presenceEase.store (latched ("mixPresenceEase", AP::mxPresenceEaseF));
+        drivePerSection.store (latched ("mixDriveSection", AP::mxDriveSectionF));
     }
+    /** Mix fixes: the presence eased before heavy drive (the drive adds its own bite, up to 2 dB),
+        and the drive per section (less in breakdowns, intro and outro). */
+    std::atomic<bool> presenceEase { false }, drivePerSection { false };
+    std::atomic<int> sectionTypeNow { -1 };
+    static float driveSectionDb (int t) noexcept { static const float v[6] = { -3.0f, 0.0f, -4.0f, -1.5f, 0.0f, -3.0f }; return t >= 0 && t < 6 ? v[t] : 0.0f; }
     std::atomic<bool> isLeadTrack { true };
     /** New song (Ouroboros): section scenes on, with the suggested offsets. */
     bool applySession (const suite::SessionStyle&, int, int) override

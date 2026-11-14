@@ -116,6 +116,7 @@ namespace lab
     inline void extraChecks (const Inputs& in, const Profile& P, std::vector<Check>& out);   // LabelChecksMore.h
     inline void checks3 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks3.h
     inline void checks4 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks4.h
+    inline void checks5 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks5.h
 
     inline Report evaluate (const Inputs& in)
     {
@@ -671,6 +672,7 @@ namespace lab
         extraChecks (in, P, out);
         checks3 (in, P, out);
         checks4 (in, P, out);
+        checks5 (in, P, out);
         // a few earlier checks name the switch that now fixes them
         for (auto& c : out)
         {
@@ -730,3 +732,4 @@ namespace lab
 #include "LabelChecksMore.h"
 #include "LabelChecks3.h"
 #include "LabelChecks4.h"
+#include "LabelChecks5.h"

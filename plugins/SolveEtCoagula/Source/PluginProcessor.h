@@ -1,6 +1,7 @@
 #pragma once
 #include "MoveLog.h"
 #include "AutopilotBus.h"
+#include "LabelReadyBus.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -70,10 +71,20 @@ public:
     }
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
+    /** Mix fix: deeper unmasking in the drops (everything plays), lighter in breakdowns and the intro. */
+    std::atomic<bool> depthPerSection { false };
+    static float depthScale (int t) noexcept { static const float v[6] = { 0.7f, 1.0f, 0.6f, 1.0f, 1.25f, 0.7f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
     void pollTick() override
     {
         scenes.watchTweaks (isMorphing());
         collectMelody();
+        {
+            // the mix fix: the unmasking depth per section (latched once Ouroboros' checks ask; saved)
+            namespace AP = suite::Autopilot;
+            if (! (bool) apvts.state.getProperty ("mixDepthSection", false) && AP::on (AP::mxDepthSectionF) && suite::LabelReadyBus::needed ((int) AP::mxDepthSectionF))
+                apvts.state.setProperty ("mixDepthSection", true, nullptr);
+            depthPerSection.store ((bool) apvts.state.getProperty ("mixDepthSection", false) && AP::on (AP::mxDepthSectionF));
+        }
         float swing = 0.0f;
         for (const auto& e : suite::Registry::list())
             if (e.plugin == "Correspondence") swing = std::max (swing, e.metrics[0]);

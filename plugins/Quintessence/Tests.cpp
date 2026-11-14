@@ -1508,7 +1508,7 @@ int main (int argc, char** argv)
         // latched where Ouroboros' checks ask: a pad that never moves gets pad motion
         suite::SectionBus::withdraw();
         auto pad = make (4);
-        std::array<uint32_t, 4> needs {};
+        std::array<uint32_t, 8> needs {};
         needs[(size_t) suite::Autopilot::padMotionF / 32] |= 1u << (suite::Autopilot::padMotionF % 32);
         suite::LabelReadyBus::publishNeeds (needs);
         FakePlayHead head; head.bpm = 120.0; head.ppq = 0.0;
@@ -1602,6 +1602,147 @@ int main (int argc, char** argv)
             const auto quiet = [] (int i) { return 0.05f * std::sin (0.05f * (float) i); };
             const auto out = runRms (dr, cx, quiet, sr, 2 * sr);
             check (std::abs (out / (0.05f * 0.707f) - 1.0f) < 0.05f, "drive keeps a quiet part's level (it only rounds the peaks)");
+        }
+        suite::FixBus::reset();
+    }
+
+
+    section ("Mix fixes: phrase rides, pan, latching, and the DSP (LabelDsp3)");
+    {
+        namespace AP = suite::Autopilot;
+        suite::FixBus::reset();
+        auto q = make (4);
+        suite::FixBus::send (suite::Fix::PhraseTrim, suite::packPhraseTrim (q->getInstanceId(), 3, 1.5f));
+        q->fixes->poll();
+        suite::FixBus::send (suite::Fix::TrackPan, suite::packMasterTone (q->getInstanceId(), 0, 2.0f));
+        q->fixes->poll();
+        check (std::abs (q->labelDsp3.phraseTrimDb[3].load() - 1.5f) < 0.01f && std::abs (q->labelDsp3.panOffset.load() - 0.2f) < 0.01f, "a phrase ride on bars 13-16 and a pan step from Ouroboros");
+        {
+            uint32_t low; int ph; float d;
+            suite::unpackPhraseTrim (suite::packPhraseTrim (0xabc, 63, -3.5f), low, ph, d);
+            check (low == 0xabc && ph == 63 && std::abs (d + 3.5f) < 0.01f, "phrase rides pack into a fix message (track, phrase, half dB)");
+        }
+        juce::MemoryBlock mb;
+        q->getStateInformation (mb);
+        auto q2 = make (4);
+        q2->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (std::abs (q2->labelDsp3.phraseTrimDb[3].load() - 1.5f) < 0.01f && std::abs (q2->labelDsp3.panOffset.load() - 0.2f) < 0.01f, "kept with the project");
+        // latched once Ouroboros asks, only where it applies (a bass fix on a bass, not on a pad)
+        {
+            std::array<uint32_t, 8> needs {};
+            needs[(size_t) AP::mxBassLowDuckF / 32] |= 1u << (AP::mxBassLowDuckF % 32);
+            suite::LabelReadyBus::publishNeeds (needs);
+            auto bass = make (2);
+            const auto t = bass->traits.snapshot (bass->getInstanceId(), 2, "Bass");
+            bass->latchMixFixes (t);
+            q->latchMixFixes (q->traits.snapshot (q->getInstanceId(), 4, "Pad"));
+            check (bass->labelDsp3.on[qn::LabelDsp3::bassLowDuck].load() && ! q->labelDsp3.on[qn::LabelDsp3::bassLowDuck].load(), "the bass's low duck latched on the bass only");
+            AP::set (AP::mxBassLowDuckF, false);
+            bass->latchMixFixes (t);
+            check (! bass->labelDsp3.on[qn::LabelDsp3::bassLowDuck].load(), "its switch turns it off");
+            AP::set (AP::mxBassLowDuckF, true);
+            suite::LabelReadyBus::reset();
+            check (AP::numFeatures > 200 && juce::String (AP::featureName (AP::mxDcBlockF)).startsWith ("Mix:"), "every mix fix has its own switch");
+        }
+        // the DSP on its own
+        const auto sr = (int) sampleRate;
+        auto run = [] (qn::LabelDsp3& d, qn::LabelDsp3::Context cx, std::function<float (int, int)> sig, int from, int to, int channel = 0)
+        {
+            juce::AudioBuffer<float> b (2, 512);
+            double p = 0.0; int n = 0, pos = 0;
+            for (int blk = 0; blk < (int) (2.0 * sampleRate / 512); ++blk)
+            {
+                for (int i = 0; i < 512; ++i) { b.setSample (0, i, sig (pos + i, 0)); b.setSample (1, i, sig (pos + i, 1)); }
+                cx.ppq = (double) pos / sampleRate * 2.0;
+                d.process (b.getArrayOfWritePointers(), 2, 512, cx);
+                for (int i = 0; i < 512; ++i) if (pos + i >= from && pos + i < to) { p += (double) b.getSample (channel, i) * b.getSample (channel, i); ++n; }
+                pos += 512;
+            }
+            return n > 0 ? (float) std::sqrt (p / n) : 0.0f;
+        };
+        auto sine = [] (float hz, float a) { return [hz, a] (int i, int) { return a * std::sin (2.0f * juce::MathConstants<float>::pi * hz * (float) i / (float) sampleRate); }; };
+        auto with = [] (int fix) { auto d = std::make_unique<qn::LabelDsp3>(); d->prepare (sampleRate); d->on[(size_t) fix].store (true); return d; };
+        auto plain = [] { auto d = std::make_unique<qn::LabelDsp3>(); d->prepare (sampleRate); return d; };
+        auto ratioDb = [] (float a, float b) { return juce::Decibels::gainToDecibels (a / juce::jmax (1.0e-9f, b)); };
+        {
+            qn::LabelDsp3::Context cx; cx.role = 2; cx.playing = true; cx.sectionType = 4;
+            auto d = with (qn::LabelDsp3::bassLowDuck);
+            // 120 BPM: a beat every 0.5 s; just after the beat against the middle of it
+            const auto near = run (*d, cx, sine (50.0f, 0.3f), sr + 441, sr + 2205), mid = run (*with (qn::LabelDsp3::bassLowDuck), cx, sine (50.0f, 0.3f), sr + 8820, sr + 10584);
+            check (ratioDb (near, mid) < -3.0f, "the bass's lows duck just after each kick (" + juce::String (ratioDb (near, mid), 1) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto d = with (qn::LabelDsp3::dcBlock);
+            const auto out = run (*d, cx, [] (int, int) { return 0.2f; }, sr, 2 * sr);
+            check (out < 0.01f, "DC removed (" + juce::String (out, 4) + " left)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 3; cx.sectionType = 2;
+            const auto cut = run (*with (qn::LabelDsp3::breakdownDrumHighCut), cx, sine (12000.0f, 0.3f), sr, 2 * sr);
+            const auto lowCut = run (*with (qn::LabelDsp3::breakdownDrumLowCut), cx, sine (60.0f, 0.3f), sr, 2 * sr);
+            cx.sectionType = 4;
+            const auto dropTop = run (*with (qn::LabelDsp3::breakdownDrumHighCut), cx, sine (12000.0f, 0.3f), sr, 2 * sr);
+            check (ratioDb (cut, dropTop) < -6.0f && lowCut < 0.3f * 0.707f * 0.5f, "drums thinned in the breakdowns only (top " + juce::String (ratioDb (cut, dropTop), 1) + " dB, lows cut)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4; cx.sectionType = 3; cx.buildProgress = 1.0f;
+            const auto hp = run (*with (qn::LabelDsp3::buildHighPass), cx, sine (100.0f, 0.3f), sr, 2 * sr), flat = run (*plain(), cx, sine (100.0f, 0.3f), sr, 2 * sr);
+            check (ratioDb (hp, flat) < -6.0f, "the high-pass rises through the build (100 Hz " + juce::String (ratioDb (hp, flat), 1) + " dB at its end)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4; cx.dropHit = 1.0f;
+            const auto ducked = run (*with (qn::LabelDsp3::impactDuck), cx, sine (300.0f, 0.3f), sr, 2 * sr), flat = run (*plain(), cx, sine (300.0f, 0.3f), sr, 2 * sr);
+            check (ratioDb (ducked, flat) < -0.7f && ratioDb (ducked, flat) > -1.5f, "the pads dip 1 dB under the drop's impact (" + juce::String (ratioDb (ducked, flat), 2) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto anti = [] (int i, int ch) { const auto v = 0.3f * std::sin (0.05f * (float) i); return ch == 0 ? v : -v; };
+            const auto guarded = run (*with (qn::LabelDsp3::correlationGuard), cx, anti, sr, 2 * sr), flat = run (*plain(), cx, anti, sr, 2 * sr);
+            check (ratioDb (guarded, flat) < -1.5f, "an image that cancels in mono is narrowed (" + juce::String (ratioDb (guarded, flat), 1) + " dB of side)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto d = plain();
+            d->panOffset.store (0.5f);
+            const auto left = run (*d, cx, sine (300.0f, 0.3f), sr, 2 * sr, 0);
+            auto d2 = plain(); d2->panOffset.store (0.5f);
+            const auto right = run (*d2, cx, sine (300.0f, 0.3f), sr, 2 * sr, 1);
+            check (left < right * 0.6f, "a pan offset moves the part to the right");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4; cx.leadActivity = 1.0f; cx.leadHz = 440.0f;
+            const auto dipped = run (*with (qn::LabelDsp3::padUnderLead), cx, sine (440.0f, 0.3f), sr, 2 * sr), flat = run (*plain(), cx, sine (440.0f, 0.3f), sr, 2 * sr);
+            const auto other = run (*with (qn::LabelDsp3::padUnderLead), cx, sine (2000.0f, 0.3f), sr, 2 * sr), otherFlat = run (*plain(), cx, sine (2000.0f, 0.3f), sr, 2 * sr);
+            check (ratioDb (dipped, flat) < -1.5f && std::abs (ratioDb (other, otherFlat)) < 0.5f, "the pad dips at the lead's note only (" + juce::String (ratioDb (dipped, flat), 1) + " dB at 440 Hz)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto d = with (qn::LabelDsp3::truePeak);
+            run (*d, cx, sine (11000.0f, 0.99f), 0, sr);
+            d->tick();
+            check (d->truePeakTrimDb.load() < -0.1f, "peaks between the samples trimmed at the source (" + juce::String (d->truePeakTrimDb.load(), 1) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 7; cx.sectionType = 3;
+            cx.energyRatio = 1.5f;
+            const auto up = run (*with (qn::LabelDsp3::riserEnergy), cx, sine (2000.0f, 0.2f), sr, 2 * sr), flat = run (*plain(), cx, sine (2000.0f, 0.2f), sr, 2 * sr);
+            check (ratioDb (up, flat) > 1.0f, "the riser follows the build's energy (" + juce::String (ratioDb (up, flat), 1) + " dB)");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4;
+            auto d = with (qn::LabelDsp3::expander);
+            d->expThreshold = 0.05f;
+            const auto quiet = run (*d, cx, sine (300.0f, 0.01f), sr, 2 * sr);
+            check (quiet < 0.01f * 0.707f * 0.5f, "the expander pulls the noise floor down");
+        }
+        {
+            qn::LabelDsp3::Context cx; cx.role = 4; cx.playing = true;
+            auto d = plain();
+            d->on[qn::LabelDsp3::phraseTrim].store (true);
+            d->phraseTrimDb[0].store (-6.0f);
+            const auto rode = run (*d, cx, sine (300.0f, 0.3f), sr, 2 * sr), flat = run (*plain(), cx, sine (300.0f, 0.3f), sr, 2 * sr);
+            check (std::abs (ratioDb (rode, flat) + 6.0f) < 0.5f, "a phrase ride moves its phrase (" + juce::String (ratioDb (rode, flat), 1) + " dB)");
         }
         suite::FixBus::reset();
     }

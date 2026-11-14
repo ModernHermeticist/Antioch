@@ -1,6 +1,7 @@
 // Offline tests for Vibration. Usage: VibrationTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "LabelReadyBus.h"
 #include "TestUtils.h"
 #include "AutomationBus.h"
 #include "ChordBus.h"
@@ -524,6 +525,26 @@ int main (int argc, char** argv)
         const auto quiet = run (0.02f), loud = run (0.6f);
         check (quiet > 6.0f && loud < -1.0f, "a quiet lead is brought up into the drive, a loud one down (" + juce::String (quiet, 1) + " / " + juce::String (loud, 1)
                    + " dB), and given back after");
+    }
+
+
+    section ("Mix fixes: presence eased before heavy drive, the drive per section");
+    {
+        auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
+        {
+            std::array<uint32_t, 8> n {};
+            for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
+            suite::LabelReadyBus::publishNeeds (n);
+        };
+        auto p = std::make_unique<VibrationProcessor>();
+        if (auto* d = p->apvts.getParameter (Params::drive)) d->setValueNotifyingHost (d->convertTo0to1 (24.0f));
+        const auto before = p->effective();
+        ask ({ suite::Autopilot::mxPresenceEaseF, suite::Autopilot::mxDriveSectionF });
+        p->pollTick();
+        const auto after = p->effective();
+        check (p->presenceEase.load() && after.presence < before.presence - 1.0f, "the presence eases under heavy drive (" + juce::String (after.presence - before.presence, 1) + " dB)");
+        check (VibrationProcessor::driveSectionDb (2) < -3.0f && VibrationProcessor::driveSectionDb (4) == 0.0f, "less drive in the breakdowns, all of it in the drops");
+        suite::LabelReadyBus::reset();
     }
 
     return finish();

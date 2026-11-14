@@ -1,3 +1,4 @@
+#include "ActivityBus.h"
 #include "PluginProcessor.h"
 #include "AutopilotBus.h"
 #include "TempoBus.h"
@@ -179,6 +180,18 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
     else
         morphAmount.store (0.0f);
+
+    // The mix fixes' cues for every track: each drop's first beat (an impact the music dips under)
+    // and the last bar of each 8-bar phrase (where fills play)
+    if (host.playing && host.hasPpq && morphFollower.refresh())
+        if (const auto pos = morphFollower.locate (host.ppq, host.barQuarters()); pos.valid)
+        {
+            namespace AB = suite::ActivityBus;
+            const auto inQ = host.ppq - pos.startQ, barQ = host.barQuarters();
+            AB::write (AB::dropHit, pos.type == suite::SectionType::Drop && inQ >= 0.0 && inQ < 1.0 ? (float) (1.0 - inQ) : 0.0f);
+            const auto phraseQ = 8.0 * barQ;
+            AB::write (AB::phraseEnd, inQ >= 0.0 && std::fmod (inQ, phraseQ) >= phraseQ - barQ && pos.endQ - host.ppq > 0.0 ? 1.0f : 0.0f);
+        }
 
     // Label-ready: the song, bar by bar, whenever it plays (the master: Ouroboros goes on the master)
     if (host.playing && host.hasPpq && buffer.getNumChannels() > 0)

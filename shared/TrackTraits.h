@@ -46,6 +46,10 @@ namespace suite::TrackTraits
         float subsonicDb = -100.0f;                        // under 20 Hz against its level (dB)
         float cpuPercent = 0.0f;                           // the plugin's share of the audio thread's time (%)
         int hitCount = 0;
+        static constexpr int maxPhrases = 64;
+        std::array<float, maxPhrases> phraseDb {};         // its level in each 4-bar phrase (16 quarters; -100 = silent there)
+        float dcDb = -100.0f;                              // its DC offset against its level (dB)
+        int lowestNote = -1;                               // its lowest note (MIDI, Quintessence's pitch estimate; -1 = unknown)
         // the waveform copy (mono, 250..1500 Hz, 4 kHz), newest sample at ring[(ringPos - 1) % ringSize]
         std::array<float, ringSize> ring {};
         int ringPos = 0;
@@ -69,7 +73,7 @@ namespace suite::TrackTraits
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v3", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v4", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -214,7 +218,7 @@ namespace suite::TrackTraits
             // a new play-through: measure afresh (the waveform copy carries on)
             if (ppq >= 0.0 && ! wasPlaying) { inPeak = 0.0f; inPow = 0.0; inN = 0; outPow = sidePow = lowMidPow = lowSidePow = 0.0; outN = 0; peakOut = 0.0f;
                                               sectionPow.fill (0.0); sectionN.fill (0); sectionPeak.fill (0.0f); nDecays.store (0); nRecoveries.store (0); nHits.store (0);
-                                              moveSum = 0.0; moveN = 0; floorHist.fill (0); }
+                                              moveSum = 0.0; moveN = 0; floorHist.fill (0); phrasePow.fill (0.0); phraseN.fill (0); dcSum = 0.0; }
             wasPlaying = ppq >= 0.0;
             for (int i = 0; i < n; ++i)
             {
@@ -227,6 +231,12 @@ namespace suite::TrackTraits
                 lowMidPow += (double) lm * lm; lowSidePow += (double) ls * ls;
                 const auto a = std::abs (mid);
                 peakOut = std::max (peakOut, a);
+                dcSum += (double) mid;
+                if (ppq >= 0.0)
+                {
+                    const auto ph = (int) ((ppq + (double) i * qPerSample) / 16.0);
+                    if (ph >= 0 && ph < Traits::maxPhrases) { phrasePow[(size_t) ph] += (double) mid * mid; ++phraseN[(size_t) ph]; }
+                }
                 if (sectionIndex >= 0 && sectionIndex < maxSections)
                 {
                     if (offline) { sectionPowOff[(size_t) sectionIndex] += (double) mid * mid; ++sectionNOff[(size_t) sectionIndex]; }
@@ -327,6 +337,8 @@ namespace suite::TrackTraits
                     t.hitSpreadDb = h[(size_t) (k * 9 / 10)] - h[(size_t) (k / 10)];
                 }
             }
+            for (int p = 0; p < Traits::maxPhrases; ++p) t.phraseDb[(size_t) p] = phraseN[(size_t) p] > (int) fs ? db (phrasePow[(size_t) p], phraseN[(size_t) p]) : -100.0f;
+            if (outN > 0 && t.outRmsDb > -90.0f) t.dcDb = juce::Decibels::gainToDecibels ((float) std::abs (dcSum / outN), -120.0f) - t.outRmsDb;
             t.ring = ring; t.ringPos = ringPos; t.ringPpq = ringPpq; t.ringBpm = ringBpm;
             return t;
         }
@@ -396,6 +408,9 @@ namespace suite::TrackTraits
         std::array<float, 3> prevWin { -200.0f, -200.0f, -200.0f };
         float prevAll = 0.0f;
         std::array<int, 200> floorHist {};
+        std::array<double, Traits::maxPhrases> phrasePow {};
+        std::array<int, Traits::maxPhrases> phraseN {};
+        double dcSum = 0.0;
         static constexpr int maxEvents = 256;
         std::array<float, maxEvents> decays {}, recoveries {};
         std::atomic<int> nDecays { 0 }, nRecoveries { 0 };

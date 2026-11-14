@@ -209,6 +209,9 @@ void KybalionProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juc
     {
         Ducker::Settings s;
         s.depth = scenes.plain (sDuckDepth);
+        if (pumpPerSection.load() && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid)
+                s.depth = juce::jlimit (0.0f, 1.0f, s.depth * pumpScale ((int) sec.type));
         s.attackMs = value (Duck::attack);
         s.holdMs = value (Duck::hold);
         s.releaseMs = value (Duck::release);
@@ -599,6 +602,20 @@ float KybalionProcessor::depthForOverlap (float db)
 {
     // Strong low end under the kick (-18 dBFS RMS or more) ducks almost fully; little (-42 or less) just a touch.
     return juce::jlimit (0.4f, 0.95f, 0.4f + (db + 42.0f) / 24.0f * 0.55f);
+}
+
+void KybalionProcessor::mixTick()
+{
+    namespace AP = suite::Autopilot;
+    auto latched = [this] (const char* key, AP::Feature f)
+    {
+        if (! (bool) apvts.state.getProperty (key, false) && AP::on (f) && suite::LabelReadyBus::needed ((int) f))
+            apvts.state.setProperty (key, true, nullptr);
+        return (bool) apvts.state.getProperty (key, false) && AP::on (f);
+    };
+    pumpPerSection.store (latched ("mixPumpSection", AP::mxPumpSectionF));
+    if (latched ("mixAutoFit", AP::mxAutoFitKickF) && ! autoFitted && sidechainConnected.load() && kick.hits() >= kicksNeeded)
+        autoFitted = fitToKick();
 }
 
 bool KybalionProcessor::fitToKick()

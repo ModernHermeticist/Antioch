@@ -1,6 +1,7 @@
 // Offline tests for Antioch. Usage: AntiochTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "LabelReadyBus.h"
 #include "AutopilotBus.h"
 #include "SuiteUI.h"
 #include "SectionBus.h"
@@ -882,6 +883,29 @@ int main (int argc, char** argv)
         p->fixes->poll();
         check (p->apvts.getRawParameterValue (Params::Verb::leadRoom)->load() > room + 0.2f, "the reverb makes more room for the lead");
         suite::FixBus::reset();
+    }
+
+
+    section ("Mix fixes: sends, decay and damping per section, pre-delay by role, the space before the drop");
+    {
+        auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
+        {
+            std::array<uint32_t, 8> n {};
+            for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
+            suite::LabelReadyBus::publishNeeds (n);
+        };
+        check (AntiochProcessor::sendScale (4) < 1.0f && AntiochProcessor::sendScale (2) > 1.0f && AntiochProcessor::decayScale (2) > AntiochProcessor::decayScale (4)
+               && AntiochProcessor::dampScale (4) < 1.0f, "drier, shorter, darker echoes in the drops; more space in the breakdowns");
+        check (AntiochProcessor::rolePreDelayMs (suite::roleVocal) > AntiochProcessor::rolePreDelayMs (suite::roleLead) && AntiochProcessor::rolePreDelayMs (suite::rolePads) == 0.0f,
+               "the vocal and lead get their reverb pre-delayed clear of them");
+        auto p = make();
+        p->mixTick();
+        check (! p->mixOn[AntiochProcessor::mxSends].load(), "off until Ouroboros asks for it");
+        ask ({ suite::Autopilot::mxSendsSectionF, suite::Autopilot::mxVerbGateF, suite::Autopilot::mxPadRoomF });
+        p->mixTick();
+        check (p->mixOn[AntiochProcessor::mxSends].load() && p->mixOn[AntiochProcessor::mxGate].load() && ! p->mixOn[AntiochProcessor::mxPadRoom].load(),
+               "latched once asked, where it applies (the pads' room only on a pad)");
+        suite::LabelReadyBus::reset();
     }
 
     return finish();

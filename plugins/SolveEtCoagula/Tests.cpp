@@ -1,6 +1,7 @@
 // Offline tests for Solve et Coagula. Usage: SolveEtCoagulaTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "LabelReadyBus.h"
 #include "TestUtils.h"
 #include "PluginEditor.h"
 #include "SectionBus.h"
@@ -471,6 +472,23 @@ int main (int argc, char** argv)
         std::unique_ptr<juce::AudioProcessorEditor> editor (p->createEditor());
         snapshot (*editor, outDir.getChildFile ("solveetcoagula.png"));
         editor.reset();
+    }
+
+
+    section ("Mix fixes: the unmasking depth per section");
+    {
+        auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
+        {
+            std::array<uint32_t, 8> n {};
+            for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
+            suite::LabelReadyBus::publishNeeds (n);
+        };
+        check (P::depthScale (4) > 1.0f && P::depthScale (2) < 0.7f, "deeper unmasking in the drops, lighter in the breakdowns");
+        P p;
+        ask ({ suite::Autopilot::mxDepthSectionF });
+        p.pollTick();
+        check (p.depthPerSection.load(), "latched once Ouroboros asks for it");
+        suite::LabelReadyBus::reset();
     }
 
     return finish();

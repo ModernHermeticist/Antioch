@@ -12,7 +12,9 @@
 
 namespace suite::ActivityBus
 {
-    enum Source { vocal = 0, lead = 1, vocalOverMusic = 2, riser = 3, numSources = 4 };   // vocalOverMusic: dB, written raw; riser: Azoth's riser and swell
+    enum Source { vocal = 0, lead = 1, vocalOverMusic = 2, riser = 3, sibilance = 4, dropHit = 5, phraseEnd = 6, numSources = 7 };
+    // vocalOverMusic: dB, written raw; riser: Azoth's riser and swell; sibilance: the vocal's "s" (Quintessence on the vocal);
+    // dropHit: each drop's first beat (Ouroboros); phraseEnd: the last bar of each 8-bar phrase, where fills play (Ouroboros)
 
     namespace detail
     {
@@ -21,7 +23,7 @@ namespace suite::ActivityBus
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_activitybus_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_activitybus_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;

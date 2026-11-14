@@ -2204,5 +2204,125 @@ int main (int argc, char** argv)
         AP::reset();
     }
 
+
+    section ("Mix fixes: the fifth checks, the plugins told, and the autopilot's budgets, arbitration, rollback and provenance");
+    {
+        using T = suite::SectionType;
+        namespace AP = suite::Autopilot;
+        AP::reset();
+        suite::FixBus::reset();
+        suite::SectionMap map;
+        const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+        for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+        map.totalBars = 96;
+        std::vector<lab::Bar> bars ((size_t) map.totalBars);
+        for (int b = 0; b < map.totalBars; ++b)
+        {
+            auto& x = bars[(size_t) b];
+            x.heard = true; x.db = (b >= 40 && b < 56) ? -14.0f : -12.0f; x.sideDb = -16.0f; x.onsets = 4.0f; x.peakDb = -10.0f;
+            for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = x.db - 3.0f * (float) std::abs (k - 3);
+        }
+        lab::Inputs in;
+        in.map = map; in.bpm = 138.0; in.bars = bars; in.sections = lab::sections (bars, map);
+        auto track = [] (uint32_t id, int role, const char* name)
+        {
+            suite::TrackTraits::Traits t;
+            t.id = id; t.role = role; juce::String (name).copyToUTF8 (t.track, sizeof (t.track) - 1);
+            t.outRmsDb = -20.0f; t.sideDb = -35.0f; t.lowMidDb = -30.0f; t.lowSideDb = -60.0f; t.crestDb = 10.0f; t.inPeakDb = -8.0f; t.inRmsDb = -20.0f;
+            for (auto& v : t.sectionDb) v = -20.0f;
+            for (auto& v : t.sectionPeakDb) v = -15.0f;
+            for (auto& v : t.sectionDbOffline) v = -100.0f;
+            for (auto& v : t.phraseDb) v = -100.0f;
+            return t;
+        };
+        auto kick = track (0x401, 1, "Kick"), pad = track (0x402, 4, "Pad"), hat1 = track (0x403, 3, "Hats"), hat2 = track (0x404, 3, "Shaker"), lead = track (0x405, 5, "Lead");
+        for (int p = 0; p < 24; ++p) pad.phraseDb[(size_t) p] = -20.0f;
+        pad.phraseDb[8] = -24.0f;                      // bars 33-36 sag 4 dB under the rest of the drop
+        kick.sectionDb[1] = -25.0f;                    // the kick 5 dB down in the first build against the drop
+        hat2.dcDb = -20.0f;                            // DC on a sample
+        lead.sectionDb[2] = -21.0f;                    // the lead 1 dB under the pad in the drop: no room
+        in.traits = { kick, pad, hat1, hat2, lead };
+        const auto rep = lab::evaluate (in);
+        auto find = [&rep] (const juce::String& name) -> const lab::Check* { for (const auto& c : rep.checks) if (c.name == name) return &c; return nullptr; };
+        auto flagged = [&] (const juce::String& name, AP::Feature first, suite::Fix fix)
+        {
+            const auto* c = find (name);
+            const auto ok = c != nullptr && c->measured && c->score < 0.75f && c->action.startsWith ("autopilot:" + juce::String ((int) first)) && c->fix == fix;
+            check (ok, name + " flagged, with its switches (" + (c == nullptr ? juce::String ("missing") : c->detail) + ")");
+            return c;
+        };
+        if (const auto* c = flagged ("Every phrase at its level", AP::mxPhraseTrimF, suite::Fix::PhraseTrim))
+        {
+            uint32_t low; int ph; float d;
+            suite::unpackPhraseTrim (c->fixData, low, ph, d);
+            check (low == (0x402u & 0xfffu) && ph == 8 && d > 0.5f, "a ride up on the pad's sagging phrase (bars 33-36, +" + juce::String (d, 1) + " dB)");
+        }
+        if (const auto* c = flagged ("The kick per section", AP::mxKickSectionF, suite::Fix::SectionTrim))
+        {
+            uint32_t low; int type; float d;
+            suite::unpackSectionTrim (c->fixData, low, type, d);
+            check (low == 0x401u && type == (int) T::Build && d > 0.0f, "the kick up a step in the builds");
+        }
+        flagged ("Parts side by side", AP::mxPanLayoutF, suite::Fix::TrackPan);
+        flagged ("A clean signal", AP::mxDcBlockF, suite::Fix::None);
+        flagged ("Room for the lead and vocal", AP::mxPadUnderLeadF, suite::Fix::None);
+        // the plugins told: each check's other switches too
+        {
+            const auto needs = lab::AutoFixer::needsFrom (rep);
+            auto has = [&needs] (AP::Feature f) { return (needs[(size_t) f / 32] & (1u << (f % 32))) != 0; };
+            check (has (AP::mxMonoWidenF) && has (AP::mxVocalPresenceF) && has (AP::mxTruePeakF) && has (AP::mxChainNeutralF), "a check's companion fixes are needed too (mono widening, vocal presence, true peak, loudness-neutral chain)");
+            check (lab::featuresOf (*find ("Parts side by side")).size() == 6, "one check, six switches");
+        }
+        check (lab::isLayerRole (1) && lab::isLayerRole (3), "kick and hat layers are lined up as layers too");
+        // the autopilot: a tone step tried and kept, its track's provenance and tone budget
+        {
+            lab::Report r;
+            lab::Check c;
+            c.area = lab::aMids; c.name = "Each part's tone where it's exposed"; c.measured = true; c.score = 0.2f;
+            c.fix = suite::Fix::MasterTone; c.fixData = suite::packMasterTone (0x402, 6, -1.0f); c.action = "autopilot:" + juce::String ((int) AP::roleTimbreF);
+            r.checks = { c };
+            lab::AutoFixer fixer;
+            fixer.step (r, in.traits, true);
+            r.checks[0].score = 0.6f;
+            for (int i = 0; i < 4; ++i) fixer.step (r, in.traits, true);
+            check (fixer.kept == 1 && fixer.provenanceOf (0x402).contains (c.name), "who changed the pad: the check whose fix was kept on it");
+            check (std::abs (fixer.toneSpentOn (0x402) - 1.0f) < 0.01f, "its tone budget spent: 1 dB of 6");
+            // arbitration: the opposite move on the same band isn't tried while the first stands
+            lab::Check up = c; up.name = "Another tone check"; up.fixData = suite::packMasterTone (0x402, 6, 1.0f); up.score = 0.1f;
+            r.checks = { up };
+            fixer.step (r, in.traits, true);
+            check (fixer.note == "nothing to do", "a fix fighting a kept one isn't tried (" + fixer.note + ")");
+            // rollback by area: the area falls well under the milestone, its fixes since then undone
+            r.checks = { c };
+            r.checks[0].score = 0.9f;
+            fixer.milestone (r);
+            lab::Check d2 = c; d2.name = "A third tone check"; d2.fixData = suite::packMasterTone (0x402, 4, -1.0f); d2.score = 0.3f;
+            r.checks = { d2 };
+            fixer.step (r, in.traits, true);
+            r.checks[0].score = 0.5f;
+            for (int i = 0; i < 4; ++i) fixer.step (r, in.traits, true);
+            const auto latest = suite::FixBus::latest();
+            r.checks[0].score = 0.2f;
+            fixer.step (r, in.traits, true);
+            check (fixer.note.contains ("undone") && latest > 0, "an area that fell since the milestone has its fixes undone (" + fixer.note + ")");
+            // the step budget: twelve tries per play-through
+            AP::set (AP::pacingF, false);   // (no pauses after the undone ones)
+            lab::AutoFixer budget;
+            lab::Report many;
+            for (int i = 0; i < 20; ++i)
+            {
+                lab::Check x = c; x.name = "Check " + juce::String (i); x.fixData = suite::packMasterTone (0x500 + (uint32_t) i, 3, -0.5f); x.score = 0.1f;
+                many.checks.push_back (x);
+            }
+            for (int i = 0; i < 20 * 5; ++i) { budget.step (many, in.traits, true); }
+            check (budget.triedThisPlayThrough() == 12 && budget.note.contains ("play it again"), "at most twelve fixes tried per play-through (" + juce::String (budget.triedThisPlayThrough()) + ")");
+            budget.step (many, in.traits, false);
+            budget.step (many, in.traits, true);
+            check (budget.triedThisPlayThrough() <= 1, "a new play-through starts the count again");
+        }
+        suite::FixBus::reset();
+        AP::reset();
+    }
+
     return finish();
 }

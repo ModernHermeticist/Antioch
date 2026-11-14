@@ -1,6 +1,7 @@
 // Offline tests for Kybalion. Usage: KybalionTests [output-dir]
 
 #include "PluginProcessor.h"
+#include "LabelReadyBus.h"
 #include "SuiteUI.h"
 #include "SectionBus.h"
 #include "TestUtils.h"
@@ -773,6 +774,31 @@ int main (int argc, char** argv)
         for (int i = 0; i < 16; ++i) same = same && std::abs (p->apvts.getRawParameterValue (Params::Gate::step (i))->load() - r.chords[(size_t) i]) < 0.01f;
         check (same && juce::String (suite::KitBus::read().name) == "Test kit", "the gate's 16 steps are the kit's chord rhythm");
         suite::KitBus::withdraw();
+    }
+
+
+    section ("Mix fixes: the pump per section, fit to the kick by itself");
+    {
+        auto ask = [] (std::initializer_list<suite::Autopilot::Feature> fs)
+        {
+            std::array<uint32_t, 8> n {};
+            for (auto f : fs) n[(size_t) f / 32] |= 1u << (f % 32);
+            suite::LabelReadyBus::publishNeeds (n);
+        };
+        check (KybalionProcessor::pumpScale (4) > 1.0f && KybalionProcessor::pumpScale (2) < 0.7f, "deeper pumping in the drops, lighter in the breakdowns");
+        auto p = make (false, true);
+        p->mixTick();
+        check (! p->pumpPerSection.load(), "off until Ouroboros asks for it");
+        ask ({ suite::Autopilot::mxPumpSectionF, suite::Autopilot::mxAutoFitKickF });
+        p->mixTick();
+        check (p->pumpPerSection.load() && (bool) p->apvts.state.getProperty ("mixPumpSection", false), "latched once asked (kept with the project)");
+        suite::LabelReadyBus::reset();
+        p->mixTick();
+        check (p->pumpPerSection.load(), "and stays on after the problem's gone");
+        suite::Autopilot::set (suite::Autopilot::mxPumpSectionF, false);
+        p->mixTick();
+        check (! p->pumpPerSection.load(), "its switch turns it off");
+        suite::Autopilot::set (suite::Autopilot::mxPumpSectionF, true);
     }
 
     return finish();

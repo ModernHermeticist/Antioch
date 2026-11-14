@@ -14,6 +14,7 @@
 #include "ActivityBus.h"
 #include "AutopilotBus.h"
 #include "FixBus.h"
+#include "LabelReadyBus.h"
 
 class AntiochProcessor : public suite::SuiteProcessor
 {
@@ -61,12 +62,28 @@ public:
         glueRoomTick();
         spacePass();
         runawayTick();
+        mixTick();
         // label-ready: asleep while every level is at zero (the sound passes through untouched)
         auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
         const auto idle = v (Params::echoLevel) < 0.001f && v (Params::verbLevel) < 0.001f && v (Params::throwLevel) < 0.001f;
         sleeping.store (idle && suite::Autopilot::on (suite::Autopilot::idleSleepF));
     }
     std::atomic<bool> sleeping { false };
+    /** The mix fixes here (each latched once Ouroboros' checks ask for it, while its autopilot
+        switch is on; saved with the project): sends, decay and echo damping per section, pre-delay
+        by role, the delay's division by role, the space tightening into each drop, the pads' own
+        room, a clap's reverb from the tempo. */
+    enum MixFix { mxSends, mxRolePreDelay, mxDecay, mxDivision, mxDamp, mxGate, mxPadRoom, mxClapVerb, numMix };
+    std::array<std::atomic<bool>, numMix> mixOn {};
+    std::atomic<bool> clapTrack { false };
+    bool divisionSet = false, padRoomSet = false;
+    void mixTick();
+    /** Per section type (Intro, Groove, Breakdown, Build, Drop, Outro): send, decay and damping scales. */
+    static float sendScale (int t) noexcept  { static const float v[6] = { 1.0f, 1.0f, 1.2f, 1.0f, 0.8f, 1.1f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    static float decayScale (int t) noexcept { static const float v[6] = { 1.0f, 1.0f, 1.25f, 1.0f, 0.8f, 1.15f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    static float dampScale (int t) noexcept  { static const float v[6] = { 1.0f, 1.0f, 1.0f, 1.1f, 0.85f, 0.9f }; return t >= 0 && t < 6 ? v[t] : 1.0f; }
+    /** Pre-delay added by role (ms): the lead and vocal clear of their own reverb. */
+    static float rolePreDelayMs (int role) noexcept { return role == suite::roleVocal ? 30.0f : role == suite::roleLead ? 20.0f : role == suite::roleHats ? 5.0f : 0.0f; }
     /** Autopilot (stability): a runaway flagged by the audio thread takes every tap's feedback,
         the throw's and the shimmer down by a quarter (message thread; tests call it). */
     bool runawayTick();

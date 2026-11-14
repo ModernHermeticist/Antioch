@@ -31,13 +31,13 @@ namespace suite::LabelReadyBus
             Master master;
             std::atomic<int32_t> overall;
             char next[160];
-            std::atomic<uint32_t> needs[4], needsStamp;   // the label-ready autopilot: which fixes are needed (bit per feature)
+            std::atomic<uint32_t> needs[8], needsStamp;   // the label-ready autopilot: which fixes are needed (bit per feature)
         };
         inline Shared& shared() noexcept
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_labelready_v2", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_labelready_v3", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -95,10 +95,10 @@ namespace suite::LabelReadyBus
         return "label-ready " + juce::String (s.overall.load()) + "/100, next: " + juce::String::fromUTF8 (buf);
     }
     /** Ouroboros: the autopilot switches whose problem the checks found (a bit per feature). */
-    inline void publishNeeds (const std::array<uint32_t, 4>& mask) noexcept
+    inline void publishNeeds (const std::array<uint32_t, 8>& mask) noexcept
     {
         auto& s = detail::shared();
-        for (size_t i = 0; i < 4; ++i) s.needs[i].store (mask[i]);
+        for (size_t i = 0; i < 8; ++i) s.needs[i].store (mask[i]);
         s.needsStamp.store (detail::nowSeconds());
     }
     /** Is the fix for this feature needed now (Ouroboros' checks found its problem in the last minute)? */
@@ -106,7 +106,7 @@ namespace suite::LabelReadyBus
     {
         auto& s = detail::shared();
         const auto st = s.needsStamp.load();
-        if (st == 0 || detail::nowSeconds() - st > 60 || feature < 0 || feature >= 128) return false;
+        if (st == 0 || detail::nowSeconds() - st > 60 || feature < 0 || feature >= 256) return false;
         return (s.needs[(size_t) feature / 32].load() & (1u << (feature % 32))) != 0;
     }
     inline void reset() noexcept { auto& s = detail::shared(); s.masterStamp.store (0); s.overallStamp.store (0); s.needsStamp.store (0); for (auto& n : s.needs) n.store (0); }

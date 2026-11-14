@@ -12,7 +12,7 @@ namespace lab
 {
     namespace detail
     {
-        inline bool isLayerRole (int role) { return role == 2 || role == 4 || role == 5; }
+        inline bool isLayerRole (int role) { return role == 2 || role == 4 || role == 5 || ((role == 1 || role == 3) && suite::Autopilot::on (suite::Autopilot::mxLayerRolesF)); }   // kick and hat layers too (the autopilot)
         inline juce::String trackLabel (const suite::TrackTraits::Traits& t)
         {
             return t.trackName().isNotEmpty() ? t.trackName() : juce::String (suite::director::roleName (t.role));

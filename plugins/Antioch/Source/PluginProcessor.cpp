@@ -211,6 +211,8 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         s.resonance = value (resonance);
         s.blend     = scenes.plain (sHarmonics);
         s.dampHz    = scenes.plain (sEchoDamp) * (1.0f - 0.5f * darkening);
+        if (mixOn[mxDamp].load() && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) s.dampHz = juce::jlimit (500.0f, 20000.0f, s.dampHz * dampScale ((int) sec.type));
         s.lowCutHz  = value (lowCut);
 
         for (int t = 0; t < numTaps; ++t)
@@ -236,6 +238,10 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
         s.decay = scenes.plain (sDecay);
         s.size = value (Verb::size);
         s.predelayMs = value (Verb::predelay);
+        if (mixOn[mxRolePreDelay].load()) s.predelayMs = juce::jmin (300.0f, s.predelayMs + rolePreDelayMs (trackRole.load()));
+        if (mixOn[mxDecay].load() && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) s.decay = juce::jlimit (0.5f, 20.0f, s.decay * decayScale ((int) sec.type));
+        if (mixOn[mxClapVerb].load() && clapTrack.load() && host.bpm > 1.0) s.decay = juce::jlimit (0.5f, 20.0f, juce::jmin (s.decay, (float) (2.0 * 60.0 / host.bpm)));   // two beats at most
         // Autopilot (mixing): the space in time with the song - the pre-delay on the nearest note
         // value (1/128 to 1/16), the decay down to whole beats (the section scenes still lengthen it in
         // breakdowns and tighten it in drops)
@@ -364,8 +370,13 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     // ---- Levels ----
     const auto out = juce::Decibels::decibelsToGain (value (output));
     dryGain.setTargetValue (scenes.plain (sDry));
-    echoGain.setTargetValue (scenes.plain (sEcho));
-    verbGain.setTargetValue (scenes.plain (sVerb));
+    {
+        float send = 1.0f;
+        if (mixOn[mxSends].load() && host.hasPpq && sections.refresh())
+            if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) send = sendScale ((int) sec.type);
+        echoGain.setTargetValue (scenes.plain (sEcho) * send);
+        verbGain.setTargetValue (scenes.plain (sVerb) * send);
+    }
     throwGain.setTargetValue (scenes.plain (sThrow));
     outGain.setTargetValue (out);
     echoSend.setTargetValue (value (echoToVerb));
@@ -386,6 +397,10 @@ void AntiochProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffer, juce
     if (sections.refresh() && host.hasPpq)
         if (const auto at = sections.locate (host.ppq, host.barQuarters()); at.valid)
             energyDb = juce::jlimit (-3.0f, 3.0f, -3.0f * (at.energyRatio - 1.0f));
+    // the mix fixes: the space tightens through the last beat before each drop (-6 dB)
+    if (mixOn[mxGate].load() && host.hasPpq && host.playing && sections.refresh())
+        if (const auto at = sections.locate (host.ppq, host.barQuarters()); at.valid && at.hasNext && at.next == suite::SectionType::Drop)
+            energyDb -= 6.0f * (float) juce::jlimit (0.0, 1.0, 1.0 - (at.endQ - host.ppq));
     const auto spaceGain = juce::Decibels::decibelsToGain ((suite::AutomationBus::bypassed() ? 0.0f : value (spaceTrim)) + energyDb);
     // The lead's phrases: while it plays (Vibration says so), automatic throws on other tracks wait
     const auto holdForLead = ! onLeadTrack.load() && suite::ActivityBus::read (suite::ActivityBus::lead) > 0.5f;
@@ -770,4 +785,43 @@ bool AntiochProcessor::runawayTick()
     suite::Autopilot::count (suite::Autopilot::runawaysCaught);
     suite::MoveLog::add (getName(), getTrackName(), "Runaway caught: the tails were growing on their own; feedback and shimmer down a quarter", suite::MoveLog::fix);
     return true;
+}
+
+void AntiochProcessor::mixTick()
+{
+    namespace AP = suite::Autopilot;
+    static const AP::Feature features[numMix] = { AP::mxSendsSectionF, AP::mxRolePreDelayF, AP::mxDecaySectionF, AP::mxDelayDivisionF, AP::mxEchoDampF,
+                                                  AP::mxVerbGateF, AP::mxPadRoomF, AP::mxClapVerbF };
+    static const char* keys[numMix] = { "mixSends", "mixRolePreDelay", "mixDecay", "mixDivision", "mixDamp", "mixGate", "mixPadRoom", "mixClapVerb" };
+    const auto role = trackRole.load();
+    const auto name = getTrackName().toLowerCase();
+    clapTrack.store (name.contains ("clap") || name.contains ("snare"));
+    for (int i = 0; i < numMix; ++i)
+    {
+        const auto applies = i == mxRolePreDelay ? rolePreDelayMs (role) > 0.0f : i == mxDivision ? (role == suite::roleLead || role == suite::roleVocal)
+                           : i == mxPadRoom ? role == suite::rolePads : i == mxClapVerb ? clapTrack.load() : true;
+        if (! (bool) apvts.state.getProperty (keys[i], false) && applies && AP::on (features[i]) && suite::LabelReadyBus::needed ((int) features[i]))
+            apvts.state.setProperty (keys[i], true, nullptr);
+        mixOn[(size_t) i].store ((bool) apvts.state.getProperty (keys[i], false) && applies && AP::on (features[i]));
+    }
+    auto setParam = [this] (const juce::String& id, float plain)
+    {
+        if (auto* p = apvts.getParameter (id)) { p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (plain)); p->endChangeGesture(); }
+    };
+    // the delay's division by role: on a lead or vocal, straight 16ths become dotted 8ths (the echoes fall between the notes)
+    if (mixOn[mxDivision].load() && ! divisionSet)
+    {
+        divisionSet = true;
+        const auto from = suite::music::divisionIndex ("1/16"), to = suite::music::divisionIndex ("1/8D");
+        for (int t = 0; t < Params::numTaps; ++t)
+            if (from >= 0 && to >= 0 && tapPtrs[(size_t) t].division != nullptr && tapPtrs[(size_t) t].division->getIndex() == from)
+                setParam (Params::tapId (t, Params::Tap::division), (float) to);
+        suite::MoveLog::add ("Antioch", getTrackName(), "Echo 1/16 -> 1/8D (the echoes fall between the lead's notes)");
+    }
+    // the pads' own room: their reverb steps back while the lead plays
+    if (mixOn[mxPadRoom].load() && ! padRoomSet)
+    {
+        padRoomSet = true;
+        if (apvts.getRawParameterValue (Params::Verb::leadRoom)->load() < 0.5f) setParam (Params::Verb::leadRoom, 0.5f);
+    }
 }

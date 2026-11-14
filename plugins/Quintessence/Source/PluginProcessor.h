@@ -34,6 +34,7 @@
 #include "TrackTraits.h"
 #include "LabelDsp.h"
 #include "LabelDsp2.h"
+#include "LabelDsp3.h"
 #include "LabelReadyBus.h"
 #include "LiveMix.h"
 #include "DirectorStage.h"
@@ -76,6 +77,7 @@ public:
     {
         applyLocks();
         autoPass();
+        labelDsp3.tick();
         // where the master's peaks come from: this track's last 2 s
         const auto pk = peakHold.exchange (0.0f);
         peakWindow[(size_t) (peakTick++ % peakWindow.size())] = pk;
@@ -85,7 +87,8 @@ public:
         // what this track is like, for the label-ready checks (about once a second)
         if (++traitsTick % 5 == 0)
         {
-            const auto t = traits.snapshot (getInstanceId(), effectiveRole(), getTrackName());
+            auto t = traits.snapshot (getInstanceId(), effectiveRole(), getTrackName());
+            t.lowestNote = labelDsp3.lowestNote.load();
             suite::TrackTraits::publish (t);
             latchLabelFixes (t);
         }
@@ -130,6 +133,7 @@ public:
         labelDsp.padMotion.store ((labelLatched & 1u) != 0 && AP::on (AP::padMotionF));
         labelDsp.breakdownLowCut.store ((labelLatched & 2u) != 0 && AP::on (AP::breakdownLowCutF));
         labelDsp.inputStage.store ((labelLatched & 4u) != 0 && AP::on (AP::inputStageF));
+        latchMixFixes (t);
         if (t.inRmsDb > -90.0f && labelDsp.inputStage.load())
             labelDsp.stageDb.store (labelDsp.stageDb.load() + 0.2f * (juce::jlimit (-12.0f, 12.0f, -18.0f - (t.inRmsDb + labelDsp.stageDb.load())) ));
     }
@@ -147,6 +151,14 @@ public:
     std::function<void()> sectionTone (uint32_t data);
     std::function<void()> sectionWidthStep (uint32_t data);
     qn::LabelDsp2 labelDsp2;
+    // The mix fixes (LabelDsp3): each latched once Ouroboros' checks ask for it and it applies to
+    // this track (its role, its name, what it measures); saved with the project.
+    qn::LabelDsp3 labelDsp3;
+    uint64_t mixLatched = 0;
+    bool mixApplies (int fix, int role, const juce::String& name, const suite::TrackTraits::Traits& t) const;
+    void latchMixFixes (const suite::TrackTraits::Traits& t);
+    std::function<void()> phraseTrimStep (uint32_t data);
+    std::function<void()> trackPan (uint32_t data);
     std::function<void()> sectionTrim (uint32_t data);
     void storeLabelFixes();
     void loadLabelFixes();

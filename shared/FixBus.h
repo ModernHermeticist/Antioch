@@ -41,7 +41,9 @@ namespace suite
                                     SectionTone,                                    // one Quintessence's tone in one kind of section (packSectionTone)
                                     SectionWidth,                                   // one Quintessence's width in one kind of section (packSectionTrim: amount x10)
                                     EchoTighter,                                    // every Antioch's echo feedback down a quarter (a busy song)
-                                    ReverbDuck };                                   // every Antioch's reverb steps back while the lead plays
+                                    ReverbDuck,                                     // every Antioch's reverb steps back while the lead plays
+                                    PhraseTrim,                                     // one Quintessence's level in one 4-bar phrase (packPhraseTrim)
+                                    TrackPan };                                     // one Quintessence's pan offset (packMasterTone: its id, band 0, pan x 10)
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
@@ -70,7 +72,7 @@ namespace suite
                                        "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
                                        "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact",
                                        "Polarity flip", "Section trim", "Punch", "Pre-delay from the tempo", "Throws at vocal ends", "Vocal onto the grid",
-                                       "Section tone", "Section width", "Tighter echoes", "Reverb steps back" };
+                                       "Section tone", "Section width", "Tighter echoes", "Reverb steps back", "Phrase ride", "Pan" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -119,6 +121,21 @@ namespace suite
         instanceLow = data & 0xfffu; type = (int) ((data >> 12) & 0x7); band = (int) ((data >> 15) & 0xf);
         auto half = (int) ((data >> 19) & 0x1f);
         if (half >= 16) half -= 32;
+        db = (float) half / 2.0f;
+    }
+
+    /** PhraseTrim: which Quintessence (12 bits), which 4-bar phrase (6 bits: the first 256 bars), a step in signed
+        half dB (6 bits: -16..+15.5 half dB). */
+    inline uint32_t packPhraseTrim (uint32_t instanceId, int phrase, float db) noexcept
+    {
+        const auto half = juce::jlimit (-31, 31, (int) std::lround (db * 2.0f));
+        return (instanceId & 0xfffu) | ((uint32_t) (phrase & 0x3f) << 12) | ((uint32_t) (half & 0x3f) << 18);
+    }
+    inline void unpackPhraseTrim (uint32_t data, uint32_t& instanceLow, int& phrase, float& db) noexcept
+    {
+        instanceLow = data & 0xfffu; phrase = (int) ((data >> 12) & 0x3f);
+        auto half = (int) ((data >> 18) & 0x3f);
+        if (half >= 32) half -= 64;
         db = (float) half / 2.0f;
     }
 

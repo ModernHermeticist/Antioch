@@ -36,6 +36,7 @@ namespace lab
             case AP::roleTimbreF: case AP::journeyF: case AP::sectionWidthF: case AP::phraseDynamicsF: case AP::kickBassPairF: case AP::harshExposureF:
             case AP::subPhaseF: case AP::airF: case AP::riserTopF: case AP::sectionEdgesF: case AP::breakdownSwellF: case AP::layerSplitF: case AP::subFillF:
             case AP::spaceSceneF: case AP::sectionToneF: case AP::depthF: case AP::echoTighterF: case AP::reverbDuckF: case AP::earCandySynthF:
+            case AP::mxPhraseTrimF: case AP::mxLowPolarityF: case AP::mxKickSectionF: case AP::mxLfHeadroomF: case AP::mxLayerRolesF: case AP::mxPanLayoutF:
                 return true;
             default:
                 return false;
@@ -44,6 +45,35 @@ namespace lab
     inline int featureOf (const Check& c)
     {
         return c.action.startsWith ("autopilot:") ? c.action.fromFirstOccurrenceOf (":", false, false).getIntValue() : -1;
+    }
+    /** A check can name several switches ("autopilot:a,b,c": the first is the one Ouroboros runs,
+        the rest live in the plugins and are told they're needed). */
+    inline std::vector<int> featuresOf (const Check& c)
+    {
+        std::vector<int> v;
+        if (! c.action.startsWith ("autopilot:")) return v;
+        for (const auto& t : juce::StringArray::fromTokens (c.action.fromFirstOccurrenceOf (":", false, false), ",", ""))
+            if (t.trim().isNotEmpty()) v.push_back (t.trim().getIntValue());
+        return v;
+    }
+    /** The track a fix message is for (the low 12 bits of its Quintessence's id), 0 = every track. */
+    inline uint32_t targetOf (suite::Fix fix, uint32_t data)
+    {
+        switch (fix)
+        {
+            case suite::Fix::MasterTone: case suite::Fix::TrackPunch: case suite::Fix::SectionTone: case suite::Fix::SectionTrim: case suite::Fix::PhraseTrim:
+            case suite::Fix::TrackPan: case suite::Fix::TrackPolarity: case suite::Fix::Narrower: case suite::Fix::SectionWidth: case suite::Fix::VocalDelay:
+                return data & 0xfffu;
+            default: return 0;
+        }
+    }
+    /** A tone move's size and direction (dB), 0 when it isn't one. */
+    inline float toneOf (suite::Fix fix, uint32_t data, int& band)
+    {
+        band = -1;
+        if (fix == suite::Fix::MasterTone) { uint32_t l; float db; suite::unpackMasterTone (data, l, band, db); return db; }
+        if (fix == suite::Fix::SectionTone) { uint32_t l; int t; float db; suite::unpackSectionTone (data, l, t, band, db); return db; }
+        return 0.0f;
     }
 
     class AutoFixer
@@ -58,11 +88,12 @@ namespace lab
         int kept = 0, undone = 0;
 
         /** The plugins' fixes: which switches are needed now (a check under 70%). */
-        static std::array<uint32_t, 4> needsFrom (const Report& rep)
+        static std::array<uint32_t, 8> needsFrom (const Report& rep)
         {
-            std::array<uint32_t, 4> m {};
+            std::array<uint32_t, 8> m {};
             for (const auto& c : rep.checks)
-                if (const auto f = featureOf (c); f >= 0 && f < 128 && c.measured && c.score < 0.7f) m[(size_t) (f / 32)] |= 1u << (f % 32);
+                if (c.measured && c.score < 0.7f)
+                    for (const auto f : featuresOf (c)) if (f >= 0 && f < 256) m[(size_t) (f / 32)] |= 1u << (f % 32);
             return m;
         }
 
@@ -87,6 +118,12 @@ namespace lab
                 {
                     ++steps[trying->check];
                     ++kept;
+                    history.push_back ({ trying->check, trying->area, trying->seqs, trying->target, trying->band, trying->toneDb, now });
+                    if (trying->target != 0)
+                    {
+                        toneSpent[trying->target] += std::abs (trying->toneDb);
+                        if (AP::on (AP::mxProvenanceF)) provenance[trying->target].add (trying->check);
+                    }
                     recent.push_back (true);
                     if (AP::on (AP::learnKeptF)) learning.record (trying->check, true);
                     note = trying->check + ": kept (" + juce::String (juce::roundToInt (trying->before * 100.0f)) + " -> " + juce::String (juce::roundToInt (juce::jmax (0.0f, after) * 100.0f)) + ")";
@@ -95,7 +132,21 @@ namespace lab
                 trying.reset();
                 return;
             }
-            if (! playing) return;
+            if (! playing) { wasPlaying = false; return; }
+            if (! wasPlaying) { wasPlaying = true; triedThisPlay = 0; }   // a new play-through
+            // rollback by area: an area that fell well under where it was at the last milestone has
+            // its fixes since then undone (newest first)
+            if (AP::on (AP::mxRollbackAreaF) && ! areaAtMilestone.empty())
+                for (const auto& [area, was] : areaAtMilestone)
+                    if (const auto nowScore = areaScore (rep, area); nowScore >= 0.0f && nowScore < was - 0.1f && rollbackArea (area) > 0)
+                    {
+                        note = "an area fell since the milestone: its fixes undone";
+                        suite::MoveLog::add ("Ouroboros", {}, "Label-ready autopilot: " + note, suite::MoveLog::fix);
+                        areaAtMilestone[area] = nowScore;   // (not again for the same fall)
+                        return;
+                    }
+            // the step budget: at most twelve fixes tried per play-through
+            if (AP::on (AP::mxStepBudgetF) && triedThisPlay >= 12) { note = "this play-through's fixes are done: play it again for more"; return; }
             // pacing: several undone in a row, wait longer between tries
             while (recent.size() > 5) recent.erase (recent.begin());
             int failed = 0; for (auto k : recent) failed += k ? 0 : 1;
@@ -107,6 +158,15 @@ namespace lab
                 if (f < 0 || ! sentByOuroboros (f) || ! AP::on ((AP::Feature) f) || ! c.measured || c.score >= 0.75f) continue;
                 if (steps[c.name] >= 3 || (resting.count (c.name) && resting[c.name] > now)) continue;
                 if (AP::on (AP::learnUndoneF) && learning.retired (c.name)) continue;
+                if (const auto tgt = targetOf (c.fix, c.fixData); tgt != 0)
+                {
+                    int band = -1;
+                    const auto tone = toneOf (c.fix, c.fixData, band);
+                    // the tone budget: no track moved more than 6 dB in all by the autopilot's tone steps
+                    if (AP::on (AP::mxToneBudgetF) && std::abs (tone) > 0.0f && toneSpent[tgt] >= 6.0f) continue;
+                    // arbitration: not the opposite of a move kept on the same track and band in the last ten minutes
+                    if (AP::on (AP::mxArbitrationF) && std::abs (tone) > 0.0f && fights (tgt, band, tone, now)) continue;
+                }
                 // fixes you've kept before go first
                 const auto rank = c.score - (AP::on (AP::learnKeptF) && learning.favoured (c.name) ? 0.3f : 0.0f);
                 const auto pickRank = pick == nullptr ? 2.0f : pick->score - (AP::on (AP::learnKeptF) && learning.favoured (pick->name) ? 0.3f : 0.0f);
@@ -114,7 +174,9 @@ namespace lab
             }
             if (pick == nullptr) { note = "nothing to do"; return; }
             Attempt a;
-            a.check = pick->name; a.before = pick->score;
+            a.check = pick->name; a.before = pick->score; a.area = pick->area;
+            a.target = targetOf (pick->fix, pick->fixData); a.toneDb = toneOf (pick->fix, pick->fixData, a.band);
+            ++triedThisPlay;
             a.seqs = apply (*pick, traits);
             if (a.seqs.empty() && ! appliedOther)
             {
@@ -166,7 +228,37 @@ namespace lab
             return seqs;
         }
 
-        void reset() { trying.reset(); steps.clear(); resting.clear(); note = {}; kept = undone = 0; recent.clear(); }
+        void reset() { trying.reset(); steps.clear(); resting.clear(); note = {}; kept = undone = 0; recent.clear(); history.clear(); toneSpent.clear(); provenance.clear(); areaAtMilestone.clear(); triedThisPlay = 0; }
+
+        /** A milestone: each area's score now, for rolling back an area that falls; the fixes so far are kept for good. */
+        void milestone (const Report& rep)
+        {
+            areaAtMilestone.clear();
+            for (const auto& c : rep.checks) if (c.measured) areaAtMilestone[c.area] = 0.0f;
+            for (auto& [area, v] : areaAtMilestone) v = areaScore (rep, area);
+            history.clear();
+        }
+        /** Undo the fixes kept in one area since the last milestone (newest first). Returns how many. */
+        int rollbackArea (int area)
+        {
+            int n = 0;
+            for (auto it = history.rbegin(); it != history.rend(); ++it)
+                if (it->area == area && ! it->seqs.empty())
+                {
+                    for (auto s : it->seqs) suite::FixBus::sendUndo (s);
+                    if (it->target != 0) toneSpent[it->target] = juce::jmax (0.0f, toneSpent[it->target] - std::abs (it->toneDb));
+                    it->seqs.clear(); ++n;
+                }
+            return n;
+        }
+        /** Who changed each track: the checks whose fixes were kept on it (low 12 bits of its id). */
+        juce::StringArray provenanceOf (uint32_t id) const
+        {
+            const auto it = provenance.find (id & 0xfffu);
+            return it != provenance.end() ? it->second : juce::StringArray();
+        }
+        float toneSpentOn (uint32_t id) const { const auto it = toneSpent.find (id & 0xfffu); return it != toneSpent.end() ? it->second : 0.0f; }
+        int triedThisPlayThrough() const { return triedThisPlay; }
         /** A fix's amount, smaller each time you undid that check before (learning). */
         uint32_t scaled (const Check& c, uint32_t data)
         {
@@ -189,7 +281,26 @@ namespace lab
         }
 
     private:
-        struct Attempt { juce::String check; float before = 0.0f; int updates = 0; std::vector<uint32_t> seqs; };
+        struct Attempt { juce::String check; float before = 0.0f; int updates = 0; std::vector<uint32_t> seqs; int area = 0; uint32_t target = 0; int band = -1; float toneDb = 0.0f; };
+        struct Kept { juce::String check; int area = 0; std::vector<uint32_t> seqs; uint32_t target = 0; int band = -1; float toneDb = 0.0f; juce::int64 at = 0; };
+        std::vector<Kept> history;   // since the last milestone
+        std::map<uint32_t, float> toneSpent;
+        std::map<uint32_t, juce::StringArray> provenance;
+        std::map<int, float> areaAtMilestone;
+        int triedThisPlay = 0;
+        bool wasPlaying = false;
+        bool fights (uint32_t target, int band, float tone, juce::int64 now) const
+        {
+            for (const auto& k : history)
+                if (k.target == target && k.band == band && now - k.at < 10 * 60 * 1000 && k.toneDb * tone < 0.0f && ! k.seqs.empty()) return true;
+            return false;
+        }
+        static float areaScore (const Report& rep, int area)
+        {
+            float sum = 0.0f; int n = 0;
+            for (const auto& c : rep.checks) if (c.area == area && c.measured) { sum += c.score; ++n; }
+            return n > 0 ? sum / (float) n : -1.0f;
+        }
         std::optional<Attempt> trying;
         std::map<juce::String, int> steps;
         std::map<juce::String, juce::int64> resting;

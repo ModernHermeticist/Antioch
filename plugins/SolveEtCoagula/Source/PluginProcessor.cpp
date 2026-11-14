@@ -97,6 +97,8 @@ void SolveEtCoagulaProcessor::processSuiteBlock (juce::AudioBuffer<float>& buffe
     scenes.beginBlock (host, sampleRate, buffer.getNumSamples());
     Unmasker::Settings s;
     s.depthDb = scenes.plain (sDepth);
+    if (depthPerSection.load() && host.hasPpq && sections.refresh())
+        if (const auto sec = sections.locate (host.ppq, host.barQuarters()); sec.valid) s.depthDb = juce::jlimit (0.0f, 12.0f, s.depthDb * depthScale ((int) sec.type));
     s.thresholdDb = thresholdFor (scenes.plain (sSensitivity));
     s.focusDb = scenes.plain (sFocus);
     s.attackMs = attack[speed];

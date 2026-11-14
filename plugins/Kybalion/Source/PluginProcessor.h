@@ -13,6 +13,8 @@
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "Music.h"
+#include "AutopilotBus.h"
+#include "LabelReadyBus.h"
 #include <map>
 
 class KybalionProcessor : public suite::SuiteProcessor
@@ -54,7 +56,17 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     suite::SceneEngine scenes;
     /** Learning from your tweaks: a knob moved by hand in a section is offered as that section's scene. */
-    void pollTick() override { scenes.watchTweaks (isMorphing()); kickBassTick(); }
+    void pollTick() override { scenes.watchTweaks (isMorphing()); kickBassTick(); mixTick(); }
+    /** The mix fixes here: the pump's depth per section (deeper in drops, lighter in breakdowns),
+        and fit to the kick by itself once a sidechained kick has been heard. Each latched once
+        Ouroboros' checks ask for it, while its autopilot switch is on; saved with the project. */
+    void mixTick();
+    std::atomic<bool> pumpPerSection { false };
+    bool autoFitted = false;
+    static float pumpScale (int sectionType) noexcept
+    {
+        switch (sectionType) { case 4: return 1.1f; case 2: return 0.6f; case 3: return 0.85f; case 0: case 5: return 0.8f; default: return 1.0f; }
+    }
 
     /** Kick and bass: where the kick's body sits against the key ("tune it up a semitone to the
         root"), and with Duck focus on Auto, whether to duck only around the kick's note (when
