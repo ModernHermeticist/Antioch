@@ -15,6 +15,8 @@
 #include <optional>
 #include "Alias.h"
 #include "SongBus.h"
+#include "LabelReadyBus.h"
+#include "AutopilotBus.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -187,6 +189,11 @@ public:
     std::vector<LabelOption> labelOptions (LabelGoal goal, float& current) const;
     float labelScore (LabelGoal goal, const suite::SectionMap& map, const chords::SongPatterns& sp) const;
     bool applyLabelOption (const LabelOption&);
+    /** Label-ready writing fixes, latched for this song when Ouroboros' checks ask for them (and
+        their autopilot switch is on); saved with the project. The part clean-ups act while latched
+        and switched on; the rest set a setting once (yours to change back). */
+    uint32_t labelLatched = 0;
+    void latchLabelWriting();
     /** The map the song is written against: Ouroboros' when it shares one, else a standard trance form. */
     static suite::SectionMap songMapOrDefault();
     /** Clash check: parts in the song clips that sit in the same register, each with a fix. */

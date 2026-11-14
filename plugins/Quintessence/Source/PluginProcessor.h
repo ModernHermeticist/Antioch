@@ -32,6 +32,8 @@
 #include "Music.h"
 #include "Registry.h"
 #include "TrackTraits.h"
+#include "LabelDsp.h"
+#include "LabelReadyBus.h"
 #include "LiveMix.h"
 #include "DirectorStage.h"
 #include "Premaster.h"
@@ -80,7 +82,38 @@ public:
         for (auto v : peakWindow) recent = juce::jmax (recent, v);
         if (recent > 1.0e-5f) suite::PeakBus::post (getInstanceId(), getTrackName(), roleShown.load(), juce::Decibels::gainToDecibels (recent), peakAtQ.load());
         // what this track is like, for the label-ready checks (about once a second)
-        if (++traitsTick % 5 == 0) suite::TrackTraits::publish (traits.snapshot (getInstanceId(), effectiveRole(), getTrackName()));
+        if (++traitsTick % 5 == 0)
+        {
+            const auto t = traits.snapshot (getInstanceId(), effectiveRole(), getTrackName());
+            suite::TrackTraits::publish (t);
+            latchLabelFixes (t);
+        }
+    }
+    /** The label-ready fixes that live here: switched on (and kept) where Ouroboros' checks found
+        the problem on this track, while their autopilot switch is on. */
+    qn::LabelDsp labelDsp;
+    uint32_t labelLatched = 0;   // 1 pad motion, 2 breakdown low cut, 4 input staging (saved with the project)
+    void latchLabelFixes (const suite::TrackTraits::Traits& t)
+    {
+        namespace AP = suite::Autopilot;
+        const auto role = effectiveRole();
+        auto latch = [&] (AP::Feature f, uint32_t bit, bool applies, const char* what)
+        {
+            if ((labelLatched & bit) == 0 && applies && AP::on (f) && suite::LabelReadyBus::needed ((int) f))
+            {
+                labelLatched |= bit;
+                apvts.state.setProperty ("labelLatched", (int) labelLatched, nullptr);
+                addLog (juce::String ("Label-ready: ") + what);
+            }
+        };
+        latch (AP::padMotionF, 1u, role == 4 && t.movementCount >= 20 && t.movementDb < 0.8f, "a slow filter movement over each phrase (this pad never changed)");
+        latch (AP::breakdownLowCutF, 2u, role != 0 && role != 1 && role != 2 && t.lowMidDb > t.outRmsDb - 6.0f, "a low cut in the breakdowns (lows left to the bass)");
+        latch (AP::inputStageF, 4u, t.inRmsDb > -90.0f && std::abs (t.inRmsDb + 18.0f) > 8.0f, "the input staged to -18 dBFS RMS (the level going out unchanged)");
+        labelDsp.padMotion.store ((labelLatched & 1u) != 0 && AP::on (AP::padMotionF));
+        labelDsp.breakdownLowCut.store ((labelLatched & 2u) != 0 && AP::on (AP::breakdownLowCutF));
+        labelDsp.inputStage.store ((labelLatched & 4u) != 0 && AP::on (AP::inputStageF));
+        if (t.inRmsDb > -90.0f && labelDsp.inputStage.load())
+            labelDsp.stageDb.store (labelDsp.stageDb.load() + 0.2f * (juce::jlimit (-12.0f, 12.0f, -18.0f - (t.inRmsDb + labelDsp.stageDb.load())) ));
     }
     /** What this track is like (clip gain, recovery, stereo lows, tails, levels per section...). */
     suite::TrackTraits::TraitsMeter traits;
@@ -91,6 +124,8 @@ public:
     std::atomic<bool> polarityFlipped { false };
     std::array<std::atomic<float>, 6> sectionTrimDb {};
     std::function<void()> flipPolarity (uint32_t data);
+    std::function<void()> punchStep (uint32_t data);
+    std::function<void()> vocalDelay (uint32_t data);
     std::function<void()> sectionTrim (uint32_t data);
     void storeLabelFixes();
     void loadLabelFixes();

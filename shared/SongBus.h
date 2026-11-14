@@ -29,6 +29,10 @@ namespace suite::SongBus
         std::array<std::array<int, maxChords>, numTypes> chordRoots {};   // per SectionType: the chords' roots (semitones above the key, -1 = none)
         std::array<int, numTypes> chordCount {};
         double hookStartQ = 0.0;                   // where the hook begins (the first drop)
+        int chordLow = 0, chordHigh = 0;           // the first drop's chords: their lowest and highest notes (0 = unknown)
+        std::vector<Note> breakdownLead;           // the first breakdown's lead (the motif, developed)
+        std::array<int, 4> leadPeakPerDrop {};     // the lead's highest note in each drop (0 = none)
+        int dropCount = 0;
     };
 
     namespace detail
@@ -41,12 +45,14 @@ namespace suite::SongBus
             float qpc, hookStart;
             N hook[maxHook], bass[maxBass], counter[maxCounter];
             int32_t chordRoots[numTypes][maxChords], chordCount[numTypes];
+            int32_t chordLow, chordHigh, dropCount, leadPeak[4], bdCount;
+            N bd[maxCounter];
         };
         inline Shared& shared() noexcept
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_songbus_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_songbus_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -71,6 +77,9 @@ namespace suite::SongBus
         copy (song.hook, s.hook, maxHook, s.hookCount);
         copy (song.bass, s.bass, maxBass, s.bassCount);
         copy (song.counter, s.counter, maxCounter, s.counterCount);
+        copy (song.breakdownLead, s.bd, maxCounter, s.bdCount);
+        s.chordLow = song.chordLow; s.chordHigh = song.chordHigh; s.dropCount = song.dropCount;
+        for (int k = 0; k < 4; ++k) s.leadPeak[k] = song.leadPeakPerDrop[(size_t) k];
         for (int t = 0; t < numTypes; ++t)
         {
             s.chordCount[t] = song.chordCount[(size_t) t];
@@ -99,6 +108,9 @@ namespace suite::SongBus
             copy (s.hook, s.hookCount, maxHook, r.hook);
             copy (s.bass, s.bassCount, maxBass, r.bass);
             copy (s.counter, s.counterCount, maxCounter, r.counter);
+            copy (s.bd, s.bdCount, maxCounter, r.breakdownLead);
+            r.chordLow = s.chordLow; r.chordHigh = s.chordHigh; r.dropCount = s.dropCount;
+            for (int k = 0; k < 4; ++k) r.leadPeakPerDrop[(size_t) k] = s.leadPeak[k];
             for (int t = 0; t < numTypes; ++t)
             {
                 r.chordCount[(size_t) t] = juce::jlimit (0, maxChords, (int) s.chordCount[t]);

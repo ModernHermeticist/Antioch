@@ -1244,6 +1244,12 @@ namespace chords
         bool manageDensity = true;
         bool takeTurns = true;
         writing::Options write;       // the Writing menu (each group on or off)
+        /** Label-ready clean-ups of the parts (LabelPolish.h): on where Ouroboros' checks asked for them. */
+        struct Polish
+        {
+            bool clearKick = false, inKey = false, accents = false, ghosts = false, roots = false, voicingRoom = false;
+            bool any() const { return clearKick || inKey || accents || ghosts || roots || voicingRoom; }
+        } polish;
     };
 
     /** Where a library layer plays in section i before the density manager (kind, or -1). */
@@ -1475,7 +1481,12 @@ namespace chords
 
     /** Song-length notes: each section plays its own pattern, restarting the progression at
         the section start and never spilling into the next section. Assumes 4/4 bars. */
-    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned = nullptr, int* turned = nullptr)
+    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned = nullptr, int* turned = nullptr);
+}
+#include "LabelPolish.h"
+namespace chords
+{
+    inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned, int* turned)
     {
         std::vector<Note> out;
         // Turn-taking: chops and candy fill the hook's gaps (where the hook plays at all)
@@ -1961,6 +1972,17 @@ namespace chords
                 out.erase (std::remove_if (out.begin(), out.end(), [at] (const Note& n) { return n.start >= at - 1.0e-6 && n.start < at + 1.5 - 1.0e-6; }), out.end());
                 for (auto n : writing::signatureFigure (hookCell, at, 74)) { n.pitch += map.keyShiftOf (i); out.push_back (n); }
             }
+        if (patterns.polish.any() && (part == SongPart::Bass || part == SongPart::Arp || part == SongPart::Chords))
+        {
+            int leadLow = 0;
+            if (part == SongPart::Chords && patterns.polish.voicingRoom)
+            {
+                leadLow = 200;
+                for (const auto& n : songClip (base, map, patterns, SongPart::Lead)) leadLow = std::min (leadLow, n.pitch);
+                if (leadLow >= 200) leadLow = 0;
+            }
+            polish::apply (out, base, map, patterns, part, leadLow);
+        }
         writing::sortByStart (out);
         return out;
     }

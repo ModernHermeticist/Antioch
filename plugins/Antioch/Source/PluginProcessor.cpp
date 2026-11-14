@@ -22,6 +22,17 @@ AntiochProcessor::AntiochProcessor()
     // them: its low cut half an octave up (at most 900 Hz)
     fixes = std::make_unique<suite::FixReceiver> (apvts, [this] (suite::Fix fix, uint32_t) -> std::vector<suite::FixReceiver::Change>
     {
+        // label-ready: the reverb's pre-delay from the tempo (a 32nd note, 10-60 ms); throws at the vocal's phrase ends
+        if (fix == suite::Fix::PreDelayTempo)
+        {
+            const auto bpm = juce::jlimit (60.0, 200.0, currentBpm.load());
+            return { { Params::Verb::predelay, juce::jlimit (10.0f, 60.0f, (float) (60000.0 / bpm / 8.0)) } };
+        }
+        if (fix == suite::Fix::ThrowsAtVocal)
+        {
+            if (apvts.getRawParameterValue (Params::throwLevel)->load() < 0.001f) return {};   // no throws on this Antioch
+            return { { Params::Throw::autoMode, (float) Params::Throw::autoAtVocalEnds } };
+        }
         if (fix != suite::Fix::ReverbLowCut) return {};
         const auto now = apvts.getRawParameterValue (Params::Verb::lowCut)->load();
         if (now >= 899.0f) return {};
@@ -117,6 +128,8 @@ void AntiochProcessor::prepareToPlay (double newSampleRate, int)
 
 void AntiochProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
+    // Label-ready: an Antioch with every level at zero sleeps (the sound passes straight through)
+    if (sleeping.load()) return;
     // Level-neutral scenes: measure what comes in, process, then bring the level back to the drop's (when it's on).
     const auto n = buffer.getNumSamples();
     const auto inPower = suite::SceneEngine::blockPower (buffer, n);

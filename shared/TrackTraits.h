@@ -37,6 +37,13 @@ namespace suite::TrackTraits
         float recoveryMs = 0.0f;                           // after a duck, back within 1 dB (median), 0 = never ducked
         int duckCount = 0;
         std::array<float, maxSections> sectionDb {};       // its level in each section of the map (-100 = not heard there)
+        std::array<float, maxSections> sectionPeakDb {};   // its loudest sample in each section
+        std::array<float, maxSections> sectionDbOffline {}; // the same, measured while FL rendered (offline), -100 = never rendered
+        float movementDb = 0.0f;                           // how much its tone changes from one tenth of a second to the next (dB)
+        int movementCount = 0;
+        float noiseFloorDb = -100.0f;                      // its quietest tenths of a second while it plays (10th percentile)
+        float hitSpreadDb = 0.0f;                          // how far its hits' peaks spread (90th - 10th percentile)
+        int hitCount = 0;
         // the waveform copy (mono, 250..1500 Hz, 4 kHz), newest sample at ring[(ringPos - 1) % ringSize]
         std::array<float, ringSize> ring {};
         int ringPos = 0;
@@ -60,7 +67,7 @@ namespace suite::TrackTraits
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -168,6 +175,8 @@ namespace suite::TrackTraits
             fs = (float) sampleRate;
             lowL.set (150.0f, 0.707f, fs); lowR.set (150.0f, 0.707f, fs);
             band.set (600.0f, 0.7f, fs);
+            highBand.set (3000.0f, 0.707f, fs);
+            windowLength = juce::jmax (1, (int) (0.1 * sampleRate));
             decim = juce::jmax (1, (int) std::lround (sampleRate / ringRate));
             fastA = 1.0f - std::exp (-1.0f / (0.005f * fs));
             refA = 1.0f - std::exp (-1.0f / (0.25f * fs));
@@ -178,8 +187,9 @@ namespace suite::TrackTraits
             inPeak = 0.0f; inPow = 0.0; inN = 0;
             outPow = sidePow = lowMidPow = lowSidePow = 0.0; outN = 0; peakOut = 0.0f;
             envFast = envRef = 0.0f;
-            sectionPow.fill (0.0); sectionN.fill (0);
-            nDecays.store (0); nRecoveries.store (0);
+            sectionPow.fill (0.0); sectionN.fill (0); sectionPeak.fill (0.0f); sectionPowOff.fill (0.0); sectionNOff.fill (0);
+            nDecays.store (0); nRecoveries.store (0); nHits.store (0);
+            winPow = winLow = winHigh = 0.0; winN = 0; prevWin = { -200.0f, -200.0f, -200.0f }; moveSum = 0.0; moveN = 0; floorHist.fill (0);
             inHit = false; ducking = false; hitPeak = 0.0f; hitSamples = duckSamples = 0;
             ring.fill (0.0f); ringPos = 0; decimAcc = 0.0f; decimCount = 0; ringPpq = -1.0;
         }
@@ -195,12 +205,13 @@ namespace suite::TrackTraits
         }
         /** What goes out, with the song position at the block's start (ppq < 0 = not playing) and
             the section index there (-1 = none). */
-        void output (const float* l, const float* r, int n, double ppq, double bpm, int sectionIndex) noexcept
+        void output (const float* l, const float* r, int n, double ppq, double bpm, int sectionIndex, bool offline = false) noexcept
         {
             const auto qPerSample = bpm / 60.0 / (double) fs;
             // a new play-through: measure afresh (the waveform copy carries on)
             if (ppq >= 0.0 && ! wasPlaying) { inPeak = 0.0f; inPow = 0.0; inN = 0; outPow = sidePow = lowMidPow = lowSidePow = 0.0; outN = 0; peakOut = 0.0f;
-                                              sectionPow.fill (0.0); sectionN.fill (0); nDecays.store (0); nRecoveries.store (0); }
+                                              sectionPow.fill (0.0); sectionN.fill (0); sectionPeak.fill (0.0f); nDecays.store (0); nRecoveries.store (0); nHits.store (0);
+                                              moveSum = 0.0; moveN = 0; floorHist.fill (0); }
             wasPlaying = ppq >= 0.0;
             for (int i = 0; i < n; ++i)
             {
@@ -212,7 +223,39 @@ namespace suite::TrackTraits
                 lowMidPow += (double) lm * lm; lowSidePow += (double) ls * ls;
                 const auto a = std::abs (mid);
                 peakOut = std::max (peakOut, a);
-                if (sectionIndex >= 0 && sectionIndex < maxSections) { sectionPow[(size_t) sectionIndex] += (double) mid * mid; ++sectionN[(size_t) sectionIndex]; }
+                if (sectionIndex >= 0 && sectionIndex < maxSections)
+                {
+                    if (offline) { sectionPowOff[(size_t) sectionIndex] += (double) mid * mid; ++sectionNOff[(size_t) sectionIndex]; }
+                    else
+                    {
+                        sectionPow[(size_t) sectionIndex] += (double) mid * mid; ++sectionN[(size_t) sectionIndex];
+                        sectionPeak[(size_t) sectionIndex] = std::max (sectionPeak[(size_t) sectionIndex], std::max (std::abs (L), std::abs (R)));
+                    }
+                }
+                // tenths of a second: the tone's movement and the noise floor
+                {
+                    const auto hi = highBand.highpass (mid);
+                    winPow += (double) mid * mid; winLow += (double) lm * lm; winHigh += (double) hi * hi;
+                    if (++winN >= windowLength)
+                    {
+                        auto db = [this] (double p) { return (float) (10.0 * std::log10 (p / winN + 1.0e-12)); };
+                        const auto all = db (winPow);
+                        if (all > -70.0f && ppq >= 0.0)
+                        {
+                            const std::array<float, 3> now { db (winLow), db (std::max (1.0e-12, winPow - winLow - winHigh)), db (winHigh) };
+                            if (prevWin[0] > -199.0f)
+                            {
+                                float d = 0.0f;
+                                for (size_t k = 0; k < 3; ++k) d += std::abs ((now[k] - all) - (prevWin[k] - prevAll));
+                                moveSum += d / 3.0f; ++moveN;
+                            }
+                            prevWin = now; prevAll = all;
+                            ++floorHist[(size_t) juce::jlimit (0, 199, (int) std::lround (-2.0f * all))];
+                        }
+                        else prevWin = { -200.0f, -200.0f, -200.0f };
+                        winPow = winLow = winHigh = 0.0; winN = 0;
+                    }
+                }
                 // envelopes (fast 5 ms, reference 250 ms)
                 envFast += fastA * (a - envFast);
                 envRef += refA * (a - envRef);
@@ -253,7 +296,31 @@ namespace suite::TrackTraits
             };
             t.decayMs = median (decays, nDecays.load()); t.decayCount = nDecays.load();
             t.recoveryMs = median (recoveries, nRecoveries.load()); t.duckCount = nRecoveries.load();
-            for (int s = 0; s < maxSections; ++s) t.sectionDb[(size_t) s] = sectionN[(size_t) s] > (int) fs ? db (sectionPow[(size_t) s], sectionN[(size_t) s]) : -100.0f;
+            for (int s = 0; s < maxSections; ++s)
+            {
+                t.sectionDb[(size_t) s] = sectionN[(size_t) s] > (int) fs ? db (sectionPow[(size_t) s], sectionN[(size_t) s]) : -100.0f;
+                t.sectionPeakDb[(size_t) s] = sectionN[(size_t) s] > 0 ? juce::Decibels::gainToDecibels (sectionPeak[(size_t) s], -100.0f) : -100.0f;
+                t.sectionDbOffline[(size_t) s] = sectionNOff[(size_t) s] > (int) fs ? db (sectionPowOff[(size_t) s], sectionNOff[(size_t) s]) : -100.0f;
+            }
+            t.movementCount = moveN; t.movementDb = moveN > 0 ? (float) (moveSum / moveN) : 0.0f;
+            {
+                int total = 0; for (auto c : floorHist) total += c;
+                if (total >= 20)
+                {
+                    int acc = 0;
+                    for (int b = 199; b >= 0; --b) { acc += floorHist[(size_t) b]; if (acc >= total / 10) { t.noiseFloorDb = -0.5f * (float) b; break; } }
+                }
+            }
+            {
+                const auto k = juce::jlimit (0, maxEvents, nHits.load());
+                t.hitCount = k;
+                if (k >= 8)
+                {
+                    std::vector<float> h (hits.begin(), hits.begin() + k);
+                    std::sort (h.begin(), h.end());
+                    t.hitSpreadDb = h[(size_t) (k * 9 / 10)] - h[(size_t) (k / 10)];
+                }
+            }
             t.ring = ring; t.ringPos = ringPos; t.ringPpq = ringPpq; t.ringBpm = ringBpm;
             return t;
         }
@@ -271,6 +338,8 @@ namespace suite::TrackTraits
             }
             ++hitSamples;
             if (envFast > hitPeak) { hitPeak = envFast; hitSamples = 0; }
+            if (envFast < 0.1f * hitPeak || hitSamples > (int) (3.0f * fs))
+                if (const auto k = nHits.load(); k < maxEvents) { hits[(size_t) k] = juce::Decibels::gainToDecibels (hitPeak, -100.0f); nHits.store (k + 1); }
             if (envFast < 0.1f * hitPeak)
             {
                 if (const auto k = nDecays.load(); k < maxEvents) { decays[(size_t) k] = 1000.0f * (float) hitSamples / fs; nDecays.store (k + 1); }
@@ -301,13 +370,22 @@ namespace suite::TrackTraits
         }
 
         float fs = 44100.0f, fastA = 0.1f, refA = 0.01f;
-        Svf lowL, lowR, band;
+        Svf lowL, lowR, band, highBand;
         float inPeak = 0.0f, peakOut = 0.0f;
         double inPow = 0.0, outPow = 0.0, sidePow = 0.0, lowMidPow = 0.0, lowSidePow = 0.0;
         int inN = 0, outN = 0;
         float envFast = 0.0f, envRef = 0.0f;
         std::array<double, maxSections> sectionPow {};
-        std::array<int, maxSections> sectionN {};
+        std::array<int, maxSections> sectionN {}, sectionNOff {};
+        std::array<double, maxSections> sectionPowOff {};
+        std::array<float, maxSections> sectionPeak {};
+        std::array<float, 256> hits {};
+        std::atomic<int> nHits { 0 };
+        double winPow = 0.0, winLow = 0.0, winHigh = 0.0, moveSum = 0.0;
+        int winN = 0, moveN = 0, windowLength = 4410;
+        std::array<float, 3> prevWin { -200.0f, -200.0f, -200.0f };
+        float prevAll = 0.0f;
+        std::array<int, 200> floorHist {};
         static constexpr int maxEvents = 256;
         std::array<float, maxEvents> decays {}, recoveries {};
         std::atomic<int> nDecays { 0 }, nRecoveries { 0 };

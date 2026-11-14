@@ -61,7 +61,12 @@ public:
         glueRoomTick();
         spacePass();
         runawayTick();
+        // label-ready: asleep while every level is at zero (the sound passes through untouched)
+        auto v = [this] (const juce::String& id) { return apvts.getRawParameterValue (id)->load(); };
+        const auto idle = v (Params::echoLevel) < 0.001f && v (Params::verbLevel) < 0.001f && v (Params::throwLevel) < 0.001f;
+        sleeping.store (idle && suite::Autopilot::on (suite::Autopilot::idleSleepF));
     }
+    std::atomic<bool> sleeping { false };
     /** Autopilot (stability): a runaway flagged by the audio thread takes every tap's feedback,
         the throw's and the shimmer down by a quarter (message thread; tests call it). */
     bool runawayTick();

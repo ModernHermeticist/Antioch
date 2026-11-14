@@ -47,6 +47,9 @@ OuroborosProcessor::OuroborosProcessor()
       apvts (*this, nullptr, "OuroborosState", layout())
 {
     map = arrangement::fromTemplate (arrangement::templates().front());
+    // the label-ready autopilot speaks to the director through the chat
+    labelReady.autoFix.director = [this] (const juce::String& words) { addNote (director.chat (words)); directorDirty = true; return true; };
+    labelReady.onAction = [this] (const juce::String& what) { snippets.markFix (what, ppq.load(), barQuarters.load()); };
     suite::TempoBus::clear();   // a new project: its tempo is noted as it plays
     fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
     fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
@@ -95,6 +98,7 @@ bool OuroborosProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
+    snippets.prepare (newSampleRate);
     const auto sr = (float) sampleRate;
     lowBand.set (100.0f, 0.707f, sr);
     highBand.set (6000.0f, 0.707f, sr);
@@ -188,6 +192,8 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         }
     }
     else if (songBarIndex >= 0) { labelReady.live.add (songBarIndex, songBar); songBar = {}; songBarIndex = -1; }
+    // before and after: the master's last seconds, kept for the snippets around each fix
+    if (buffer.getNumChannels() > 0) snippets.push (buffer.getReadPointer (0), buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : buffer.getReadPointer (0), buffer.getNumSamples());
     // milestone A/B, level-matched: a monitor trim only (never in a render)
     if (labelReady.abOn && ! isNonRealtime())
     {
@@ -612,6 +618,7 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     juce::ValueTree autopilotTree ("Autopilot");
     autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
     autopilotTree.setProperty ("fixesOff", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeatures()), nullptr);
+    autopilotTree.setProperty ("fixesOff2", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeaturesHigh()), nullptr);
     state.appendChild (autopilotTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -658,6 +665,7 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
     {
         suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
         suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
+        suite::Autopilot::setDisabledFeaturesHigh ((uint32_t) ap["fixesOff2"].toString().getHexValue64());
         state.removeChild (ap, nullptr);
     }
     if (const auto lt = state.getChildWithName ("LabelReady"); lt.isValid())

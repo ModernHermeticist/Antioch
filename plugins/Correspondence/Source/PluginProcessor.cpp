@@ -71,8 +71,41 @@ void CorrespondenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
                     buffer.getNumSamples(), apvts.getRawParameterValue (Params::preview)->load());
 }
 
+void CorrespondenceProcessor::latchLabelWriting()
+{
+    namespace AP = suite::Autopilot;
+    struct Fix { int bit; AP::Feature f; const char* what; std::vector<std::pair<juce::String, float>> params; };
+    const Fix fixes[] = {
+        { 0, AP::bassClearKickF, "bass notes stop a 16th before each kick", {} },
+        { 1, AP::bassInKeyF, "bass notes outside the key snapped into it", {} },
+        { 2, AP::accentsF, "the offbeats accented on the bass and arp", {} },
+        { 3, AP::ghostLiftF, "ghost notes brought up", {} },
+        { 4, AP::bassRootsF, "the bass's thirds on the beat moved to the root", {} },
+        { 5, AP::voicingRoomF, "the chords' top notes kept under the lead", {} },
+        { 6, AP::arrangeEntriesF, "Writing > Arrangement on (entries every 8 bars, the outro mirroring the intro)", { { Params::writingId (5), 1.0f } } },
+        { 7, AP::loopVariationF, "phrase turnarounds and ghost notes on (no 8 bars repeated unchanged)", { { Params::songPhrase, 1.0f }, { Params::songGhost, 1.0f } } },
+        { 8, AP::tightSwingF, "the exports quantised to one swing (humanise off)", { { Params::humanise, 0.0f } } },
+        { 9, AP::melodyClimbF, "the lead up an octave in the later drops", { { Params::songLift, 1.0f } } },
+        { 10, AP::dropTensionF, "Writing > Harmony on (tensions into each drop)", { { Params::writingId (2), 1.0f } } } };
+    for (const auto& f : fixes)
+    {
+        if ((labelLatched & (1u << f.bit)) != 0 || ! AP::on (f.f) || ! suite::LabelReadyBus::needed ((int) f.f)) continue;
+        labelLatched |= 1u << f.bit;
+        apvts.state.setProperty ("labelLatched", (int) labelLatched, nullptr);
+        for (const auto& [id, v] : f.params)
+            if (auto* p = apvts.getParameter (id))
+            {
+                p->beginChangeGesture();
+                p->setValueNotifyingHost (p->convertTo0to1 (v));
+                p->endChangeGesture();
+            }
+        suite::MoveLog::add ("Correspondence", {}, juce::String ("Label-ready: ") + f.what, suite::MoveLog::fix);
+    }
+}
+
 void CorrespondenceProcessor::publishKey()
 {
+    latchLabelWriting();
     // Adopt a key detected by Emerald Tablet, if allowed.
     const auto suggestion = suite::KeyBus::readSuggestion();
     if (suggestion.valid && suggestion.sequence != lastSuggestion)
@@ -241,11 +274,36 @@ suite::SongBus::Song CorrespondenceProcessor::songForLabel (const suite::Section
         std::sort (counter.begin(), counter.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
         toBus (counter, song.hookStartQ, to, song.counter, (size_t) suite::SongBus::maxCounter);
     }
+    // the lead's peak in each drop, and the first breakdown's lead (the motif developed)
+    {
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        for (int i = 0; i < map.count; ++i)
+        {
+            const auto t = map.sections[(size_t) i].type;
+            const auto from = 4.0 * (map.sections[(size_t) i].startBar - 1), to = 4.0 * (map.endBar (i) - 1);
+            if (t == suite::SectionType::Drop && song.dropCount < 4)
+            {
+                int peak = 0; for (const auto& n : lead) if (n.start >= from && n.start < to) peak = juce::jmax (peak, n.pitch);
+                song.leadPeakPerDrop[(size_t) song.dropCount++] = peak;
+            }
+            if (t == suite::SectionType::Breakdown && song.breakdownLead.empty())
+                toBus (lead, from, to, song.breakdownLead, (size_t) suite::SongBus::maxCounter);
+        }
+    }
     auto bass = chords::songClip (s, map, sp, chords::SongPart::Bass);
     std::sort (bass.begin(), bass.end(), [] (const chords::Note& a, const chords::Note& b) { return a.start < b.start; });
     toBus (bass, 0.0, 1.0e9, song.bass, (size_t) suite::SongBus::maxBass);
     // the chord roots per kind of section: the lowest note of each chord slot, the first time the kind plays
     const auto chordsClip = chords::songClip (s, map, sp, chords::SongPart::Chords);
+    for (int i = 0; i < map.count; ++i)
+        if (map.sections[(size_t) i].type == suite::SectionType::Drop)
+        {
+            const auto from = 4.0 * (map.sections[(size_t) i].startBar - 1), to = 4.0 * (map.endBar (i) - 1);
+            int lo = 200, hi = 0;
+            for (const auto& n : chordsClip) if (n.start >= from && n.start < to) { lo = juce::jmin (lo, n.pitch); hi = juce::jmax (hi, n.pitch); }
+            if (hi > 0) { song.chordLow = lo; song.chordHigh = hi; }
+            break;
+        }
     const auto qpc = juce::jmax (0.5, s.quartersPerChord);
     const auto slots = juce::jlimit (1, suite::SongBus::maxChords, s.count);
     for (auto& row : song.chordRoots) row.fill (-1);
@@ -988,6 +1046,14 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     patterns.vocalBars = suite::VocalBus::read();
     patterns.manageDensity = suite::Autopilot::on (suite::Autopilot::densityF);
     patterns.takeTurns = suite::Autopilot::on (suite::Autopilot::turnTakingF);
+    namespace AP = suite::Autopilot;
+    auto active = [this] (int bit, AP::Feature f) { return (labelLatched & (1u << bit)) != 0 && AP::on (f); };
+    patterns.polish.clearKick = active (0, AP::bassClearKickF);
+    patterns.polish.inKey = active (1, AP::bassInKeyF);
+    patterns.polish.accents = active (2, AP::accentsF);
+    patterns.polish.ghosts = active (3, AP::ghostLiftF);
+    patterns.polish.roots = active (4, AP::bassRootsF);
+    patterns.polish.voicingRoom = active (5, AP::voicingRoomF);
     return patterns;
 }
 
@@ -1261,6 +1327,7 @@ void CorrespondenceProcessor::setPluginState (const void* data, int sizeInBytes)
                 motif = loaded;
             }
             state.removeChild (state.getChildWithName ("Motif"), nullptr);
+            labelLatched = (uint32_t) (int) state.getProperty ("labelLatched", 0);
             chords::BassDna learnedBass;
             if (const auto bt = state.getChildWithName ("BassDna"); bt.isValid())
             {

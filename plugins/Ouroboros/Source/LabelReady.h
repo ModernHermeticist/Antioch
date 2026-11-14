@@ -65,6 +65,10 @@ namespace lab
         juce::String groovePrint;                        // this song's kit groove (KitBus), as hits
         std::vector<juce::String> otherGrooves;          // your earlier songs' grooves
         int focusSection = -1;                           // score one section only (its index), -1 = the whole song
+        std::vector<float> vocalCents;                   // per sung note (in.vocal): how far off the note (+ sharp)
+        std::map<int, float> swingMs;                    // per role: how late its offbeat 16ths sit (ms)
+        float flamMs = -1.0f;                            // the bass's start against the kick on shared beats (median ms), -1 = unknown
+        std::vector<float> resonanceHz;                  // what each track's resonance finder hears now
     };
 
     struct Report
@@ -109,6 +113,7 @@ namespace lab
     }
 
     inline void extraChecks (const Inputs& in, const Profile& P, std::vector<Check>& out);   // LabelChecksMore.h
+    inline void checks3 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks3.h
 
     inline Report evaluate (const Inputs& in)
     {
@@ -264,7 +269,7 @@ namespace lab
                      db (-depth) + " under the drops (the label: " + P.breakdownDepthDb.text() + ")" + (hint ? ", the hook hinted" : ", no hint of the hook"),
                      depth > P.breakdownDepthDb.hi ? juce::String ("too empty: a pad or the hook's hint") : depth < P.breakdownDepthDb.lo ? juce::String ("too busy: thin it out") : juce::String ("a hint of the hook (the director: a hook hint)"),
                      S[(size_t) b].startBar, false, depth > P.breakdownDepthDb.hi ? suite::Fix::BreakdownLouder : depth < P.breakdownDepthDb.lo ? suite::Fix::BreakdownQuieter : suite::Fix::None,
-                     0, false);
+                     0, false, depth < P.breakdownDepthDb.lo ? "autopilot:" + juce::String ((int) suite::Autopilot::contrastF) : juce::String());
                 break;   // the first breakdown speaks for the rest
             }
             // the emotional peak
@@ -662,6 +667,7 @@ namespace lab
         }
 
         extraChecks (in, P, out);
+        checks3 (in, P, out);
 
         // one section only: the checks that point inside it (the rest don't count)
         if (in.focusSection >= 0 && in.focusSection < in.map.count)
@@ -710,3 +716,4 @@ namespace lab
 }
 
 #include "LabelChecksMore.h"
+#include "LabelChecks3.h"

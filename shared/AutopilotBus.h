@@ -19,13 +19,14 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
 namespace suite::Autopilot
 {
     enum Group : uint32_t { harshness = 1u, stability = 2u, arrangement = 4u, mixing = 8u };
 
     /** Each automatic fix, with its own switch inside its group (it runs when both are on). */
-    enum Feature
+    enum Feature : int
     {
         // harshness
         harshDipF, spikeTamerF, driveEaseF, tailDarkenF, sharedResonanceF,
@@ -41,6 +42,12 @@ namespace suite::Autopilot
         // arrangement (added later: kept at the end so saved switches keep their places)
         transmuteF,
         headroomF,          // mixing: keep the premaster's -6 dBFS headroom (every Quintessence down together)
+        // label-ready (each acts where Ouroboros' checks find the problem; LabelAutoFix.h)
+        kickShapeF, leadTimbreF, padMotionF, clapTransientF, hygieneF, sectionFxF, phraseFillsF, arrangeEntriesF, preDropCurveF,
+        loopVariationF, vocalTimingF, vocalClarityF, sibilanceF, vocalSteadyF, throwsF, squashF, peakTrimF, stressFixF,
+        bassClearKickF, bassInKeyF, breakdownLowCutF, reverbLowsF, monoDoublesF, hatsToneF, harshAttackF, fxUnderLeadF,
+        tightSwingF, accentsF, ghostLiftF, bassRootsF, dropTensionF, melodyClimbF, voicingRoomF, idleSleepF, inputStageF,
+        preDelayF, widthBuildF, contrastF,
         numFeatures
     };
     inline const char* featureName (int f)
@@ -56,12 +63,36 @@ namespace suite::Autopilot
             "Bass dips at the kick's note", "Spread layers left and right", "Tune the kick to the key", "Glue on a drum bus",
             "Out-of-key FX re-pitched", "Clear the sub before each kick", "Cut vocal pops", "Lower vocal breaths", "Smooth clip starts and ends", "Re-centre a leaning track", "Keep the reverb mono-safe",
             "Remove hum", "De-ess the space", "Fade the space after the last bar", "Line up layered parts", "Equal loudness for the A/B bypass",
-            "Creative moves at transitions (Transmutation)", "Keep the premaster's headroom (-6 dBFS)" };
+            "Creative moves at transitions (Transmutation)", "Keep the premaster's headroom (-6 dBFS)",
+            "Label: shape the kick (click, tail, sub)", "Label: the lead's timbre", "Label: movement on static pads", "Label: clap and snare attacks",
+            "Label: noise and aliasing in samples", "Label: mark every section change", "Label: fills at phrase ends", "Label: the intro builds, the outro mirrors it (Correspondence)",
+            "Label: a curve into each drop", "Label: vary repeated 8-bar loops (Correspondence)", "Label: early vocal delayed onto the grid", "Label: room for the vocal at 2-4 kHz",
+            "Label: sibilance", "Label: the vocal steady between sections", "Label: throws at the vocal's phrase ends (Antioch)", "Label: let squashed sections breathe",
+            "Label: trim the track behind the loudest peak", "Label: fixes from the mastering stress test",
+            "Label: bass notes stop before the kick (Correspondence)", "Label: bass notes in key (Correspondence)", "Label: no rumble in the breakdowns",
+            "Label: no lows in the reverbs", "Label: doubles that survive mono", "Label: the hats against the label", "Label: soften biting attacks",
+            "Label: noise FX under the lead", "Label: one swing for every part (Correspondence)", "Label: accents line up (Correspondence)",
+            "Label: ghost notes heard (Correspondence)", "Label: the bass on the chords' roots (Correspondence)", "Label: tension into each drop (Correspondence)",
+            "Label: the melody climbs through the song (Correspondence)", "Label: chords leave the lead room (Correspondence)", "Label: idle plugins sleep",
+            "Label: stage each track's input (Quintessence)", "Label: reverb pre-delay from the tempo (Antioch)", "Label: width opens into the drop",
+            "Label: drops against breakdowns like the label" };
+        static_assert (sizeof (n) / sizeof (n[0]) == numFeatures, "a name for every fix");
+        static_assert (numFeatures <= 96, "three words of switches");
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
     inline uint32_t featureGroup (int f)
     {
         if (f == transmuteF) return 4u;
+        if (f >= kickShapeF)
+            switch (f)
+            {
+                case sectionFxF: case phraseFillsF: case arrangeEntriesF: case preDropCurveF: case loopVariationF: case tightSwingF: case accentsF:
+                case ghostLiftF: case bassRootsF: case dropTensionF: case melodyClimbF: case voicingRoomF: case bassClearKickF: case bassInKeyF: case contrastF:
+                    return 4u;
+                case harshAttackF: return 1u;
+                case idleSleepF: case inputStageF: return 2u;
+                default: return 8u;
+            }
         return f <= sharedResonanceF ? 1u : f <= driveLevelF ? 2u : f <= hangoverTrimF ? 4u : 8u;
     }
 
@@ -101,7 +132,7 @@ namespace suite::Autopilot
         struct Shared
         {
             std::atomic<uint32_t> disabled;                 // groups switched off
-            std::atomic<uint32_t> featuresOff[2];           // single fixes switched off (bit per Feature)
+            std::atomic<uint32_t> featuresOff[3];           // single fixes switched off (bit per Feature)
             std::atomic<float> harshAmount;                 // 0..1: how harsh the master is right now
             std::atomic<int32_t> harshBand;                 // octave band of the harshness (6 = 2 kHz, 7 = 4 kHz, 8 = 8 kHz)
             std::atomic<uint32_t> harshIds[maxHarshIds];    // the tracks causing it (low 12 bits of their Quintessence's id)
@@ -123,7 +154,7 @@ namespace suite::Autopilot
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v4", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v5", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -157,6 +188,9 @@ namespace suite::Autopilot
     }
     inline uint64_t disabledFeatures() noexcept { auto& s = detail::shared(); return (uint64_t) s.featuresOff[0].load() | ((uint64_t) s.featuresOff[1].load() << 32); }
     inline void setDisabledFeatures (uint64_t m) noexcept { auto& s = detail::shared(); s.featuresOff[0].store ((uint32_t) m); s.featuresOff[1].store ((uint32_t) (m >> 32)); }
+    /** Switches from 64 on (the label-ready ones). */
+    inline uint32_t disabledFeaturesHigh() noexcept { return detail::shared().featuresOff[2].load(); }
+    inline void setDisabledFeaturesHigh (uint32_t m) noexcept { detail::shared().featuresOff[2].store (m); }
 
     inline uint32_t disabledGroups() noexcept { return detail::shared().disabled.load(); }   // saved with Ouroboros
     inline void setDisabledGroups (uint32_t mask) noexcept { detail::shared().disabled.store (mask & 15u); }
@@ -205,6 +239,16 @@ namespace suite::Autopilot
         s.resonanceMs[slot].store (detail::nowMs());
     }
     /** How many other tracks hear a resonance within a sixth of an octave of `hz`. */
+    /** Every resonance a track has posted in the last 20 s (Hz). */
+    inline std::vector<float> resonancesNow()
+    {
+        auto& s = detail::shared();
+        const auto now = detail::nowMs();
+        std::vector<float> out;
+        for (int i = 0; i < maxResonances; ++i)
+            if (const auto hz = s.resonanceHz[i].load(); hz > 0.0f && now - s.resonanceMs[i].load() <= 20000u) out.push_back (hz);
+        return out;
+    }
     inline int othersRingingAt (uint32_t id, float hz) noexcept
     {
         auto& s = detail::shared();
@@ -303,7 +347,7 @@ namespace suite::Autopilot
     inline void reset() noexcept   // tests
     {
         auto& s = detail::shared();
-        s.disabled.store (0); s.featuresOff[0].store (0); s.featuresOff[1].store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
+        s.disabled.store (0); s.featuresOff[0].store (0); s.featuresOff[1].store (0); s.featuresOff[2].store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
         for (auto& h : s.harshIds) h.store (0);
         for (auto& c : s.counters) c.store (0);
         for (int i = 0; i < maxResonances; ++i) { s.resonanceId[i].store (0); s.resonanceHz[i].store (0.0f); s.resonanceMs[i].store (0); }

@@ -147,7 +147,8 @@ namespace lab
             if (front >= 0.0f && back >= 0.0f)
                 add (aMids, "Depth: the lead in front", true, ramp (back - front, 0.15f, -0.1f), frontName + " sits " + (front <= back ? "in front of " : "behind ") + backName
                      + " (" + juce::String (juce::roundToInt (front * 100.0f)) + " vs " + juce::String (juce::roundToInt (back * 100.0f)) + ", 0 = right in front)",
-                     "the lead drier and narrower, the pads wider and softer (pre-delay on the lead's reverb)");
+                     "the lead drier and narrower, the pads wider and softer: pre-delay on the reverb from the tempo (one click)", -1, false,
+                     suite::Fix::PreDelayTempo, 0, true, "autopilot:" + juce::String ((int) suite::Autopilot::preDelayF));
             else add (aMids, "Depth: the lead in front", false, 1.0f, haveTraits ? juce::String ("needs a lead (or vocal) and a pad playing") : noTraits);
 
             // supersaw stacking: wide layers piling into one octave

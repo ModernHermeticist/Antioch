@@ -56,7 +56,7 @@ namespace lab
             auto head = area.removeFromTop (70);
             g.setColour (r.ready ? Colours::moss : Colours::ember);
             g.setFont (juce::FontOptions (40.0f, juce::Font::bold));
-            g.drawText (juce::String (r.overall), head.removeFromLeft (90), juce::Justification::centredLeft);
+            g.drawText (processor.labelReady.freshEars ? juce::String ("--") : juce::String (r.overall), head.removeFromLeft (90), juce::Justification::centredLeft);
             g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
             g.setColour (Colours::text);
             auto right = head;
@@ -83,7 +83,8 @@ namespace lab
                 g.fillRoundedRectangle (juce::Rectangle<float> ((float) cell.getX(), (float) cell.getBottom(), (float) cell.getWidth() * (r.areaMeasured[(size_t) a] ? s : 0.0f), 8.0f), 3.0f);
                 g.setColour (Colours::text);
                 g.setFont (juce::FontOptions (11.0f));
-                g.drawText (juce::String (areaName (a)) + (r.areaMeasured[(size_t) a] ? "  " + juce::String (juce::roundToInt (s * 100.0f)) : juce::String ("  -")), cell, juce::Justification::centredLeft, true);
+                g.drawText (juce::String (areaName (a)) + (processor.labelReady.signOff.count (a) ? " (signed)" : "")
+                                + (r.areaMeasured[(size_t) a] && ! processor.labelReady.freshEars ? "  " + juce::String (juce::roundToInt (s * 100.0f)) : juce::String ("  -")), cell, juce::Justification::centredLeft, true);
             }
             // the history graph
             const auto& h = processor.labelReady.history;
@@ -164,6 +165,9 @@ namespace lab
                 if (lr.watching && lr.watchBaseline >= 0) line = "WATCHING: " + juce::String (lr.report.overall - lr.watchBaseline >= 0 ? "+" : "") + juce::String (lr.report.overall - lr.watchBaseline) + " since you started.  " + line;
                 if (lr.abOn) line = "A/B: " + (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("switching")) + " (level-matched " + juce::String (lr.abGainDb.load(), 1) + " dB).  " + line;
                 if (lr.translationLoop) line << "  |  Translation loop: " << lr.loopNote;
+                if (lr.autoFixOn && lr.autoFix.note.isNotEmpty() && lr.autoFix.note != "nothing to do") line << "  |  Autopilot: " << lr.autoFix.note;
+                if (lr.freshEars && lr.minutesListening() > 0 && lr.minutesListening() % 45 == 0) line = "FRESH EARS: " + juce::String (lr.minutesListening()) + " minutes in. Rest your ears for ten minutes, then listen again.  " + line;
+                if (lr.abOn && lr.abBlind) line = line.replace (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("~~"), lr.abShowing == lr.abA ? "A" : "B");
                 listenLabel.setText (line, juce::dontSendNotification);
             }
             if (processor.labelReady.analysing.isNotEmpty()) note ("Measuring \"" + processor.labelReady.analysing + "\"...");
@@ -177,7 +181,9 @@ namespace lab
             if (c == nullptr) { detail.setText ("Click a check to see what it found, where, and what would move it.\n\nBlocking:\n" + processor.labelReady.report.blockers.joinIntoString ("\n")); return; }
             juce::StringArray t;
             t.add (c->name + (c->blocking ? "  (blocks the gate when low)" : ""));
-            t.add (c->measured ? "Score: " + juce::String (juce::roundToInt (c->score * 100.0f)) + "%" : juce::String ("Not measured yet"));
+            t.add (c->measured ? (processor.labelReady.freshEars ? juce::String ("Score hidden (fresh ears)") : "Score: " + juce::String (juce::roundToInt (c->score * 100.0f)) + "%"
+                                      + (c->score < 0.99f ? "  (fixing it fully: about +" + juce::String (processor.labelReady.predictedGain (*c), 1) + " points overall)" : juce::String()))
+                               : juce::String ("Not measured yet"));
             t.add ("");
             t.add ("Found: " + c->detail);
             if (c->bar > 0) t.add ("Where: bar " + juce::String (c->bar) + " (FL's playhead can't be moved by a plugin: go there in the playlist)");
@@ -281,14 +287,23 @@ namespace lab
                 for (int j = i + 1; j < (int) ms.size(); ++j)
                     if (i * 50 + j < 2000) ab.addItem (1000 + i * 50 + j, ms[(size_t) i].name + "  vs  " + ms[(size_t) j].name);
             m.addSubMenu ("A/B two milestones (level-matched, switching on the bar)", ab, ms.size() >= 2 && ! processor.labelReady.abOn);
+            m.addItem (4, "Blind A/B (the names hidden: A and B, in a random order)", ! processor.labelReady.abOn, processor.labelReady.abBlind);
             m.addItem (2, "Switch the A/B at the next bar", processor.labelReady.abOn);
             m.addItem (3, "Stop the A/B", processor.labelReady.abOn);
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&milestoneB), [this] (int r)
             {
                 auto& lr = processor.labelReady;
-                if (r >= 1000) { lr.abStart ((r - 1000) / 50, (r - 1000) % 50); note ("A/B: the first milestone loads at the next bar; Switch flips at the bar after. A monitor level match only: stop the A/B before you render."); }
+                if (r >= 1000 && lr.abBlind && juce::Random::getSystemRandom().nextBool()) { lr.abStart ((r - 1000) % 50, (r - 1000) / 50); note ("Blind A/B: listen, then Stop the A/B to see which was which."); }
+                else if (r >= 1000) { lr.abStart ((r - 1000) / 50, (r - 1000) % 50); note ("A/B: the first milestone loads at the next bar; Switch flips at the bar after. A monitor level match only: stop the A/B before you render."); }
                 else if (r == 2) lr.abToggle();
-                else if (r == 3) { lr.abStop(); note ("A/B stopped (the last one loaded stays)."); }
+                else if (r == 4) lr.abBlind = ! lr.abBlind;
+                else if (r == 3)
+                {
+                    const auto last = lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String();
+                    lr.abStop();
+                    note (lr.abBlind ? "A was \"" + lr.milestones[(size_t) juce::jmax (0, lr.abA)].name + "\", B was \"" + lr.milestones[(size_t) juce::jmax (0, lr.abB)].name + "\" (\"" + last + "\" stays loaded)."
+                                     : juce::String ("A/B stopped (the last one loaded stays)."));
+                }
                 else if (r == 1) askText ("Save a milestone", "What it is, e.g. \"sent to vocalist\", \"A&R round 1\"", [this] (juce::String n) { processor.labelReady.saveMilestone (n); note ("Milestone saved: " + n); });
                 else if (r >= 300) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "What changed between the milestones", lr.diffMilestones (r - 301, r - 300).joinIntoString ("\n"));
                 else if (r >= 100) { lr.restoreMilestone (r - 100); note ("Restoring \"" + lr.milestones[(size_t) r - 100].name + "\" across the suite"); }
@@ -321,6 +336,21 @@ namespace lab
                 iterate.addItem (34, must ? "\"" + c->name + "\" is no longer a must" : "\"" + c->name + "\" is a must for this label (at least 80%)");
             }
             m.addSubMenu ("Iterate", iterate);
+            juce::PopupMenu decide;
+            decide.addItem (50, "Today's plan: the three changes worth the most...");
+            decide.addItem (51, "Why not 100: the points missing, area by area...");
+            decide.addItem (52, "A&R notes (one page, plain words)...");
+            decide.addItem (53, "The song against each reference...", ! lr.profile.refs.empty());
+            decide.addItem (54, "Against your best signed track...");
+            m.addSubMenu ("Decide what's next", decide);
+            juce::PopupMenu ears;
+            ears.addItem (60, "Fresh ears: hide the scores, remind me to rest", true, lr.freshEars);
+            if (const auto* c = selected())
+                ears.addItem (61, juce::String (lr.signOff.count (c->area) ? "Take back the sign-off of " : "Sign off ") + areaName (c->area) + " (I've listened, it's done)");
+            ears.addItem (62, "The gate waits for every area's sign-off", true, lr.requireSignOff);
+            ears.addItem (63, "Save the before/after snippets (" + juce::String ((int) processor.snippets.pairs().size()) + ")...", ! processor.snippets.pairs().empty());
+            m.addSubMenu ("Listening", ears);
+            m.addItem (64, "The label autopilot (" + juce::String (lr.autoFix.kept) + " kept, " + juce::String (lr.autoFix.undone) + " undone; each fix has its switch on the Autopilot page)", true, lr.autoFixOn);
             m.addItem (40, "Blind spots: what couldn't be measured, and why...");
             m.addItem (41, "The listen-through queue (every flagged bar, in order)...");
             m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsB), [this] (int r)
@@ -346,6 +376,26 @@ namespace lab
                 else if (r == 31) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Score log", host.scoreLogText());
                 else if (r == 32 || r == 33) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "The label's tracks, scored", host.scoreReferences (r == 33));
                 else if (r == 34) if (const auto* c = selected()) { const auto must = host.profile.minScore.count (c->name) > 0; host.setMinimum (c->name, must ? 0.0f : 0.8f); }
+                if (r == 50) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Today's plan", host.sessionPlan());
+                else if (r == 51) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Why not 100", host.whyNot100());
+                else if (r == 52) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "A&R notes", host.arSummary());
+                else if (r == 53) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Against each reference", host.scoreByReference());
+                else if (r == 54) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Against your best signed track", host.overlayBestSigned());
+                else if (r == 60) { host.freshEars = ! host.freshEars; host.sessionStartMs = juce::Time::currentTimeMillis(); }
+                else if (r == 61) { if (const auto* c = selected()) { if (host.signOff.count (c->area)) host.signOff.erase (c->area); else host.signOff[c->area] = juce::Time::getCurrentTime().toString (true, true); } }
+                else if (r == 62) host.requireSignOff = ! host.requireSignOff;
+                else if (r == 63)
+                {
+                    chooser = std::make_unique<juce::FileChooser> ("Where to put the before/after snippets", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory));
+                    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories, [this] (const juce::FileChooser& fc)
+                    {
+                        if (! fc.getResult().isDirectory()) return;
+                        const auto dir = fc.getResult().getChildFile ("Before and after");
+                        note (juce::String (processor.snippets.save (dir)) + " pair(s) saved");
+                        dir.revealToUser();
+                    });
+                }
+                else if (r == 64) { host.autoFixOn = ! host.autoFixOn; if (! host.autoFixOn) host.autoFix.reset(); }
                 if (r == 40) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Blind spots", host.blindSpots());
                 else if (r == 41)
                 {

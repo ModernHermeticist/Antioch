@@ -67,6 +67,8 @@ QuintessenceProcessor::QuintessenceProcessor()
         if (fix == suite::Fix::Narrower) return narrower (data);
         if (fix == suite::Fix::LessSquash) return lessSquash();
         if (fix == suite::Fix::TrackPolarity) return flipPolarity (data);
+        if (fix == suite::Fix::TrackPunch) return punchStep (data);
+        if (fix == suite::Fix::VocalDelay) return vocalDelay (data);
         if (fix == suite::Fix::SectionTrim) return sectionTrim (data);
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
@@ -108,6 +110,7 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
 {
     directorStage.prepare (sampleRate);
     traits.prepare (sampleRate);
+    labelDsp.prepare (sampleRate);
     sr = sampleRate;
     const auto fs = (float) sr;
     for (auto& f : lowCuts) f.reset();
@@ -199,6 +202,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     bypassedNow.store (false);
     if (buffer.getNumChannels() > 0) traits.input (buffer.getReadPointer (0), buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : nullptr, buffer.getNumSamples());
     if (polarityFlipped.load()) buffer.applyGain (-1.0f);
+    labelDsp.input (buffer.getArrayOfWritePointers(), juce::jmin (2, buffer.getNumChannels()), buffer.getNumSamples());
 
     // Breakdowns get their own correction: a pass measures one kind of section only
     int group = 0;
@@ -662,8 +666,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             trimGain = target;
         }
     }
+    labelDsp.output (buffer.getArrayOfWritePointers(), chs, n, info.ppq, info.bpm > 0.0 ? info.bpm : 120.0, info.barQuarters(), sectionType, roleNow, info.playing);
     traits.output (buffer.getReadPointer (0), chs > 1 ? buffer.getReadPointer (1) : nullptr, n, info.playing && info.hasPpq ? info.ppq : -1.0,
-                   info.bpm > 0.0 ? info.bpm : 120.0, sectionIndexNow);
+                   info.bpm > 0.0 ? info.bpm : 120.0, sectionIndexNow, isNonRealtime());
     {
         double p = 0.0;
         for (int c = 0; c < chs; ++c)
@@ -1203,6 +1208,30 @@ std::function<void()> QuintessenceProcessor::flipPolarity (uint32_t data)
     return [this] { polarityFlipped.store (! polarityFlipped.load()); storeLabelFixes(); };
 }
 
+std::function<void()> QuintessenceProcessor::punchStep (uint32_t data)
+{
+    uint32_t low; int band; float db;
+    suite::unpackMasterTone (data, low, band, db);
+    if (low != (getInstanceId() & 0xfffu) || std::abs (db) < 0.01f) return {};
+    const auto before = value (qn::punchId), after = juce::jlimit (-1.0f, 1.0f, before + 0.15f * db);
+    if (std::abs (after - before) < 0.005f) return {};
+    write (qn::punchId, after);
+    addLog ("Punch " + juce::String (before, 2) + " -> " + juce::String (after, 2) + " (label-ready: the attacks against the label)");
+    return [this, before, after] { if (std::abs (value (qn::punchId) - after) < 0.01f) write (qn::punchId, before); };
+}
+
+std::function<void()> QuintessenceProcessor::vocalDelay (uint32_t data)
+{
+    uint32_t low; int band; float ms;
+    suite::unpackMasterTone (data, low, band, ms);
+    if (low != (getInstanceId() & 0xfffu)) return {};
+    const auto before = labelDsp.vocalDelayMs.load(), after = juce::jlimit (0.0f, 60.0f, ms);
+    labelDsp.vocalDelayMs.store (after);
+    apvts.state.setProperty ("labelVocalDelay", after, nullptr);
+    addLog ("Delayed " + juce::String (after, 1) + " ms (label-ready: the vocal sat early, now on the grid)");
+    return [this, before] { labelDsp.vocalDelayMs.store (before); apvts.state.setProperty ("labelVocalDelay", before, nullptr); };
+}
+
 std::function<void()> QuintessenceProcessor::sectionTrim (uint32_t data)
 {
     uint32_t low; int type; float db;
@@ -1229,6 +1258,8 @@ void QuintessenceProcessor::storeLabelFixes()
 void QuintessenceProcessor::loadLabelFixes()
 {
     polarityFlipped.store ((bool) apvts.state.getProperty ("labelPolarity", false));
+    labelLatched = (uint32_t) (int) apvts.state.getProperty ("labelLatched", 0);
+    labelDsp.vocalDelayMs.store ((float) apvts.state.getProperty ("labelVocalDelay", 0.0f));
     const auto trims = juce::StringArray::fromTokens (apvts.state.getProperty ("labelTrims", "").toString(), ",", "");
     for (int i = 0; i < 6; ++i) sectionTrimDb[(size_t) i].store (i < trims.size() ? juce::jlimit (-6.0f, 6.0f, trims[i].getFloatValue()) : 0.0f);
 }

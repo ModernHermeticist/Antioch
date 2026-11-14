@@ -33,7 +33,11 @@ namespace suite
                                     SectionDown,                                    // every track 1 dB down in one kind of section (data: the type)
                                     BuildImpact,
                                     TrackPolarity,                                  // one Quintessence flips its polarity (data: its id's low 12 bits)
-                                    SectionTrim };                                  // one Quintessence's level in one kind of section (packSectionTrim)
+                                    SectionTrim,                                    // one Quintessence's level in one kind of section (packSectionTrim)
+                                    TrackPunch,                                     // one Quintessence's transient shaper (packMasterTone: its id, band 0, signed dB)
+                                    PreDelayTempo,                                  // every Antioch's reverb pre-delay set from the tempo
+                                    ThrowsAtVocal,                                  // every Antioch throws at the end of each vocal phrase
+                                    VocalDelay };                                   // one Quintessence delays its track (packMasterTone: its id, band 0, ms)
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
@@ -61,7 +65,7 @@ namespace suite
                                        "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
                                        "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
                                        "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact",
-                                       "Polarity flip", "Section trim" };
+                                       "Polarity flip", "Section trim", "Punch", "Pre-delay from the tempo", "Throws at vocal ends", "Vocal onto the grid" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }

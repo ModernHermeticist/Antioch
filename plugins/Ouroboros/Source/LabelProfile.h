@@ -68,6 +68,7 @@ namespace lab
         std::array<float, numTypes> width {}, level {};
         std::array<bool, numTypes> has {};
         juce::String dropProgression;   // the first drop's chords, as steps between roots (SongLab::progressionPrint)
+        int keyRoot = -1;               // its key's root (0 = C), from the whole song's chroma; -1 = unknown
 
         void summarise()
         {
@@ -113,6 +114,20 @@ namespace lab
             map = listen::propose (features (bars));
             if (map.count == 0) return false;
             sections = lab::sections (bars, map);
+            {
+                // the key: the major or minor key whose scale holds the most of the song's chroma
+                std::array<float, 12> total {};
+                for (const auto& b : bars) for (int k = 0; k < 12; ++k) total[(size_t) k] += b.chroma[(size_t) k];
+                float best = 0.0f;
+                for (int r = 0; r < 12; ++r)
+                    for (const auto* steps : { &suite::music::scales()[0].steps, &suite::music::scales()[1].steps })
+                    {
+                        float sc = 0.0f;
+                        for (auto st : *steps) sc += total[(size_t) ((r + st) % 12)];
+                        sc += total[(size_t) r];   // the tonic counts double
+                        if (sc > best) { best = sc; keyRoot = steps == &suite::music::scales()[0].steps ? r : (r + 9) % 12; }
+                    }
+            }
             for (const auto& sec : sections)
                 if (sec.type == T::Drop) { dropProgression = progressionPrint (progression (bars, sec.startBar - 1, sec.startBar - 1 + juce::jmin (16, sec.bars))); break; }
             summarise();
@@ -217,6 +232,7 @@ namespace lab
                 }
                 c.setProperty ("sections", secs.joinIntoString (";"), nullptr);
                 c.setProperty ("progression", r.dropProgression, nullptr);
+                c.setProperty ("key", r.keyRoot, nullptr);
                 t.appendChild (c, nullptr);
             }
             return t;
@@ -234,6 +250,7 @@ namespace lab
                 r.name = c["name"].toString(); r.file = c["file"].toString(); r.addedMs = (juce::int64) c["added"];
                 r.yours = (bool) c["yours"]; r.bpm = (double) c["bpm"]; r.seconds = (double) c["seconds"];
                 r.dropProgression = c["progression"].toString();
+                r.keyRoot = (int) c.getProperty ("key", -1);
                 int idx = 0;
                 for (const auto& sec : juce::StringArray::fromTokens (c["sections"].toString(), ";", ""))
                 {

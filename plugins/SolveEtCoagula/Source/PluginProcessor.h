@@ -90,7 +90,7 @@ public:
         if (melody.notes().size() != publishedNotes)
         {
             std::vector<suite::WritingBus::SungNote> sung;
-            for (const auto& n : melody.notes()) sung.push_back ({ n.pitch, n.start, n.length });
+            for (const auto& n : melody.notes()) sung.push_back ({ n.pitch, n.start, n.length, n.cents });
             suite::WritingBus::publishSung (sung);
             publishedNotes = melody.notes().size();
         }

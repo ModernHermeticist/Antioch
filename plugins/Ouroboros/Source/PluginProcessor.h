@@ -12,6 +12,7 @@
 #include "SuiteDSP.h"
 #include "DirectorHost.h"
 #include "LabelReadyHost.h"
+#include "LabelSnippets.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <optional>
 #include <thread>
@@ -399,6 +400,7 @@ public:
     }
     // ---- Label-ready: the song measured as it plays, scored against the label (LabelReadyHost.h) ----
     lab::LabelReadyHost labelReady;
+    lab::Snippets snippets;              // before and after each fix (LabelSnippets.h)
     lab::Analyser songAnalyser;          // audio thread
     lab::Accumulator songBar;            // audio thread: the bar being heard
     int songBarIndex = -1;               // audio thread
@@ -440,6 +442,8 @@ public:
         // milestone A/B: switches land on a bar line
         const auto barNow = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load()));
         if (barNow != labelBar) { labelBar = barNow; if (playing.load()) labelReady.abTick(); }
+        snippets.tick (playing.load(), ppq.load(), barQuarters.load());
+        labelReady.playingNow = playing.load();
         if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
         {
             labelReady.live.expectedSamples = (float) (sampleRate * barQuarters.load() * 60.0 / juce::jmax (1.0, bpm.load()));

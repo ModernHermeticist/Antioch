@@ -17,12 +17,12 @@
 
 namespace suite::WritingBus
 {
-    struct SungNote { int pitch = 60; double start = 0.0, length = 0.25; };
+    struct SungNote { int pitch = 60; double start = 0.0, length = 0.25; float cents = 0.0f; };   // cents: how far it was sung off the note (+ sharp)
 
     namespace detail
     {
         constexpr int maxNotes = 1024;
-        struct Note { int32_t pitch; float start, length; };
+        struct Note { int32_t pitch; float start, length, cents; };
         struct Shared
         {
             std::atomic<uint32_t> notesStamp, notesSeq, thinStamp, thinMask;
@@ -33,7 +33,7 @@ namespace suite::WritingBus
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_writingbus_v1", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_writingbus_v2", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -51,7 +51,7 @@ namespace suite::WritingBus
         auto& s = detail::shared();
         const auto n = (int) std::min (notes.size(), (size_t) detail::maxNotes);
         s.noteCount.store (0);
-        for (int i = 0; i < n; ++i) s.notes[i] = { notes[(size_t) i].pitch, (float) notes[(size_t) i].start, (float) notes[(size_t) i].length };
+        for (int i = 0; i < n; ++i) s.notes[i] = { notes[(size_t) i].pitch, (float) notes[(size_t) i].start, (float) notes[(size_t) i].length, notes[(size_t) i].cents };
         s.noteCount.store (n);
         s.notesSeq.fetch_add (1);
         s.notesStamp.store (detail::nowSeconds());
@@ -63,7 +63,7 @@ namespace suite::WritingBus
         const auto stamp = s.notesStamp.load();
         if (stamp == 0 || detail::nowSeconds() - stamp > 30) return out;
         const auto n = std::min ((int) s.noteCount.load(), detail::maxNotes);
-        for (int i = 0; i < n; ++i) out.push_back ({ s.notes[i].pitch, (double) s.notes[i].start, (double) s.notes[i].length });
+        for (int i = 0; i < n; ++i) out.push_back ({ s.notes[i].pitch, (double) s.notes[i].start, (double) s.notes[i].length, s.notes[i].cents });
         return out;
     }
     inline void clearSung() noexcept { detail::shared().notesStamp.store (0); detail::shared().noteCount.store (0); }

@@ -8,6 +8,7 @@
 #include "SectionBus.h"
 #include "SuiteDSP.h"
 #include "Listen.h"
+#include "Music.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <array>
 #include <cmath>
@@ -22,6 +23,7 @@ namespace lab
     {
         bool heard = false;
         float db = -100.0f, sideDb = -100.0f, onsets = 0.0f, lowFlux = 0.0f;
+        float peakDb = -100.0f, leanDb = 0.0f;   // its loudest sample; left over right (dB)
         Bands band {};
         std::array<float, 12> chroma {};   // the pitch classes' share of the bar's tonal energy (C = 0), sums to 1 (or all 0)
         float bandDb (int b) const { return band[(size_t) juce::jlimit (0, numBands - 1, b)]; }
@@ -30,7 +32,8 @@ namespace lab
     /** Sums for one bar while it plays (power), turned into a Bar at the end. */
     struct Accumulator
     {
-        double full = 0.0, side = 0.0, low = 0.0;
+        double full = 0.0, side = 0.0, low = 0.0, left = 0.0, right = 0.0;
+        float peak = 0.0f;
         std::array<double, numBands> band {};
         std::array<double, 12> chroma {};
         int samples = 0, onsets = 0;
@@ -44,6 +47,8 @@ namespace lab
             for (int i = 0; i < numBands; ++i) b.band[(size_t) i] = db (band[(size_t) i]);
             b.onsets = (float) onsets;
             b.lowFlux = (float) low;
+            b.peakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
+            b.leanDb = left > 1.0e-12 && right > 1.0e-12 ? (float) (10.0 * std::log10 (left / right)) : 0.0f;
             double c = 0.0;
             for (auto v : chroma) c += v;
             if (c > 1.0e-12) for (int k = 0; k < 12; ++k) b.chroma[(size_t) k] = (float) (chroma[(size_t) k] / c);
@@ -110,6 +115,8 @@ namespace lab
         {
             const auto mono = 0.5f * (l + r), side = 0.5f * (l - r);
             ++acc.samples;
+            acc.left += (double) l * l; acc.right += (double) r * r;
+            acc.peak = std::max (acc.peak, std::max (std::abs (l), std::abs (r)));
             acc.full += (double) mono * mono;
             acc.side += (double) side * side;
             for (int b = 0; b < numBands; ++b) { const auto y = filters[(size_t) b].bandpass (mono); acc.band[(size_t) b] += (double) y * y; }
