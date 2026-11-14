@@ -193,6 +193,7 @@ public:
         their autopilot switch is on); saved with the project. The part clean-ups act while latched
         and switched on; the rest set a setting once (yours to change back). */
     uint32_t labelLatched = 0;
+    int labelTick = 0;
     void latchLabelWriting();
     /** The map the song is written against: Ouroboros' when it shares one, else a standard trance form. */
     static suite::SectionMap songMapOrDefault();

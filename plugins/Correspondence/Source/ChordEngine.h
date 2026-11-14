@@ -1248,8 +1248,11 @@ namespace chords
         struct Polish
         {
             bool clearKick = false, inKey = false, accents = false, ghosts = false, roots = false, voicingRoom = false;
-            bool any() const { return clearKick || inKey || accents || ghosts || roots || voicingRoom; }
+            bool pickups = false, partFills = false, arpOffHook = false, peaksLate = false, counterLater = false, bassLength = false, grooveLock = false;
+            bool any() const { return clearKick || inKey || accents || ghosts || roots || voicingRoom || any2(); }
+            bool any2() const { return pickups || partFills || arpOffHook || peaksLate || counterLater || bassLength || grooveLock; }
         } polish;
+        bool kitOffbeatOnly = false;   // the kit leaves the odd 16ths empty (the bass's groove lock)
     };
 
     /** Where a library layer plays in section i before the density manager (kind, or -1). */
@@ -1484,6 +1487,7 @@ namespace chords
     inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned = nullptr, int* turned = nullptr);
 }
 #include "LabelPolish.h"
+#include "LabelPolish2.h"
 namespace chords
 {
     inline std::vector<Note> songClip (const Settings& base, const suite::SectionMap& map, const SongPatterns& patterns, SongPart part, int* thinned, int* turned)
@@ -1972,6 +1976,17 @@ namespace chords
                 out.erase (std::remove_if (out.begin(), out.end(), [at] (const Note& n) { return n.start >= at - 1.0e-6 && n.start < at + 1.5 - 1.0e-6; }), out.end());
                 for (auto n : writing::signatureFigure (hookCell, at, 74)) { n.pitch += map.keyShiftOf (i); out.push_back (n); }
             }
+        if (patterns.polish.any2() && (part == SongPart::Bass || part == SongPart::Arp || part == SongPart::Lead || part == SongPart::Counter))
+        {
+            std::vector<Note> hookNotes;
+            if (part == SongPart::Arp && patterns.polish.arpOffHook)
+            {
+                auto plain = patterns;
+                plain.polish = {};
+                hookNotes = songClip (base, map, plain, SongPart::Lead);
+            }
+            polish::apply2 (out, base, map, patterns, part, hookNotes);
+        }
         if (patterns.polish.any() && (part == SongPart::Bass || part == SongPart::Arp || part == SongPart::Chords))
         {
             int leadLow = 0;

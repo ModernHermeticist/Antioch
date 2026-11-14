@@ -27,7 +27,7 @@ namespace lab
     struct LiveBars
     {
         static constexpr int maxBars = 1024;
-        struct B { std::atomic<float> full { 0 }, side { 0 }, low { 0 }, onsets { 0 }, left { 0 }, right { 0 }, peak { 0 }; std::array<std::atomic<float>, numBands> band {}; std::array<std::atomic<float>, 12> chroma {}; std::atomic<int> samples { 0 }; };
+        struct B { std::atomic<float> full { 0 }, side { 0 }, low { 0 }, onsets { 0 }, left { 0 }, right { 0 }, peak { 0 }, lowLR { 0 }, lowLL { 0 }, lowRR { 0 }; std::array<std::atomic<float>, numBands> band {}; std::array<std::atomic<float>, 12> chroma {}; std::atomic<int> samples { 0 }; };
         std::array<B, maxBars> bars;
         void add (int bar, const Accumulator& a) noexcept
         {
@@ -35,6 +35,7 @@ namespace lab
             auto& b = bars[(size_t) bar];
             b.full.store (b.full.load() + (float) a.full); b.side.store (b.side.load() + (float) a.side); b.low.store (b.low.load() + (float) a.low);
             b.left.store (b.left.load() + (float) a.left); b.right.store (b.right.load() + (float) a.right); b.peak.store (std::max (b.peak.load(), a.peak));
+            b.lowLR.store (b.lowLR.load() + (float) a.lowLR); b.lowLL.store (b.lowLL.load() + (float) a.lowLL); b.lowRR.store (b.lowRR.load() + (float) a.lowRR);
             b.onsets.store (b.onsets.load() + (float) a.onsets);
             for (int k = 0; k < numBands; ++k) b.band[(size_t) k].store (b.band[(size_t) k].load() + (float) a.band[(size_t) k]);
             for (int k = 0; k < 12; ++k) b.chroma[(size_t) k].store (b.chroma[(size_t) k].load() + (float) a.chroma[(size_t) k]);
@@ -48,7 +49,8 @@ namespace lab
                 const auto& b = bars[(size_t) i];
                 Accumulator a;
                 a.samples = b.samples.load();
-                a.full = b.full.load(); a.side = b.side.load(); a.low = b.low.load(); a.left = b.left.load(); a.right = b.right.load(); a.peak = b.peak.load(); a.onsets = (int) std::lround (b.onsets.load());
+                a.full = b.full.load(); a.side = b.side.load(); a.low = b.low.load(); a.left = b.left.load(); a.right = b.right.load(); a.peak = b.peak.load();
+                a.lowLR = b.lowLR.load(); a.lowLL = b.lowLL.load(); a.lowRR = b.lowRR.load(); a.onsets = (int) std::lround (b.onsets.load());
                 for (int k = 0; k < numBands; ++k) a.band[(size_t) k] = b.band[(size_t) k].load();
                 for (int k = 0; k < 12; ++k) a.chroma[(size_t) k] = b.chroma[(size_t) k].load();
                 auto bar = a.finish();
@@ -58,7 +60,7 @@ namespace lab
             }
             return out;
         }
-        void clear() noexcept { for (auto& b : bars) { b.full.store (0); b.side.store (0); b.low.store (0); b.onsets.store (0); for (auto& x : b.band) x.store (0); for (auto& x : b.chroma) x.store (0); b.left.store (0); b.right.store (0); b.peak.store (0); b.samples.store (0); } }
+        void clear() noexcept { for (auto& b : bars) { b.full.store (0); b.side.store (0); b.low.store (0); b.onsets.store (0); for (auto& x : b.band) x.store (0); for (auto& x : b.chroma) x.store (0); b.left.store (0); b.right.store (0); b.peak.store (0); b.lowLR.store (0); b.lowLL.store (0); b.lowRR.store (0); b.samples.store (0); } }
         float expectedSamples = 44100.0f * 1.74f;   // one bar's samples at the current tempo (the message thread keeps it up to date)
     };
 
@@ -70,7 +72,7 @@ namespace lab
         bool profileFromCatalogue = false;
         Report report;
         std::vector<std::pair<juce::int64, int>> history;      // (time, overall), a point a minute
-        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; float lufs = -100.0f; };
+        struct Milestone { juce::String name, recipe; juce::int64 timeMs = 0; int overall = 0; std::array<float, numAreas> areas {}; float lufs = -100.0f; int stage = -1; };
         std::vector<Milestone> milestones;
         std::map<int, std::array<double, numTypes>> rolePower;   // per role, per kind of section: summed power
         std::map<int, std::array<int, numTypes>> roleCount;
@@ -266,7 +268,31 @@ namespace lab
             // the score log: what each action did, two updates later
             for (auto& e : scoreLog) if (e.after < 0 && ++e.updatesSince >= 2) e.after = report.overall;
             // steering toward the label: its drop tone becomes every Quintessence's reference
-            if (steerToLabel && profileFromCatalogue) suite::ReferenceBus::publish (labelToneTarget());
+            if (steerToLabel && profileFromCatalogue)
+            {
+                auto target = labelToneTarget();
+                if (suite::Autopilot::on (suite::Autopilot::tasteF))
+                {
+                    int n = 0;
+                    const auto taste = Learning::tasteOffset (n);
+                    for (size_t k = 0; k < 10; ++k) target[k] += taste[k];
+                }
+                suite::ReferenceBus::publish (target);
+            }
+            // the regression guard: a signed-off area falling after a change is put back
+            if (suite::Autopilot::on (suite::Autopilot::regressionGuardF) && lastActionMs > 0 && juce::Time::currentTimeMillis() - lastActionMs < 90000)
+                for (const auto& [a, was] : signOffScore)
+                    if (report.areaMeasured[(size_t) a] && report.areaScore[(size_t) a] < was - 0.1f && suite::FixBus::latest() > 0)
+                    {
+                        suite::FixBus::sendUndo (suite::FixBus::latest());
+                        regressionNote = juce::String (areaName (a)) + " fell after the last change: undone";
+                        suite::MoveLog::add ("Ouroboros", {}, "Label-ready: " + regressionNote, suite::MoveLog::fix);
+                        lastActionMs = 0;
+                        break;
+                    }
+            // the score's steadiness: the final score of each play-through
+            if (wasPlaying && ! playingNow && report.overall > 0) { playthroughs.push_back (report.overall); if (playthroughs.size() > 8) playthroughs.erase (playthroughs.begin()); }
+            wasPlaying = playingNow;
             // the translation loop: one fix at a time, kept only if it helped
             if (translationLoop) stepTranslationLoop();
             // the first time the gate passes: a milestone, automatically
@@ -285,6 +311,7 @@ namespace lab
         std::function<void (const juce::String&)> onAction;   // the processor: a before/after snippet around it
         void logAction (const juce::String& what)
         {
+            lastActionMs = juce::Time::currentTimeMillis();
             if (onAction) onAction (what);
             scoreLog.push_back ({ juce::Time::currentTimeMillis(), what, report.overall, -1, 0 });
             if (scoreLog.size() > 200) scoreLog.erase (scoreLog.begin());
@@ -443,6 +470,120 @@ namespace lab
         juce::int64 sessionStartMs = juce::Time::currentTimeMillis();
         int minutesListening() const { return (int) ((juce::Time::currentTimeMillis() - sessionStartMs) / 60000); }
         bool abBlind = false;
+
+        // ---- confidence, stages, learning ----
+        juce::int64 lastActionMs = 0;
+        std::map<int, float> signOffScore;   // each signed-off area's score when it was signed
+        juce::String regressionNote, preRenderNote;
+        bool wasPlaying = false;
+        std::vector<int> playthroughs;
+        /** How steady the score is from one play-through to the next (its spread), or -1 with fewer than three. */
+        float scoreSpread() const
+        {
+            if (playthroughs.size() < 3) return -1.0f;
+            const auto [lo, hi] = std::minmax_element (playthroughs.begin(), playthroughs.end());
+            return (float) (*hi - *lo);
+        }
+        void signOffArea (int area, bool on)
+        {
+            if (on) { signOff[area] = juce::Time::getCurrentTime().toString (true, true); signOffScore[area] = report.areaScore[(size_t) area]; }
+            else { signOff.erase (area); signOffScore.erase (area); }
+        }
+        /** Stages a milestone's name can carry, and what each needs. */
+        static int stageOf (const juce::String& name)
+        {
+            const auto n = name.toLowerCase();
+            return n.contains ("sketch") ? 0 : n.contains ("arrang") ? 1 : n.contains ("mix") ? 2 : n.contains ("premaster") || n.contains ("master") || n.contains ("label") ? 3 : -1;
+        }
+        static const char* stageName (int s) { static const char* n[] = { "sketch", "arrangement", "mix", "premaster" }; return s >= 0 && s < 4 ? n[s] : ""; }
+        /** Whether the song (now) meets a stage's definition of done, and what's missing. */
+        juce::String stageDone (int stage) const
+        {
+            juce::StringArray missing;
+            auto need = [&] (int area, float min) { if (report.areaMeasured[(size_t) area] && report.areaScore[(size_t) area] < min) missing.add (juce::String (areaName (area)) + " " + juce::String (juce::roundToInt (report.areaScore[(size_t) area] * 100.0f)) + "% (needs " + juce::String (juce::roundToInt (min * 100.0f)) + ")"); };
+            if (stage >= 0) { need (aAR, 0.6f); need (aWriting, 0.6f); }
+            if (stage >= 1) { need (aAR, 0.75f); need (aReference, 0.7f); }
+            if (stage >= 2) { need (aLowEnd, 0.75f); need (aMids, 0.75f); need (aBalance, 0.75f); need (aTranslation, 0.7f); }
+            if (stage >= 3) { if (! report.ready) missing.add ("the gate: " + (report.blockers.isEmpty() ? "the score under the label's threshold" : report.blockers.joinIntoString ("; "))); }
+            return missing.isEmpty() ? juce::String ("done") : missing.joinIntoString (", ");
+        }
+        /** The label's structure: the closest reference's map, at this song's start. */
+        suite::SectionMap proposeMap() const
+        {
+            const auto [best, d] = profile.closest (lastSections, 138.0);
+            juce::ignoreUnused (d);
+            if (best < 0) return {};
+            return profile.refs[(size_t) best].map;
+        }
+        /** Each section's score: the average of the checks pointing inside it. */
+        std::vector<float> sectionScores (const suite::SectionMap& map) const
+        {
+            std::vector<float> out ((size_t) map.count, -1.0f);
+            for (int i = 0; i < map.count; ++i)
+            {
+                float s = 0.0f; int n = 0;
+                for (const auto& c : report.checks) if (c.measured && c.bar >= map.sections[(size_t) i].startBar && c.bar < map.endBar (i)) { s += c.score; ++n; }
+                if (n > 0) out[(size_t) i] = s / (float) n;
+            }
+            return out;
+        }
+        /** Where every track sits front to back, and who ducks under whom. */
+        juce::String depthMap() const
+        {
+            juce::StringArray l { "FRONT TO BACK (0 = right in front, 100 = far back)", "" };
+            std::vector<std::pair<float, juce::String>> v;
+            for (const auto& t : lastTraits)
+            {
+                if (t.outRmsDb < -60.0f) continue;
+                const auto wide = juce::jlimit (0.0f, 1.0f, (t.sideDb - t.outRmsDb + 20.0f) / 20.0f), soft = juce::jlimit (0.0f, 1.0f, 1.0f - (t.crestDb - 6.0f) / 12.0f);
+                v.push_back ({ 0.5f * wide + 0.5f * soft, detail::trackLabel (t) });
+            }
+            std::sort (v.begin(), v.end());
+            for (const auto& [d, name] : v) l.add (juce::String (juce::roundToInt (d * 100.0f)).paddedLeft (' ', 4) + "  " + name);
+            l.add (""); l.add ("WHO DUCKS (back within ms after the duck)");
+            for (const auto& t : lastTraits) if (t.duckCount >= 4) l.add ("  " + detail::trackLabel (t) + ": " + juce::String (juce::roundToInt (t.recoveryMs)) + " ms, " + juce::String (t.duckCount) + " ducks heard");
+            return l.joinIntoString ("\n");
+        }
+        /** Ear-candy one-shots in the key: a pluck, a riser and a fall, written as WAVs. */
+        bool writeEarCandyShots (const juce::File& folder) const
+        {
+            const auto key = suite::KeyBus::read();
+            const auto song = suite::SongBus::read();
+            const auto root = song.valid ? song.root : key.valid ? key.root : 9;
+            const double fs = 44100.0;
+            folder.createDirectory();
+            auto write = [&] (const juce::String& name, int seconds10, std::function<float (double, double)> fn)
+            {
+                juce::AudioBuffer<float> b (2, (int) (fs * seconds10 / 10.0));
+                for (int i = 0; i < b.getNumSamples(); ++i) { const auto t = (double) i / fs, pos = (double) i / b.getNumSamples(); const auto v = fn (t, pos); b.setSample (0, i, v); b.setSample (1, i, v); }
+                const auto f = folder.getChildFile (name + ".wav");
+                f.deleteFile();
+                juce::WavAudioFormat fmt;
+                std::unique_ptr<juce::AudioFormatWriter> w (fmt.createWriterFor (new juce::FileOutputStream (f), fs, 2, 24, {}, 0));
+                return w != nullptr && w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+            };
+            const auto hz = 440.0 * std::pow (2.0, (root + 72 - 69) / 12.0);
+            const auto twoPi = juce::MathConstants<double>::twoPi;
+            bool ok = write ("Candy pluck", 5, [hz, twoPi] (double t, double) { return (float) (0.4 * std::exp (-t * 9.0) * (std::sin (twoPi * hz * t) + 0.3 * std::sin (twoPi * hz * 2.0 * t))); });
+            ok = write ("Candy riser", 20, [hz, twoPi] (double t, double pos) { return (float) (0.25 * pos * std::sin (twoPi * hz * 0.5 * t * (1.0 + pos))); }) && ok;
+            ok = write ("Candy fall", 10, [hz, twoPi] (double t, double pos) { return (float) (0.3 * (1.0 - pos) * std::sin (twoPi * hz * t * (1.0 - 0.5 * pos))); }) && ok;
+            return ok;
+        }
+        static juce::String lastSongRecipe() { return "Your last song (label-ready milestone)"; }
+        /** A new project starts set up like your last song (off unless you ask: a new idea starts clean). */
+        static juce::File startLikeLastFile() { return suite::Alias::file ("Label start like last song.txt"); }
+        static bool startLikeLast() { return startLikeLastFile().loadFileAsString().trim() == "on"; }
+        static void setStartLikeLast (bool on) { startLikeLastFile().getParentDirectory().createDirectory(); startLikeLastFile().replaceWithText (on ? "on" : "off"); }
+        /** FL started rendering: what's off right now (reported, nothing changed mid-render). */
+        juce::String preRenderReport (bool abOnNow) const
+        {
+            juce::StringArray l;
+            for (const auto& e : suite::Registry::list()) if (e.has (suite::Status::masterPreview)) l.add ("Lapis is playing the master preview: the render would be a master, not the premaster");
+            if (abOnNow) l.add ("a milestone A/B is on");
+            if (const auto ms = suite::LabelReadyBus::master(); ms.valid && ms.truePeakDb > -6.0f) l.add ("the master peaks at " + juce::String (ms.truePeakDb, 1) + " dBFS (the premaster wants -6)");
+            for (const auto& c : report.checks) if (c.measured && c.blocking && c.score < 0.5f) l.add (c.name + ": " + c.detail);
+            return l.isEmpty() ? juce::String ("Rendering: nothing in the way.") : "Rendering with: " + l.joinIntoString ("; ");
+        }
 
         // ---- the mix toward the label ----
         bool steerToLabel = false;    // the label's drop tone as every Quintessence's reference
@@ -725,8 +866,20 @@ namespace lab
             m.recipe = "Milestone - " + m.name + " - " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H-%M");
             m.overall = report.overall;
             m.areas = report.areaScore;
+            m.stage = stageOf (m.name);
+            // your taste: this song's drop tone against the label's, for the taste offset
+            for (const auto& s : lastSections)
+                if (s.type == T::Drop && s.heard() && profileFromCatalogue)
+                {
+                    const auto sh = shape (s.band), lab = profile.toneOf (T::Drop);
+                    std::array<float, 10> off {};
+                    for (int k = 0; k < 10 && k < numBands; ++k) off[(size_t) k] = sh[(size_t) k] - lab[(size_t) k];
+                    Learning::recordTaste (off, m.name);
+                    break;
+                }
             if (const auto ms = suite::LabelReadyBus::master(); ms.valid && ms.measuredSeconds > 5.0f) m.lufs = ms.lufs;   // for the level-matched A/B
             suite::RecipeBus::send (suite::RecipeAction::Save, m.recipe);   // every plugin saves its state under that name
+            suite::RecipeBus::send (suite::RecipeAction::Save, lastSongRecipe());   // and as "your last song" (a new project can start from it)
             milestones.push_back (m);
             const auto song = suite::SongBus::read();
             if (song.valid && ! song.hook.empty()) suite::StyleLog::add ("hookprint", { { "print", detail::hookPrint (song.hook) }, { "milestone", m.name } });
@@ -817,7 +970,7 @@ namespace lab
             t.setProperty ("autoFix", autoFixOn, nullptr);
             t.setProperty ("requireSignOff", requireSignOff, nullptr);
             juce::StringArray so;
-            for (const auto& [a, note] : signOff) so.add (juce::String (a) + "|" + note.replaceCharacters ("|~", "  "));
+            for (const auto& [a, note] : signOff) so.add (juce::String (a) + "|" + note.replaceCharacters ("|~", "  ") + "|" + juce::String (signOffScore.count (a) ? signOffScore.at (a) : 0.0f, 3));
             t.setProperty ("signOff", so.joinIntoString ("~"), nullptr);
             juce::StringArray lg;
             for (const auto& e : scoreLog) lg.add (juce::String (e.timeMs) + "|" + e.what.replaceCharacters ("|~", "  ") + "|" + juce::String (e.before) + "|" + juce::String (e.after));
@@ -831,6 +984,7 @@ namespace lab
                 juce::StringArray a; for (auto v : m.areas) a.add (juce::String (v, 3));
                 c.setProperty ("areas", a.joinIntoString (","), nullptr);
                 c.setProperty ("lufs", m.lufs, nullptr);
+                c.setProperty ("stage", m.stage, nullptr);
                 t.appendChild (c, nullptr);
             }
             return t;
@@ -845,7 +999,12 @@ namespace lab
             requireSignOff = (bool) t.getProperty ("requireSignOff", false);
             signOff.clear();
             for (const auto& e : juce::StringArray::fromTokens (t["signOff"].toString(), "~", ""))
-                if (e.contains ("|")) signOff[e.upToFirstOccurrenceOf ("|", false, false).getIntValue()] = e.fromFirstOccurrenceOf ("|", false, false);
+                if (e.contains ("|"))
+                {
+                    const auto f = juce::StringArray::fromTokens (e, "|", "");
+                    signOff[f[0].getIntValue()] = f[1];
+                    if (f.size() > 2) signOffScore[f[0].getIntValue()] = f[2].getFloatValue();
+                }
             scoreLog.clear();
             for (const auto& e : juce::StringArray::fromTokens (t["scoreLog"].toString(), "~", ""))
             {
@@ -863,6 +1022,7 @@ namespace lab
                     const auto a = juce::StringArray::fromTokens (c["areas"].toString(), ",", "");
                     for (int k = 0; k < numAreas && k < a.size(); ++k) m.areas[(size_t) k] = a[k].getFloatValue();
                     m.lufs = (float) c.getProperty ("lufs", -100.0f);
+                    m.stage = (int) c.getProperty ("stage", -1);
                     milestones.push_back (m);
                 }
         }

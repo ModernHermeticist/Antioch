@@ -1,4 +1,6 @@
 #pragma once
+#include "MoveLog.h"
+#include "AutopilotBus.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "SuiteProcessor.h"
@@ -94,8 +96,17 @@ public:
             suite::WritingBus::publishSung (sung);
             publishedNotes = melody.notes().size();
         }
+        // label-ready: the vocal's harmonies written once there's enough of it, in the key
+        if (! harmoniesWritten && melody.notes().size() >= 16 && key.valid && suite::Autopilot::on (suite::Autopilot::vocalHarmonyF))
+        {
+            harmoniesWritten = true;
+            const auto folder = suite::Alias::file ("Vocal");
+            saveVocalMidi (folder);
+            suite::MoveLog::add (getName(), getTrackName(), "Label-ready: the vocal's melody and harmonies written to " + folder.getFullPathName(), suite::MoveLog::fix);
+        }
     }
     size_t publishedNotes = 0;
+    bool harmoniesWritten = false;
     /** Writes "Vocal melody.mid" and (with a key) "Vocal harmony.mid", a third above, into `folder`. */
     juce::String saveVocalMidi (const juce::File& folder)
     {

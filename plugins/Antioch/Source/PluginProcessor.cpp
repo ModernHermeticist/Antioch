@@ -33,6 +33,23 @@ AntiochProcessor::AntiochProcessor()
             if (apvts.getRawParameterValue (Params::throwLevel)->load() < 0.001f) return {};   // no throws on this Antioch
             return { { Params::Throw::autoMode, (float) Params::Throw::autoAtVocalEnds } };
         }
+        if (fix == suite::Fix::EchoTighter)   // a busy song: each tap's feedback down a quarter
+        {
+            std::vector<suite::FixReceiver::Change> ch;
+            for (int t = 0; t < Params::numTaps; ++t)
+            {
+                const auto id = Params::tapId (t, Params::Tap::feedback);
+                const auto now = apvts.getRawParameterValue (id)->load();
+                if (now > 0.05f) ch.push_back ({ id, now * 0.75f });
+            }
+            return ch;
+        }
+        if (fix == suite::Fix::ReverbDuck)    // the reverb steps back while the lead plays
+        {
+            const auto now = apvts.getRawParameterValue (Params::Verb::leadRoom)->load();
+            if (now >= 0.95f) return {};
+            return { { Params::Verb::leadRoom, juce::jmin (1.0f, now + 0.25f) } };
+        }
         if (fix != suite::Fix::ReverbLowCut) return {};
         const auto now = apvts.getRawParameterValue (Params::Verb::lowCut)->load();
         if (now >= 899.0f) return {};

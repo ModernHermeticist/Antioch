@@ -723,8 +723,8 @@ namespace lab
             int same = 0; for (const auto& x : a) same += std::find (b.begin(), b.end(), x) != b.end() ? 1 : 0;
             const auto rep = a.empty() ? 0.0f : (float) same / (float) a.size();
             add (aWriting, "A hook you remember", ! a.empty() && ! b.empty(), juce::jmin (ramp (rep, 0.5f, 0.15f), ramp (rep, 0.95f, 1.01f) + 0.5f),
-                 juce::String (juce::roundToInt (rep * 100.0f)) + "% of its first two bars come back in the next two", "say it twice: the opening cell again, the ending changed (Correspondence: Write the hook stronger)",
-                 -1, false, suite::Fix::None, 0, false, "write stronger");
+                 juce::String (juce::roundToInt (rep * 100.0f)) + "% of its first two bars come back in the next two", "say it twice: the opening cell again, the ending changed (Correspondence: call and response, or Write the hook stronger)",
+                 -1, false, suite::Fix::None, 0, false, feature (AP::callResponseF));
         }
         // 32. chord voicings crowding the lead's register
         if (in.song.valid && in.song.chordHigh > 0 && ! in.song.hook.empty())
@@ -742,7 +742,7 @@ namespace lab
             {
                 const auto diff = std::abs (drop->onsetsPerBar - groove->onsetsPerBar) / juce::jmax (1.0f, groove->onsetsPerBar);
                 add (aWriting, "The drop has its own groove", true, ramp (diff, 0.25f, 0.05f), "the drop has " + juce::String (juce::roundToInt (diff * 100.0f)) + "% more (or fewer) events per bar than the groove",
-                     "a busier or different rhythm in the drop: a rolling bass, a 16th arp, extra percussion", drop->startBar);
+                     "a different chord rhythm per section: held in the breakdowns, gated in the drops (Correspondence, the autopilot)", drop->startBar, false, suite::Fix::None, 0, false, feature (AP::chordRhythmF));
             }
         }
         // 34. the motif comes back changed

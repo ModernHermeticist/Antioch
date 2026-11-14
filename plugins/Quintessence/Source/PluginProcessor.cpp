@@ -69,6 +69,8 @@ QuintessenceProcessor::QuintessenceProcessor()
         if (fix == suite::Fix::TrackPolarity) return flipPolarity (data);
         if (fix == suite::Fix::TrackPunch) return punchStep (data);
         if (fix == suite::Fix::VocalDelay) return vocalDelay (data);
+        if (fix == suite::Fix::SectionTone) return sectionTone (data);
+        if (fix == suite::Fix::SectionWidth) return sectionWidthStep (data);
         if (fix == suite::Fix::SectionTrim) return sectionTrim (data);
         if (fix == suite::Fix::Relearn && (data & (1u << juce::jlimit (0, 31, effectiveRole()))) != 0)
         {
@@ -111,6 +113,7 @@ void QuintessenceProcessor::prepareToPlay (double sampleRate, int)
     directorStage.prepare (sampleRate);
     traits.prepare (sampleRate);
     labelDsp.prepare (sampleRate);
+    labelDsp2.prepare (sampleRate);
     sr = sampleRate;
     const auto fs = (float) sr;
     for (auto& f : lowCuts) f.reset();
@@ -209,6 +212,9 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     float buildProgress = 0.0f, energyRatio = 1.0f;
     double sectionStartQ = 0.0;
     int sectionType = -1, sectionIndexNow = -1;
+    bool nextIsDrop = false;
+    double sectionEndQ = 0.0;
+    const auto cpuStart = juce::Time::getHighResolutionTicks();
     const auto info = suite::HostInfo::read (getPlayHead());
     if (follower.refresh() && info.hasPpq)
     {
@@ -218,7 +224,7 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         if (pos.valid && (pos.type == suite::SectionType::Groove || pos.type == suite::SectionType::Intro || pos.type == suite::SectionType::Outro)
             && suite::Autopilot::on (suite::Autopilot::sectionEqF)) group = 3;
         if (pos.valid && pos.type == suite::SectionType::Build) { group = 2; buildProgress = (float) juce::jlimit (0.0, 1.0, pos.progress (info.ppq)); }
-        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; sectionIndexNow = pos.index; }
+        if (pos.valid) { energyRatio = pos.energyRatio; sectionStartQ = pos.startQ; sectionType = (int) pos.type; sectionIndexNow = pos.index; nextIsDrop = pos.hasNext && pos.next == suite::SectionType::Drop; sectionEndQ = pos.endQ; }
     }
     if (info.hasPpq && info.playing) suite::MoveLog::setBar ((int) std::floor (info.ppq / info.barQuarters()) + 1);
     if (group != passGroup) { resetMeasurement(); passGroup = group; measureGroup.store (group); }
@@ -667,8 +673,20 @@ void QuintessenceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         }
     }
     labelDsp.output (buffer.getArrayOfWritePointers(), chs, n, info.ppq, info.bpm > 0.0 ? info.bpm : 120.0, info.barQuarters(), sectionType, roleNow, info.playing);
+    {
+        qn::LabelDsp2::Context cx;
+        cx.ppq = info.ppq; cx.bpm = info.bpm > 0.0 ? info.bpm : 120.0; cx.barQ = info.barQuarters(); cx.sectionType = sectionType; cx.role = roleNow;
+        cx.buildProgress = buildProgress; cx.nextIsDrop = nextIsDrop; cx.playing = info.playing; cx.sectionEndQ = sectionEndQ;
+        labelDsp2.process (buffer.getArrayOfWritePointers(), chs, n, cx);
+    }
     traits.output (buffer.getReadPointer (0), chs > 1 ? buffer.getReadPointer (1) : nullptr, n, info.playing && info.hasPpq ? info.ppq : -1.0,
                    info.bpm > 0.0 ? info.bpm : 120.0, sectionIndexNow, isNonRealtime());
+    {
+        // this plugin's share of the audio thread's time (for the label-ready CPU check)
+        const auto used = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - cpuStart);
+        const auto avail = (double) n / sr;
+        if (avail > 0.0) traits.cpu.store (0.99f * traits.cpu.load() + 0.01f * (float) (100.0 * used / avail));
+    }
     {
         double p = 0.0;
         for (int c = 0; c < chs; ++c)
@@ -1208,6 +1226,37 @@ std::function<void()> QuintessenceProcessor::flipPolarity (uint32_t data)
     return [this] { polarityFlipped.store (! polarityFlipped.load()); storeLabelFixes(); };
 }
 
+std::function<void()> QuintessenceProcessor::sectionTone (uint32_t data)
+{
+    uint32_t low; int type, band; float db;
+    suite::unpackSectionTone (data, low, type, band, db);
+    if (low != (getInstanceId() & 0xfffu) || type < 0 || type >= 6 || band < 0 || band >= 10) return {};
+    auto& v = labelDsp2.toneDb[(size_t) type][(size_t) band];
+    const auto before = v.load(), after = juce::jlimit (-6.0f, 6.0f, before + db);
+    if (std::abs (after - before) < 0.01f) return {};
+    v.store (after);
+    labelDsp2.sectionTone.store (true);
+    storeLabelFixes();
+    addLog (juce::String (juce::roundToInt (analysis::bandCentres()[(size_t) band])) + " Hz in the " + juce::String (suite::sectionName ((suite::SectionType) type)).toLowerCase() + "s "
+            + juce::String (before, 1) + " -> " + juce::String (after, 1) + " dB (label-ready: that section's tone)");
+    return [this, type, band, before] { labelDsp2.toneDb[(size_t) type][(size_t) band].store (before); storeLabelFixes(); };
+}
+
+std::function<void()> QuintessenceProcessor::sectionWidthStep (uint32_t data)
+{
+    uint32_t low; int type; float amount10;
+    suite::unpackSectionTrim (data, low, type, amount10);
+    if (low != (getInstanceId() & 0xfffu) || type < 0 || type >= 6) return {};
+    auto& v = labelDsp2.widthOffset[(size_t) type];
+    const auto before = v.load(), after = juce::jlimit (-0.5f, 0.5f, before + amount10 / 10.0f);
+    if (std::abs (after - before) < 0.005f) return {};
+    v.store (after);
+    labelDsp2.sectionWidth.store (true);
+    storeLabelFixes();
+    addLog ("Width in the " + juce::String (suite::sectionName ((suite::SectionType) type)).toLowerCase() + "s " + juce::String (juce::roundToInt (100.0f * (1.0f + after))) + "% (label-ready)");
+    return [this, type, before] { labelDsp2.widthOffset[(size_t) type].store (before); storeLabelFixes(); };
+}
+
 std::function<void()> QuintessenceProcessor::punchStep (uint32_t data)
 {
     uint32_t low; int band; float db;
@@ -1253,12 +1302,31 @@ void QuintessenceProcessor::storeLabelFixes()
     for (auto& t : sectionTrimDb) trims.add (juce::String (t.load(), 2));
     apvts.state.setProperty ("labelPolarity", polarityFlipped.load(), nullptr);
     apvts.state.setProperty ("labelTrims", trims.joinIntoString (","), nullptr);
+    juce::StringArray tone, widths;
+    for (auto& row : labelDsp2.toneDb) for (auto& v : row) tone.add (juce::String (v.load(), 2));
+    for (auto& v : labelDsp2.widthOffset) widths.add (juce::String (v.load(), 3));
+    apvts.state.setProperty ("labelSectionTone", tone.joinIntoString (","), nullptr);
+    apvts.state.setProperty ("labelSectionWidth", widths.joinIntoString (","), nullptr);
 }
 
 void QuintessenceProcessor::loadLabelFixes()
 {
     polarityFlipped.store ((bool) apvts.state.getProperty ("labelPolarity", false));
     labelLatched = (uint32_t) (int) apvts.state.getProperty ("labelLatched", 0);
+    {
+        const auto tone = juce::StringArray::fromTokens (apvts.state.getProperty ("labelSectionTone", "").toString(), ",", "");
+        bool any = false;
+        for (int t = 0; t < 6; ++t) for (int b = 0; b < 10; ++b)
+        {
+            const auto v = t * 10 + b < tone.size() ? juce::jlimit (-6.0f, 6.0f, tone[t * 10 + b].getFloatValue()) : 0.0f;
+            labelDsp2.toneDb[(size_t) t][(size_t) b].store (v); any = any || std::abs (v) > 0.01f;
+        }
+        labelDsp2.sectionTone.store (any);
+        const auto w = juce::StringArray::fromTokens (apvts.state.getProperty ("labelSectionWidth", "").toString(), ",", "");
+        bool anyW = false;
+        for (int t = 0; t < 6; ++t) { const auto v = t < w.size() ? juce::jlimit (-0.5f, 0.5f, w[t].getFloatValue()) : 0.0f; labelDsp2.widthOffset[(size_t) t].store (v); anyW = anyW || std::abs (v) > 0.001f; }
+        labelDsp2.sectionWidth.store (anyW);
+    }
     labelDsp.vocalDelayMs.store ((float) apvts.state.getProperty ("labelVocalDelay", 0.0f));
     const auto trims = juce::StringArray::fromTokens (apvts.state.getProperty ("labelTrims", "").toString(), ",", "");
     for (int i = 0; i < 6; ++i) sectionTrimDb[(size_t) i].store (i < trims.size() ? juce::jlimit (-6.0f, 6.0f, trims[i].getFloatValue()) : 0.0f);

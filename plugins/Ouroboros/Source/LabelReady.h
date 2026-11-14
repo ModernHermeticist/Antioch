@@ -81,6 +81,7 @@ namespace lab
         bool ready = false;
         juce::StringArray blockers;
         int closestRef = -1;
+        float coverage = 0.0f;   // how much of the song was heard (0..1): a score on half a play-through says so
         float closestDistance = 0.0f;
     };
 
@@ -114,6 +115,7 @@ namespace lab
 
     inline void extraChecks (const Inputs& in, const Profile& P, std::vector<Check>& out);   // LabelChecksMore.h
     inline void checks3 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks3.h
+    inline void checks4 (const Inputs& in, const Profile& P, std::vector<Check>& out);       // LabelChecks4.h
 
     inline Report evaluate (const Inputs& in)
     {
@@ -668,6 +670,15 @@ namespace lab
 
         extraChecks (in, P, out);
         checks3 (in, P, out);
+        checks4 (in, P, out);
+        // a few earlier checks name the switch that now fixes them
+        for (auto& c : out)
+        {
+            namespace AP = suite::Autopilot;
+            if (c.action.isNotEmpty()) continue;
+            if (c.name == "The last drop outdoes the first") c.action = "autopilot:" + juce::String ((int) AP::finalPeakF);
+            else if (c.name == "Kick and bass paired") c.action = "autopilot:" + juce::String ((int) AP::kickBassPairF);
+        }
 
         // one section only: the checks that point inside it (the rest don't count)
         if (in.focusSection >= 0 && in.focusSection < in.map.count)
@@ -693,6 +704,7 @@ namespace lab
         // the gate: the label's threshold, and nothing blocking
         for (const auto& c : out) if (c.measured && c.blocking && (c.score < 0.5f || c.belowMinimum)) rep.blockers.add (c.name + ": " + c.detail + (c.belowMinimum ? " (under this label's minimum)" : ""));
         rep.ready = rep.overall >= P.readyThreshold && rep.blockers.isEmpty() && weights > 0.0f && songHeard;   // never "ready" unheard
+        rep.coverage = in.map.totalBars > 0 ? juce::jlimit (0.0f, 1.0f, (float) heardBars / (float) in.map.totalBars) : 0.0f;
         // the next action: the biggest weighted gap
         const Check* next = nullptr; float gap = 0.0f;
         for (const auto& c : out)
@@ -717,3 +729,4 @@ namespace lab
 
 #include "LabelChecksMore.h"
 #include "LabelChecks3.h"
+#include "LabelChecks4.h"

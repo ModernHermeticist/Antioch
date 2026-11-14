@@ -64,6 +64,13 @@ namespace lab
                         right.removeFromTop (22), juce::Justification::centredLeft);
             g.setFont (juce::FontOptions (13.0f));
             g.setColour (Colours::dimText);
+            {
+                const auto spread = processor.labelReady.scoreSpread();
+                const auto extra = "heard " + juce::String (juce::roundToInt (r.coverage * 100.0f)) + "% of the song" + (spread >= 0.0f ? ", +-" + juce::String (spread * 0.5f, 1) + " between play-throughs" : juce::String());
+                g.setFont (juce::FontOptions (11.0f));
+                g.drawText (extra, right.withTrimmedLeft (right.getWidth() - 300).removeFromTop (16), juce::Justification::centredRight);
+                g.setFont (juce::FontOptions (13.0f));
+            }
             g.drawText ("Profile: " + processor.labelReady.profile.name + (processor.labelReady.profileFromCatalogue ? " (" + juce::String ((int) processor.labelReady.profile.refs.size()) + " references)" : juce::String (" (generic norms: add references)")),
                         right.removeFromTop (18), juce::Justification::centredLeft);
             g.setColour (Colours::text);
@@ -85,6 +92,21 @@ namespace lab
                 g.setFont (juce::FontOptions (11.0f));
                 g.drawText (juce::String (areaName (a)) + (processor.labelReady.signOff.count (a) ? " (signed)" : "")
                                 + (r.areaMeasured[(size_t) a] && ! processor.labelReady.freshEars ? "  " + juce::String (juce::roundToInt (s * 100.0f)) : juce::String ("  -")), cell, juce::Justification::centredLeft, true);
+            }
+            // the heat map: each section's score
+            {
+                const auto map = processor.getMap();
+                const auto scores = processor.labelReady.sectionScores (map);
+                auto strip = juce::Rectangle<int> (area.getX(), area.getY() + 2, area.getWidth(), 6);
+                if (map.totalBars > 0)
+                    for (int i = 0; i < map.count; ++i)
+                    {
+                        const auto x0 = strip.getX() + strip.getWidth() * (map.sections[(size_t) i].startBar - 1) / map.totalBars;
+                        const auto x1 = strip.getX() + strip.getWidth() * (map.endBar (i) - 1) / map.totalBars;
+                        const auto s = scores[(size_t) i];
+                        g.setColour (s < 0.0f ? Colours::outline : s >= 0.8f ? Colours::moss : s >= 0.5f ? Colours::brass : Colours::ember);
+                        g.fillRect (x0, strip.getY(), juce::jmax (1, x1 - x0 - 1), strip.getHeight());
+                    }
             }
             // the history graph
             const auto& h = processor.labelReady.history;
@@ -166,6 +188,10 @@ namespace lab
                 if (lr.abOn) line = "A/B: " + (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("switching")) + " (level-matched " + juce::String (lr.abGainDb.load(), 1) + " dB).  " + line;
                 if (lr.translationLoop) line << "  |  Translation loop: " << lr.loopNote;
                 if (lr.autoFixOn && lr.autoFix.note.isNotEmpty() && lr.autoFix.note != "nothing to do") line << "  |  Autopilot: " << lr.autoFix.note;
+                if (processor.monitor.playingReference.load()) line = "HEARING THE REFERENCE: " + processor.monitor.referenceName() + ".  " + line;
+                if (processor.monitor.preview.load() != lab::Monitor::none) line = juce::String ("PREVIEW (") + (processor.monitor.preview.load() == lab::Monitor::mono ? "mono" : processor.monitor.preview.load() == lab::Monitor::phone ? "phone" : "car") + ").  " + line;
+                if (lr.regressionNote.isNotEmpty()) line << "  |  " << lr.regressionNote;
+                if (lr.preRenderNote.isNotEmpty() && processor.monitor.rendering.load()) line = lr.preRenderNote;
                 if (lr.freshEars && lr.minutesListening() > 0 && lr.minutesListening() % 45 == 0) line = "FRESH EARS: " + juce::String (lr.minutesListening()) + " minutes in. Rest your ears for ten minutes, then listen again.  " + line;
                 if (lr.abOn && lr.abBlind) line = line.replace (lr.abShowing >= 0 ? lr.milestones[(size_t) lr.abShowing].name : juce::String ("~~"), lr.abShowing == lr.abA ? "A" : "B");
                 listenLabel.setText (line, juce::dontSendNotification);
@@ -350,6 +376,20 @@ namespace lab
             ears.addItem (62, "The gate waits for every area's sign-off", true, lr.requireSignOff);
             ears.addItem (63, "Save the before/after snippets (" + juce::String ((int) processor.snippets.pairs().size()) + ")...", ! processor.snippets.pairs().empty());
             m.addSubMenu ("Listening", ears);
+            juce::PopupMenu hear;
+            hear.addItem (70, "Hear the reference (same section, level-matched)...", ! lr.profile.refs.empty(), processor.monitor.referenceOn.load());
+            hear.addItem (71, "Preview: mono", true, processor.monitor.preview.load() == lab::Monitor::mono);
+            hear.addItem (72, "Preview: a phone", true, processor.monitor.preview.load() == lab::Monitor::phone);
+            hear.addItem (73, "Preview: a car", true, processor.monitor.preview.load() == lab::Monitor::car);
+            hear.addItem (74, "Preview off", processor.monitor.preview.load() != lab::Monitor::none);
+            m.addSubMenu ("Hear (listen-only: never in a render)", hear);
+            juce::PopupMenu more;
+            more.addItem (80, "Front to back, and who ducks...");
+            more.addItem (81, "Propose the label's structure (a map like its closest release)...", lr.profileFromCatalogue);
+            more.addItem (82, "Is it done? (the stage of the last milestone)...", ! lr.milestones.empty());
+            more.addItem (83, "Start new projects like my last song", true, lab::LabelReadyHost::startLikeLast());
+            more.addItem (84, "What the autopilot has learned...");
+            m.addSubMenu ("More", more);
             m.addItem (64, "The label autopilot (" + juce::String (lr.autoFix.kept) + " kept, " + juce::String (lr.autoFix.undone) + " undone; each fix has its switch on the Autopilot page)", true, lr.autoFixOn);
             m.addItem (40, "Blind spots: what couldn't be measured, and why...");
             m.addItem (41, "The listen-through queue (every flagged bar, in order)...");
@@ -382,7 +422,7 @@ namespace lab
                 else if (r == 53) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Against each reference", host.scoreByReference());
                 else if (r == 54) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Against your best signed track", host.overlayBestSigned());
                 else if (r == 60) { host.freshEars = ! host.freshEars; host.sessionStartMs = juce::Time::currentTimeMillis(); }
-                else if (r == 61) { if (const auto* c = selected()) { if (host.signOff.count (c->area)) host.signOff.erase (c->area); else host.signOff[c->area] = juce::Time::getCurrentTime().toString (true, true); } }
+                else if (r == 61) { if (const auto* c = selected()) host.signOffArea (c->area, host.signOff.count (c->area) == 0); }
                 else if (r == 62) host.requireSignOff = ! host.requireSignOff;
                 else if (r == 63)
                 {
@@ -396,6 +436,51 @@ namespace lab
                     });
                 }
                 else if (r == 64) { host.autoFixOn = ! host.autoFixOn; if (! host.autoFixOn) host.autoFix.reset(); }
+                else if (r == 70)
+                {
+                    if (processor.monitor.referenceOn.load()) { processor.monitor.referenceOn.store (false); note ("Back to the song."); }
+                    else
+                    {
+                        juce::PopupMenu pick;
+                        for (int i = 0; i < (int) host.profile.refs.size(); ++i) pick.addItem (1 + i, host.profile.refs[(size_t) i].name);
+                        pick.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&toolsB), [this] (int k)
+                        {
+                            auto& h = processor.labelReady;
+                            if (k <= 0 || k > (int) h.profile.refs.size()) return;
+                            if (processor.monitor.loadReference (h.profile.refs[(size_t) k - 1])) { processor.monitor.referenceOn.store (true); note ("Hearing \"" + processor.monitor.referenceName() + "\" at the same place in the same section, level-matched. Tools > Hear again to come back."); }
+                            else note ("Couldn't open that reference's file (moved?).");
+                        });
+                    }
+                }
+                else if (r >= 71 && r <= 74) processor.monitor.preview.store (r == 74 ? lab::Monitor::none : r - 70);
+                else if (r == 80) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Front to back", host.depthMap());
+                else if (r == 81)
+                {
+                    const auto proposal = host.proposeMap();
+                    if (proposal.count == 0) { note ("No reference to take a structure from."); return; }
+                    juce::StringArray l;
+                    for (int i = 0; i < proposal.count; ++i) l.add (juce::String (suite::sectionName (proposal.sections[(size_t) i].type)) + " at bar " + juce::String (proposal.sections[(size_t) i].startBar));
+                    auto* aw = new juce::AlertWindow ("The label's structure", "The closest release is laid out like this:\n" + l.joinIntoString (", ") + "\n\nUse it as the map? (FL's playlist doesn't change: arrange your clips to it.)", juce::MessageBoxIconType::NoIcon);
+                    aw->addButton ("Use it", 1); aw->addButton ("Cancel", 0);
+                    aw->enterModalState (true, juce::ModalCallbackFunction::create ([this, proposal] (int k) { if (k == 1) { processor.setMap (proposal); note ("The map now follows the label's structure."); } }), true);
+                }
+                else if (r == 82)
+                {
+                    const auto& last = host.milestones.back();
+                    const auto stage = last.stage >= 0 ? last.stage : 3;
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Is it done?",
+                        juce::String ("As a ") + lab::LabelReadyHost::stageName (stage) + " (name a milestone \"sketch\", \"arrangement\", \"mix\" or \"premaster\" to set its stage): " + host.stageDone (stage));
+                }
+                else if (r == 83) lab::LabelReadyHost::setStartLikeLast (! lab::LabelReadyHost::startLikeLast());
+                else if (r == 84)
+                {
+                    juce::StringArray l { "WHAT THE AUTOPILOT HAS LEARNED (across your songs)", "" };
+                    for (const auto& [name, rec] : host.autoFix.learning.all())
+                        l.add (name + ": kept " + juce::String (rec.kept) + ", undone " + juce::String (rec.undone) + (host.autoFix.learning.retired (name) ? "  (left alone now)" : host.autoFix.learning.favoured (name) ? "  (tried first)" : ""));
+                    int n = 0; const auto taste = lab::Learning::tasteOffset (n);
+                    l.add (""); l.add ("Your taste against the label (" + juce::String (n) + " milestones): " + (n >= 3 ? juce::String (taste[1], 1) + " dB lows, " + juce::String (taste[5], 1) + " dB mids, " + juce::String (taste[8], 1) + " dB top" : juce::String ("needs three milestones")));
+                    juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Learned", l.joinIntoString ("\n"));
+                }
                 if (r == 40) juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Blind spots", host.blindSpots());
                 else if (r == 41)
                 {

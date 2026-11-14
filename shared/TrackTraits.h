@@ -43,6 +43,8 @@ namespace suite::TrackTraits
         int movementCount = 0;
         float noiseFloorDb = -100.0f;                      // its quietest tenths of a second while it plays (10th percentile)
         float hitSpreadDb = 0.0f;                          // how far its hits' peaks spread (90th - 10th percentile)
+        float subsonicDb = -100.0f;                        // under 20 Hz against its level (dB)
+        float cpuPercent = 0.0f;                           // the plugin's share of the audio thread's time (%)
         int hitCount = 0;
         // the waveform copy (mono, 250..1500 Hz, 4 kHz), newest sample at ring[(ringPos - 1) % ringSize]
         std::array<float, ringSize> ring {};
@@ -67,7 +69,7 @@ namespace suite::TrackTraits
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v2", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_tracktraits_v3", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -176,6 +178,7 @@ namespace suite::TrackTraits
             lowL.set (150.0f, 0.707f, fs); lowR.set (150.0f, 0.707f, fs);
             band.set (600.0f, 0.7f, fs);
             highBand.set (3000.0f, 0.707f, fs);
+            subL.set (20.0f, 0.707f, fs);
             windowLength = juce::jmax (1, (int) (0.1 * sampleRate));
             decim = juce::jmax (1, (int) std::lround (sampleRate / ringRate));
             fastA = 1.0f - std::exp (-1.0f / (0.005f * fs));
@@ -219,6 +222,7 @@ namespace suite::TrackTraits
                 const auto mid = 0.5f * (L + R), side = 0.5f * (L - R);
                 outPow += (double) mid * mid; sidePow += (double) side * side;
                 const auto lo1 = lowL.lowpass (L), lo2 = lowR.lowpass (R);
+                { const auto sub = subL.lowpass (0.5f * (L + R)); subPow += (double) sub * sub; }
                 const auto lm = 0.5f * (lo1 + lo2), ls = 0.5f * (lo1 - lo2);
                 lowMidPow += (double) lm * lm; lowSidePow += (double) ls * ls;
                 const auto a = std::abs (mid);
@@ -286,6 +290,8 @@ namespace suite::TrackTraits
             t.inRmsDb = db (inPow, inN);
             t.outRmsDb = db (outPow, outN); t.sideDb = db (sidePow, outN);
             t.lowMidDb = db (lowMidPow, outN); t.lowSideDb = db (lowSidePow, outN);
+            t.subsonicDb = outN > 0 && t.outRmsDb > -90.0f ? db (subPow, outN) - t.outRmsDb : -100.0f;
+            t.cpuPercent = cpu.load();
             t.crestDb = outN > 0 && t.outRmsDb > -90.0f ? juce::Decibels::gainToDecibels (peakOut, -100.0f) - t.outRmsDb : 0.0f;
             auto median = [] (const std::array<float, maxEvents>& a, int count)
             {
@@ -370,7 +376,11 @@ namespace suite::TrackTraits
         }
 
         float fs = 44100.0f, fastA = 0.1f, refA = 0.01f;
-        Svf lowL, lowR, band, highBand;
+        Svf lowL, lowR, band, highBand, subL;
+        double subPow = 0.0;
+    public:
+        std::atomic<float> cpu { 0.0f };   // set by the plugin (its share of the audio thread's time, %)
+    private:
         float inPeak = 0.0f, peakOut = 0.0f;
         double inPow = 0.0, outPow = 0.0, sidePow = 0.0, lowMidPow = 0.0, lowSidePow = 0.0;
         int inN = 0, outN = 0;

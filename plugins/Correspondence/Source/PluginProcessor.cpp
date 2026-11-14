@@ -87,9 +87,96 @@ void CorrespondenceProcessor::latchLabelWriting()
         { 8, AP::tightSwingF, "the exports quantised to one swing (humanise off)", { { Params::humanise, 0.0f } } },
         { 9, AP::melodyClimbF, "the lead up an octave in the later drops", { { Params::songLift, 1.0f } } },
         { 10, AP::dropTensionF, "Writing > Harmony on (tensions into each drop)", { { Params::writingId (2), 1.0f } } } };
+    // the second set: some triggered by another check's switch, some by Correspondence's own measure
+    const auto map = songMapOrDefault();
+    const auto sp = currentSongPatterns();
+    const auto s = currentSettings();
+    using T = suite::SectionType;
+    auto firstDropWindow = [&map] (double& from, double& to)
+    {
+        for (int i = 0; i < map.count; ++i) if (map.sections[(size_t) i].type == T::Drop) { from = 4.0 * (map.sections[(size_t) i].startBar - 1); to = 4.0 * (map.endBar (i) - 1); return true; }
+        return false;
+    };
+    auto arpOnHook = [&]
+    {
+        double from = 0.0, to = 0.0;
+        if (! firstDropWindow (from, to)) return false;
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead), arp = chords::songClip (s, map, sp, chords::SongPart::Arp);
+        int on = 0, n = 0;
+        for (const auto& a : arp) if (a.start >= from && a.start < to) { ++n; for (const auto& l : lead) if (std::abs (l.start - a.start) < 0.01) { ++on; break; } }
+        return n > 8 && (float) on / (float) n > 0.5f;
+    };
+    auto peaksEarly = [&]
+    {
+        double from = 0.0, to = 0.0;
+        if (! firstDropWindow (from, to)) return false;
+        const auto lead = chords::songClip (s, map, sp, chords::SongPart::Lead);
+        int phrases = 0, early = 0;
+        for (auto ph = from; ph + 32.0 <= to + 1.0e-6; ph += 32.0)
+        {
+            int peak = 0; double at = ph;
+            for (const auto& n : lead) if (n.start >= ph && n.start < ph + 32.0 && n.pitch > peak) { peak = n.pitch; at = n.start; }
+            if (peak > 0) { ++phrases; early += at < ph + 16.0 ? 1 : 0; }
+        }
+        return phrases > 0 && early * 2 > phrases;
+    };
+    auto noPickup = [&]
+    {
+        double from = 0.0, to = 0.0;
+        if (! firstDropWindow (from, to) || from < 1.0) return false;
+        for (const auto& n : chords::songClip (s, map, sp, chords::SongPart::Lead)) if (n.start >= from - 1.0 && n.start < from) return false;
+        return true;
+    };
+    auto needed = [] (AP::Feature f) { return suite::LabelReadyBus::needed ((int) f); };
+    const auto drop = (int) T::Drop, bd = (int) T::Breakdown, outro = (int) T::Outro;
+    struct Fix2 { int bit; AP::Feature f; std::function<bool()> trigger; const char* what; std::vector<std::pair<juce::String, float>> params; };
+    const Fix2 more[] = {
+        { 11, AP::bassLengthF, [&] { return needed (AP::bassLengthF) || needed (AP::bassClearKickF); }, "bass note lengths sized to each section", {} },
+        { 12, AP::grooveLockF, [&] { return needed (AP::grooveLockF); }, "the bass locked to the kit's groove", {} },
+        { 13, AP::fillsPickupsF, [&] { return needed (AP::fillsPickupsF) || needed (AP::phraseFillsF) || noPickup(); }, "fills at phrase ends and pickups into the drops", {} },
+        { 14, AP::arpOffHookF, [&] { return arpOnHook(); }, "the arp off the hook's rhythm", {} },
+        { 15, AP::peaksLateF, [&] { return peaksEarly(); }, "the melody's peaks late in each phrase", {} },
+        { 16, AP::counterLaterF, [&] { return needed (AP::finalPeakF); }, "the counter-melody from the second drop", { { Params::songCounter, 1.0f } } },
+        { 17, AP::chordRhythmF, [&] { return needed (AP::chordRhythmF); }, "chords held in the breakdowns, gated in the drops",
+          { { Params::songId (chords::SongPart::Chords, bd), 1.0f }, { Params::songId (chords::SongPart::Chords, drop), 4.0f } } },
+        { 18, AP::finalPeakF, [&] { return needed (AP::finalPeakF); }, "the final drop as the peak (doubled, lifted, varied)",
+          { { Params::songDouble, 1.0f }, { Params::songLift, 1.0f }, { Params::songVary, 1.0f } } },
+        { 19, AP::breakdownBedF, [&] { return needed (AP::breakdownBedF); }, "a piano bed in the breakdown, the hook hinted",
+          { { Params::layerId (0), 1.0f }, { Params::songId (chords::SongPart::Chords, bd), 1.0f }, { Params::songId (chords::SongPart::Lead, bd), 3.0f } } },
+        { 20, AP::outroGrooveF, [&] { return needed (AP::outroGrooveF); }, "the bass carries on into the outro",
+          { { Params::songId (chords::SongPart::Bass, outro), (float) juce::jmax (1, sp.bass[(size_t) drop]) } } },
+        { 21, AP::macroRidesF, [&] { return needed (AP::macroRidesF) || needed (AP::motionF) || needed (AP::padMotionF); }, "Spire macro rides in the exports", { { Params::songMacros, 1.0f } } },
+        { 22, AP::callResponseF, [&] { return needed (AP::callResponseF); }, "Writing > Phrase shaping on (call and response in the hook)", { { Params::writingId (0), 1.0f } } } };
+    bool latchedNow = false;
+    for (const auto& f : more)
+    {
+        if ((labelLatched & (1u << f.bit)) != 0 || ! AP::on (f.f) || ! f.trigger()) continue;
+        labelLatched |= 1u << f.bit;
+        latchedNow = true;
+        for (const auto& [id, v] : f.params)
+            if (auto* p = apvts.getParameter (id)) { p->beginChangeGesture(); p->setValueNotifyingHost (p->convertTo0to1 (v)); p->endChangeGesture(); }
+        suite::MoveLog::add ("Correspondence", {}, juce::String ("Label-ready: ") + f.what, suite::MoveLog::fix);
+    }
+    // the five scored goals: the best option applied once when the song scores under 60%
+    static const AP::Feature goalFeature[] = { AP::goalBreakdownF, AP::goalDrop2F, AP::goalCounterF, AP::goalBassF, AP::goalTeaserF };
+    for (int g = 0; g < 5; ++g)
+    {
+        const auto bit = 23 + g;
+        if ((labelLatched & (1u << bit)) != 0 || ! AP::on (goalFeature[g])) continue;
+        float current = 1.0f;
+        const auto options = labelOptions ((LabelGoal) g, current);
+        if (current >= 0.6f || options.empty()) continue;
+        labelLatched |= 1u << bit;
+        latchedNow = true;
+        applyLabelOption (options.front());
+        beforeVariation.clear();   // (not an Undo the user started)
+        suite::MoveLog::add ("Correspondence", {}, "Label-ready: " + options.front().name + " (" + juce::String (juce::roundToInt (current * 100.0f)) + " -> "
+                                                  + juce::String (juce::roundToInt (options.front().score * 100.0f)) + ")", suite::MoveLog::fix);
+    }
     for (const auto& f : fixes)
     {
         if ((labelLatched & (1u << f.bit)) != 0 || ! AP::on (f.f) || ! suite::LabelReadyBus::needed ((int) f.f)) continue;
+        latchedNow = true;
         labelLatched |= 1u << f.bit;
         apvts.state.setProperty ("labelLatched", (int) labelLatched, nullptr);
         for (const auto& [id, v] : f.params)
@@ -101,11 +188,18 @@ void CorrespondenceProcessor::latchLabelWriting()
             }
         suite::MoveLog::add ("Correspondence", {}, juce::String ("Label-ready: ") + f.what, suite::MoveLog::fix);
     }
+    apvts.state.setProperty ("labelLatched", (int) labelLatched, nullptr);
+    // the parts changed: export them again so FL's clips can follow
+    if (latchedNow && AP::on (AP::reExportF))
+    {
+        lastDraft = exportEverything (suite::Alias::file ("Exports"));
+        suite::MoveLog::add ("Correspondence", {}, "Label-ready: the parts exported again to " + lastDraft.getFullPathName(), suite::MoveLog::fix);
+    }
 }
 
 void CorrespondenceProcessor::publishKey()
 {
-    latchLabelWriting();
+    if (++labelTick % 25 == 0) latchLabelWriting();   // every few seconds (it renders the parts to measure them)
     // Adopt a key detected by Emerald Tablet, if allowed.
     const auto suggestion = suite::KeyBus::readSuggestion();
     if (suggestion.valid && suggestion.sequence != lastSuggestion)
@@ -1054,6 +1148,18 @@ chords::SongPatterns CorrespondenceProcessor::currentSongPatterns() const
     patterns.polish.ghosts = active (3, AP::ghostLiftF);
     patterns.polish.roots = active (4, AP::bassRootsF);
     patterns.polish.voicingRoom = active (5, AP::voicingRoomF);
+    patterns.polish.bassLength = active (11, AP::bassLengthF);
+    patterns.polish.grooveLock = active (12, AP::grooveLockF);
+    patterns.polish.pickups = patterns.polish.partFills = active (13, AP::fillsPickupsF);
+    patterns.polish.arpOffHook = active (14, AP::arpOffHookF);
+    patterns.polish.peaksLate = active (15, AP::peaksLateF);
+    patterns.polish.counterLater = active (16, AP::counterLaterF);
+    if (const auto r = suite::KitBus::read (600); r.valid)
+    {
+        bool odd = false;
+        for (int k = 1; k < 16; k += 2) odd = odd || r.chords[(size_t) k] > 0.0f || r.arp[(size_t) k] > 0.0f;
+        patterns.kitOffbeatOnly = ! odd;
+    }
     return patterns;
 }
 

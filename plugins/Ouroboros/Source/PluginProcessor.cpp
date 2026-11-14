@@ -50,6 +50,8 @@ OuroborosProcessor::OuroborosProcessor()
     // the label-ready autopilot speaks to the director through the chat
     labelReady.autoFix.director = [this] (const juce::String& words) { addNote (director.chat (words)); directorDirty = true; return true; };
     labelReady.onAction = [this] (const juce::String& what) { snippets.markFix (what, ppq.load(), barQuarters.load()); };
+    labelReady.autoFix.earCandy = [this] { return labelReady.writeEarCandyShots (suite::Alias::file ("Ear candy")); };
+    createdMs = juce::Time::currentTimeMillis();
     suite::TempoBus::clear();   // a new project: its tempo is noted as it plays
     fixes = std::make_unique<suite::FixReceiver> (apvts, [] (suite::Fix) { return std::vector<suite::FixReceiver::Change> {}; });
     fixes->setCustom ([this] (suite::Fix fix, uint32_t data) -> std::function<void()>
@@ -99,6 +101,7 @@ void OuroborosProcessor::prepareToPlay (double newSampleRate, int)
 {
     sampleRate = newSampleRate;
     snippets.prepare (newSampleRate);
+    monitor.prepare (newSampleRate);
     const auto sr = (float) sampleRate;
     lowBand.set (100.0f, 0.707f, sr);
     highBand.set (6000.0f, 0.707f, sr);
@@ -203,6 +206,13 @@ void OuroborosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         abGainNow = g;
     }
     else abGainNow = 1.0f;
+    // listening: the reference A/B and the previews (never in a render); a render starting is noticed
+    {
+        const auto offline = isNonRealtime();
+        if (offline && ! wasOffline) renderStarted.store (true);
+        wasOffline = offline;
+        monitor.process (buffer, offline, host.ppq, host.barQuarters(), monType.load(), monStartQ.load(), monSongDb.load(), host.playing);
+    }
 
     if (resetFeatures.exchange (false))
         for (auto& b : barData) { b.flux.store (0.0f); b.high.store (0.0f); b.full.store (0.0f); b.samples.store (0); }
@@ -619,6 +629,7 @@ void OuroborosProcessor::getPluginState (juce::MemoryBlock& destData)
     autopilotTree.setProperty ("off", (int) suite::Autopilot::disabledGroups(), nullptr);
     autopilotTree.setProperty ("fixesOff", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeatures()), nullptr);
     autopilotTree.setProperty ("fixesOff2", juce::String::toHexString ((juce::int64) suite::Autopilot::disabledFeaturesHigh()), nullptr);
+    autopilotTree.setProperty ("fixesOffRest", suite::Autopilot::disabledFeaturesRest(), nullptr);
     state.appendChild (autopilotTree, nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -656,6 +667,7 @@ bool OuroborosProcessor::logVersionLengths()
 
 void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
 {
+    stateLoaded = true;
     auto xml = getXmlFromBinary (data, sizeInBytes);
     if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
         return;
@@ -666,6 +678,7 @@ void OuroborosProcessor::setPluginState (const void* data, int sizeInBytes)
         suite::Autopilot::setDisabledGroups ((uint32_t) (int) ap["off"]);
         suite::Autopilot::setDisabledFeatures ((uint64_t) ap["fixesOff"].toString().getHexValue64());
         suite::Autopilot::setDisabledFeaturesHigh ((uint32_t) ap["fixesOff2"].toString().getHexValue64());
+        if (ap.hasProperty ("fixesOffRest")) suite::Autopilot::setDisabledFeaturesRest (ap["fixesOffRest"].toString());
         state.removeChild (ap, nullptr);
     }
     if (const auto lt = state.getChildWithName ("LabelReady"); lt.isValid())

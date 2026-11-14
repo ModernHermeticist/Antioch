@@ -165,9 +165,20 @@ namespace lab
             }
             int most = 0, mostBand = 0;
             for (const auto& [b, c] : perBand) if (c > most) { most = c; mostBand = b; }
+            uint32_t weakest = 0; float weakestDb = 1000.0f;
+            for (const auto& t : in.traits)
+                if ((t.role == 5 || t.role == 4) && heardTrack (t) && t.sideDb - t.outRmsDb >= -8.0f && t.outRmsDb < weakestDb)
+                    for (const auto& r : in.tracks)
+                        if (r.track == t.trackName())
+                        {
+                            int top = 4; for (int k = 4; k < numBands; ++k) if (r.bands[(size_t) k] > r.bands[(size_t) top]) top = k;
+                            if (top == mostBand && most >= 2) { weakest = t.id; weakestDb = t.outRmsDb; }
+                        }
             if (! perBand.empty())
                 add (aMids, "Supersaw stacking", true, ramp ((float) most, 2.0f, 4.0f), juce::String (most) + " wide layer(s) peaking around " + juce::String (juce::roundToInt (analysis::bandCentres()[(size_t) mostBand])) + " Hz",
-                     "one wide layer per octave: move one up or down an octave, or narrow it");
+                     "one wide layer per octave: the weaker one a step down there (one click, or the autopilot)", -1, false,
+                     weakest != 0 ? suite::Fix::MasterTone : suite::Fix::None, weakest != 0 ? suite::packMasterTone (weakest, mostBand, -1.5f) : 0u, true,
+                     "autopilot:" + juce::String ((int) suite::Autopilot::layerSplitF));
             else add (aMids, "Supersaw stacking", false, 1.0f, haveTraits ? juce::String ("no wide leads or pads heard yet") : noTraits);
         }
 

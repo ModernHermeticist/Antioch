@@ -39,6 +39,7 @@
 #include "Analysis.h"
 #include "AutopilotBus.h"
 #include "Music.h"
+#include "KeyBus.h"
 #include <vector>
 
 namespace qn
@@ -74,7 +75,7 @@ namespace qn
             liftGain = 0.0f; liftSet = 0.0f;
             for (auto& f : lowSplit) { f.set (70.0f, 0.707f, fs); f.reset(); }
             lowMix = 0.0f;
-            sideLow.set (120.0f, 0.707f, fs); sideLow.reset();
+            sideLow.set (120.0f, 0.707f, fs); sideLow.reset(); monoHz = 120.0f;
             for (auto& f : bassLp) { f.set (250.0f, 0.707f, fs); f.reset(); }
             pitchLp.set (300.0f, 0.707f, fs); pitchLp.reset();
             noteDb.fill (-100.0f); noteSeen.fill (0);
@@ -140,6 +141,19 @@ namespace qn
         {
             ctx = c;
             for (int f = 0; f < suite::Autopilot::numFeatures; ++f) useF[(size_t) f] = c.mixing && suite::Autopilot::on ((suite::Autopilot::Feature) f);
+            // label-ready: the mono lows' split follows the key (twice the bass's root, 90-150 Hz)
+            {
+                auto want = 120.0f;
+                if (use (suite::Autopilot::keyMonoF))
+                    if (const auto key = suite::KeyBus::read (8); key.valid)
+                    {
+                        auto hz = 440.0f * std::pow (2.0f, (float) (key.root + 28 - 69) / 12.0f) * 2.0f;   // E1..D#2, an octave up
+                        while (hz < 90.0f) hz *= 2.0f;
+                        while (hz > 150.0f) hz *= 0.5f;
+                        want = hz;
+                    }
+                if (std::abs (want - monoHz) > 1.0f) { monoHz = want; sideLow.set (monoHz, 0.707f, fs); }
+            }
             const auto mine = suite::Autopilot::priorityOf (c.role);
             const auto blockA = [&] (float tau) { return 1.0f - std::exp (-(float) numSamples / (tau * fs)); };
 
@@ -802,6 +816,10 @@ namespace qn
         float a1ms = 0.0f, a5ms = 0.0f, a20ms = 0.0f, a40ms = 0.0f, a80ms = 0.0f, a200ms = 0.0f;
         std::array<bool, 16> counted {};
         std::array<bool, suite::Autopilot::numFeatures> useF {};
+        float monoHz = 120.0f;
+    public:
+        float monoLowsHz() const noexcept { return monoHz; }
+    private:
         bool use (suite::Autopilot::Feature f) const noexcept { return useF[(size_t) f]; }
         std::array<suite::Svf, 2> subSplit, popSplit;
         float subGain = 1.0f, kickNextNow = 1.0e9f;

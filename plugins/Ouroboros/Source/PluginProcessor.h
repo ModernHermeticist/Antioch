@@ -13,6 +13,7 @@
 #include "DirectorHost.h"
 #include "LabelReadyHost.h"
 #include "LabelSnippets.h"
+#include "LabelMonitor.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <optional>
 #include <thread>
@@ -401,6 +402,60 @@ public:
     // ---- Label-ready: the song measured as it plays, scored against the label (LabelReadyHost.h) ----
     lab::LabelReadyHost labelReady;
     lab::Snippets snippets;              // before and after each fix (LabelSnippets.h)
+    lab::Monitor monitor;                // the reference A/B and the previews (LabelMonitor.h)
+    std::atomic<int> monType { -1 };     // the section now, for the monitor (message thread sets it)
+    std::atomic<double> monStartQ { 0.0 };
+    std::atomic<float> monSongDb { -100.0f };
+    std::atomic<bool> renderStarted { false };
+    bool wasOffline = false, stateLoaded = false, startedLikeLast = false;
+    juce::int64 createdMs = 0;
+    /** Message thread, each tick: the label-ready work that isn't scoring. */
+    void labelHousekeeping()
+    {
+        namespace AP = suite::Autopilot;
+        // the monitor's section, and the song's level there (for the reference A/B's level match)
+        {
+            const auto m = getMap();
+            const auto bar = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load())) + 1;
+            int idx = -1;
+            for (int i = 0; i < m.count; ++i) if (m.sections[(size_t) i].startBar <= bar) idx = i;
+            monType.store (idx >= 0 ? (int) m.sections[(size_t) idx].type : -1);
+            monStartQ.store (idx >= 0 ? (m.sections[(size_t) idx].startBar - 1) * barQuarters.load() : 0.0);
+            float db = -100.0f;
+            for (const auto& s : labelReady.lastSections) if (s.index == idx && s.heard()) db = s.db;
+            monSongDb.store (db);
+        }
+        // a render starting: what's in the way (reported only)
+        if (renderStarted.exchange (false) && AP::on (AP::preRenderF))
+        {
+            labelReady.preRenderNote = labelReady.preRenderReport (labelReady.abOn);
+            suite::MoveLog::add ("Ouroboros", {}, "Label-ready: " + labelReady.preRenderNote, suite::MoveLog::fix);
+        }
+        // the director's moves in the label's style (only while its genre is on Auto)
+        if (labelTicks % 100 == 0 && AP::on (AP::transitionStyleF) && labelReady.profileFromCatalogue && director.settings.genre == suite::director::genreAuto)
+        {
+            const auto& refs = labelReady.profile.refs;
+            std::vector<std::pair<float, float>> bpms;
+            for (const auto& r : refs) bpms.push_back ({ (float) r.bpm, 1.0f });
+            auto style = labelReady.profile.subStyle.toLowerCase();
+            int genre = bpms.empty() ? (int) suite::director::genreUplifting : suite::director::genreFromTempo (lab::statOf (bpms).median);
+            for (int g = 1; g < suite::director::numGenres; ++g) if (style.contains (juce::String (suite::director::genreName (g)).toLowerCase())) genre = g;
+            director.settings.genre = genre;
+            if (labelReady.profile.subStyle.isEmpty()) labelReady.profile.subStyle = suite::director::genreName (genre);
+            directorDirty = true;
+            addNote (juce::String ("Label-ready: the director's moves follow the label (") + suite::director::genreName (genre) + ")");
+        }
+        // a new project starts like your last song, if you asked for that
+        if (! startedLikeLast && ! stateLoaded && juce::Time::currentTimeMillis() - createdMs > 3000)
+        {
+            startedLikeLast = true;
+            if (lab::LabelReadyHost::startLikeLast())
+            {
+                suite::RecipeBus::send (suite::RecipeAction::Load, lab::LabelReadyHost::lastSongRecipe());
+                addNote ("Started like your last song (Label-ready: Tools > Listening)");
+            }
+        }
+    }
     lab::Analyser songAnalyser;          // audio thread
     lab::Accumulator songBar;            // audio thread: the bar being heard
     int songBarIndex = -1;               // audio thread
@@ -443,6 +498,7 @@ public:
         const auto barNow = (int) std::floor (ppq.load() / juce::jmax (1.0, barQuarters.load()));
         if (barNow != labelBar) { labelBar = barNow; if (playing.load()) labelReady.abTick(); }
         snippets.tick (playing.load(), ppq.load(), barQuarters.load());
+        labelHousekeeping();
         labelReady.playingNow = playing.load();
         if (labelTicks % (labelReady.watching ? 10 : 40) == 0)
         {

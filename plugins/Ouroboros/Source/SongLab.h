@@ -24,6 +24,7 @@ namespace lab
         bool heard = false;
         float db = -100.0f, sideDb = -100.0f, onsets = 0.0f, lowFlux = 0.0f;
         float peakDb = -100.0f, leanDb = 0.0f;   // its loudest sample; left over right (dB)
+        float lowCorr = 1.0f; int lowCorrCount = 0;   // the correlation of left and right under 120 Hz (1 = in phase), counted when there's low end
         Bands band {};
         std::array<float, 12> chroma {};   // the pitch classes' share of the bar's tonal energy (C = 0), sums to 1 (or all 0)
         float bandDb (int b) const { return band[(size_t) juce::jlimit (0, numBands - 1, b)]; }
@@ -32,7 +33,7 @@ namespace lab
     /** Sums for one bar while it plays (power), turned into a Bar at the end. */
     struct Accumulator
     {
-        double full = 0.0, side = 0.0, low = 0.0, left = 0.0, right = 0.0;
+        double full = 0.0, side = 0.0, low = 0.0, left = 0.0, right = 0.0, lowLR = 0.0, lowLL = 0.0, lowRR = 0.0;
         float peak = 0.0f;
         std::array<double, numBands> band {};
         std::array<double, 12> chroma {};
@@ -48,6 +49,7 @@ namespace lab
             b.onsets = (float) onsets;
             b.lowFlux = (float) low;
             b.peakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
+            if (lowLL > 1.0e-6 * samples && lowRR > 1.0e-6 * samples) { b.lowCorr = (float) (lowLR / std::sqrt (lowLL * lowRR)); b.lowCorrCount = 1; }
             b.leanDb = left > 1.0e-12 && right > 1.0e-12 ? (float) (10.0 * std::log10 (left / right)) : 0.0f;
             double c = 0.0;
             for (auto v : chroma) c += v;
@@ -65,6 +67,7 @@ namespace lab
             fs = (float) sr;
             for (int b = 0; b < numBands; ++b) filters[(size_t) b].set (analysis::bandCentres()[(size_t) b], 1.41f, fs);
             lowBand.set (100.0f, 0.707f, fs);
+            lowLeft.set (120.0f, 0.707f, fs); lowRight.set (120.0f, 0.707f, fs);
             envFast = envSlow = lowEnv = 0.0f;
             fastA = 1.0f - std::exp (-1.0f / (0.005f * fs)); slowA = 1.0f - std::exp (-1.0f / (0.12f * fs));
             lowA = 1.0f - std::exp (-1.0f / (0.002f * fs)); lowR = 1.0f - std::exp (-1.0f / (0.04f * fs));
@@ -116,6 +119,7 @@ namespace lab
             const auto mono = 0.5f * (l + r), side = 0.5f * (l - r);
             ++acc.samples;
             acc.left += (double) l * l; acc.right += (double) r * r;
+            { const auto a = lowLeft.lowpass (l), b = lowRight.lowpass (r); acc.lowLR += (double) a * b; acc.lowLL += (double) a * a; acc.lowRR += (double) b * b; }
             acc.peak = std::max (acc.peak, std::max (std::abs (l), std::abs (r)));
             acc.full += (double) mono * mono;
             acc.side += (double) side * side;
@@ -153,7 +157,7 @@ namespace lab
         int holdOff = 0;
         bool armed = true;
         std::array<suite::Svf, numBands> filters;
-        suite::Svf lowBand, antiAlias;
+        suite::Svf lowBand, antiAlias, lowLeft, lowRight;
         int decimFactor = 4, decimCount = 0, frameFill = 0;
         float decimSum = 0.0f;
         std::array<float, fftSize> frame {}, re {}, im {}, window {};

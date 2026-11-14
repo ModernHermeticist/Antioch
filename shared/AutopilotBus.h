@@ -15,6 +15,7 @@
 // resonances each track hears) and a count of everything done, for the health readout.
 
 #include "SharedMemory.h"
+#include <juce_core/juce_core.h>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -48,6 +49,8 @@ namespace suite::Autopilot
         bassClearKickF, bassInKeyF, breakdownLowCutF, reverbLowsF, monoDoublesF, hatsToneF, harshAttackF, fxUnderLeadF,
         tightSwingF, accentsF, ghostLiftF, bassRootsF, dropTensionF, melodyClimbF, voicingRoomF, idleSleepF, inputStageF,
         preDelayF, widthBuildF, contrastF,
+        // label-ready, the fourth set
+        roleTimbreF, journeyF, sectionWidthF, phraseDynamicsF, kickBassPairF, earCandySynthF, goalBreakdownF, goalDrop2F, goalCounterF, goalBassF, goalTeaserF, transitionStyleF, harshExposureF, learnKeptF, learnUndoneF, tasteF, regressionGuardF, preRenderF, subsonicF, pacingF, subPhaseF, bassLengthF, keyMonoF, kickTailF, subHandoverF, echoTighterF, reverbDuckF, motionF, airF, riserTopF, chokeF, grooveLockF, arpOffHookF, chordRhythmF, peaksLateF, fillsPickupsF, sectionEdgesF, finalPeakF, breakdownBedF, driveF, macroRidesF, layerSplitF, subFillF, spaceSceneF, sectionToneF, depthF, counterLaterF, callResponseF, vocalHarmonyF, reExportF, outroGrooveF, breakdownSwellF,
         numFeatures
     };
     inline const char* featureName (int f)
@@ -75,9 +78,61 @@ namespace suite::Autopilot
             "Label: ghost notes heard (Correspondence)", "Label: the bass on the chords' roots (Correspondence)", "Label: tension into each drop (Correspondence)",
             "Label: the melody climbs through the song (Correspondence)", "Label: chords leave the lead room (Correspondence)", "Label: idle plugins sleep",
             "Label: stage each track's input (Quintessence)", "Label: reverb pre-delay from the tempo (Antioch)", "Label: width opens into the drop",
-            "Label: drops against breakdowns like the label" };
+            "Label: drops against breakdowns like the label",
+            "Label: each part's tone where it's exposed",
+            "Label: the loudness journey section by section",
+            "Label: width section by section",
+            "Label: every phrase breathes",
+            "Label: kick and bass paired (Kybalion)",
+            "Label: ear-candy one-shots where nothing new happens",
+            "Label: the breakdown's emotion (Correspondence)",
+            "Label: drop 2 differs from drop 1 (Correspondence)",
+            "Label: the counter-line's space (Correspondence)",
+            "Label: the drop's bass fits the chords (Correspondence)",
+            "Label: the hook teased early (Correspondence)",
+            "Label: the director's moves in the label's style",
+            "Label: harshness over the whole song",
+            "Label: learn from the fixes you keep",
+            "Label: learn from the fixes you undo",
+            "Label: your taste on top of the label's tone",
+            "Label: undo a change that breaks a signed-off area",
+            "Label: check everything when FL renders",
+            "Label: subsonic filter (Quintessence)",
+            "Label: slow down when fixes keep failing",
+            "Label: sub phase bar by bar (Kybalion)",
+            "Label: bass note lengths per section (Correspondence)",
+            "Label: mono lows follow the key",
+            "Label: shorter kick tail in the drops (Quintessence)",
+            "Label: the sub hands over through builds (Quintessence)",
+            "Label: fewer echoes when it's busy (Antioch)",
+            "Label: the reverb steps back for the lead (Antioch)",
+            "Label: movement on parts that never change",
+            "Label: air on top",
+            "Label: the riser peaks under the drop",
+            "Label: hats and FX cut before the drop (Quintessence)",
+            "Label: the bass locks with the kit (Correspondence)",
+            "Label: the arp leaves the hook's rhythm (Correspondence)",
+            "Label: chord rhythm per section (Correspondence)",
+            "Label: melodic peaks late in the phrase (Correspondence)",
+            "Label: fills and pickups (Correspondence)",
+            "Label: section openings and endings",
+            "Label: the final drop is the peak (Correspondence)",
+            "Label: a bed in thin breakdowns (Correspondence)",
+            "Label: drive where the lead doesn't cut (Quintessence)",
+            "Label: macro rides in the exports (Correspondence)",
+            "Label: layers in one octave split",
+            "Label: sub under a thin bass",
+            "Label: drier drops, more space in breakdowns",
+            "Label: each section's tone (Quintessence)",
+            "Label: the pads behind the lead",
+            "Label: the counter-melody from drop 2 (Correspondence)",
+            "Label: call and response in the hook (Correspondence)",
+            "Label: vocal harmonies written (Solve et Coagula)",
+            "Label: re-export the parts after a writing fix (Correspondence)",
+            "Label: the outro keeps the groove (Correspondence)",
+            "Label: a swell in long breakdowns" };
         static_assert (sizeof (n) / sizeof (n[0]) == numFeatures, "a name for every fix");
-        static_assert (numFeatures <= 96, "three words of switches");
+        static_assert (numFeatures <= 160, "five words of switches");
         return f >= 0 && f < numFeatures ? n[f] : "";
     }
     inline uint32_t featureGroup (int f)
@@ -89,7 +144,11 @@ namespace suite::Autopilot
                 case sectionFxF: case phraseFillsF: case arrangeEntriesF: case preDropCurveF: case loopVariationF: case tightSwingF: case accentsF:
                 case ghostLiftF: case bassRootsF: case dropTensionF: case melodyClimbF: case voicingRoomF: case bassClearKickF: case bassInKeyF: case contrastF:
                     return 4u;
-                case harshAttackF: return 1u;
+                case harshAttackF: case harshExposureF: case airF: return 1u;
+                case earCandySynthF: case goalBreakdownF: case goalDrop2F: case goalCounterF: case goalBassF: case goalTeaserF: case transitionStyleF: case bassLengthF: case grooveLockF: case arpOffHookF: case chordRhythmF: case peaksLateF: case fillsPickupsF: case sectionEdgesF: case finalPeakF: case breakdownBedF: case macroRidesF: case counterLaterF: case callResponseF: case reExportF: case outroGrooveF: case breakdownSwellF:
+                    return 4u;
+                case learnKeptF: case learnUndoneF: case tasteF: case regressionGuardF: case preRenderF: case subsonicF: case pacingF:
+                    return 2u;
                 case idleSleepF: case inputStageF: return 2u;
                 default: return 8u;
             }
@@ -132,7 +191,7 @@ namespace suite::Autopilot
         struct Shared
         {
             std::atomic<uint32_t> disabled;                 // groups switched off
-            std::atomic<uint32_t> featuresOff[3];           // single fixes switched off (bit per Feature)
+            std::atomic<uint32_t> featuresOff[5];           // single fixes switched off (bit per Feature)
             std::atomic<float> harshAmount;                 // 0..1: how harsh the master is right now
             std::atomic<int32_t> harshBand;                 // octave band of the harshness (6 = 2 kHz, 7 = 4 kHz, 8 = 8 kHz)
             std::atomic<uint32_t> harshIds[maxHarshIds];    // the tracks causing it (low 12 bits of their Quintessence's id)
@@ -154,7 +213,7 @@ namespace suite::Autopilot
         {
             static Shared* s = []
             {
-                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v5", sizeof (Shared)));
+                auto* m = static_cast<Shared*> (openSharedBlock ("antioch_suite_autopilot_v6", sizeof (Shared)));
                 return m != nullptr ? m : new Shared {};
             }();
             return *s;
@@ -191,6 +250,18 @@ namespace suite::Autopilot
     /** Switches from 64 on (the label-ready ones). */
     inline uint32_t disabledFeaturesHigh() noexcept { return detail::shared().featuresOff[2].load(); }
     inline void setDisabledFeaturesHigh (uint32_t m) noexcept { detail::shared().featuresOff[2].store (m); }
+    /** Every switch's word (from 64 on: words 2..4), as hex "a,b,c" for the project. */
+    inline juce::String disabledFeaturesRest()
+    {
+        auto& s = detail::shared();
+        return juce::String::toHexString ((int) s.featuresOff[2].load()) + "," + juce::String::toHexString ((int) s.featuresOff[3].load()) + "," + juce::String::toHexString ((int) s.featuresOff[4].load());
+    }
+    inline void setDisabledFeaturesRest (const juce::String& hex)
+    {
+        auto& s = detail::shared();
+        const auto w = juce::StringArray::fromTokens (hex, ",", "");
+        for (int i = 0; i < 3; ++i) s.featuresOff[2 + i].store (i < w.size() ? (uint32_t) w[i].getHexValue64() : 0u);
+    }
 
     inline uint32_t disabledGroups() noexcept { return detail::shared().disabled.load(); }   // saved with Ouroboros
     inline void setDisabledGroups (uint32_t mask) noexcept { detail::shared().disabled.store (mask & 15u); }
@@ -347,7 +418,7 @@ namespace suite::Autopilot
     inline void reset() noexcept   // tests
     {
         auto& s = detail::shared();
-        s.disabled.store (0); s.featuresOff[0].store (0); s.featuresOff[1].store (0); s.featuresOff[2].store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
+        s.disabled.store (0); s.featuresOff[0].store (0); s.featuresOff[1].store (0); s.featuresOff[2].store (0); s.featuresOff[3].store (0); s.featuresOff[4].store (0); s.harshAmount.store (0.0f); s.harshMs.store (0);
         for (auto& h : s.harshIds) h.store (0);
         for (auto& c : s.counters) c.store (0);
         for (int i = 0; i < maxResonances; ++i) { s.resonanceId[i].store (0); s.resonanceHz[i].store (0.0f); s.resonanceMs[i].store (0); }

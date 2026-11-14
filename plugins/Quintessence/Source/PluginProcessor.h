@@ -33,6 +33,7 @@
 #include "Registry.h"
 #include "TrackTraits.h"
 #include "LabelDsp.h"
+#include "LabelDsp2.h"
 #include "LabelReadyBus.h"
 #include "LiveMix.h"
 #include "DirectorStage.h"
@@ -109,6 +110,23 @@ public:
         latch (AP::padMotionF, 1u, role == 4 && t.movementCount >= 20 && t.movementDb < 0.8f, "a slow filter movement over each phrase (this pad never changed)");
         latch (AP::breakdownLowCutF, 2u, role != 0 && role != 1 && role != 2 && t.lowMidDb > t.outRmsDb - 6.0f, "a low cut in the breakdowns (lows left to the bass)");
         latch (AP::inputStageF, 4u, t.inRmsDb > -90.0f && std::abs (t.inRmsDb + 18.0f) > 8.0f, "the input staged to -18 dBFS RMS (the level going out unchanged)");
+        latch (AP::motionF, 8u, (role == 3 || role == 5 || role == 7) && t.movementCount >= 20 && t.movementDb < 1.0f, "slow movement over each phrase (this part never changed)");
+        latch (AP::kickTailF, 16u, role == 1 && t.decayCount >= 3, "the kick's tail shortened in the drops");
+        latch (AP::subHandoverF, 32u, role == 2, "the sub handed over through the builds");
+        latch (AP::chokeF, 64u, role == 3 || role == 7, "cut for the last 16th before each drop");
+        latch (AP::subsonicF, 128u, t.subsonicDb > -40.0f, "a subsonic filter (energy under 20 Hz)");
+        latch (AP::driveF, 256u, role == 5, "gentle drive for harmonics (the lead didn't cut through)");
+        labelDsp.padMotion.store (labelDsp.padMotion.load() || ((labelLatched & 8u) != 0 && AP::on (AP::motionF)));
+        labelDsp2.kickTail.store ((labelLatched & 16u) != 0 && AP::on (AP::kickTailF));
+        labelDsp2.subHandover.store ((labelLatched & 32u) != 0 && AP::on (AP::subHandoverF));
+        labelDsp2.choke.store ((labelLatched & 64u) != 0 && AP::on (AP::chokeF));
+        labelDsp2.subsonic.store ((labelLatched & 128u) != 0 && AP::on (AP::subsonicF));
+        labelDsp2.drive.store ((labelLatched & 256u) != 0 && AP::on (AP::driveF));
+        bool anyTone = false, anyWidth = false;
+        for (auto& row : labelDsp2.toneDb) for (auto& v : row) anyTone = anyTone || std::abs (v.load()) > 0.01f;
+        for (auto& v : labelDsp2.widthOffset) anyWidth = anyWidth || std::abs (v.load()) > 0.001f;
+        labelDsp2.sectionTone.store (anyTone && AP::on (AP::sectionToneF));
+        labelDsp2.sectionWidth.store (anyWidth && AP::on (AP::sectionWidthF));
         labelDsp.padMotion.store ((labelLatched & 1u) != 0 && AP::on (AP::padMotionF));
         labelDsp.breakdownLowCut.store ((labelLatched & 2u) != 0 && AP::on (AP::breakdownLowCutF));
         labelDsp.inputStage.store ((labelLatched & 4u) != 0 && AP::on (AP::inputStageF));
@@ -126,6 +144,9 @@ public:
     std::function<void()> flipPolarity (uint32_t data);
     std::function<void()> punchStep (uint32_t data);
     std::function<void()> vocalDelay (uint32_t data);
+    std::function<void()> sectionTone (uint32_t data);
+    std::function<void()> sectionWidthStep (uint32_t data);
+    qn::LabelDsp2 labelDsp2;
     std::function<void()> sectionTrim (uint32_t data);
     void storeLabelFixes();
     void loadLabelFixes();

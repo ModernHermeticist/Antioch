@@ -37,7 +37,11 @@ namespace suite
                                     TrackPunch,                                     // one Quintessence's transient shaper (packMasterTone: its id, band 0, signed dB)
                                     PreDelayTempo,                                  // every Antioch's reverb pre-delay set from the tempo
                                     ThrowsAtVocal,                                  // every Antioch throws at the end of each vocal phrase
-                                    VocalDelay };                                   // one Quintessence delays its track (packMasterTone: its id, band 0, ms)
+                                    VocalDelay,                                     // one Quintessence delays its track (packMasterTone: its id, band 0, ms)
+                                    SectionTone,                                    // one Quintessence's tone in one kind of section (packSectionTone)
+                                    SectionWidth,                                   // one Quintessence's width in one kind of section (packSectionTrim: amount x10)
+                                    EchoTighter,                                    // every Antioch's echo feedback down a quarter (a busy song)
+                                    ReverbDuck };                                   // every Antioch's reverb steps back while the lead plays
 
     /** Fixes that only move a track's level, mutes or filters: Prima Materia makes those
         suggestions now (it never changes the track), so they're suggested once, not checked or
@@ -65,7 +69,8 @@ namespace suite
                                        "Ride the vocal", "Mono lows", "Darker", "Brighter", "Wider", "More pump", "Section lows down",
                                        "Re-learn changed parts", "Mix it", "Export all", "Master tone share",
                                        "Narrower", "Drops breathe", "Reverb low cut up", "Drive softer", "Section down", "Build impact",
-                                       "Polarity flip", "Section trim", "Punch", "Pre-delay from the tempo", "Throws at vocal ends", "Vocal onto the grid" };
+                                       "Polarity flip", "Section trim", "Punch", "Pre-delay from the tempo", "Throws at vocal ends", "Vocal onto the grid",
+                                       "Section tone", "Section width", "Tighter echoes", "Reverb steps back" };
         const auto i = (int) f;
         return i >= 0 && i < (int) (sizeof (names) / sizeof (names[0])) ? juce::String (names[i]) : juce::String ("Fix");
     }
@@ -100,6 +105,17 @@ namespace suite
         instanceLow = data & 0xfffu;
         type = (int) ((data >> 12) & 0xf);
         db = (float) (int8_t) (uint8_t) ((data >> 16) & 0xff) / 2.0f;
+    }
+
+    /** SectionTone: which Quintessence (12 bits), which kind of section (3 bits), which octave band (4 bits), signed half dB. */
+    inline uint32_t packSectionTone (uint32_t instanceId, int type, int band, float db) noexcept
+    {
+        return (instanceId & 0xfffu) | ((uint32_t) (type & 0x7) << 12) | ((uint32_t) (band & 0xf) << 15) | ((uint32_t) (uint8_t) (int8_t) juce::jlimit (-127, 127, (int) std::lround (db * 2.0f)) << 19);
+    }
+    inline void unpackSectionTone (uint32_t data, uint32_t& instanceLow, int& type, int& band, float& db) noexcept
+    {
+        instanceLow = data & 0xfffu; type = (int) ((data >> 12) & 0x7); band = (int) ((data >> 15) & 0xf);
+        db = (float) (int8_t) (uint8_t) ((data >> 19) & 0xff) / 2.0f;
     }
 
     /** ReferenceTone carries two signed amounts in quarter dB (low shelf, high shelf). */
