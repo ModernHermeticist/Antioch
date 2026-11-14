@@ -134,7 +134,7 @@ namespace lab
         // 7. the arc against the label's
         if (songHeard && ! P.refs.empty())
         {
-            constexpr int points = 16;
+            static constexpr int points = 16;   // (static: MSVC wants a plain constexpr local captured by the lambdas below)
             std::array<float, points> mine {}, theirs {};
             std::array<int, points> nTheirs {};
             auto arcOf = [] (const std::vector<SectionStat>& secs, int total, std::array<float, points>& arc, std::array<int, points>& n)
