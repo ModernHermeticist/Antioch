@@ -720,15 +720,20 @@ namespace suite::ui
         g.drawText (name, r.removeFromLeft (titleW), juce::Justification::centredLeft);
         g.setColour (Colours::dimText);
         g.setFont (font (Type::tagline));
-        const auto tagW = (int) std::ceil (juce::GlyphArrangement::getStringWidth (font (Type::tagline), tagline)) + 16;
-        g.drawText (tagline, r.removeFromLeft (tagW).withTrimmedTop (3), juce::Justification::centredLeft, true);
+        // the tagline, and the status pill after it, stop where the buttons start (left out if there's no room)
+        // When it's tight the live status matters more than the tagline: the tagline goes first.
+        const auto limit = (buttonsLeft > 0 ? buttonsLeft : r.getRight()) - 8 - r.getX();
+        const auto tagFull = (int) std::ceil (juce::GlyphArrangement::getStringWidth (font (Type::tagline), tagline)) + 16;
+        const auto statusFull = status.isEmpty() ? 0 : (int) std::ceil (juce::GlyphArrangement::getStringWidth (font (Type::label, true), status)) + 46;
+        const auto showTagline = tagFull + juce::jmin (statusFull, 220) <= limit;
+        if (showTagline) g.drawText (tagline, r.removeFromLeft (tagFull).withTrimmedTop (3), juce::Justification::centredLeft, true);
         // the status pill, after the tagline
         if (status.isNotEmpty())
         {
             const auto f = font (Type::label, true);
             const auto room = (buttonsLeft > 0 ? buttonsLeft : r.getRight()) - 12 - (r.getX() + 4);
             const auto w = juce::jmin (room, (int) std::ceil (juce::GlyphArrangement::getStringWidth (f, status)) + 34);
-            if (w > 60)
+            if (w > 110)
             {
                 const auto pill = juce::Rectangle<int> (r.getX() + 4, r.getCentreY() - 12, w, 24).toFloat();
                 g.setColour (Colours::raised);
