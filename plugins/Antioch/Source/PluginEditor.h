@@ -25,6 +25,9 @@ private:
 
     AntiochProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
+    static int heightFor (bool advanced) { return advanced ? 790 : 340; }
 
     suite::ui::Toggle syncButton;
     juce::Label bpmLabel, keyStatus;

@@ -19,6 +19,8 @@ private:
 
     PrimaMateriaProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
     juce::ComboBox roleBox;
     juce::TextButton saveRole { "Save as my role" };
     suite::ui::Toggle follow, ramp, laterOn, lowManager;

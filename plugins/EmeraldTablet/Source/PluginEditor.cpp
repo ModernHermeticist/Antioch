@@ -11,15 +11,29 @@ namespace
 
 EmeraldTabletEditor::EmeraldTabletEditor (EmeraldTabletProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("EMERALD TABLET", "key detector", emerald),
       autoSend (p.apvts, EmeraldTabletProcessor::autoSendId, "Auto-send to Correspondence", emerald),
       broadcastAlone (p.apvts, EmeraldTabletProcessor::broadcastAloneId, "Broadcast if no Correspondence", emerald)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    makePrimary (sendButton, emerald);
+    sendButton.setTooltip ("Send the detected key to Correspondence now");
+    resetButton.setTooltip ("Forget what was heard and listen again");
+    header.actions = [this]
+    {
+        return std::vector<Action> {
+            { "Send the key now", "to Correspondence (or the whole suite)", "Key", [this] { processor.sendNow(); } },
+            { "Reset detection", "forget what was heard and listen again", "Key", [this] { processor.resetDetection(); } },
+            { autoSend.getToggleState() ? "Stop auto-sending" : "Auto-send to Correspondence", "send once the result is confident and stable", "Key",
+              [this] { autoSend.setToggleState (! autoSend.getToggleState(), juce::sendNotification); } } };
+    };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); });
     sendButton.onClick = [this] { processor.sendNow(); };
     resetButton.onClick = [this] { processor.resetDetection(); };
     for (auto* c : std::initializer_list<juce::Component*> { &autoSend, &broadcastAlone, &sendButton, &resetButton })
         addAndMakeVisible (c);
-    setSize (760, 480);
+    setSize (820, 480);
     startTimerHz (10);
 }
 
@@ -29,10 +43,18 @@ EmeraldTabletEditor::~EmeraldTabletEditor()
     setLookAndFeel (nullptr);
 }
 
+void EmeraldTabletEditor::timerCallback()
+{
+    const auto best = processor.detector.best.load();
+    const auto sent = processor.lastSent.load();
+    header.setStatus (best < 0 ? juce::String ("Listening...") : sent >= 0 ? "Sent: " + keyLabel (sent) : "Heard: " + keyLabel (best),
+                      best < 0 ? Colours::faintText : sent >= 0 ? Colours::moss : Colours::brass);
+    repaint();
+}
+
 void EmeraldTabletEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "EMERALD TABLET", "key detector", emerald);
     drawPanel (g, resultArea, "Detected key", emerald);
     drawPanel (g, chromaArea, "Pitch classes heard");
 
@@ -94,7 +116,9 @@ void EmeraldTabletEditor::paint (juce::Graphics& g)
 void EmeraldTabletEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
-    bounds.removeFromTop (48);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    broadcastAlone.setVisible (header.advanced());
     resultArea = bounds.removeFromTop (170);
     bounds.removeFromTop (12);
     chromaArea = bounds;
@@ -102,7 +126,7 @@ void EmeraldTabletEditor::resized()
     auto r = resultArea.reduced (16, 10).withTrimmedTop (18);
     auto right = r.removeFromRight (260);
     autoSend.setBounds (right.removeFromTop (34).reduced (2));
-    broadcastAlone.setBounds (right.removeFromTop (34).reduced (2));
+    if (header.advanced()) broadcastAlone.setBounds (right.removeFromTop (34).reduced (2));
     right.removeFromTop (6);
     auto buttons = right.removeFromTop (32);
     sendButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2));

@@ -22,6 +22,8 @@ private:
 
     VibrationProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header { "VIBRATION", "lead polish strip", suite::ui::Colours::brass };
+    std::vector<suite::ui::Action> actions();
 
     suite::ui::Knob euphoria;
     juce::ComboBox presetBox;

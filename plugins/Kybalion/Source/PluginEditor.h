@@ -53,6 +53,8 @@ private:
 
     KybalionProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
 
     suite::ui::Toggle gateOn, duckOn, followSections;
     juce::Label sectionStatus;

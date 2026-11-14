@@ -13,10 +13,11 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override { repaint(); }
+    void timerCallback() override;
 
     EmeraldTabletProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
     suite::ui::Toggle autoSend, broadcastAlone;
     juce::TextButton sendButton { "Send now" }, resetButton { "Reset" };
     juce::Rectangle<int> resultArea, chromaArea;

@@ -30,6 +30,10 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
       tension (p.apvts, Params::tensionWidth, "Tension width", Colours::moss)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (fingerprintButton, 170);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
 
     euphoria.maxHeight = 200;
     euphoria.caption.setFont (juce::FontOptions (15.0f, juce::Font::bold));
@@ -63,8 +67,6 @@ VibrationEditor::VibrationEditor (VibrationProcessor& p)
     fingerprintStatus.setFont (juce::FontOptions (12.0f));
     fingerprintStatus.setJustificationType (juce::Justification::centredRight);
     fingerprintStatus.setColour (juce::Label::textColourId, Colours::dimText);
-    addAndMakeVisible (fingerprintButton);
-    addAndMakeVisible (fingerprintStatus);
     tweakBanner = std::make_unique<suite::ui::TweakBanner> (p.scenes);   // "make it a scene?" after you tweak a knob in a section
     addChildComponent (*tweakBanner);
     autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueStereo); };
@@ -103,19 +105,25 @@ void VibrationEditor::timerCallback()
                        juce::dontSendNotification);
     autoGainInfo.setText ("Level matched: " + signedDb (processor.autoGainDb.load()), juce::dontSendNotification);
     suite::ui::updateSceneGhosts (*this, processor.scenes);
+    header.setStatus (fingerprintStatus.getText().isNotEmpty() ? fingerprintStatus.getText()
+                                                               : "Euphoria " + juce::String (juce::roundToInt (processor.apvts.getRawParameterValue (Params::euphoria)->load() * 100.0f)) + "%"
+                                                                     + juce::String::fromUTF8 (" \xc2\xb7 level matched ") + signedDb (processor.autoGainDb.load()),
+                      processor.apvts.getRawParameterValue (Params::autoGain)->load() > 0.5f ? Colours::moss : Colours::faintText);
 }
 
 void VibrationEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "VIBRATION", "lead polish strip", accent);
     drawPanel (g, macroArea, "Macro", accent);
     if (spectrum.isVisible())
         drawPanel (g, spectrumArea, "Spectrum  (grey = in, gold = out)");
-    drawPanel (g, eqArea, "Tone", Colours::verdigris);
-    drawPanel (g, satArea, "Saturation", Colours::ember);
-    drawPanel (g, mbArea, "Multiband", Colours::amethyst);
-    drawPanel (g, widthArea, "Width", Colours::moss);
+    if (header.advanced())
+    {
+        drawPanel (g, eqArea, "Tone", Colours::verdigris);
+        drawPanel (g, satArea, "Saturation", Colours::ember);
+        drawPanel (g, mbArea, "Multiband", Colours::amethyst);
+        drawPanel (g, widthArea, "Width", Colours::moss);
+    }
 }
 
 void VibrationEditor::showFingerprintMenu()
@@ -154,14 +162,13 @@ void VibrationEditor::resized()
 {
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    {
-        auto header = bounds.removeFromTop (48);
-        fingerprintButton.setBounds (header.removeFromRight (170).reduced (4, 8));
-        fingerprintStatus.setBounds (header.removeFromRight (420).reduced (4, 8));
-    }
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
 
-    auto bottom = bounds.removeFromBottom (190);
-    bounds.removeFromBottom (12);
+    const auto advanced = header.advanced();
+    setShown ({ &lowCut, &mud, &presence, &air, &pitchBright, &drive, &satMix, &mbDepth, &mbTime, &width, &monoBelow, &tension }, advanced);
+    auto bottom = advanced ? bounds.removeFromBottom (190) : juce::Rectangle<int>();
+    if (advanced) bounds.removeFromBottom (12);
 
     macroArea = bounds.removeFromLeft (330);
     bounds.removeFromLeft (12);
@@ -170,9 +177,10 @@ void VibrationEditor::resized()
     auto m = macroArea.reduced (14, 8).withTrimmedTop (14);
     presetBox.setBounds (m.removeFromTop (28));
     m.removeFromTop (6);
-    euphoria.setBounds (m.removeFromTop (180));
-    macroInfo.setBounds (m.removeFromTop (40));
-    auto row = m;
+    auto row = m.removeFromBottom (130);
+    macroInfo.setBounds (m.removeFromBottom (40));
+    euphoria.maxHeight = juce::jmax (200, m.getHeight());
+    euphoria.setBounds (m);
     output.setBounds (row.removeFromRight (110));
     autoGain.setBounds (row.removeFromTop (30).reduced (4, 2));
     autoGainInfo.setBounds (row);
@@ -196,4 +204,18 @@ void VibrationEditor::resized()
     layoutRow (inner (satArea), { &drive, &satMix });
     layoutRow (inner (mbArea), { &mbDepth, &mbTime });
     layoutRow (inner (widthArea), { &width, &monoBelow, &tension });
+}
+
+std::vector<suite::ui::Action> VibrationEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    for (size_t i = 0; i < Params::presets().size(); ++i)
+        a.push_back ({ "Preset: " + juce::String (Params::presets()[i].name), "sets the macro and the manual knobs", "Presets",
+                       [this, i] { presetBox.setSelectedId ((int) i + 1); } });
+    a.push_back ({ "Lead fingerprint", "save this lead's sound, or match one you saved", "Fingerprint", [this] { showFingerprintMenu(); } });
+    a.push_back ({ "Show the spectrum", "in and out", "View", [this] { viewTabs.setSelected (0); } });
+    a.push_back ({ "Show the section scenes", "per-section offsets for the knobs", "View", [this] { viewTabs.setSelected (1); } });
+    a.push_back ({ autoGain.getToggleState() ? "Turn auto gain off" : "Turn auto gain on", "keep the output level matched to the input", "Level",
+                   [this] { autoGain.setToggleState (! autoGain.getToggleState(), juce::sendNotification); } });
+    return a;
 }

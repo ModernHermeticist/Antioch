@@ -359,6 +359,7 @@ private:
 //==============================================================================
 AntiochEditor::AntiochEditor (AntiochProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("ANTIOCH", juce::String::fromUTF8 ("harmonic echo \xc2\xb7 euphoric reverb \xc2\xb7 throw"), Colours::brass),
       syncButton (p.apvts, Params::sync, "Tempo Sync"),
       rootChoice (p.apvts, Params::rootNote, "Key"),
       followButton (p.apvts, Params::followKey, "Follow Key", Colours::verdigris),
@@ -371,13 +372,17 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
       tabs ({ "ECHO", "REVERB", "THROW", "SCENES" }, { echoColour, verbColour, throwColour, Colours::ember })
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (syncButton, 130);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool on) { setSize (getWidth(), heightFor (on)); resized(); repaint(); });
 
     echoPanel = std::make_unique<EchoPanel> (p);
     reverbPanel = std::make_unique<ReverbPanel> (p);
     throwPanel = std::make_unique<ThrowPanel> (p);
     scenePanel = std::make_unique<suite::ui::ScenePanel> (p.scenes, p.apvts);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &syncButton, &bpmLabel, &keyStatus, &rootChoice, &followButton,
+    for (auto* c : std::initializer_list<juce::Component*> { &keyStatus, &rootChoice, &followButton,
                                                              &octave, &dry, &echoLevel, &verbLevel, &throwLevel, &output, &tabs,
                                                              echoPanel.get(), reverbPanel.get(), throwPanel.get(), scenePanel.get() })
         addAndMakeVisible (c);
@@ -391,6 +396,7 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
         reverbPanel->setVisible (index == 1);
         throwPanel->setVisible (index == 2);
         scenePanel->setVisible (index == 3);
+        if (! header.advanced()) for (auto* c : std::initializer_list<juce::Component*> { echoPanel.get(), reverbPanel.get(), throwPanel.get(), scenePanel.get() }) c->setVisible (false);
     };
     tabs.onChange (0);
     tabs.setComponentID ("tabs");
@@ -410,7 +416,7 @@ AntiochEditor::AntiochEditor (AntiochProcessor& p)
         return m;
     };
     addAndMakeVisible (autopilotStrip);
-    setSize (960, 770);
+    setSize (960, heightFor (header.advanced()));
     timerCallback();
     startTimerHz (20);
 }
@@ -426,6 +432,10 @@ void AntiochEditor::timerCallback()
     auto& state = processor.apvts;
     const auto synced = state.getRawParameterValue (Params::sync)->load() > 0.5f;
     bpmLabel.setText (synced ? juce::String (processor.currentBpm.load(), 1) + " BPM" : "Free time", juce::dontSendNotification);
+    header.setStatus (bpmLabel.getText() + juce::String::fromUTF8 (" \xc2\xb7 ")
+                          + (processor.followingBus.load() ? "following " + suite::music::keyName (processor.effectiveRoot.load(), processor.busScale.load())
+                                                           : juce::String ("manual key")),
+                      processor.followingBus.load() ? Colours::moss : Colours::faintText);
 
     const auto root = processor.effectiveRoot.load();
     const auto following = processor.followingBus.load();
@@ -445,8 +455,6 @@ void AntiochEditor::timerCallback()
 void AntiochEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 600, 32 }, "ANTIOCH", juce::String::fromUTF8 ("harmonic echo \xc2\xb7 euphoric reverb \xc2\xb7 throw"),
-                Colours::brass);
     drawPanel (g, masterArea, "Master");
 }
 
@@ -455,12 +463,13 @@ void AntiochEditor::resized()
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
 
-    auto header = bounds.removeFromTop (40);
-    bpmLabel.setBounds (header.removeFromRight (100));
-    syncButton.setBounds (header.removeFromRight (120).reduced (4, 6));
-
-    bounds.removeFromTop (8);
-    masterArea = bounds.removeFromTop (118);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    tabs.setVisible (advanced);
+    octave.setVisible (advanced);
+    tabs.onChange (tabs.getSelected());
+    masterArea = advanced ? bounds.removeFromTop (118) : bounds;
     bounds.removeFromTop (10);
     tabs.setBounds (bounds.removeFromTop (34));
     bounds.removeFromTop (10);
@@ -473,8 +482,25 @@ void AntiochEditor::resized()
     rootChoice.setBounds (keyCell);
     auto followCell = m.removeFromLeft (cell);
     followButton.setBounds (followCell.withSizeKeepingCentre (cell - 12, 28).translated (0, 8));
-    layoutRow (m, { &octave, &dry, &echoLevel, &verbLevel, &throwLevel, &output });
+    if (advanced) layoutRow (m, { &octave, &dry, &echoLevel, &verbLevel, &throwLevel, &output });
+    else          layoutRow (m, { &dry, &echoLevel, &verbLevel, &throwLevel, &output });
+    if (! advanced) return;
 
     for (auto* panel : std::initializer_list<juce::Component*> { echoPanel.get(), reverbPanel.get(), throwPanel.get(), scenePanel.get() })
         panel->setBounds (panelArea);
+}
+
+std::vector<suite::ui::Action> AntiochEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    auto show = [this] (int tab) { header.setAdvanced (true); tabs.setSelected (tab); };
+    a.push_back ({ "Echo taps", "the harmonic echo: four tuned taps", "Echo", [show] { show (0); } });
+    a.push_back ({ "Reverb", "the euphoric reverb", "Reverb", [show] { show (1); } });
+    a.push_back ({ "Throws", "echo and reverb throws on phrase ends", "Throw", [show] { show (2); } });
+    a.push_back ({ "Section scenes", "per-section offsets for the knobs", "Scenes", [show] { show (3); } });
+    a.push_back ({ syncButton.getToggleState() ? "Free time (stop tempo sync)" : "Tempo sync", "", "Time",
+                   [this] { syncButton.setToggleState (! syncButton.getToggleState(), juce::sendNotification); } });
+    a.push_back ({ followButton.getToggleState() ? "Stop following the key" : "Follow the song's key", "from Correspondence", "Key",
+                   [this] { followButton.setToggleState (! followButton.getToggleState(), juce::sendNotification); } });
+    return a;
 }

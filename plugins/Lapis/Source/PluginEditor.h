@@ -18,6 +18,8 @@ private:
 
     LapisProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
     suite::ui::Choice target, mode;
     suite::ui::Knob ceiling, clip, release, manualGain, toneLow, toneHigh;
     suite::ui::Choice bitDepth;

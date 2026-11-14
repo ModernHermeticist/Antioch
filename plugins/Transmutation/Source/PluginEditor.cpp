@@ -188,6 +188,7 @@ juce::String EffectList::getTooltipForRow (int row)
 //==============================================================================
 TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("TRANSMUTATION", "creative moves, directed for each track", Colours::ember),
       spice (p.apvts, TParams::spice, "Spice", Colours::ember),
       builds (p.apvts, TParams::builds, "Builds", Colours::brass),
       drops (p.apvts, TParams::drops, "Drops", Colours::ember),
@@ -199,9 +200,14 @@ TransmutationEditor::TransmutationEditor (TransmutationProcessor& p)
       timeline (p), effectList (p)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (exportButton, 160);
+    header.addRight (rerollAllButton, 190);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     autopilot.director = [] { return suite::DirectorBus::cue (suite::director::pTransmute); };
     for (auto* c : std::initializer_list<juce::Component*> { &spice, &builds, &drops, &amount, &output, &genre, &role, &director, &status, &nowPlaying,
-                                                             &timeline, &moveInfo, &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton, &exportButton,
+                                                             &timeline, &moveInfo, &lockButton, &rerollButton, &neverButton, &playButton,
                                                              &category, &effectList, &autopilot })
         addAndMakeVisible (c);
     for (auto* l : { &status, &nowPlaying, &moveInfo })
@@ -335,34 +341,42 @@ void TransmutationEditor::timerCallback()
     for (auto& a : processor.activeNow) if (const auto id = a.load(); id > 0) now.add (trm::effect (id).name);
     nowPlaying.setText (now.isEmpty() ? juce::String ("Now: -") : "Now: " + now.joinIntoString (" + "), juce::dontSendNotification);
     nowPlaying.setColour (juce::Label::textColourId, now.isEmpty() ? Colours::dimText : Colours::ember);
+    header.setStatus (! now.isEmpty() ? "Now: " + now.joinIntoString (" + ")
+                                      : juce::String ((int) plan.moves.size()) + " moves planned" + (processor.mapFound.load() ? "" : " (no Ouroboros map yet)"),
+                      ! now.isEmpty() ? Colours::ember : processor.mapFound.load() ? Colours::moss : Colours::faintText);
 }
 
 void TransmutationEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "TRANSMUTATION", "creative moves, directed for each track", Colours::ember);
     drawPanel (g, leftArea, "This track", Colours::ember);
     drawPanel (g, planArea, "The plan", Colours::brass);
-    drawPanel (g, listArea, "Moves", Colours::verdigris);
+    if (header.advanced()) drawPanel (g, listArea, "Moves", Colours::verdigris);
 }
 
 void TransmutationEditor::resized()
 {
     autopilot.setBounds (getLocalBounds().removeFromBottom (AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (AutopilotStrip::height + 4).reduced (16);
-    bounds.removeFromTop (44);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &amount, &output, &genre, &role, &category, &effectList }, advanced);
     leftArea = bounds.removeFromLeft (290);
     bounds.removeFromLeft (12);
-    listArea = bounds.removeFromRight (340);
-    bounds.removeFromRight (12);
+    listArea = advanced ? bounds.removeFromRight (340) : juce::Rectangle<int>();
+    if (advanced) bounds.removeFromRight (12);
     planArea = bounds;
 
     auto l = leftArea.reduced (10, 8).withTrimmedTop (16);
     layoutRow (l.removeFromTop (110), { &spice, &builds, &drops });
-    layoutRow (l.removeFromTop (110), { &amount, &output });
-    auto choices = l.removeFromTop (58);
-    genre.setBounds (choices.removeFromLeft (choices.getWidth() / 2).reduced (2, 0));
-    role.setBounds (choices.reduced (2, 0));
+    if (advanced)
+    {
+        layoutRow (l.removeFromTop (110), { &amount, &output });
+        auto choices = l.removeFromTop (58);
+        genre.setBounds (choices.removeFromLeft (choices.getWidth() / 2).reduced (2, 0));
+        role.setBounds (choices.reduced (2, 0));
+    }
     l.removeFromTop (4);
     director.setBounds (l.removeFromTop (28));
     l.removeFromTop (6);
@@ -371,8 +385,8 @@ void TransmutationEditor::resized()
     auto p = planArea.reduced (10, 8).withTrimmedTop (16);
     nowPlaying.setBounds (p.removeFromTop (22));
     auto buttons = p.removeFromBottom (30);
-    const auto bw = buttons.getWidth() / 6;
-    for (auto* b : { &lockButton, &rerollButton, &neverButton, &playButton, &rerollAllButton, &exportButton })
+    const auto bw = buttons.getWidth() / 4;
+    for (auto* b : { &lockButton, &rerollButton, &neverButton, &playButton })
         b->setBounds (buttons.removeFromLeft (bw).reduced (2, 0));
     p.removeFromBottom (6);
     moveInfo.setBounds (p.removeFromBottom (48));
@@ -383,4 +397,21 @@ void TransmutationEditor::resized()
     category.setBounds (r.removeFromTop (26));
     r.removeFromTop (6);
     effectList.setBounds (r);
+}
+
+std::vector<suite::ui::Action> TransmutationEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Re-roll the whole track", "a new plan for this track", "Plan", [this] { rerollAllButton.triggerClick(); } });
+    a.push_back ({ "Export plan (MIDI)", "a note and a marker per move, for FL", "Plan", [this] { exportButton.triggerClick(); } });
+    const auto sel = lockButton.isEnabled();
+    a.push_back ({ lockButton.getButtonText(), "the move selected on the timeline", "Selected move", [this] { lockButton.triggerClick(); }, sel });
+    a.push_back ({ "Re-roll this moment", "the move selected on the timeline", "Selected move", [this] { rerollButton.triggerClick(); }, sel });
+    a.push_back ({ "Never use this move", "on this track", "Selected move", [this] { neverButton.triggerClick(); }, sel });
+    a.push_back ({ "Play it now", "the selected move, over whatever is playing", "Selected move", [this] { playButton.triggerClick(); }, sel });
+    a.push_back ({ director.getToggleState() ? "Stop the director planning" : "Let the director plan the moves", "from the song map and the suite director", "Plan",
+                   [this] { director.setToggleState (! director.getToggleState(), juce::sendNotification); } });
+    for (int id = 1; id <= trm::numEffects; ++id)
+        a.push_back ({ "Play: " + juce::String (trm::effect (id).name), trm::effect (id).what, "Moves", [this, id] { processor.audition (id); } });
+    return a;
 }

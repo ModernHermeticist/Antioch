@@ -7,6 +7,7 @@ namespace { const juce::Colour accent { 0xffb98b5e }; }
 
 PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("PRIMA MATERIA", "section mixer (suggestions only)", accent),
       follow (p.apvts, pm::followId, "Follow Ouroboros", Colours::ember),
       ramp (p.apvts, pm::rampId, "Ramp through builds", Colours::brass),
       laterOn (p.apvts, pm::laterOnId, "Separate Drop 2+", Colours::ember),
@@ -16,6 +17,13 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
       monoLows (p.apvts, pm::monoLowsId, "Mono lows")
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (follow, 170);
+    header.addRight (previewButton, 100);
+    header.addRight (suggestionsButton, 220);
+    makePrimary (suggestionsButton, accent);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
 
     roleBox.setTextWhenNothingSelected ("Track role preset...");
     for (size_t i = 0; i < pm::roles().size(); ++i)
@@ -76,12 +84,10 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
     suggestionsButton.setTooltip ("Prima Materia never moves this track's level or filters it: here are the moves it suggests, section by section, "
                                   "to make in FL's mixer, and an export of the fader moves as automation");
     suggestionsButton.onClick = [this] { showSuggestions(); };
-    addAndMakeVisible (suggestionsButton);
     previewButton.setTooltip ("Hear the suggested moves while this is on (not saved: the track always loads untouched)");
     previewButton.setClickingTogglesState (true);
     previewButton.setToggleState (processor.previewPlan.load(), juce::dontSendNotification);
     previewButton.onClick = [this] { processor.previewPlan.store (previewButton.getToggleState()); };
-    addAndMakeVisible (previewButton);
     autoStage = std::make_unique<suite::ui::Toggle> (p.apvts, pm::autoStageId, "Keep at -18", Colours::moss);
     autoStage->setTooltip ("Continuous gain staging: every 10 s, if this track's input has drifted more than 1.5 dB from -18 dBFS RMS, Input gain follows");
     addAndMakeVisible (*autoStage);
@@ -91,7 +97,7 @@ PrimaMateriaEditor::PrimaMateriaEditor (PrimaMateriaProcessor& p)
 
     status.setFont (juce::FontOptions (14.0f, juce::Font::bold));
     lowManager.setTooltip ("Where a kick or bass track is playing, this track leaves the low end to them (an automatic low cut for its role)");
-    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &follow, &ramp, &laterOn, &lowManager, &morph, &gap, &monoLows, &status })
+    for (auto* c : std::initializer_list<juce::Component*> { &roleBox, &saveRole, &ramp, &laterOn, &lowManager, &morph, &gap, &monoLows, &status })
         addAndMakeVisible (c);
 
     autopilotStrip.director = [] { return suite::DirectorBus::mixCue (suite::DirectorBus::cueSilence); };
@@ -141,8 +147,8 @@ void PrimaMateriaEditor::timerCallback()
 {
     {
         const auto isVocal = processor.getRole() == 6;
-        rideVocal->setVisible (isVocal);
-        vocalRoom->setVisible (! isVocal);
+        rideVocal->setVisible (isVocal && header.advanced());
+        vocalRoom->setVisible (! isVocal && header.advanced());
     }
     const auto t = processor.currentType.load();
     if (t != shownType)
@@ -179,6 +185,11 @@ void PrimaMateriaEditor::timerCallback()
     if (processor.roleGuessed.load() && processor.getRole() >= 0)
         text << "   |   Role guessed from the sound: " << pm::roles()[(size_t) processor.getRole()].name << " (choose another if it's wrong)";
     status.setText (text, juce::dontSendNotification);
+    {
+        const auto n = processor.planLines().size();
+        header.setStatus (juce::String (n) + (n == 1 ? " suggested move" : " suggested moves") + (processor.previewPlan.load() ? " (previewing)" : ""),
+                          processor.previewPlan.load() ? Colours::ember : n > 0 ? Colours::brass : Colours::moss);
+    }
 
     const auto in = processor.inputLevelDb();
     inputLabel.setText (in > -80.0f ? "Input " + juce::String (in, 1) + " dBFS RMS" : juce::String ("Input: play to measure"), juce::dontSendNotification);
@@ -192,7 +203,6 @@ void PrimaMateriaEditor::timerCallback()
 void PrimaMateriaEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "PRIMA MATERIA", "section mixer", accent);
     drawPanel (g, gridArea, {});
 
     for (int t = 0; t < pm::numColumns; ++t)
@@ -219,15 +229,17 @@ void PrimaMateriaEditor::resized()
 {
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    auto header = bounds.removeFromTop (48);
-    follow.setBounds (header.removeFromRight (180).reduced (4, 8));
-    previewButton.setBounds (header.removeFromRight (100).reduced (4, 8));
-    suggestionsButton.setBounds (header.removeFromRight (220).reduced (4, 8));
-    header.removeFromRight (12);
-    trim->setBounds (header.removeFromRight (150).withTrimmedTop (-10).withTrimmedBottom (-6));
-    trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (6);
+    const auto advanced = header.advanced();
+    setShown ({ &morph, &gap, &monoLows, breath.get(), pump.get(), sweep.get(), answer.get(), inputGain.get(), &inputLabel, &gainStageButton, autoStage.get() }, advanced);
+    if (! advanced) { vocalRoom->setVisible (false); rideVocal->setVisible (false); }
+    for (int t = 0; t < pm::numColumns; ++t)
+        for (int r = 1; r < 3; ++r) knobs[(size_t) (t * 3 + r)]->setVisible (advanced);
 
     auto controls = bounds.removeFromTop (60);
+    trim->setBounds (controls.removeFromRight (150).withTrimmedTop (2));
+    trim->slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 16);
     roleBox.setBounds (controls.removeFromLeft (220).withSizeKeepingCentre (220, 28).translated (0, 8));
     saveRole.setBounds (controls.removeFromLeft (170).withSizeKeepingCentre (160, 28).translated (0, 8));
     controls.removeFromLeft (12);
@@ -239,6 +251,7 @@ void PrimaMateriaEditor::resized()
     monoLows.setBounds (controls.removeFromLeft (150));
 
 
+    if (advanced)
     {
         auto row = bounds.removeFromTop (62);
         breath->setBounds (row.removeFromLeft (150));
@@ -265,8 +278,28 @@ void PrimaMateriaEditor::resized()
     {
         columns[(size_t) t] = juce::Rectangle<int> (grid.getX() + t * w, grid.getY(), w, grid.getHeight());
         auto col = columns[(size_t) t].reduced (6).withTrimmedTop (34);
+        if (! advanced)
+        {
+            knobs[(size_t) (t * 3)]->maxHeight = 150;
+            knobs[(size_t) (t * 3)]->setBounds (col.withSizeKeepingCentre (col.getWidth(), juce::jmin (col.getHeight(), 170)));
+            continue;
+        }
+        knobs[(size_t) (t * 3)]->maxHeight = 110;
         const auto rowH = col.getHeight() / 3;
         for (int r = 0; r < 3; ++r)
             knobs[(size_t) (t * 3 + r)]->setBounds (col.removeFromTop (rowH));
     }
+}
+
+std::vector<suite::ui::Action> PrimaMateriaEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Suggested mixer moves", "section by section, to make in FL's mixer; export as automation", "Suggestions", [this] { showSuggestions(); } });
+    a.push_back ({ previewButton.getToggleState() ? "Stop previewing the moves" : "Preview the suggested moves", "hear them (never saved)", "Suggestions",
+                   [this] { previewButton.triggerClick(); } });
+    a.push_back ({ "Gain-stage all tracks", "every track's channel gain for -18 dBFS RMS", "Levels", [this] { gainStageButton.triggerClick(); } });
+    a.push_back ({ "Save as my role", "this track's section settings, for every track with this role", "Role", [this] { saveRole.triggerClick(); } });
+    for (size_t i = 0; i < pm::roles().size(); ++i)
+        a.push_back ({ "Role: " + juce::String (pm::roles()[i].name), "start from this role's section settings", "Role", [this, i] { roleBox.setSelectedId ((int) i + 1); } });
+    return a;
 }

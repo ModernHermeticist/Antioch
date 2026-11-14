@@ -147,10 +147,18 @@ void FixHistoryPanel::paint (juce::Graphics& g)
 //==============================================================================
 MentalismEditor::MentalismEditor (MentalismProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("MENTALISM", "mix assistant", accent),
       loudTarget (p.apvts, Params::loudnessTarget, "Loudness target"),
       tonalTarget (p.apvts, Params::tonalTarget, "Tonal target")
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (finishButton, 150);
+    header.addRight (problemsButton, 120);
+    header.addRight (roughMixButton, 110);
+    header.addRight (historyButton, 90);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
 
     resetButton.onClick = [this] { processor.resetMeasurements(); };
     roughMixButton.setTooltip ("Sets every Prima Materia track's Trim so it sits at the usual trance level for its role, "
@@ -168,7 +176,6 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     {
         juce::CallOutBox::launchAsynchronously (std::make_unique<FixHistoryPanel> (processor), historyButton.getScreenBounds(), nullptr);
     };
-    addAndMakeVisible (historyButton);
     likeMeButton.setTooltip ("How close this song is to the way you usually make trance: key, tempo, structure, length, loudness and tone");
     likeMeButton.onClick = [this]
     {
@@ -201,7 +208,7 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     autoCoach->setTooltip ("After every complete play-through, applies the coach's fixes by itself (up to 3 passes) until it's happy");
     finishButton.setTooltip ("Gain staging, DJ intro/outro, reference tone, then the rough mix once the drop is heard again, "
                              "then the auto-coach until the energy arc is right. Everything can be undone in History.");
-    finishButton.setColour (juce::TextButton::buttonColourId, Colours::moss.withAlpha (0.4f));
+    makePrimary (finishButton, Colours::moss);
     finishButton.onClick = [this]
     {
         juce::PopupMenu m;
@@ -262,12 +269,11 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
             if (id >= 100 && id - 100 < (int) list.size()) processor.applyProblemFix (list[(size_t) (id - 100)].key);
         });
     };
-    addAndMakeVisible (problemsButton);
     addAndMakeVisible (*problemWatch);
     autoBalance = std::make_unique<suite::ui::Toggle> (p.apvts, Params::autoBalance, "Balance", Colours::ember);
     autoBalance->setTooltip ("Every 4 s of music, each track that's off its rough-mix balance moves 1 dB towards it; the step is kept "
                              "only if the master didn't move away from its tonal target (see What changed in Ouroboros)");
-    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), autoMasking.get(), autoBalance.get(), &finishButton, &automationStatus })
+    for (auto* c : std::initializer_list<juce::Component*> { autoCoach.get(), autoMasking.get(), autoBalance.get(), &automationStatus })
         addAndMakeVisible (c);
     matchButton.setTooltip ("Moves Lapis' low and high tone half-way towards the reference (at most 4 dB) and sets the loudness "
                             "target to match it. Undo it in History.");
@@ -282,7 +288,7 @@ MentalismEditor::MentalismEditor (MentalismProcessor& p)
     };
     roughStatus.setFont (juce::FontOptions (12.0f));
     roughStatus.setJustificationType (juce::Justification::centredRight);
-    for (auto* c : std::initializer_list<juce::Component*> { &roughMixButton, &roughUndoButton, &roughStatus })
+    for (auto* c : std::initializer_list<juce::Component*> { &roughUndoButton })
         addAndMakeVisible (c);
     loadButton.onClick = [this]
     {
@@ -481,6 +487,9 @@ void MentalismEditor::timerCallback()
         const auto n = (int) processor.problems().size();
         problemsButton.setButtonText (n > 0 ? "Problems (" + juce::String (n) + ")" : "Problems");
         problemsButton.setColour (juce::TextButton::textColourOffId, n > 0 ? Colours::ember : Colours::text);
+        const auto status = automationStatus.getText().isNotEmpty() ? automationStatus.getText() : roughStatus.getText();
+        header.setStatus (status.isNotEmpty() ? status : n > 0 ? juce::String (n) + (n == 1 ? " problem needs your OK" : " problems need your OK") : juce::String ("No problems right now"),
+                          status.isNotEmpty() ? Colours::moss : n > 0 ? Colours::ember : Colours::moss);
     }
     rep = processor.report();
     {
@@ -512,7 +521,6 @@ void MentalismEditor::timerCallback()
 void MentalismEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "MENTALISM", "mix assistant", accent);
     drawPanel (g, loudArea, "Loudness", accent);
     drawPanel (g, stereoArea, "Stereo", Colours::amethyst);
     const auto arrangementTab = balanceTabs.getSelected() == 1, maskingTab = balanceTabs.getSelected() == 2;
@@ -797,13 +805,10 @@ void MentalismEditor::resized()
 {
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    auto header = bounds.removeFromTop (48);
-    resetButton.setBounds (header.removeFromRight (110).reduced (4, 8));
-    roughUndoButton.setBounds (header.removeFromRight (70).reduced (4, 8));
-    roughMixButton.setBounds (header.removeFromRight (110).reduced (4, 8));
-    historyButton.setBounds (header.removeFromRight (90).reduced (4, 8));
-    likeMeButton.setBounds (header.removeFromRight (90).reduced (4, 8));
-    roughStatus.setBounds (header.removeFromRight (190).reduced (4, 8));
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &resetButton, &likeMeButton, &roughUndoButton, autoCoach.get(), autoMasking.get(), autoBalance.get(), problemWatch.get() }, advanced);
 
     auto top = bounds.removeFromTop (190);
     loudArea = top.removeFromLeft (top.getWidth() * 62 / 100);
@@ -817,6 +822,13 @@ void MentalismEditor::resized()
 
     auto l = loudArea.reduced (12, 6).withTrimmedTop (14);
     loudTarget.setBounds (l.removeFromRight (180).withHeight (60));
+    if (advanced)
+    {
+        auto extra = l.withTrimmedTop (l.getHeight() - 30).removeFromRight (310);
+        resetButton.setBounds (extra.removeFromRight (100).reduced (2, 0));
+        likeMeButton.setBounds (extra.removeFromRight (100).reduced (2, 0));
+        roughUndoButton.setBounds (extra.removeFromRight (100).reduced (2, 0));
+    }
     loudContent = l;
 
     stereoContent = stereoArea.reduced (14, 8).withTrimmedTop (18);
@@ -843,11 +855,38 @@ void MentalismEditor::resized()
 
     adviceContent = adviceArea.reduced (14, 8).withTrimmedTop (18);
     checklistButton.setBounds (adviceArea.getRight() - 162, adviceArea.getY() + 6, 150, 26);
-    finishButton.setBounds (adviceArea.getRight() - 324, adviceArea.getY() + 6, 150, 26);
-    autoCoach->setBounds (adviceArea.getRight() - 456, adviceArea.getY() + 6, 124, 26);
-    autoMasking->setBounds (adviceArea.getRight() - 608, adviceArea.getY() + 6, 146, 26);
-    autoBalance->setBounds (adviceArea.getRight() - 704, adviceArea.getY() + 6, 90, 26);
-    problemWatch->setBounds (adviceArea.getRight() - 788, adviceArea.getY() + 6, 78, 26);
-    problemsButton.setBounds (adviceArea.getRight() - 900, adviceArea.getY() + 6, 106, 26);
+    autoCoach->setBounds (adviceArea.getRight() - 294, adviceArea.getY() + 6, 124, 26);
+    autoMasking->setBounds (adviceArea.getRight() - 446, adviceArea.getY() + 6, 146, 26);
+    autoBalance->setBounds (adviceArea.getRight() - 542, adviceArea.getY() + 6, 90, 26);
+    problemWatch->setBounds (adviceArea.getRight() - 626, adviceArea.getY() + 6, 78, 26);
     automationStatus.setBounds (adviceContent.removeFromBottom (20));
+}
+
+std::vector<suite::ui::Action> MentalismEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Finish the song", "gain staging, rough mix, coaching", "Finish", [this] { processor.finishSong(); } });
+    a.push_back ({ "Mix it", "everything automatic (also masking, mud, harshness and translation)", "Finish", [this] { processor.mixIt(); } });
+    a.push_back ({ "Undo Mix it", "", "Finish", [this] { processor.undoMixIt(); } });
+    a.push_back ({ "Translation check", "phone, earbuds, mono", "Checks", [this]
+                   { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Translation check", processor.translationCheck().joinIntoString ("\n\n")); } });
+    a.push_back ({ "Premaster report", "readiness, checks, peak sources", "Checks", [this]
+                   { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Premaster report", processor.premasterReport()); } });
+    a.push_back ({ "Export checklist", "pass/fail before rendering", "Checks", [this] { checklistButton.triggerClick(); } });
+    a.push_back ({ "Problems", "what the watcher found that needs your OK", "Problems", [this] { problemsButton.triggerClick(); } });
+    for (const auto& pr : processor.problems())
+        if (pr.fix != suite::Fix::None)
+            a.push_back ({ "Fix: " + pr.text, pr.fixText, "Problems", [this, key = pr.key] { processor.applyProblemFix (key); } });
+    a.push_back ({ "Rough mix", "every track's trim for its role, relative to the kick", "Mix", [this] { roughMixButton.triggerClick(); } });
+    a.push_back ({ "Undo the last fix", "", "Mix", [this] { undoFixButton.onClick(); }, lastFixSeq != 0 });
+    a.push_back ({ "History", "every fix so far, with Undo for each", "Mix", [this] { historyButton.triggerClick(); } });
+    a.push_back ({ "Load a reference track", "", "Reference", [this] { balanceTabs.setSelected (0); loadButton.triggerClick(); } });
+    a.push_back ({ "Match the reference", "Lapis' tone half-way towards it", "Reference", [this] { matchButton.triggerClick(); } });
+    a.push_back ({ "Learn my sound", "from a few of your finished tracks", "Reference", [this] { mySoundButton.triggerClick(); } });
+    a.push_back ({ "Sounds like me?", "how close this song is to the way you make trance", "Reference", [this] { likeMeButton.triggerClick(); } });
+    a.push_back ({ "Reset the measurements", "", "Meters", [this] { processor.resetMeasurements(); } });
+    a.push_back ({ "Show the tonal balance", "", "View", [this] { balanceTabs.setSelected (0); } });
+    a.push_back ({ "Show the arrangement", "loudness per section", "View", [this] { balanceTabs.setSelected (1); } });
+    a.push_back ({ "Show the masking", "tracks fighting for the same frequencies", "View", [this] { balanceTabs.setSelected (2); } });
+    return a;
 }

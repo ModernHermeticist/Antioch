@@ -65,6 +65,8 @@ private:
 
     TransmutationProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
     juce::TooltipWindow tooltips { this, 400 };
 
     suite::ui::Knob spice, builds, drops, amount, output;

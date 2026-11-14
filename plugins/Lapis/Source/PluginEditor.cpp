@@ -6,6 +6,7 @@ namespace { const juce::Colour accent = Colours::verdigris.interpolatedWith (Col
 
 LapisEditor::LapisEditor (LapisProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("LAPIS", "premaster check (reference only)", accent),
       target (p.apvts, LapisProcessor::targetId, "Target"),
       mode (p.apvts, LapisProcessor::modeId, "Gain"),
       ceiling (p.apvts, LapisProcessor::ceilingId, "Ceiling", accent),
@@ -20,12 +21,16 @@ LapisEditor::LapisEditor (LapisProcessor& p)
     hearMaster.setTooltip ("The suite delivers a label-ready premaster: Lapis is a reference. Off: the audio passes untouched (render this). "
                            "On: hear how it would master, for A/B only.");
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (fingerprintButton, 180);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     resetButton.onClick = [this] { processor.resetLearning(); };
     fingerprintButton.setTooltip ("Save this master chain and the finished master's tonal shape, or match a new song to one you saved");
     fingerprintButton.onClick = [this] { showFingerprintMenu(); };
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth, &resetButton, &fingerprintButton, &status, &hearMaster })
+    for (auto* c : std::initializer_list<juce::Component*> { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth, &resetButton, &status, &hearMaster })
         addAndMakeVisible (c);
     setSize (1000, 520);
     startTimerHz (20);
@@ -48,6 +53,14 @@ void LapisEditor::timerCallback()
     manualGain.setEnabled (m == LapisProcessor::Manual);
     ceiling.setEnabled (! processor.followingMentalism.load());
 
+    {
+        const auto pk = processor.premasterPeakDb.load();
+        header.setTagline (processor.hearingMaster.load() ? "master preview (A/B)" : "premaster check (reference only)");
+        if (processor.hearingMaster.load()) header.setStatus ("Hearing the master preview: don't render", Colours::ember);
+        else if (pk <= -99.0f)              header.setStatus ("Play the song to check it", Colours::faintText);
+        else if (pk <= suite::premaster::peakDbfs + 0.05f) header.setStatus ("Premaster OK: " + juce::String (pk, 1) + " dBTP", Colours::moss);
+        else header.setStatus ("Peaks " + juce::String (pk, 1) + " dBTP: lower the master " + juce::String (suite::premaster::overBy (pk), 1) + " dB", Colours::ember);
+    }
     juce::String text;
     if (! processor.hearingMaster.load())
     {
@@ -85,7 +98,6 @@ void LapisEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
     const auto preview = processor.hearingMaster.load();
-    drawHeader (g, { 20, 12, 700, 32 }, "LAPIS", preview ? "master preview (A/B)" : "premaster check (reference only)", accent);
     drawPanel (g, meterArea, preview ? "Output: the master preview" : "The premaster (passing through untouched)");
     if (! preview)
     {
@@ -212,7 +224,10 @@ void LapisEditor::showFingerprintMenu()
 void LapisEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
-    bounds.removeFromTop (48);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &resetButton }, advanced);
     meterArea = bounds.removeFromTop (200);
     bounds.removeFromTop (12);
     controlArea = bounds;
@@ -221,7 +236,18 @@ void LapisEditor::resized()
     auto statusRow = c.removeFromBottom (30);
     hearMaster.setBounds (statusRow.removeFromLeft (360).reduced (2));
     resetButton.setBounds (statusRow.removeFromRight (140).reduced (2));
-    fingerprintButton.setBounds (statusRow.removeFromRight (170).reduced (2));
     status.setBounds (statusRow);
-    layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth });
+    if (advanced) layoutRow (c, { &target, &mode, &ceiling, &clip, &release, &manualGain, &toneLow, &toneHigh, &bitDepth });
+    else          layoutRow (c.withSizeKeepingCentre (juce::jmin (c.getWidth(), 600), c.getHeight()), { &target, &mode, &bitDepth });
+}
+
+std::vector<suite::ui::Action> LapisEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ hearMaster.getToggleState() ? "Stop hearing the master (back to the premaster)" : "Hear the master preview (A/B)",
+                   "for comparing only: never render with it on", "Listen", [this] { hearMaster.setToggleState (! hearMaster.getToggleState(), juce::sendNotification); } });
+    a.push_back ({ "Master fingerprint", "save this master's sound, or match a song to one you saved", "Fingerprint", [this] { showFingerprintMenu(); } });
+    a.push_back ({ "Check a rendered premaster file", "proof after the render: peaks, headroom, format", "Fingerprint", [this] { showFingerprintMenu(); } });
+    a.push_back ({ "Reset learning", "the master preview learns its gain again", "Preview", [this] { processor.resetLearning(); } });
+    return a;
 }

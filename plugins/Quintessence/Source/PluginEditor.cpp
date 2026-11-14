@@ -24,6 +24,7 @@ namespace
 
 QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("QUINTESSENCE", "self-managing EQ and dynamics", quint),
       autoEq (p.apvts, qn::autoEqId, "Auto EQ", quint),
       autoMb (p.apvts, qn::autoMbId, "Auto dynamics", quint),
       role (p.apvts, qn::roleId, "Role"),
@@ -33,6 +34,18 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
       widthLock (p.apvts, qn::widthLockId, "Locked", quint)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    deltaButton.setClickingTogglesState (true);
+    deltaButton.setTooltip ("Delta listen: hear only what Quintessence takes out and adds (for checking; it turns itself off when the editor closes)");
+    deltaButton.setColour (juce::TextButton::buttonOnColourId, Colours::ember);
+    deltaButton.onClick = [this] { processor.deltaListen.store (deltaButton.getToggleState()); };
+    relearnButton.setTooltip ("Forget what it learned on this track and listen again");
+    tipsButton.setTooltip ("What to change in Spire for this sound, from what it hears");
+    header.addRight (deltaButton, 170);
+    header.addRight (tipsButton, 110);
+    header.addRight (relearnButton, 100);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     relearnButton.onClick = [this] { processor.relearn(); };
     tipsButton.onClick = [this]
     {
@@ -50,7 +63,7 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
         label->setSize (460, 80 + 36 * (tips.size() + (start.isNotEmpty() ? 2 : 0)));
         juce::CallOutBox::launchAsynchronously (std::move (label), tipsButton.getScreenBounds(), nullptr);
     };
-    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &role, &relearnButton, &tipsButton, &lowCut, &highCut, &width,
+    for (auto* c : std::initializer_list<juce::Component*> { &autoEq, &autoMb, &role, &lowCut, &highCut, &width,
                                                               &lowLock, &highLock, &widthLock })
         addAndMakeVisible (c);
     for (int s = 0; s < qn::numSlots; ++s)
@@ -112,8 +125,21 @@ QuintessenceEditor::QuintessenceEditor (QuintessenceProcessor& p)
 
 QuintessenceEditor::~QuintessenceEditor()
 {
+    processor.deltaListen.store (false);
     stopTimer();
     setLookAndFeel (nullptr);
+}
+
+void QuintessenceEditor::timerCallback()
+{
+    const auto moves = processor.kept.load();
+    if (processor.failsafeTripped.load()) header.setStatus ("Failsafe: it stepped back (something went wrong)", Colours::ember);
+    else if (processor.deltaListen.load()) header.setStatus ("Delta listen: hearing only what it changes", Colours::ember);
+    else if (processor.bypassedNow.load()) header.setStatus ("Bypassed for the A/B (matched loudness)", Colours::faintText);
+    else header.setStatus (processor.passes.load() == 0 ? juce::String ("Listening: play the track")
+                                                        : juce::String (moves) + (moves == 1 ? " move kept, " : " moves kept, ") + juce::String (processor.passes.load()) + " passes",
+                           processor.passes.load() == 0 ? Colours::faintText : Colours::moss);
+    repaint();
 }
 
 void QuintessenceEditor::drawCurve (juce::Graphics& g, juce::Rectangle<int> area)
@@ -176,11 +202,14 @@ void QuintessenceEditor::drawCurve (juce::Graphics& g, juce::Rectangle<int> area
 void QuintessenceEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 1000, 32 }, "QUINTESSENCE", "self-managing EQ and multiband dynamics", quint);
+    const auto advanced = header.advanced();
     drawPanel (g, curveArea, "Where it is, and what it's steering out", quint);
     drawPanel (g, controlArea, "Automation");
-    drawPanel (g, cutArea, "Cuts and width");
-    drawPanel (g, mbArea, "Dynamics (level-neutral)", Colours::verdigris);
+    if (advanced)
+    {
+        drawPanel (g, cutArea, "Cuts and width");
+        drawPanel (g, mbArea, "Dynamics (level-neutral)", Colours::verdigris);
+    }
     drawPanel (g, logArea, "What it did");
     drawCurve (g, curveArea.reduced (14, 10).withTrimmedTop (18));
 
@@ -213,7 +242,7 @@ void QuintessenceEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.drawFittedText ("Touch a band and it's yours: it locks. Unlock it to hand it back.", c.removeFromTop (18), juce::Justification::topLeft, 1);
 
-    for (int s = 0; s < qn::numSlots; ++s)
+    for (int s = 0; s < qn::numSlots && advanced; ++s)
     {
         const auto reason = (int) processor.apvts.getRawParameterValue (qn::reasonId (s))->load();
         const auto when = (int) processor.apvts.getRawParameterValue (qn::whenId (s))->load();
@@ -232,7 +261,7 @@ void QuintessenceEditor::paint (juce::Graphics& g)
         }
     }
 
-    for (int b = 0; b < qn::numMbBands; ++b)
+    for (int b = 0; b < qn::numMbBands && advanced; ++b)
     {
         const auto m = meterAreas[(size_t) b];
         g.setColour (Colours::outline);
@@ -267,7 +296,25 @@ void QuintessenceEditor::resized()
 {
     autopilotStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    bounds.removeFromTop (48);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    for (auto* list : { &bandKnobs, &mbKnobs }) for (auto& k : *list) k->setVisible (advanced);
+    for (auto* list : { &bandLocks, &mbLocks }) for (auto& k : *list) k->setVisible (advanced);
+    setShown ({ &lowCut, &highCut, &width, &lowLock, &highLock, &widthLock }, advanced);
+    if (! advanced)
+    {
+        // the simple view: the curve, the automation and what it did
+        auto top = bounds.removeFromTop (bounds.getHeight() * 3 / 5);
+        controlArea = top.removeFromRight (300);
+        top.removeFromRight (12);
+        curveArea = top;
+        bounds.removeFromTop (12);
+        logArea = bounds;
+        cutArea = mbArea = {};
+    }
+    else
+    {
     auto top = bounds.removeFromTop (230);
     controlArea = top.removeFromRight (300);
     top.removeFromRight (12);
@@ -297,17 +344,14 @@ void QuintessenceEditor::resized()
     mbArea = bottom.removeFromLeft (juce::jmax (560, bottom.getWidth() - 320));
     bottom.removeFromLeft (12);
     logArea = bottom;
+    }
 
     auto c = controlArea.reduced (14, 10).withTrimmedTop (20);
     auto toggles = c.removeFromTop (30);
     autoEq.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2).reduced (2, 0));
     autoMb.setBounds (toggles.reduced (2, 0));
     role.setBounds (c.removeFromTop (54));
-    c.removeFromTop (4);
-    auto buttons = c.removeFromTop (28);
-    relearnButton.setBounds (buttons.removeFromLeft (120));
-    buttons.removeFromLeft (8);
-    tipsButton.setBounds (buttons.removeFromLeft (120));
+    if (! advanced) return;
 
     auto cu = cutArea.reduced (10, 8).withTrimmedTop (18);
     const auto third = cu.getWidth() / 3;
@@ -330,4 +374,22 @@ void QuintessenceEditor::resized()
         mbKnobs[(size_t) (b * 2)]->setBounds (r.removeFromTop (kh));
         mbKnobs[(size_t) (b * 2 + 1)]->setBounds (r);
     }
+}
+
+std::vector<suite::ui::Action> QuintessenceEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Re-learn", "forget what it learned on this track and listen again", "Learning", [this] { processor.relearn(); } });
+    a.push_back ({ "Spire tips", "what to change in Spire for this sound", "Tips", [this] { tipsButton.triggerClick(); } });
+    a.push_back ({ deltaButton.getToggleState() ? "Stop delta listen" : "Hear what it changes (delta listen)", "only what it takes out and adds", "Listen",
+                   [this] { deltaButton.triggerClick(); } });
+    a.push_back ({ autoEq.getToggleState() ? "Turn auto EQ off" : "Turn auto EQ on", "the twelve bands steer themselves", "Automation",
+                   [this] { autoEq.setToggleState (! autoEq.getToggleState(), juce::sendNotification); } });
+    a.push_back ({ autoMb.getToggleState() ? "Turn auto dynamics off" : "Turn auto dynamics on", "the multiband dynamics set themselves", "Automation",
+                   [this] { autoMb.setToggleState (! autoMb.getToggleState(), juce::sendNotification); } });
+    for (int s = 0; s < qn::numSlots; ++s)
+        a.push_back ({ "Unlock band " + juce::String (s + 1), "hand it back to the automation", "Bands",
+                       [this, s] { if (auto* p = processor.apvts.getParameter (qn::lockId (s))) p->setValueNotifyingHost (0.0f); },
+                       processor.apvts.getRawParameterValue (qn::lockId (s))->load() > 0.5f });
+    return a;
 }

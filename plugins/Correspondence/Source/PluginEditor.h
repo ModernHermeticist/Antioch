@@ -84,6 +84,8 @@ private:
 
     CorrespondenceProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header { "CORRESPONDENCE", "key & chord engine", suite::ui::Colours::verdigris };
+    std::vector<suite::ui::Action> actions();
 
     suite::ui::Choice root, scale, perChord;
     suite::ui::Knob count;

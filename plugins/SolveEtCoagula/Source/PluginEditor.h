@@ -19,6 +19,8 @@ private:
 
     SolveEtCoagulaProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
     suite::ui::Knob depth, sensitivity, focus, mix;
     suite::ui::Choice speed;
     juce::Label status;

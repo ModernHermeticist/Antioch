@@ -15,11 +15,14 @@ public:
     void resized() override;
 
 private:
-    void timerCallback() override { repaint(); }
+    void timerCallback() override;
     void drawCurve (juce::Graphics&, juce::Rectangle<int>);
 
     QuintessenceProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    juce::TextButton deltaButton { "Hear what it changes" };
+    std::vector<suite::ui::Action> actions();
     suite::ui::Toggle autoEq, autoMb;
     suite::ui::Choice role;
     juce::TextButton relearnButton { "Re-learn" }, tipsButton { "Spire tips" };

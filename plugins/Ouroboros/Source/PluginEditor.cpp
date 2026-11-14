@@ -1170,6 +1170,7 @@ void ArrangePanel::resized()
 //==============================================================================
 OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("OUROBOROS", "arrangement conductor", accent),
       broadcast (p.apvts, OuroborosProcessor::broadcastId, "Broadcast to suite", accent),
       snap (p.apvts, OuroborosProcessor::snapId, "Snap"),
       lift (p.apvts, OuroborosProcessor::liftId, "Final drop key"),
@@ -1182,6 +1183,8 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
       timeline (p)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.actions = [this] { return actions(); };
 
     templateBox.setTextWhenNothingSelected ("Start from a template...");
     fillTemplates();
@@ -1505,19 +1508,22 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
     {
         juce::CallOutBox::launchAsynchronously (std::make_unique<SuitePanel> (&processor), suiteButton.getScreenBounds(), nullptr);
     };
-    addAndMakeVisible (suiteButton);
     directorButton.setTooltip ("The director: one plan for every transition in the song, every plugin's part in it");
     directorButton.onClick = [this]
     {
         juce::CallOutBox::launchAsynchronously (std::make_unique<ouro::DirectorPanel> (processor), directorButton.getScreenBounds(), nullptr);
     };
-    addAndMakeVisible (directorButton);
     labelButton.setTooltip ("Label-ready: is this a track a label signs? Every check against the label's references, the gate, milestones");
     labelButton.onClick = [this]
     {
         juce::CallOutBox::launchAsynchronously (std::make_unique<lab::LabelReadyPanel> (processor), labelButton.getScreenBounds(), nullptr);
     };
-    addAndMakeVisible (labelButton);
+    makePrimary (labelButton, accent);
+    header.addRight (broadcast, 170);
+    header.addRight (suiteButton, 100);
+    header.addRight (directorButton, 100);
+    header.addRight (labelButton, 120);
+    header.enableAdvanced (processor.apvts.state, [this] (bool) { resized(); repaint(); });
     arrangeButton.setTooltip ("Generate a song map from a length and a few choices");
     applyButton.onClick = [this]
     {
@@ -1533,7 +1539,7 @@ OuroborosEditor::OuroborosEditor (OuroborosProcessor& p)
         addAndMakeVisible (c);
 
     for (auto* c : std::initializer_list<juce::Component*> { &templateBox, &lengthSlider, &lengthCaption, &nowLabel, &nextLabel,
-                                                             &selectionLabel, &legend, &broadcast, &snap, &lift, &finalSnap, &dropGap, &timeline, &deleteButton })
+                                                             &selectionLabel, &legend, &snap, &lift, &finalSnap, &dropGap, &timeline, &deleteButton })
         addAndMakeVisible (c);
 
     setSize (1060, 640);
@@ -1724,12 +1730,16 @@ void OuroborosEditor::timerCallback()
     }
     refreshSelection();
     timeline.repaint();
+    {
+        const auto lr = suite::LabelReadyBus::overallLine();
+        header.setStatus (lr.isNotEmpty() ? lr : nowLabel.getText().isNotEmpty() ? nowLabel.getText() : juce::String ("No map yet"),
+                          lr.isNotEmpty() ? accent : index >= 0 ? sectionColour (m.sections[(size_t) index].type) : Colours::faintText);
+    }
 }
 
 void OuroborosEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "OUROBOROS", "arrangement conductor", accent);
     drawPanel (g, nowArea, "Now playing");
     drawPanel (g, songArea, "Song map  (drag edges or the energy line, double-click to split, right-click for options)", accent);
     drawPanel (g, performArea, "Perform", Colours::brass);
@@ -1740,23 +1750,28 @@ void OuroborosEditor::paint (juce::Graphics& g)
 void OuroborosEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
-    auto header = bounds.removeFromTop (48);
-    broadcast.setBounds (header.removeFromRight (190).reduced (4, 8));
-    header.removeFromRight (12);
-    saveSnapshotButton.setBounds (header.removeFromRight (80).reduced (2, 8));
-    for (int s = (int) slotButtons.size() - 1; s >= 0; --s)
-        slotButtons[(size_t) s].setBounds (header.removeFromRight (38).reduced (2, 8));
-    snapshotStatus.setBounds (header.removeFromRight (170).reduced (4, 8));
-    suiteButton.setBounds (header.removeFromRight (110).reduced (4, 8));
-    directorButton.setBounds (header.removeFromRight (110).reduced (4, 8));
-    labelButton.setBounds (header.removeFromRight (120).reduced (4, 8));
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &dropGap, &sessionButton, &versionsButton, &recipesButton, &referenceButton, &lift, &finalSnap, &snap, &entrance, &ride }, advanced);
 
     nowArea = bounds.removeFromTop (84);
     auto n = nowArea.reduced (14, 6).withTrimmedTop (14);
-    dropGap.setBounds (n.removeFromRight (190).withTrimmedTop (-10));
-    sessionButton.setBounds (n.removeFromRight (122).withSizeKeepingCentre (116, 30));
-    versionsButton.setBounds (n.removeFromRight (132).withSizeKeepingCentre (126, 30));
-    recipesButton.setBounds (n.removeFromRight (106).withSizeKeepingCentre (100, 30));
+    {
+        // the suite snapshots: A-D and Save
+        auto snaps = n.removeFromRight (4 * 38 + 80).withSizeKeepingCentre (4 * 38 + 80, 30);
+        saveSnapshotButton.setBounds (snaps.removeFromRight (80).reduced (2, 0));
+        for (int s = (int) slotButtons.size() - 1; s >= 0; --s)
+            slotButtons[(size_t) s].setBounds (snaps.removeFromRight (38).reduced (2, 0));
+        snapshotStatus.setBounds (n.removeFromRight (170).withSizeKeepingCentre (170, 30));
+    }
+    if (advanced)
+    {
+        dropGap.setBounds (n.removeFromRight (190).withTrimmedTop (-10));
+        sessionButton.setBounds (n.removeFromRight (122).withSizeKeepingCentre (116, 30));
+        versionsButton.setBounds (n.removeFromRight (132).withSizeKeepingCentre (126, 30));
+        recipesButton.setBounds (n.removeFromRight (106).withSizeKeepingCentre (100, 30));
+    }
     nowLabel.setBounds (n.removeFromLeft (n.getWidth() / 2));
     nextLabel.setBounds (n);
     bounds.removeFromTop (10);
@@ -1769,7 +1784,7 @@ void OuroborosEditor::resized()
     lengthSlider.setBounds (bar.removeFromRight (120).reduced (0, 2));
     lengthCaption.setBounds (bar.removeFromRight (50));
     bar.removeFromLeft (12);
-    referenceButton.setBounds (bar.removeFromLeft (100).reduced (4, 2));
+    if (advanced) referenceButton.setBounds (bar.removeFromLeft (100).reduced (4, 2));
     listenButton.setBounds (bar.removeFromLeft (80).reduced (0, 2));
     proposeButton.setBounds (bar.removeFromLeft (110).reduced (4, 2));
     statusWide = bar.reduced (6, 0);
@@ -1788,13 +1803,14 @@ void OuroborosEditor::resized()
     selectArea = bottom;
 
     auto ma = markArea.reduced (12, 6).withTrimmedTop (16);
+    if (advanced)
     {
         auto column = ma.removeFromRight (150);
         lift.setBounds (column.removeFromTop (column.getHeight() / 2));
         finalSnap.setBounds (column);
+        auto snapCell = ma.removeFromRight (110);
+        snap.setBounds (snapCell);
     }
-    auto snapCell = ma.removeFromRight (110);
-    snap.setBounds (snapCell);
     const auto bw = ma.getWidth() / 3;
     for (int t = 0; t < numTypes; ++t)
     {
@@ -1818,8 +1834,11 @@ void OuroborosEditor::resized()
         intensity.setBounds (pa.removeFromLeft (180));
         intensity.slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 16);
         intensity.maxHeight = 52;
-        entrance.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
-        ride.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
+        if (advanced)
+        {
+            entrance.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
+            ride.setBounds (pa.removeFromLeft (170).withTrimmedTop (-10));
+        }
         live.setBounds (pa.removeFromLeft (150).withSizeKeepingCentre (140, 30));
         liveHelp.setBounds (pa.reduced (10, 0));
     }
@@ -1882,4 +1901,29 @@ void OuroborosEditor::exportMarkers()
         processor.addNote (processor.exportMarkers (f) ? "Exported section markers to " + f.withFileExtension ("mid").getFileName() + " (and a .txt cue sheet)"
                                                        : juce::String ("Couldn't export the markers"));
     });
+}
+
+std::vector<suite::ui::Action> OuroborosEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Label-ready", "every check against the label's references, the gate, milestones, the mix fixes", "Label", [this] { labelButton.triggerClick(); } });
+    a.push_back ({ "The director", "one plan for every transition", "Director", [this] { directorButton.triggerClick(); } });
+    a.push_back ({ "Suite overview", "every suite plugin loaded and what still needs setting up", "Suite", [this] { suiteButton.triggerClick(); } });
+    a.push_back ({ "Arrange...", "generate a song map", "Map", [this] { showArrange(); } });
+    a.push_back ({ processor.listening.load() ? "Stop listening" : "Listen", "detect the song's sections while it plays", "Map", [this] { listenButton.triggerClick(); } });
+    a.push_back ({ "Propose a map", "from what Listen heard", "Map", [this] { proposeButton.triggerClick(); }, proposeButton.isEnabled() });
+    a.push_back ({ "Copy a reference's structure...", "", "Map", [this] { chooseReference(); } });
+    a.push_back ({ "New song...", "a style and a key set up the whole suite", "Song", [this] { sessionButton.triggerClick(); } });
+    a.push_back ({ "Recipes...", "save or load the whole suite's settings", "Song", [this] { recipesButton.triggerClick(); } });
+    for (int s = 0; s < (int) slotButtons.size(); ++s)
+        a.push_back ({ "Recall snapshot " + suite::SuiteProcessor::slotName (s), "every suite plugin's settings", "Snapshots",
+                       [this, s] { currentSlot = s; snapshotCommand (suite::SnapshotAction::Recall, s); refreshSnapshots(); }, processor.hasSnapshot (s) });
+    a.push_back ({ "Save snapshot " + suite::SuiteProcessor::slotName (currentSlot), "the chosen slot", "Snapshots", [this] { saveSnapshotButton.triggerClick(); } });
+    for (int t = 0; t < (int) markButtons.size(); ++t)
+        a.push_back ({ "Mark " + markButtons[(size_t) t]->getButtonText().toLowerCase() + " at the playhead", "", "Mark", [this, t] { markButtons[(size_t) t]->triggerClick(); } });
+    for (int i = 0; i < templateBox.getNumItems(); ++i)
+        if (const auto id = templateBox.getItemId (i); id > 0)
+            a.push_back ({ templateBox.getItemText (i).upToFirstOccurrenceOf ("...", false, false), "", id < 900 ? "Templates" : "Tools",
+                           [this, id] { templateBox.setSelectedId (id); }, templateBox.isItemEnabled (id) });
+    return a;
 }

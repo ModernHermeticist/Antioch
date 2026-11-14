@@ -84,6 +84,8 @@ private:
 
     MentalismProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
 
     suite::ui::Choice loudTarget, tonalTarget;
     juce::TextButton resetButton { "Reset" }, loadButton { "Load reference..." }, roughMixButton { "Rough mix" }, roughUndoButton { "Undo" }, historyButton { "History" }, likeMeButton { "Like me?" }, checklistButton { "Export checklist" },

@@ -159,6 +159,7 @@ void DuckView::paint (juce::Graphics& g)
 //==============================================================================
 KybalionEditor::KybalionEditor (KybalionProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("KYBALION", juce::String::fromUTF8 ("rhythm \xc2\xb7 polarity \xc2\xb7 trance bus"), gateColour),
       gateOn (p.apvts, Params::gateOn, "RHYTHM ON", gateColour),
       duckOn (p.apvts, Params::duckOn, "POLARITY ON", duckColour),
       followSections (p.apvts, Params::follow, "Follow Ouroboros", Colours::ember),
@@ -194,6 +195,10 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
       flip (p.apvts, Params::Duck::flip, "Flip polarity", Colours::ember)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (followSections, 170);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
 
     patternBox.setTextWhenNothingSelected ("Gate pattern...");
     fillPatterns();
@@ -259,7 +264,7 @@ KybalionEditor::KybalionEditor (KybalionProcessor& p)
 
     sectionStatus.setFont (juce::FontOptions (12.0f));
     sectionStatus.setJustificationType (juce::Justification::centredLeft);
-    for (auto* c : std::initializer_list<juce::Component*> { &gateOn, &duckOn, &followSections, &sectionStatus, &output, &bpmLabel,
+    for (auto* c : std::initializer_list<juce::Component*> { &gateOn, &duckOn, &sectionStatus, &output,
                                                              &tabs, &gatePanel, &duckPanel })
         addAndMakeVisible (c);
 
@@ -286,7 +291,12 @@ KybalionEditor::~KybalionEditor()
 
 void KybalionEditor::timerCallback()
 {
-    bpmLabel.setText (juce::String (processor.currentBpm.load(), 1) + " BPM", juce::dontSendNotification);
+    {
+        const auto sec = processor.currentSection.load();
+        const auto on = processor.apvts.getRawParameterValue (Params::gateOn)->load() > 0.5f || processor.apvts.getRawParameterValue (Params::duckOn)->load() > 0.5f;
+        header.setStatus (juce::String (processor.currentBpm.load(), 1) + " BPM" + (sec >= 0 ? juce::String::fromUTF8 (" \xc2\xb7 ") + suite::sectionName ((suite::SectionType) sec) : juce::String()),
+                          on ? Colours::moss : Colours::faintText);
+    }
     grid.refresh();
     duckView.repaint();
     suite::ui::updateSceneGhosts (*this, processor.scenes);
@@ -352,7 +362,6 @@ void KybalionEditor::timerCallback()
 void KybalionEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "KYBALION", juce::String::fromUTF8 ("rhythm \xc2\xb7 polarity \xc2\xb7 trance bus"), gateColour);
     drawPanel (g, masterArea, "Master");
 
     const auto drawSection = [&] (juce::Component& panel, std::initializer_list<std::pair<juce::Rectangle<int>, juce::String>> areas,
@@ -416,10 +425,11 @@ void KybalionEditor::resized()
 {
     directorStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    auto header = bounds.removeFromTop (40);
-    bpmLabel.setBounds (header.removeFromRight (100));
-
-    bounds.removeFromTop (8);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &length, &attack, &release, &stereo, &panSteps, &filter, &res, &fillStyle, &chordFollow,
+                &duckRate, &nudge, &duckAttack, &hold, &curve, &split, &threshold }, advanced);
     masterArea = bounds.removeFromTop (70);
     auto m = masterArea.reduced (14, 8).withTrimmedTop (10);
     gateOn.setBounds (m.removeFromLeft (150).withSizeKeepingCentre (140, 30));
@@ -448,7 +458,8 @@ void KybalionEditor::resized()
         grid.setBounds (top);
 
         auto shape = gatePanel.getLocalBounds().withTrimmedTop (310).reduced (10, 6).withTrimmedTop (12);
-        layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &panSteps, &filter, &res, &fills, &fillStyle, &chordFollow });
+        if (advanced) layoutRow (shape, { &gateRate, &length, &attack, &release, &depth, &swing, &stereo, &panSteps, &filter, &res, &fills, &fillStyle, &chordFollow });
+        else          layoutRow (shape.withSizeKeepingCentre (juce::jmin (shape.getWidth(), 600), shape.getHeight()), { &gateRate, &depth, &swing, &fills });
     }
 
     // ---- Polarity ----
@@ -465,6 +476,32 @@ void KybalionEditor::resized()
         duckView.setBounds (top);
 
         auto shape = duckPanel.getLocalBounds().withTrimmedTop (260).reduced (10, 6).withTrimmedTop (12);
-        layoutRow (shape, { &source, &duckRate, &nudge, &duckDepth, &duckAttack, &hold, &duckRelease, &curve, &split, &threshold });
+        if (advanced) layoutRow (shape, { &source, &duckRate, &nudge, &duckDepth, &duckAttack, &hold, &duckRelease, &curve, &split, &threshold });
+        else          layoutRow (shape.withSizeKeepingCentre (juce::jmin (shape.getWidth(), 480), shape.getHeight()), { &source, &duckDepth, &duckRelease });
     }
+}
+
+std::vector<suite::ui::Action> KybalionEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    auto flipToggle = [] (juce::Button& b) { b.setToggleState (! b.getToggleState(), juce::sendNotification); };
+    a.push_back ({ gateOn.getToggleState() ? "Turn the rhythm gate off" : "Turn the rhythm gate on", "the trance gate", "Rhythm", [this, flipToggle] { flipToggle (gateOn); } });
+    a.push_back ({ duckOn.getToggleState() ? "Turn the ducking off" : "Turn the ducking on", "polarity: sidechain-style ducking", "Polarity", [this, flipToggle] { flipToggle (duckOn); } });
+    a.push_back ({ "Randomise the gate", "a new gate pattern", "Rhythm", [this] { tabs.setSelected (0); randomButton.triggerClick(); } });
+    for (size_t i = 0; i < Params::Gate::patterns().size(); ++i)
+        a.push_back ({ "Gate pattern: " + juce::String (Params::Gate::patterns()[i].name), "", "Rhythm",
+                       [this, i] { tabs.setSelected (0); patternBox.setSelectedId ((int) i + 1); } });
+    a.push_back ({ "Gate from the song's chords", "Correspondence's pattern library", "Rhythm", [this] { patternBox.setSelectedId (990); } });
+    a.push_back ({ "Save this gate pattern", "", "Rhythm", [this] { patternBox.setSelectedId (999); } });
+    a.push_back ({ "Fit to kick", "hold and release from the kick on the sidechain", "Polarity", [this] { tabs.setSelected (1); fitButton.triggerClick(); }, fitButton.isEnabled() });
+    a.push_back ({ shareKick.getToggleState() ? "Stop sharing the kick" : "Share this track's kick", "every Kybalion on 'Suite kick' ducks to it", "Polarity",
+                   [this, flipToggle] { flipToggle (shareKick); } });
+    a.push_back ({ flip.getToggleState() ? "Flip polarity back" : "Flip polarity", "when the low end cancels with the kick", "Polarity", [this, flipToggle] { flipToggle (flip); } });
+    for (size_t i = 0; i < Params::Duck::presets().size(); ++i)
+        a.push_back ({ "Ducking preset: " + juce::String (Params::Duck::presets()[i].name), "", "Polarity",
+                       [this, i] { tabs.setSelected (1); presetBox.setSelectedId ((int) i + 1); } });
+    a.push_back ({ "Show the rhythm", "", "View", [this] { tabs.setSelected (0); } });
+    a.push_back ({ "Show the ducking", "", "View", [this] { tabs.setSelected (1); } });
+    a.push_back ({ "Show the section scenes", "", "View", [this] { tabs.setSelected (2); } });
+    return a;
 }

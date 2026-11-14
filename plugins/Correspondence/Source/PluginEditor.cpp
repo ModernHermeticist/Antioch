@@ -240,6 +240,8 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
       melodyStyle (p.apvts, Params::melodyStyle, "Melody")
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.actions = [this] { return actions(); };
     for (const auto& name : Params::layerNames())
     {
         layerTiles.push_back (std::make_unique<DragTile> (p, "Song " + name, name == "Piano" || name == "Strings" || name == "Brass" || name == "Choir" || name == "Timpani"
@@ -399,12 +401,13 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
                                                              &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile,
                                                              &arpTile, &songChordTile, &songBassTile, &songArpTile,
                                                              &melodyTile, &songLeadTile, &melodyStyle, &newMelodyButton,
-                                                             &playButton, &saveButton, &songButton, &colourButton, &varyButton, &writeButton })
+                                                             &playButton, &saveButton, &songButton, &colourButton, &varyButton })
         addAndMakeVisible (c);
     writeButton.setTooltip ("Write: lock bars and regenerate the rest, step through takes and keep the best bars, hear a part in context, "
                             "the hook doctor, hum a hook, a topline from lyrics, the originality check, the emotional arc, trance harmony moves, "
                             "a reference's feel, the shared rhythm, and why it works");
     writeButton.onClick = [this] { showWriteMenu(); };
+    makePrimary (writeButton, accent);
 
     // Two pages: Chords and Song
     songGrid = makeSongGrid (processor.apvts, [this] (juce::Component& c) { showStrongerHooks (c); }, [this] (juce::Component& c, int goal) { showLabelOptions (c, goal); });
@@ -414,8 +417,11 @@ CorrespondenceEditor::CorrespondenceEditor (CorrespondenceProcessor& p)
     {
         b->setClickingTogglesState (false);
         b->setColour (juce::TextButton::buttonOnColourId, accent.withAlpha (0.35f));
-        addAndMakeVisible (*b);
     }
+    header.addRight (songTab, 90);
+    header.addRight (chordsTab, 100);
+    header.addRight (writeButton, 110);
+    header.enableAdvanced (processor.apvts.state, [this] (bool) { resized(); repaint(); });
     chordsTab.setTooltip ("Key, progression, voicing and rhythm, and the loop clips");
     songTab.setTooltip ("The whole song: patterns per section, the pattern library (mood, style, kit, layers) and every song clip to drag into FL");
     chordsTab.onClick = [this] { showPage (0); };
@@ -956,7 +962,7 @@ std::vector<juce::Component*> CorrespondenceEditor::chordsPageParts()
 {
     std::vector<juce::Component*> v { &roll, &voicing, &chordPattern, &bassPattern, &arpPattern, &voiceLead, &addBass, &registerOct,
                                       &bassOctave, &arpOctaves, &previewVolume, &humanise, &chordTile, &bassTile, &arpTile, &melodyTile,
-                                      &melodyStyle, &newMelodyButton, &playButton, &saveButton, &songButton, &colourButton, &varyButton, &writeButton };
+                                      &melodyStyle, &newMelodyButton, &playButton, &saveButton, &songButton, &colourButton, &varyButton };
     for (auto& s : slots) v.push_back (s.get());
     return v;
 }
@@ -1070,6 +1076,8 @@ void CorrespondenceEditor::timerCallback()
     broadcastStatus.setText (broadcasting ? juce::String (processor.adoptedDetectedKey.load() ? "Detected key. " : "") + "Suite follows " + suite::music::keyName (settings.root, settings.scale)
                                           : "Not broadcasting: other plugins use their own key",
                              juce::dontSendNotification);
+    header.setStatus (broadcasting ? "Suite follows " + suite::music::keyName (settings.root, settings.scale) : juce::String ("Not broadcasting the key"),
+                      broadcasting ? Colours::moss : Colours::faintText);
 }
 
 bool CorrespondenceEditor::isInterestedInFileDrag (const juce::StringArray& files)
@@ -1112,13 +1120,9 @@ void CorrespondenceEditor::fillPresets()
 void CorrespondenceEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "CORRESPONDENCE", "key & chord engine", accent);
     if (page == 0) drawPanel (g, keyArea, "Key");
     if (page == 1)
     {
-        g.setColour (accent);
-        g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-        g.drawText ("Key: " + broadcastStatus.getText().fromFirstOccurrenceOf ("follows ", false, false), getWidth() / 2 - 150, 14, 300, 30, juce::Justification::centred);
         drawPanel (g, songGridArea, "Song patterns  (each section of the Ouroboros map; the pattern library's mood, style, kit and layers)", accent);
         drawPanel (g, songTilesArea, "Drag into FL  (the whole song, following the map)", Colours::amethyst);
     }
@@ -1147,14 +1151,12 @@ void CorrespondenceEditor::resized()
 {
     processor.apvts.state.setProperty ("uiWidth", getWidth(), nullptr);
     processor.apvts.state.setProperty ("uiHeight", getHeight(), nullptr);
-    {
-        auto tabs = juce::Rectangle<int> (getWidth() - 16 - 260, 14, 260, 30);
-        chordsTab.setBounds (tabs.removeFromLeft (130).reduced (3, 0));
-        songTab.setBounds (tabs.reduced (3, 0));
-        directorStrip.setBounds (getWidth() - 16 - 260 - 12 - 440, 16, 440, suite::ui::AutopilotStrip::height);   // the director's cue, in the header
-    }
-    auto bounds = getLocalBounds().reduced (16);
-    bounds.removeFromTop (48);
+    directorStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
+    auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    if (page == 0) setShown ({ &registerOct, &voiceLead, &addBass, &bassOctave, &arpOctaves, &humanise, &previewVolume }, advanced);
 
     // The key row on the Chords page; the Song page gives its room to the section patterns
     for (auto* c : std::initializer_list<juce::Component*> { &root, &scale, &perChord, &count, &broadcast, &acceptDetected, &broadcastStatus, &presetCaption, &presetBox })
@@ -1212,27 +1214,36 @@ void CorrespondenceEditor::resized()
 
     auto v = inner (voicingArea);
     auto vTop = v.removeFromTop (v.getHeight() / 2);
-    layoutRow (vTop, { &voicing, &registerOct, &melodyStyle });
     const auto third = v.getWidth() / 3;
-    voiceLead.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
-    addBass.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
-    newMelodyButton.setBounds (v.withSizeKeepingCentre (third - 6, 28));
+    if (advanced)
+    {
+        layoutRow (vTop, { &voicing, &registerOct, &melodyStyle });
+        voiceLead.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
+        addBass.setBounds (v.removeFromLeft (third).withSizeKeepingCentre (third - 6, 28));
+        newMelodyButton.setBounds (v.withSizeKeepingCentre (third - 6, 28));
+    }
+    else
+    {
+        layoutRow (vTop, { &voicing, &melodyStyle });
+        newMelodyButton.setBounds (v.withSizeKeepingCentre (juce::jmin (v.getWidth() - 12, 200), 30));
+    }
 
     auto pa = inner (patternArea);
-    auto paTop = pa.removeFromTop (pa.getHeight() / 2);
+    auto paTop = advanced ? pa.removeFromTop (pa.getHeight() / 2) : pa.withSizeKeepingCentre (pa.getWidth(), juce::jmin (pa.getHeight(), 80));
     layoutRow (paTop, { &chordPattern, &bassPattern, &arpPattern });
+    if (advanced) {
     layoutRow (pa, { &bassOctave, &arpOctaves, &humanise, &previewVolume });
     for (auto* knob : { &bassOctave, &arpOctaves, &humanise, &previewVolume })
         knob->setBounds (knob->getBounds().withSizeKeepingCentre (knob->getWidth(), knob->getHeight() + 10));
+    }
 
     auto ex = inner (exportArea);
     auto buttons = ex.removeFromBottom (34);
     placeTiles (ex.withTrimmedBottom (6), { &chordTile, &bassTile, &arpTile, &melodyTile });
-    const auto bw = buttons.getWidth() / 6;
+    const auto bw = buttons.getWidth() / 5;
     playButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     colourButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     varyButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
-    writeButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     saveButton.setBounds (buttons.removeFromLeft (bw).reduced (3, 0));
     songButton.setBounds (buttons.reduced (3, 0));
 }
@@ -1470,4 +1481,23 @@ void CorrespondenceEditor::showToplineDialog()
             });
         });
     }), true);
+}
+
+std::vector<suite::ui::Action> CorrespondenceEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Write...", "locks and takes, hear it in context, the hook doctor, hum a hook, topline from lyrics, originality, the arc, harmony moves, feel",
+                   "Write", [this] { showWriteMenu(); } });
+    a.push_back ({ "Chords page", "key, progression, voicing and rhythm, the loop clips", "View", [this] { showPage (0); } });
+    a.push_back ({ "Song page", "patterns per section and every song clip", "View", [this] { showPage (1); } });
+    a.push_back ({ playing ? "Stop" : "Play the progression", "", "Listen", [this] { playButton.triggerClick(); } });
+    a.push_back ({ "Colour...", "re-harmonise and add colour to the chords", "Chords", [this] { colourButton.triggerClick(); } });
+    a.push_back ({ "Vary...", "variations of the progression and the melody", "Chords", [this] { varyButton.triggerClick(); } });
+    a.push_back ({ "New melody", "", "Melody", [this] { newMelodyButton.triggerClick(); }, newMelodyButton.isEnabled() });
+    a.push_back ({ "Export all...", "every clip, the markers and a song pack", "Export", [this] { saveButton.triggerClick(); } });
+    a.push_back ({ "Song patterns...", "", "Song", [this] { songButton.triggerClick(); } });
+    for (int i = 0; i < presetBox.getNumItems(); ++i)
+        if (const auto id = presetBox.getItemId (i); id > 0)
+            a.push_back ({ presetBox.getItemText (i), "", "Presets", [this, id] { presetBox.setSelectedId (id); } });
+    return a;
 }

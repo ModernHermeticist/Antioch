@@ -10,6 +10,7 @@ namespace
 
 SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("SOLVE ET COAGULA", "vocal unmasking", accent),
       depth (p.apvts, P::depthId, "Depth", Colours::ember),
       sensitivity (p.apvts, P::sensitivityId, "Sensitivity", accent),
       focus (p.apvts, P::focusId, "Focus", accent),
@@ -23,6 +24,11 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
       chopsLevel (p.apvts, P::chopsLevelId, "Level", Colours::ember)
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (saveMidi, 150);
+    header.addRight (checkVocal, 180);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool) { resized(); repaint(); });
     status.setFont (juce::FontOptions (13.0f));
     status.setJustificationType (juce::Justification::centredLeft);
     for (auto* c : std::initializer_list<juce::Component*> { &depth, &sensitivity, &focus, &speed, &mix, &status,
@@ -40,10 +46,8 @@ SolveEtCoagulaEditor::SolveEtCoagulaEditor (SolveEtCoagulaProcessor& p)
         const auto result = processor.saveVocalMidi (SolveEtCoagulaProcessor::vocalMidiFolder());
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Vocal MIDI", result);
     };
-    addAndMakeVisible (saveMidi);
     checkVocal.setTooltip ("Lists the vocal's notes that sit more than 25 cents off the key or 30 ms off the grid (a check: nothing is moved)");
     checkVocal.onClick = [this] { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::NoIcon, "Vocal tuning and timing", processor.checkVocal()); };
-    addAndMakeVisible (checkVocal);
     chopsStatus.setFont (juce::FontOptions (12.0f));
     chopsStatus.setJustificationType (juce::Justification::centredLeft);
     chopsStatus.setColour (juce::Label::textColourId, Colours::dimText);
@@ -77,6 +81,9 @@ void SolveEtCoagulaEditor::timerCallback()
         text = "Sidechain connected; waiting for the vocal.";
     status.setColour (juce::Label::textColourId, processor.sidechainConnected.load() ? Colours::text : Colours::dimText);
     status.setText (text, juce::dontSendNotification);
+    header.setStatus (! processor.sidechainConnected.load() ? "No vocal on the sidechain"
+                      : processor.vocalPresent.load() ? "Vocal present: unmasking" : "Waiting for the vocal",
+                      ! processor.sidechainConnected.load() ? Colours::ember : processor.vocalPresent.load() ? Colours::moss : Colours::faintText);
     chopsStatus.setText (processor.chopsPlaying.load() ? "Chopping the vocal's last bar."
                          : processor.chopsReady.load() ? "A bar of vocal is ready to chop."
                                                        : "Listens to the sidechain vocal outside the chop sections and keeps its last whole bar.",
@@ -90,7 +97,6 @@ void SolveEtCoagulaEditor::timerCallback()
 void SolveEtCoagulaEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 760, 32 }, "SOLVE ET COAGULA", "vocal unmasking", accent);
     drawPanel (g, controlArea, "Controls", accent);
     drawPanel (g, chopsArea, "Vocal chops (on top of the music)", Colours::ember);
     if (viewTabs.getSelected() == 1)
@@ -139,7 +145,10 @@ void SolveEtCoagulaEditor::paint (juce::Graphics& g)
 void SolveEtCoagulaEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
-    bounds.removeFromTop (48);
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (10);
+    const auto advanced = header.advanced();
+    setShown ({ &sensitivity, &focus, &speed, &chopsWhere, &chopsPattern, &chopsOctave }, advanced);
     viewTabs.setBounds (bounds.removeFromTop (30).removeFromRight (300).withTrimmedBottom (4));
     bandArea = bounds.removeFromTop (300);
     scenePanel->setBounds (bandArea);
@@ -149,19 +158,30 @@ void SolveEtCoagulaEditor::resized()
     controlArea = bounds;
 
     auto ch = chopsArea.reduced (12, 8).withTrimmedTop (14);
-    {
-        auto bottom = ch.removeFromBottom (24);
-        saveMidi.setBounds (bottom.removeFromRight (150));
-        checkVocal.setBounds (bottom.removeFromRight (170).reduced (4, 0));
-        chopsStatus.setBounds (bottom);
-    }
-    chopsOn.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (130, 30));
-    chopsWhere.setBounds (ch.removeFromLeft (170));
-    chopsPattern.setBounds (ch.removeFromLeft (150));
+    chopsStatus.setBounds (ch.removeFromBottom (24));
+    chopsOn.setBounds (ch.removeFromLeft (150).withSizeKeepingCentre (140, 32));
     chopsLevel.setBounds (ch.removeFromLeft (110));
-    chopsOctave.setBounds (ch.removeFromLeft (140).withSizeKeepingCentre (120, 30));
+    if (advanced)
+    {
+        chopsWhere.setBounds (ch.removeFromLeft (170));
+        chopsPattern.setBounds (ch.removeFromLeft (150));
+        chopsOctave.setBounds (ch.removeFromLeft (150).withSizeKeepingCentre (130, 32));
+    }
 
     auto c = controlArea.reduced (12, 8).withTrimmedTop (14);
     status.setBounds (c.removeFromBottom (36));
-    layoutRow (c, { &depth, &sensitivity, &focus, &speed, &mix });
+    if (advanced) layoutRow (c, { &depth, &sensitivity, &focus, &speed, &mix });
+    else          layoutRow (c.withSizeKeepingCentre (juce::jmin (c.getWidth(), 360), c.getHeight()), { &depth, &mix });
+}
+
+std::vector<suite::ui::Action> SolveEtCoagulaEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    a.push_back ({ "Save vocal MIDI", "what the vocal sang, on the grid and in key, plus a harmony a third above", "Vocal", [this] { saveMidi.triggerClick(); } });
+    a.push_back ({ "Check tuning & timing", "lists notes off the key or off the grid (nothing is moved)", "Vocal", [this] { checkVocal.triggerClick(); } });
+    a.push_back ({ chopsOn.getToggleState() ? "Turn vocal chops off" : "Turn vocal chops on", "chops of the vocal's last bar, on top of the music", "Chops",
+                   [this] { chopsOn.setToggleState (! chopsOn.getToggleState(), juce::sendNotification); } });
+    a.push_back ({ "Show the bands", "vocal level up, music cut down", "View", [this] { viewTabs.setSelected (0); } });
+    a.push_back ({ "Show the section scenes", "per-section offsets for the knobs", "View", [this] { viewTabs.setSelected (1); } });
+    return a;
 }

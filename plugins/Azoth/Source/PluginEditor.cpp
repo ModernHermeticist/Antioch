@@ -6,6 +6,7 @@ namespace { const juce::Colour accent { 0xffd6c06a }; }
 
 AzothEditor::AzothEditor (AzothProcessor& p)
     : AudioProcessorEditor (p), processor (p),
+      header ("AZOTH", "automatic transition FX", accent),
       impact (p.apvts, AzothProcessor::impactId, "Impact", sectionColour (suite::SectionType::Drop)),
       crash (p.apvts, AzothProcessor::crashId, "Crash", sectionColour (suite::SectionType::Drop)),
       swell (p.apvts, AzothProcessor::swellId, "Swell into drop", sectionColour (suite::SectionType::Build)),
@@ -41,6 +42,11 @@ AzothEditor::AzothEditor (AzothProcessor& p)
       rollVel (p.apvts, AzothProcessor::rollVelId, "Roll start vel.", sectionColour (suite::SectionType::Build))
 {
     setLookAndFeel (&lnf);
+    addAndMakeVisible (header);
+    header.addRight (follow, 170);
+    header.addRight (samplesButton, 190);
+    header.actions = [this] { return actions(); };
+    header.enableAdvanced (p.apvts.state, [this] (bool on) { setSize (getWidth(), heightFor (on)); resized(); repaint(); });
     const char* names[] = { "Impact", "Crash", "Downlifter", "Snare" };
     const int auditionFlags[] = { AzothProcessor::aImpact, AzothProcessor::aCrash, AzothProcessor::aDown, AzothProcessor::aSnare };
     for (int i = 0; i < 4; ++i)
@@ -52,10 +58,10 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     status.setFont (juce::FontOptions (13.0f));
     next.setFont (juce::FontOptions (20.0f, juce::Font::bold));
     for (auto* c : std::initializer_list<juce::Component*> { &impact, &crash, &swell, &down, &roll, &level, &tone, &rollPitch, &laterDrops,
-                                                             &swellLen, &rollStart, &gap, &follow, &grooveCrash, &status, &next,
+                                                             &swellLen, &rollStart, &gap, &grooveCrash, &status, &next,
                                                              &reverseOn, &reverseLevel, &reverseTarget, &reverseLength, &reverseNote,
                                                              &riser, &trackRiser, &riserRange, &riserNote,
-                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesButton, &samplesNote, &preLift,
+                                                             &dropFx, &dropFxLen, &buildShape, &buildFilter, &samplesNote, &preLift,
                                                              &riserChords, &rollPitchSpeed, &impactTune, &rollFrom, &rollTo, &rollCurve, &rollVel })
         addAndMakeVisible (c);
     reverseNote.setFont (juce::FontOptions (12.0f));
@@ -72,7 +78,7 @@ AzothEditor::AzothEditor (AzothProcessor& p)
     samplesNote.setJustificationType (juce::Justification::centredLeft);
     samplesButton.onClick = [this] { showSamplesMenu(); };
     updateSamplesNote();
-    setSize (980, 1014);
+    setSize (980, heightFor (header.advanced()));
     directorStrip.director = [] { return suite::DirectorBus::cue (suite::director::pAzoth); };
     addAndMakeVisible (directorStrip);
     timerCallback();
@@ -165,6 +171,8 @@ void AzothEditor::timerCallback()
     else if (type >= 0)                                    what = juce::String (suite::sectionName ((suite::SectionType) type)) + " (no FX)";
     next.setColour (juce::Label::textColourId, type >= 0 ? sectionColour ((suite::SectionType) type) : Colours::dimText);
     next.setText (type >= 0 ? "Next: " + what + " in " + juce::String (bars, 1) + " bars" : juce::String ("Waiting for playback"), juce::dontSendNotification);
+    header.setStatus (type >= 0 ? "Next: " + what + " in " + juce::String (bars, 1) + " bars" : juce::String (processor.mapAvailable.load() ? "Waiting for playback" : "No Ouroboros map"),
+                      type >= 0 ? sectionColour ((suite::SectionType) type) : Colours::faintText);
     status.setText (processor.mapAvailable.load() ? "Following the Ouroboros map. FX fired: " + juce::String (processor.eventsFired.load())
                                                   : "No Ouroboros map: load Ouroboros to place transitions automatically (audition buttons still work).",
                     juce::dontSendNotification);
@@ -173,21 +181,23 @@ void AzothEditor::timerCallback()
 void AzothEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours::background);
-    drawHeader (g, { 20, 12, 700, 32 }, "AZOTH", "automatic transition FX", accent);
     drawPanel (g, elementArea, "Transitions");
     drawPanel (g, shapeArea, "Shape", accent);
-    drawPanel (g, riserArea, "Build: risers and snare roll", sectionColour (suite::SectionType::Build));
+    drawPanel (g, riserArea, header.advanced() ? "Build: risers and snare roll" : "Build: risers", sectionColour (suite::SectionType::Build));
     drawPanel (g, reverseArea, "Reverse swells from this track", Colours::amethyst);
-    drawPanel (g, entranceArea, "Into the drop, build shape and your samples", sectionColour (suite::SectionType::Drop));
+    if (header.advanced())
+        drawPanel (g, entranceArea, "Into the drop, build shape and your samples", sectionColour (suite::SectionType::Drop));
 }
 
 void AzothEditor::resized()
 {
     directorStrip.setBounds (getLocalBounds().removeFromBottom (suite::ui::AutopilotStrip::height + 8).reduced (16, 4));
     auto bounds = getLocalBounds().withTrimmedBottom (suite::ui::AutopilotStrip::height + 4).reduced (16);
-    auto header = bounds.removeFromTop (48);
-    follow.setBounds (header.removeFromRight (180).reduced (4, 8));
-    impactTune.setBounds (header.removeFromRight (180).reduced (4, 8));
+    header.setBounds (bounds.removeFromTop (HeaderBar::height).withTrimmedTop (-8));
+    bounds.removeFromTop (8);
+    const auto advanced = header.advanced();
+    setShown ({ &swellLen, &rollStart, &rollPitch, &gap, &dropFx, &dropFxLen, &buildShape, &buildFilter, &preLift, &impactTune, &samplesNote,
+                &rollPitchSpeed, &rollFrom, &rollTo, &rollCurve, &rollVel, &reverseTarget, &reverseLength, &riserRange }, advanced);
     auto info = bounds.removeFromTop (54);
     next.setBounds (info.removeFromTop (30));
     status.setBounds (info);
@@ -198,8 +208,8 @@ void AzothEditor::resized()
     bounds.removeFromTop (12);
     riserArea = bounds.removeFromTop (130);
     bounds.removeFromTop (12);
-    entranceArea = bounds.removeFromTop (130);
-    bounds.removeFromTop (12);
+    entranceArea = advanced ? bounds.removeFromTop (130) : juce::Rectangle<int>();
+    if (advanced) bounds.removeFromTop (12);
     reverseArea = bounds;
 
     auto en = entranceArea.reduced (10, 6).withTrimmedTop (14);
@@ -209,14 +219,14 @@ void AzothEditor::resized()
     buildFilter.setBounds (en.removeFromLeft (110));
     {
         auto col = en.removeFromLeft (170);
-        samplesButton.setBounds (col.removeFromTop (col.getHeight() / 2).withSizeKeepingCentre (160, 30));
+        impactTune.setBounds (col.removeFromTop (col.getHeight() / 2).withSizeKeepingCentre (160, 30));
         preLift.setBounds (col.withSizeKeepingCentre (160, 30));
     }
     samplesNote.setBounds (en.reduced (8, 0));
 
     auto ri = riserArea.reduced (10, 6).withTrimmedTop (14);
     riser.setBounds (ri.removeFromLeft (120));
-    riserRange.setBounds (ri.removeFromLeft (160));
+    if (advanced) riserRange.setBounds (ri.removeFromLeft (160));
     trackRiser.setBounds (ri.removeFromLeft (120));
     {
         auto col = ri.removeFromLeft (170);
@@ -227,13 +237,17 @@ void AzothEditor::resized()
     rollTo.setBounds (ri.removeFromLeft (90));
     rollCurve.setBounds (ri.removeFromLeft (110));
     rollVel.setBounds (ri.removeFromLeft (100));
-    riserNote.setVisible (false);
+    riserNote.setVisible (! advanced);
+    if (! advanced) riserNote.setBounds (ri.reduced (12, 0));
 
     auto rv = reverseArea.reduced (10, 6).withTrimmedTop (14);
     reverseOn.setBounds (rv.removeFromLeft (170).withSizeKeepingCentre (160, 30));
     reverseLevel.setBounds (rv.removeFromLeft (120));
-    reverseTarget.setBounds (rv.removeFromLeft (170));
-    reverseLength.setBounds (rv.removeFromLeft (150));
+    if (advanced)
+    {
+        reverseTarget.setBounds (rv.removeFromLeft (170));
+        reverseLength.setBounds (rv.removeFromLeft (150));
+    }
     reverseNote.setBounds (rv.reduced (8, 0));
 
     auto e = elementArea.reduced (10, 6).withTrimmedTop (14);
@@ -248,5 +262,20 @@ void AzothEditor::resized()
     auto s = shapeArea.reduced (10, 6).withTrimmedTop (14);
     auto toggleCell = s.removeFromRight (170);
     grooveCrash.setBounds (toggleCell.withSizeKeepingCentre (160, 30));
-    layoutRow (s, { &level, &tone, &swellLen, &rollStart, &rollPitch, &gap, &laterDrops });
+    if (advanced) layoutRow (s, { &level, &tone, &swellLen, &rollStart, &rollPitch, &gap, &laterDrops });
+    else          layoutRow (s.removeFromLeft (s.getWidth() * 3 / 7), { &level, &tone, &laterDrops });
+}
+
+std::vector<suite::ui::Action> AzothEditor::actions()
+{
+    std::vector<suite::ui::Action> a;
+    const char* names[] = { "impact", "crash", "downlifter", "snare" };
+    for (int i = 0; i < 4; ++i)
+        a.push_back ({ juce::String ("Play the ") + names[i], "hear it now", "Audition", [this, i] { auditions[(size_t) i].triggerClick(); } });
+    a.push_back ({ "Samples and presets", "your own impact, crash, downlifter and tag; sound design presets", "Samples", [this] { showSamplesMenu(); } });
+    a.push_back ({ reverseOn.getToggleState() ? "Turn reverse swells off" : "Turn reverse swells on", "this track's own audio, reversed into the next section", "Swells",
+                   [this] { reverseOn.setToggleState (! reverseOn.getToggleState(), juce::sendNotification); } });
+    a.push_back ({ follow.getToggleState() ? "Stop following Ouroboros" : "Follow Ouroboros", "place the transitions from the song map", "Map",
+                   [this] { follow.setToggleState (! follow.getToggleState(), juce::sendNotification); } });
+    return a;
 }

@@ -234,6 +234,8 @@ private:
 
     OuroborosProcessor& processor;
     suite::ui::LookAndFeel lnf;
+    suite::ui::HeaderBar header;
+    std::vector<suite::ui::Action> actions();
 
     juce::ComboBox templateBox;
     std::vector<std::pair<juce::String, suite::SectionMap>> userTemplates;
