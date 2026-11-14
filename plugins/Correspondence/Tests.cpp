@@ -2204,7 +2204,7 @@ int main (int argc, char** argv)
         p->applyPreset (0);
         const auto map = CorrespondenceProcessor::songMapOrDefault();
         const auto s = p->currentSettings();
-        std::array<uint32_t, 4> needs {};
+        std::array<uint32_t, 8> needs {};
         for (auto f : { AP::bassClearKickF, AP::bassInKeyF, AP::accentsF, AP::ghostLiftF, AP::melodyClimbF }) needs[(size_t) f / 32] |= 1u << (f % 32);
         suite::LabelReadyBus::publishNeeds (needs);
         set (*p, Params::songLift, 0.0f);
