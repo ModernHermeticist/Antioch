@@ -2273,7 +2273,7 @@ int main (int argc, char** argv)
             check (has (AP::mxMonoWidenF) && has (AP::mxVocalPresenceF) && has (AP::mxTruePeakF) && has (AP::mxChainNeutralF), "a check's companion fixes are needed too (mono widening, vocal presence, true peak, loudness-neutral chain)");
             check (lab::featuresOf (*find ("Parts side by side")).size() == 6, "one check, six switches");
         }
-        check (lab::isLayerRole (1) && lab::isLayerRole (3), "kick and hat layers are lined up as layers too");
+        check (lab::detail::isLayerRole (1) && lab::detail::isLayerRole (3), "kick and hat layers are lined up as layers too");
         // the autopilot: a tone step tried and kept, its track's provenance and tone budget
         {
             lab::Report r;
