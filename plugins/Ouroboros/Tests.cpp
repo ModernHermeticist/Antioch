@@ -2603,5 +2603,8 @@ int main (int argc, char** argv)
         suite::DirectorBus::withdraw();   // the plan published above is shared memory: don't leave it for the next plugin's tests
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Ouroboros", [] { auto p = std::make_unique<OuroborosProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

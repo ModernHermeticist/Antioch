@@ -2053,5 +2053,8 @@ int main (int argc, char** argv)
         check (juce::String (R::fullName (R::acidBass)) == "Bass > Acid / 303 & reese", "roles show as family > role");
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Quintessence", [] { auto p = std::make_unique<QuintessenceProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

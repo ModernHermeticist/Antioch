@@ -5,6 +5,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "Worker.h"
 #include <iostream>
 
 namespace suite::test
@@ -162,6 +163,46 @@ namespace suite::test
                 b.setSample (1, i, v);
             }
         };
+    }
+
+    /** CPU: the audio thread's cost (% of one core in real time, 48 kHz, 512-sample blocks) playing
+        noise, stopped with noise coming in, and playing silence; and the timers' cost on FL's interface
+        thread (ms per second). Each is measured on a fresh instance from `make` (already prepared). */
+    template <typename Make>
+    inline void cpuReport (const juce::String& name, Make&& make, double seconds = 4.0)
+    {
+        auto audio = [&] (bool playing, bool silent)
+        {
+            auto p = make();
+            FakePlayHead head;
+            head.playing = playing;
+            p->setPlayHead (&head);
+            juce::Random rng (7);
+            InputFn in = [&rng, silent] (juce::AudioBuffer<float>& b, int64_t)
+            {
+                if (silent) return;
+                for (int c = 0; c < b.getNumChannels(); ++c)
+                    for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.25f * (rng.nextFloat() * 2.0f - 1.0f));
+            };
+            render (*p, 1.0, in, nullptr, &head);   // warm up
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            render (*p, seconds, in, nullptr, &head);
+            const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+            p->setPlayHead (nullptr);
+            return 100.0 * ms / (seconds * 1000.0);
+        };
+        const auto playing = audio (true, false), stopped = audio (false, false), silent = audio (true, true);
+        double ui = 0.0;
+        {
+            // background jobs go to the worker as in FL (they don't hold the interface thread)
+            auto& worker = suite::Worker::detail::thread();
+            const auto wasInline = worker.inlineMode;
+            worker.inlineMode = false;
+            { auto p = make(); ui = p->timerCostForTests (seconds); suite::Worker::finish(); }
+            worker.inlineMode = wasInline;
+        }
+        std::cout << "  CPU   " << name << ": playing " << juce::String (playing, 2) << "%, stopped " << juce::String (stopped, 2)
+                  << "%, silent " << juce::String (silent, 2) << "% of a core; timers " << juce::String (ui, 1) << " ms/s" << std::endl;
     }
 
     inline int finish()

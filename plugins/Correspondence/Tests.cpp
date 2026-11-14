@@ -2476,5 +2476,8 @@ int main (int argc, char** argv)
         suite::SectionBus::withdraw();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Correspondence", [] { auto p = std::make_unique<CorrespondenceProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

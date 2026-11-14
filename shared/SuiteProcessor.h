@@ -272,6 +272,26 @@ namespace suite
             return nullptr;
         }
         const std::vector<Module>& getModules() const noexcept { return modules; }
+        /** Tests: what this plugin's timers cost FL's interface thread, in ms of work per second, over
+            `seconds` of simulated time (each timer called as often as it would be; modules included). */
+        double timerCostForTests (double seconds)
+        {
+            std::vector<juce::Timer*> timers { &poller, &morpher };
+            if (auto* t = dynamic_cast<juce::Timer*> (this)) timers.push_back (t);
+            double spent = 0.0;
+            for (auto* t : timers)
+            {
+                const auto interval = t->getTimerInterval();
+                if (interval <= 0) continue;
+                const auto calls = juce::jmax (1, (int) (seconds * 1000.0 / interval));
+                const auto t0 = juce::Time::getMillisecondCounterHiRes();
+                for (int i = 0; i < calls; ++i) t->timerCallback();
+                spent += juce::Time::getMillisecondCounterHiRes() - t0;
+            }
+            double mine = spent / seconds;
+            for (auto& m : modules) if (m.active.load()) mine += m.proc->timerCostForTests (seconds);
+            return mine;
+        }
 
         void prepareModules (double sampleRate, int blockSize)
         {

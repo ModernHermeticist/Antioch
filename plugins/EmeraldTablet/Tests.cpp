@@ -131,5 +131,8 @@ int main (int argc, char** argv)
         suite::KeyBus::withdraw();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Emerald Tablet", [] { auto p = std::make_unique<EmeraldTabletProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

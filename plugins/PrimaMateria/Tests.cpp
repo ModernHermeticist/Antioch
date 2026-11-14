@@ -991,5 +991,8 @@ int main (int argc, char** argv)
                "CC 7: 100 = unchanged, 0 = muted");
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Prima Materia", [] { auto p = std::make_unique<PrimaMateriaProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

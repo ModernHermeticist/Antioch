@@ -1525,5 +1525,8 @@ int main (int argc, char** argv)
         m->releaseResources();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Mentalism", [] { auto p = std::make_unique<MentalismProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

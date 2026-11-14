@@ -559,5 +559,8 @@ int main (int argc, char** argv)
         suite::LabelReadyBus::reset();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Vibration", [] { auto p = std::make_unique<VibrationProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

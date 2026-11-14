@@ -667,5 +667,8 @@ int main (int argc, char** argv)
         check (! big, "another track leads: only small supporting moves");
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Transmutation", [] { auto p = std::make_unique<TransmutationProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

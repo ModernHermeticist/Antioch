@@ -384,5 +384,8 @@ int main (int argc, char** argv)
         check (std::abs (p->suiteStatus().metrics[1] - 4.5f) < 0.01f && p->suiteStatus().metrics[1] == 0.0f, "the most it held back since the last report, then afresh");
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Lapis", [] { auto p = std::make_unique<LapisProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

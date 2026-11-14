@@ -820,5 +820,8 @@ int main (int argc, char** argv)
 
     suite::SectionBus::withdraw();
     suite::KeyBus::withdraw();
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Azoth", [] { auto p = std::make_unique<AzothProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

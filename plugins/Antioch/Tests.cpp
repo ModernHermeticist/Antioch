@@ -940,5 +940,8 @@ int main (int argc, char** argv)
         suite::LabelReadyBus::reset(); suite::MixFixBus::reset();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Antioch", [] { auto p = std::make_unique<AntiochProcessor>(); suite::test::prepare (*p); return p; });
+
     return finish();
 }

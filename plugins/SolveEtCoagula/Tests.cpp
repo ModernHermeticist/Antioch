@@ -492,5 +492,8 @@ int main (int argc, char** argv)
         suite::LabelReadyBus::reset();
     }
 
+    suite::test::section ("CPU");
+    suite::test::cpuReport ("Solve et Coagula", [] { return make (false); });
+
     return finish();
 }
