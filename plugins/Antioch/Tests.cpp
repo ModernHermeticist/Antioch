@@ -4,6 +4,7 @@
 #include "AutopilotBus.h"
 #include "SuiteUI.h"
 #include "SectionBus.h"
+#include "FixBus.h"
 #include "TestUtils.h"
 #include "ChordBus.h"
 #include "KickBus.h"
@@ -837,6 +838,34 @@ int main (int argc, char** argv)
                        + juce::String (rmsBetween (out, 4.2, 4.6), 5) + ", " + juce::String (rmsBetween (out, 6.0, 6.5), 5) + ", " + juce::String (rmsBetween (out, 8.1, 9.0), 6) + ")");
         }
         suite::Autopilot::reset();
+    }
+
+
+    section ("Label-ready: pre-delay from the tempo, throws at the vocal's phrase ends, asleep when idle");
+    {
+        suite::FixBus::reset();
+        auto p = make();
+        suite::FixBus::send (suite::Fix::PreDelayTempo);
+        p->fixes->poll();
+        const auto pre = p->apvts.getRawParameterValue (Params::Verb::predelay)->load();
+        check (pre >= 10.0f && pre <= 60.0f && std::abs (pre - juce::jlimit (10.0f, 60.0f, (float) (60000.0 / p->currentBpm.load() / 8.0))) < 0.5f,
+               "the reverb's pre-delay becomes a 32nd note (" + juce::String (pre, 1) + " ms)");
+        set (*p, Params::throwLevel, 0.5f);
+        suite::FixBus::send (suite::Fix::ThrowsAtVocal);
+        p->fixes->poll();
+        check ((int) p->apvts.getRawParameterValue (Params::Throw::autoMode)->load() == Params::Throw::autoAtVocalEnds, "throws at the end of each vocal phrase");
+        auto q = make();
+        set (*q, Params::echoLevel, 0.0f); set (*q, Params::verbLevel, 0.0f); set (*q, Params::throwLevel, 0.0f);
+        q->pollTick();
+        juce::AudioBuffer<float> b (2, 256);
+        for (int i = 0; i < 256; ++i) { b.setSample (0, i, 0.3f * std::sin (0.1f * i)); b.setSample (1, i, 0.3f * std::sin (0.1f * i)); }
+        const auto before = b;
+        juce::MidiBuffer m;
+        q->processBlock (b, m);
+        float diff = 0.0f;
+        for (int i = 0; i < 256; ++i) diff = juce::jmax (diff, std::abs (b.getSample (0, i) - before.getSample (0, i)));
+        check (q->sleeping.load() && diff < 1.0e-6f, "with every level at zero it sleeps: the sound passes through untouched");
+        suite::FixBus::reset();
     }
 
     return finish();

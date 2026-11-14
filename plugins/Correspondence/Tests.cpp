@@ -11,6 +11,8 @@
 #include "FixBus.h"
 #include "KeyBus.h"
 #include "SectionBus.h"
+#include "LabelReadyBus.h"
+#include "AutopilotBus.h"
 #include "TestUtils.h"
 #include "Audition.h"
 #include "Drums.h"
@@ -2191,6 +2193,46 @@ int main (int argc, char** argv)
                 check (std::abs (back - current) < 0.02f, "  (back to " + juce::String (back, 2) + ")");
             }
         }
+    }
+
+
+    section ("Label-ready: the parts cleaned up where Ouroboros' checks asked (latched, switched)");
+    {
+        namespace AP = suite::Autopilot;
+        AP::reset();
+        auto p = make();
+        p->applyPreset (0);
+        const auto map = CorrespondenceProcessor::songMapOrDefault();
+        const auto s = p->currentSettings();
+        std::array<uint32_t, 4> needs {};
+        for (auto f : { AP::bassClearKickF, AP::bassInKeyF, AP::accentsF, AP::ghostLiftF, AP::melodyClimbF }) needs[(size_t) f / 32] |= 1u << (f % 32);
+        suite::LabelReadyBus::publishNeeds (needs);
+        set (*p, Params::songLift, 0.0f);
+        p->latchLabelWriting();
+        const auto bass = chords::songClip (s, map, p->currentSongPatterns(), chords::SongPart::Bass);
+        bool clear = ! bass.empty(), inKey = true;
+        const auto& steps = suite::music::scales()[(size_t) s.scale].steps;
+        for (const auto& n : bass)
+        {
+            const auto nextBeat = std::floor (n.start + 1.0e-6) + 1.0;
+            clear = clear && n.start + n.length <= (n.start < nextBeat - 0.25 - 1.0e-6 ? nextBeat - 0.25 : nextBeat) + 1.0e-6;
+            int sec = 0; for (int i = 0; i < map.count; ++i) if ((map.sections[(size_t) i].startBar - 1) * 4.0 <= n.start + 1.0e-6) sec = i;
+            const auto pc = ((n.pitch - s.root - map.keyShiftOf (sec)) % 12 + 12) % 12;
+            inKey = inKey && std::find (steps.begin(), steps.end(), pc) != steps.end();
+        }
+        check (clear, "the bass stops a 16th before each kick");
+        check (inKey, "and stays in key");
+        check (p->apvts.getRawParameterValue (Params::songLift)->load() > 0.5f, "the lead goes up an octave in the later drops (a setting, set once)");
+        check ((p->labelLatched & 0x1fu) == 0x0fu, "latched: the bass, accents and ghost clean-ups; not the bass-on-roots one nobody asked for");
+        AP::set (AP::bassClearKickF, false);
+        check (! p->currentSongPatterns().polish.clearKick && p->currentSongPatterns().polish.inKey, "its switch off: that clean-up stops (the others stay)");
+        juce::MemoryBlock mb;
+        p->getStateInformation (mb);
+        auto q = make();
+        q->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (q->labelLatched == p->labelLatched, "the latches are saved with the project");
+        AP::reset();
+        suite::LabelReadyBus::reset();
     }
 
     return finish();

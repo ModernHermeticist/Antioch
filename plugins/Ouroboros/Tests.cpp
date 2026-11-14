@@ -1856,5 +1856,202 @@ int main (int argc, char** argv)
         }
     }
 
+
+    section ("Label-ready 3: the sounds, arrangement detail, vocal, a simulated master, groove and harmony; the label autopilot");
+    {
+        using T = suite::SectionType;
+        namespace AP = suite::Autopilot;
+        const double fs = 44100.0;
+        // the meter: a static tone against one that moves; a noise floor; even and uneven hits; the render
+        {
+            auto run = [fs] (bool moving, bool offline)
+            {
+                suite::TrackTraits::TraitsMeter m;
+                m.prepare (fs);
+                const auto n = (int) (fs * 6.0);
+                std::vector<float> x ((size_t) n);
+                for (int i = 0; i < n; ++i)
+                {
+                    const auto t = (double) i / fs;
+                    const auto bright = moving ? 0.5f + 0.5f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1.5 * t) : 0.5f;
+                    x[(size_t) i] = 0.2f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 200.0 * t) + 0.2f * bright * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 5000.0 * t);
+                }
+                for (int i = 0; i < n; i += 512) m.output (x.data() + i, x.data() + i, juce::jmin (512, n - i), (double) i / fs * 2.0, 120.0, 0, offline);
+                return m.snapshot (1, 4, "Pad");
+            };
+            const auto still = run (false, false), moving = run (true, false), rendered = run (false, true);
+            check (still.movementCount > 20 && still.movementDb < 0.3f && moving.movementDb > still.movementDb + 1.0f,
+                   "a pad that never changes reads " + juce::String (still.movementDb, 2) + " dB of movement, a moving one " + juce::String (moving.movementDb, 2));
+            check (rendered.sectionDbOffline[0] > -40.0f && rendered.sectionDb[0] < -90.0f && still.sectionDbOffline[0] < -90.0f, "levels heard while FL renders are kept apart from playback");
+            check (still.sectionPeakDb[0] > -12.0f && still.sectionPeakDb[0] < -6.0f, "each section's peak (" + juce::String (still.sectionPeakDb[0], 1) + " dB)");
+            suite::TrackTraits::TraitsMeter m;
+            m.prepare (fs);
+            const auto n = (int) (fs * 6.0);
+            std::vector<float> h ((size_t) n);
+            juce::Random rng (4);
+            for (int i = 0; i < n; ++i)
+            {
+                const auto k = i % (int) (fs / 4), hit = i / (int) (fs / 4);
+                const auto amp = hit % 2 == 0 ? 0.6f : 0.15f;   // loud and soft notes in turn
+                h[(size_t) i] = amp * (float) std::exp (-k / (0.03 * fs)) * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 60.0 * i / fs) + 0.003f * (rng.nextFloat() - 0.5f);
+            }
+            for (int i = 0; i < n; i += 512) m.output (h.data() + i, h.data() + i, juce::jmin (512, n - i), (double) i / fs * 2.0, 120.0, 0);
+            const auto b = m.snapshot (2, 2, "Bass");
+            check (b.hitCount >= 8 && b.hitSpreadDb > 9.0f, "notes 12 dB apart spread " + juce::String (b.hitSpreadDb, 1) + " dB");
+            check (b.noiseFloorDb > -100.0f && b.noiseFloorDb < b.outRmsDb - 10.0f, "the quietest moments (" + juce::String (b.noiseFloorDb, 1) + " dB) under its level");
+        }
+        // the bars: peak and lean
+        {
+            lab::Analyser an; an.prepare (fs);
+            lab::Accumulator acc;
+            for (int i = 0; i < 44100; ++i) an.process (0.5f * std::sin (0.05f * i), 0.25f * std::sin (0.05f * i), acc);
+            const auto bar = acc.finish();
+            check (std::abs (bar.peakDb + 6.0f) < 0.3f && std::abs (bar.leanDb - 6.0f) < 0.3f, "each bar's peak (" + juce::String (bar.peakDb, 1) + ") and lean (" + juce::String (bar.leanDb, 1) + " dB left)");
+        }
+
+        // a song with problems everywhere
+        suite::SectionMap map;
+        const std::pair<T, int> form[] = { { T::Intro, 1 }, { T::Build, 17 }, { T::Drop, 25 }, { T::Breakdown, 41 }, { T::Build, 57 }, { T::Drop, 65 }, { T::Outro, 81 } };
+        for (const auto& [type, bar] : form) { map.sections[(size_t) map.count].type = type; map.sections[(size_t) map.count].startBar = bar; ++map.count; }
+        map.totalBars = 96;
+        std::vector<lab::Bar> bars ((size_t) map.totalBars);
+        for (int b = 0; b < map.totalBars; ++b)
+        {
+            auto& x = bars[(size_t) b];
+            x.heard = true; x.db = -12.0f; x.sideDb = -20.0f; x.onsets = 4.0f; x.peakDb = b >= 24 && b < 40 ? -5.0f : -9.0f; x.leanDb = b >= 40 && b < 56 ? 2.5f : 0.0f;
+            for (int k = 0; k < lab::numBands; ++k) x.band[(size_t) k] = x.db - 3.0f * (float) std::abs (k - 3);
+        }
+        lab::Inputs in;
+        in.map = map; in.bpm = 138.0; in.bars = bars; in.sections = lab::sections (bars, map);
+        auto track = [] (uint32_t id, int role, const char* name)
+        {
+            suite::TrackTraits::Traits t;
+            t.id = id; t.role = role; juce::String (name).copyToUTF8 (t.track, sizeof (t.track) - 1);
+            t.outRmsDb = -20.0f; t.sideDb = -35.0f; t.lowMidDb = -30.0f; t.lowSideDb = -60.0f; t.crestDb = 10.0f; t.inPeakDb = -8.0f; t.inRmsDb = -20.0f;
+            for (auto& v : t.sectionDb) v = -100.0f;
+            for (auto& v : t.sectionPeakDb) v = -100.0f;
+            for (auto& v : t.sectionDbOffline) v = -100.0f;
+            return t;
+        };
+        auto pad = track (0x201, 4, "Pad"), lead = track (0x202, 5, "Lead"), kick = track (0x203, 1, "Kick"), hats = track (0x204, 3, "Hats"), vox = track (0x205, 6, "Vox");
+        pad.movementCount = 40; pad.movementDb = 0.1f;
+        kick.sectionPeakDb[2] = -5.5f;   // the kick makes the loudest peak in the drop
+        pad.sectionDb[2] = -20.0f; pad.sectionDbOffline[2] = -17.0f;   // louder in the render
+        hats.inRmsDb = -42.0f;
+        vox.sectionDb[2] = -14.0f; vox.sectionDb[3] = -24.0f;   // the vocal sinks in the breakdown
+        in.traits = { pad, lead, kick, hats, vox };
+        auto bandsOf = [] (std::initializer_list<float> v) { lab::Bands b {}; int k = 0; for (auto x : v) b[(size_t) k++] = x; return b; };
+        in.tracks = { { 1, "Kick", -10.0f, bandsOf ({ -10, -6, -8, -14, -20, -26, -40, -42, -50, -60 }) },          // no click
+                      { 3, "Hats", -20.0f, bandsOf ({ -80, -70, -60, -50, -40, -30, -20, -12, -30, -40 }) },        // 4 kHz bite, no air
+                      { 6, "Vox", -18.0f, bandsOf ({ -80, -50, -30, -22, -20, -18, -24, -26, -16, -40 }) },         // sibilant, buried at 2-4 kHz
+                      { 4, "Pad", -16.0f, bandsOf ({ -60, -30, -20, -16, -14, -14, -12, -12, -30, -40 }) } };
+        in.entries.push_back ({}); in.entries.back().plugin = "Antioch"; in.entries.back().track = "Return"; in.entries.back().flags = suite::Status::idle;
+        in.entries.push_back ({}); in.entries.back().plugin = "Antioch"; in.entries.back().track = "Return 2"; in.entries.back().flags = suite::Status::idle;
+        in.song.valid = true; in.song.root = 9; in.song.scale = 0; in.song.quartersPerChord = 4.0;
+        for (int i = 0; i < 32; ++i) in.song.bass.push_back ({ i % 4 == 0 ? 44 : 45, (float) (96.0 + i * 0.5), 1.5f, i % 3 == 0 ? 20 : 100 });   // long, a note out of key, flat accents, quiet ghosts
+        for (int t = 0; t < suite::SongBus::numTypes; ++t) { in.song.chordCount[(size_t) t] = 4; in.song.chordRoots[(size_t) t] = { 0, 8, 3, 10, -1, -1, -1, -1 }; }
+        for (int i = 0; i < 12; ++i) { in.vocal.push_back ({ 69, (float) (i * 2.0 - 0.06), 1.0f, 100 }); in.vocalCents.push_back (i % 3 == 0 ? 45.0f : 5.0f); }   // early, a third out of tune
+        in.swingMs = { { 3, 2.0f }, { 4, 18.0f } };
+        in.flamMs = 9.0f;
+        const auto rep = lab::evaluate (in);
+        auto find = [&rep] (const juce::String& name) -> const lab::Check* { for (const auto& c : rep.checks) if (c.name == name) return &c; return nullptr; };
+        auto flagged = [&] (const juce::String& name, AP::Feature f)
+        {
+            const auto* c = find (name);
+            check (c != nullptr && c->measured && c->score < 0.75f && c->action == "autopilot:" + juce::String ((int) f),
+                   name + " flagged, with its switch (" + (c == nullptr ? juce::String ("missing") : c->detail) + ")");
+        };
+        flagged ("Kick quality", AP::kickShapeF);
+        flagged ("Pads that move", AP::padMotionF);
+        flagged ("Bass notes stop before the kick", AP::bassClearKickF);
+        flagged ("The bass stays in key", AP::bassInKeyF);
+        flagged ("Accents line up", AP::accentsF);
+        flagged ("Ghost notes heard", AP::ghostLiftF);
+        flagged ("Vocal timing", AP::vocalTimingF);
+        flagged ("The vocal is clear", AP::vocalClarityF);
+        flagged ("Sibilance", AP::sibilanceF);
+        flagged ("The vocal stays steady", AP::vocalSteadyF);
+        flagged ("Attacks that bite", AP::harshAttackF);
+        flagged ("The loudest peak", AP::peakTrimF);
+        flagged ("Balanced left and right", AP::balanceF);
+        flagged ("Nothing loaded doing nothing", AP::idleSleepF);
+        flagged ("Gain staging into the plugins", AP::inputStageF);
+        flagged ("One swing", AP::tightSwingF);
+        flagged ("Kick and bass start together", AP::layerAlignF);
+        flagged ("No 8 bars repeated too often", AP::loopVariationF);
+        flagged ("Phrase ends change something", AP::phraseFillsF);
+        {
+            const auto* tune = find ("Vocal tuning");
+            check (tune != nullptr && tune->score < 0.5f && tune->explain.contains ("pitch editor"), "vocal tuning: the notes listed (no pitch correction in the suite: said so)");
+            const auto* peak = find ("The loudest peak");
+            check (peak != nullptr && peak->fix == suite::Fix::SectionTrim && peak->detail.contains ("Kick"), "the loudest peak names the kick and trims it there (" + (peak != nullptr ? peak->detail : juce::String()) + ")");
+            const auto* render = find ("The render sounds like playback");
+            check (render != nullptr && render->measured && render->score < 0.5f && render->detail.contains ("Pad"), "the render against playback names the pad (+3 dB rendered)");
+            const auto* timing = find ("Vocal timing");
+            check (timing != nullptr && timing->fix == suite::Fix::VocalDelay, "an early vocal: delayed onto the grid by its Quintessence");
+        }
+
+        // the autopilot: what the plugins are told, and Ouroboros' own fixes tried and kept or undone
+        {
+            const auto needs = lab::AutoFixer::needsFrom (rep);
+            auto has = [&needs] (AP::Feature f) { return (needs[(size_t) f / 32] & (1u << (f % 32))) != 0; };
+            check (has (AP::padMotionF) && has (AP::bassClearKickF) && has (AP::idleSleepF), "the plugins are told which of their fixes are needed");
+            suite::LabelReadyBus::publishNeeds (needs);
+            check (suite::LabelReadyBus::needed ((int) AP::padMotionF) && ! suite::LabelReadyBus::needed ((int) AP::stressFixF) == ! has (AP::stressFixF), "through the shared bus");
+            suite::FixBus::reset();
+            AP::reset();
+            lab::AutoFixer fixer;
+            fixer.step (rep, in.traits, true);
+            const auto first = suite::FixBus::latest();
+            check (first > 0, "the autopilot sends one fix (" + fixer.note + ")");
+            for (int k = 0; k < 4; ++k) fixer.step (rep, in.traits, true);   // the same score: no better
+            check (fixer.undone == 1 && suite::FixBus::latest() > first, "no better after listening: undone (" + fixer.note + ")");
+            AP::set (AP::kickShapeF, false); AP::set (AP::leadTimbreF, false);
+            lab::AutoFixer quiet;
+            for (int f = AP::kickShapeF; f < AP::numFeatures; ++f) AP::set ((AP::Feature) f, false);
+            const auto before = suite::FixBus::latest();
+            quiet.step (rep, in.traits, true);
+            check (suite::FixBus::latest() == before, "switched off, nothing is sent");
+            AP::reset();
+            suite::FixBus::reset();
+        }
+
+        // deciding and listening
+        {
+            lab::LabelReadyHost host;
+            host.report = rep;
+            host.lastSections = in.sections;
+            host.lastInputs = in;
+            host.lastInputs.profile = nullptr;
+            check (host.sessionPlan().contains ("1. ") && host.sessionPlan().contains ("points"), "today's plan: the top changes, with the points each is worth");
+            check (host.whyNot100().contains ("points missing"), "why not 100, area by area");
+            check (host.arSummary().contains ("A&R NOTES") && host.arSummary().contains ("Verdict"), "A&R notes in plain words");
+            const auto* worst = find ("Kick quality");
+            check (worst != nullptr && host.predictedGain (*worst) > 0.1f, "a check knows what fixing it is worth (+" + juce::String (worst != nullptr ? host.predictedGain (*worst) : 0.0f, 1) + ")");
+            lab::Reference mine;
+            mine.name = "My signed one"; mine.yours = true; mine.bpm = 138.0; mine.sections = in.sections; mine.addedMs = juce::Time::currentTimeMillis(); mine.summarise();
+            host.profile.refs = { mine };
+            host.profile.learn();
+            check (host.overlayBestSigned().contains ("My signed one") && host.scoreByReference().contains ("My signed one"), "against your best signed track, and against each reference");
+            host.requireSignOff = true;
+            host.report.ready = true;
+            host.update (map, 138.0, 4.0, nullptr);
+            check (! host.report.ready, "with sign-off required, the gate waits for it");
+            lab::LabelReadyHost back;
+            host.signOff[lab::aAR] = "today";
+            back.fromTree (host.toTree());
+            check (back.requireSignOff && back.signOff.count (lab::aAR) == 1, "sign-offs are saved with the project");
+            // before and after
+            lab::Snippets sn;
+            sn.prepare (8000.0);
+            std::vector<float> loud (8000, 0.5f), quietB (8000, 0.1f);
+            for (int k = 0; k < 10; ++k) sn.push (loud.data(), loud.data(), 8000);
+            sn.markFix ("test", 8.0, 4.0);
+            for (int k = 0; k < 10; ++k) sn.push (quietB.data(), quietB.data(), 8000);
+            sn.tick (true, 100.0, 4.0);   // the bar never comes back...
+            check (sn.pairs().empty(), "the after waits for the same bar");
+        }
+    }
+
     return finish();
 }

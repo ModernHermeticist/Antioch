@@ -39,7 +39,8 @@ namespace chords::polish
             if (isBass && P.clearKick)
             {
                 const auto nextBeat = std::floor (n.start + 1.0e-6) + 1.0;
-                if (n.start + n.length > nextBeat - 0.25 + 1.0e-6) n.length = juce::jmax (0.125, nextBeat - 0.25 - n.start);
+                const auto stopAt = n.start < nextBeat - 0.25 - 1.0e-6 ? nextBeat - 0.25 : nextBeat;   // a 16th before the kick, or at it for a note in the last 16th
+                if (n.start + n.length > stopAt + 1.0e-6) n.length = juce::jmax (0.05, stopAt - n.start);
             }
             if (isBass && P.inKey && ! inKey (n.pitch, shift))
                 n.pitch = inKey (n.pitch - 1, shift) ? n.pitch - 1 : n.pitch + 1;

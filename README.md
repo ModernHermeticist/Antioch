@@ -148,6 +148,52 @@ threshold so 80% of them pass); a check can be made a *must* for a label (under 
 unmeasured check); the *listen-through* line (as the song plays, what to listen for at each flagged bar, and the next
 one); the first time the gate passes, a milestone is saved by itself.
 
+**The third set of checks** looks at the sounds themselves and the details:
+- **The sounds:** the kick (click against body, its tail against the tempo, its sub), the lead's timbre against the
+  label, pads that never move, the bass's harmonics for small speakers, clap and snare attacks, noise baked into samples.
+- **The arrangement in detail:** the song's arc against the label's average arc, every section change marked, something
+  changing at each 8-bar phrase end, the intro building, a curve (not a jump) into each drop, the breakdown's payoff,
+  the drop arriving full, drop length, no 8 bars repeated unchanged, room before the drop (never a full silence), the
+  outro mirroring the intro, a contrast map of every pair of sections, density peaking in the drops.
+- **The vocal:** tuning and timing note by note (from Solve et Coagula), clarity at 2-4 kHz, sibilance, steady from
+  section to section, throws at its phrase ends.
+- **Premaster and a simulated master:** room for the mastering engineer per section, the loudest peak and the track
+  behind it, a mastering stress test (how much limiting a club master would need, and the top end after it, listened to
+  only, never rendered), resonances several tracks share.
+- **Low end, space, top, groove, harmony:** bass notes ringing into the kick, bass notes out of key, a kick-and-bass
+  overlap map, bass notes even, rumble in the breakdowns, lows in the reverbs, left/right balance per section, width
+  opening into the drop, doubles that vanish in mono, hats against the label, biting attacks, noise FX under the lead,
+  one swing for every part, kick and bass starting together, accents lining up, ghost notes heard, the bass on the
+  chords' roots, tension into each drop, the melody climbing, clean chord changes, a hook you remember, chords leaving
+  the lead room, the drop's own groove, the motif developing, the tempo and key against the label's catalogue.
+- **Production:** plugins loaded doing nothing, gain staging into each track, and the render against playback (every
+  Quintessence measures its track while FL renders as well as while it plays, and names the one that differs).
+
+**The label autopilot:** 38 new switches on the Autopilot page (they start "Label:"), each fixing what its check finds,
+only where it finds it. Two kinds:
+- **Fixes in the plugins**, switched on for this song when a check asks (kept with the project; the switch turns them
+  off): pad motion, the breakdown low cut and input staging (Quintessence), idle Antiochs sleeping, and in
+  Correspondence's parts: bass notes stopping before the kick, bass notes in key, accents lined up, ghost notes heard,
+  the bass on the roots, chords under the lead, plus one-time settings (Writing's arrangement and harmony groups,
+  phrase turnarounds and ghost notes, one swing, the lead up an octave in later drops).
+- **Fixes Ouroboros sends**, one at a time while the song plays: a tone step on one track (kick, lead, hats, sibilance,
+  noise FX), punch on the claps, the vocal steadied, the loudest track trimmed where it peaks, squashed sections let
+  breathe, the reverbs' low cut, a double narrowed, the reverb pre-delay from the tempo, throws at vocal ends, an early
+  vocal delayed onto the grid, the breakdowns a step quieter on every track, or a word to the director (more going on,
+  a bigger build, a wider drop). Each is listened to for about eight seconds: kept if its check moved up, undone and
+  rested for ten minutes if not, at most three steps per check. *Tools > The label autopilot* turns them all off at once.
+
+**Deciding what's next** (*Tools*): today's plan (the three changes worth the most for the least work), why not 100
+(the points missing per area and the cheapest way back), A&R notes on one page, the song against each reference, the
+song against your best signed track; each check shows what fixing it would add. **Listening:** fresh ears (the scores
+hidden, a reminder to rest every 45 minutes), a blind A/B of two milestones, sign-off per area (the gate can wait for
+it), and before/after snippets of every fix (the same bar heard before and after, saved as WAVs).
+
+**What stays manual, and why:** vocal tuning (the suite has no pitch correction: the notes are listed for a pitch
+editor), a late vocal (a plugin can't play audio before it arrives: slide the clip), cutting a long drop (a plugin
+can't edit FL's playlist), and a plugin that renders differently (it's named; its setting is yours to change). Sample
+rates and bit depths of FL's audio clips, and CPU, aren't visible to a plugin.
+
 **Still not measured** (left out rather than guessed): the sound design's own quality, the vocal's performance, and
 whether the idea is good.
 
@@ -2097,7 +2143,13 @@ The tests render audio offline and check behaviour, not just that nothing crashe
   one section's score, the listen-through queue, the drop-impact designer, the score log, the
   label's tracks scored, the level-matched A/B and ear candy. Quintessence's: the polarity flip,
   a section trim, and the traits it shares. Correspondence's: each *Write for the label* goal
-  offers only higher-scoring options, writes them and undoes them.
+  offers only higher-scoring options, writes them and undoes them. **Label-ready 3:** the track meter's
+  movement, noise floor, note spread, section peaks and render levels; bar peaks and lean; every new
+  check flagged on a made-up problem song with its switch; the autopilot sending one fix, undoing it when
+  the check didn't move, and sending nothing when switched off; today's plan, why not 100, A&R notes, the
+  reference views, sign-off and before/after. Quintessence's: punch, the vocal delay, the breakdown low
+  cut, input staging, pad motion latched and saved. Antioch's: pre-delay, throws, sleeping. Correspondence's:
+  the bass clean-ups latched where asked, a switch turning one off, the latches saved.
 - **Scenes:** a Breakdown offset moves the value in use but not the knob, switching
   Scenes off restores the knob value, and scenes survive save/restore.
 - **Lapis:** latency matches what it reports; sample peaks stay at the ceiling and true

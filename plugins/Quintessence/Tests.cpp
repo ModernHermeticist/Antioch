@@ -7,6 +7,7 @@
 #include "Registry.h"
 #include "MoveLog.h"
 #include "StyleLog.h"
+#include "LabelReadyBus.h"
 #include "TestUtils.h"
 #include "ConductorBus.h"
 #include "ReferenceBus.h"
@@ -1455,6 +1456,73 @@ int main (int argc, char** argv)
         check (found, "each Quintessence shares what its track is like: the input's peak, the level in each section, the stereo lows");
         suite::SectionBus::withdraw();
         suite::TrackTraits::reset();
+    }
+
+
+    section ("Label-ready: punch, the vocal onto the grid, pad motion, the breakdown low cut, input staging");
+    {
+        suite::FixBus::reset();
+        auto p = make (3);
+        const auto before = p->apvts.getRawParameterValue (qn::punchId)->load();
+        suite::FixBus::send (suite::Fix::TrackPunch, suite::packMasterTone (p->getInstanceId(), 0, 1.0f));
+        p->fixes->poll();
+        check (std::abs (p->apvts.getRawParameterValue (qn::punchId)->load() - before - 0.15f) < 0.01f, "a punch step on this track's transient shaper");
+        auto v = make (6);
+        suite::FixBus::send (suite::Fix::VocalDelay, suite::packMasterTone (v->getInstanceId(), 0, 12.0f));
+        v->fixes->poll();
+        render (*v, 1.5, [] (juce::AudioBuffer<float>& b, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < b.getNumSamples(); ++i) b.setSample (c, i, 0.2f * std::sin (0.02f * (float) (pos + i))); });
+        check (std::abs (v->labelDsp.delayInUseMs() - 12.0f) < 0.5f, "an early vocal delayed 12 ms (" + juce::String (v->labelDsp.delayInUseMs(), 2) + ")");
+        // the DSP on its own: the breakdown low cut, input staging, pad motion
+        qn::LabelDsp d;
+        d.prepare (sampleRate);
+        auto lowRms = [&] (int sectionType, bool cut)
+        {
+            d.breakdownLowCut.store (cut);
+            juce::AudioBuffer<float> b (2, (int) sampleRate);
+            double p2 = 0.0;
+            for (int rep = 0; rep < 3; ++rep)
+            {
+                for (int i = 0; i < b.getNumSamples(); ++i) { const auto x = 0.3f * std::sin (2.0f * juce::MathConstants<float>::pi * 50.0f * (float) i / (float) sampleRate); b.setSample (0, i, x); b.setSample (1, i, x); }
+                d.output (b.getArrayOfWritePointers(), 2, b.getNumSamples(), 0.0, 120.0, 4.0, sectionType, 4, true);
+                if (rep == 2) for (int i = 0; i < b.getNumSamples(); ++i) p2 += (double) b.getSample (0, i) * b.getSample (0, i);
+            }
+            return std::sqrt (p2 / sampleRate);
+        };
+        const auto inDrop = lowRms (4, true), inBreak = lowRms (2, true);
+        check (inBreak < inDrop * 0.5, "the breakdown low cut takes the 50 Hz out in the breakdowns only (" + juce::String (inBreak / inDrop, 2) + " of the drop's)");
+        qn::LabelDsp g;
+        g.prepare (sampleRate);
+        g.inputStage.store (true); g.stageDb.store (9.0f);
+        juce::AudioBuffer<float> b (2, 512);
+        float worst = 0.0f;
+        for (int blk = 0; blk < 200; ++blk)
+        {
+            for (int i = 0; i < 512; ++i) { b.setSample (0, i, 0.01f); b.setSample (1, i, 0.01f); }
+            g.input (b.getArrayOfWritePointers(), 2, 512);
+            const auto staged = b.getSample (0, 0);
+            g.output (b.getArrayOfWritePointers(), 2, 512, 0.0, 120.0, 4.0, 4, 4, true);
+            if (blk == 199) worst = std::abs (b.getSample (0, 0) - 0.01f) + (staged > 0.02f ? 0.0f : 1.0f);
+        }
+        check (worst < 1.0e-4f, "input staging: the processing sees +9 dB, the level going out is unchanged");
+
+        // latched where Ouroboros' checks ask: a pad that never moves gets pad motion
+        suite::SectionBus::withdraw();
+        auto pad = make (4);
+        std::array<uint32_t, 4> needs {};
+        needs[(size_t) suite::Autopilot::padMotionF / 32] |= 1u << (suite::Autopilot::padMotionF % 32);
+        suite::LabelReadyBus::publishNeeds (needs);
+        FakePlayHead head; head.bpm = 120.0; head.ppq = 0.0;
+        pad->setPlayHead (&head);
+        render (*pad, 4.0, [] (juce::AudioBuffer<float>& bb, int64_t pos) { for (int c = 0; c < 2; ++c) for (int i = 0; i < bb.getNumSamples(); ++i) bb.setSample (c, i, 0.2f * std::sin (0.05f * (float) (pos + i))); }, nullptr, &head);
+        for (int k = 0; k < 5; ++k) pad->pollTick();
+        check ((pad->labelLatched & 1u) != 0 && pad->labelDsp.padMotion.load(), "a pad that never moves gets a slow filter movement (latched)");
+        juce::MemoryBlock mb;
+        pad->getStateInformation (mb);
+        auto again = make (4);
+        again->setStateInformation (mb.getData(), (int) mb.getSize());
+        check ((again->labelLatched & 1u) != 0, "and keeps it with the project");
+        suite::LabelReadyBus::reset();
+        suite::FixBus::reset();
     }
 
     return finish();

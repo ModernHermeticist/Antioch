@@ -282,6 +282,16 @@ Load a 16-bar-loop map or a short template (Radio edit, 88 bars) so a play-throu
 - [ ] **6h.18** *Milestones > A/B two milestones*: they switch on the bar line, at matched loudness. Stop the A/B before rendering.
 - [ ] **6h.19** *Tools > Blind spots*: remove Mentalism: it says the master can't be heard. The listen-through line follows the playhead.
 
+- [ ] **6h.20** Autopilot page: the "Label:" switches are listed and saved with the project.
+- [ ] **6h.21** Play a song with a static pad, a bass that rings into the kick and an idle Antioch: within a couple of
+  play-throughs the pad moves, Correspondence's bass stops before each kick (export it), and the Antioch sleeps.
+- [ ] **6h.22** The line above the checks shows the autopilot trying a fix, then "kept" or "undone"; Mentalism's What
+  changed lists each.
+- [ ] **6h.23** *Tools > Decide what's next*: today's plan, why not 100, A&R notes, against each reference, against your best track.
+- [ ] **6h.24** *Tools > Listening*: fresh ears hides the scores; sign off an area; with "the gate waits", it does.
+- [ ] **6h.25** Make a fix, loop the bar: *Save the before/after snippets*: the two WAVs are the same bar, before and after.
+- [ ] **6h.26** Render the song from FL, then open Label-ready: *The render sounds like playback* is measured.
+
 ## 7. A song end to end
 
 - [ ] **7.1** Ouroboros: *New song… > Draft the whole song*. Within a few seconds the suite is
