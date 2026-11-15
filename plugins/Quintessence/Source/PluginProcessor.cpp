@@ -1311,11 +1311,13 @@ void QuintessenceProcessor::returnsMove()
     // An effect return (a track named reverb, delay, echo, return, send or space, or one with
     // Antioch on it): low cut at 180 Hz and high cut at 12 kHz, so the space doesn't muddy the low
     // end or fizz on top. Once; your own cut settings are left alone.
+    const auto fxBus = subRole() == suite::roles::fxBus;   // the Effects bus role, whatever the track's called
+    if (fxBus && ! returnsByRole) { returnsByRole = true; returnsDone = false; }   // (chosen later: looked at again)
     if (returnsDone) return;
     const auto track = getTrackName().toLowerCase();
-    if (track.isEmpty()) return;
+    if (track.isEmpty() && ! fxBus) return;
     returnsDone = true;
-    bool isReturn = false;
+    bool isReturn = fxBus;
     for (const auto* w : { "reverb", "verb", "delay", "echo", "return", "send", "space" }) isReturn = isReturn || track.contains (w);
     for (const auto& e : suite::Registry::list()) isReturn = isReturn || (e.plugin == "Antioch" && e.track.toLowerCase() == track);
     if (! isReturn) return;
@@ -1656,6 +1658,7 @@ bool QuintessenceProcessor::glueMove (const Measurement& m, int role)
     const auto track = getTrackName().toLowerCase();
     const auto drumBus = suite::Autopilot::on (suite::Autopilot::drumBusGlueF) && (track.contains ("drum") || track.contains ("perc") || track.contains ("beat"));
     if ((role != qn::targets::musicBus && ! drumBus) || value (qn::autoMbId) < 0.5f || m.group == 1 || m.glueLevelDb < -80.0f) return false;
+    if (subRole() == suite::roles::fxBus) return false;   // an effects bus isn't glued (a compressed reverb pumps)
     if (drumBus && ! drumBusCounted) { drumBusCounted = true; suite::Autopilot::count (suite::Autopilot::drumBusGlued); }
     const auto thr = value (qn::glueThrId);
     const auto on = thr < -0.05f;

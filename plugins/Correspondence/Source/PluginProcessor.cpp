@@ -1789,9 +1789,10 @@ void CorrespondenceProcessor::startDraftPick()
     const auto sp = currentSongPatterns();
     const auto map = songMapOrDefault();
     const auto seed = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff);
-    suite::Worker::post ([job, s, sp, map, seed]
+    const auto taste = chords::critic::taste::learn().weights;   // your picks so far (none: the rules as written)
+    suite::Worker::post ([job, s, sp, map, seed, taste]
     {
-        job->pick = chords::critic::bestOf (s, map, sp, 6, seed);
+        job->pick = chords::critic::bestOf (s, map, sp, 6, seed, taste.empty() ? nullptr : &taste);
         job->ready.store (true);
         job->busy.store (false);
     });
@@ -1828,6 +1829,10 @@ void CorrespondenceProcessor::finishDraftPick()
                    + juce::String ((int) pick.firstLibSeed) + " and " + juce::String (pick.firstMelodySeed) + ").");
         folder.getChildFile ("Critic.txt").replaceWithText (lines.joinIntoString ("\n") + "\n");
         lastCompare = folder;
+        lastComparePick = pick;
+        comparePending = true;
+        lines.add ("Tell it which you liked (search: I prefer A / I prefer B): your picks teach the critic your taste.");
+        folder.getChildFile ("Critic.txt").replaceWithText (lines.joinIntoString ("\n") + "\n");
         lastCriticReport = lines.joinIntoString ("\n");
         suite::MoveLog::add (getName(), getTrackName(), "Two versions to compare in " + folder.getFullPathName() + " (critic " + juce::String (pick.first.total, 2) + " vs " + juce::String (pick.report.total, 2) + ")", suite::MoveLog::fix);
         return;
@@ -1846,6 +1851,22 @@ void CorrespondenceProcessor::finishDraftPick()
     lastCriticReport = lines.joinIntoString ("\n");
     if (lastDraft.isDirectory()) lastDraft.getChildFile ("Critic.txt").replaceWithText (lastCriticReport + "\n");
     suite::MoveLog::add (getName(), getTrackName(), "Song draft: the strongest of six versions (critic " + juce::String (pick.before, 2) + " -> " + juce::String (r.total, 2) + ")", suite::MoveLog::fix);
+}
+
+bool CorrespondenceProcessor::preferCompared (bool a)
+{
+    if (! comparePending) return false;
+    comparePending = false;
+    const auto& pick = lastComparePick;
+    chords::critic::taste::record (pick.first, pick.report, a);
+    if (a)
+    {
+        setParameterPlain (apvts, Params::libSeed, (float) pick.firstLibSeed);
+        setParameterPlain (apvts, Params::melodySeed, (float) pick.firstMelodySeed);
+    }
+    suite::MoveLog::add (getName(), getTrackName(), juce::String ("You preferred ") + (a ? "A (back to it)" : "B") + ": the critic learns from it. "
+                         + chords::critic::taste::describe (chords::critic::taste::learn()).upToFirstOccurrenceOf ("\n", false, false), suite::MoveLog::fix);
+    return true;
 }
 
 uint32_t CorrespondenceProcessor::roleLayersFrom (const std::vector<suite::SuiteEntry>& entries)

@@ -1508,6 +1508,12 @@ std::vector<suite::ui::Action> CorrespondenceEditor::actions()
     a.push_back ({ "Export all...", "every clip, the markers and a song pack", "Export", [this] { saveButton.triggerClick(); } });
     a.push_back ({ "Write two versions to compare", "the song as it is and the writing critic's pick of six, exported side by side (Drafts/A-B) with its scores", "Export",
                    [this] { processor.writeCompare(); } });
+    a.push_back ({ "I prefer A", "of the last two versions you compared: A comes back, and the critic learns your taste", "Export",
+                   [this] { header.setStatus (processor.preferCompared (true) ? "A it is: noted" : "Compare two versions first (Write two versions to compare)"); } });
+    a.push_back ({ "I prefer B", "of the last two versions you compared: B stays, and the critic learns your taste", "Export",
+                   [this] { header.setStatus (processor.preferCompared (false) ? "B it is: noted" : "Compare two versions first (Write two versions to compare)"); } });
+    a.push_back ({ "Your taste", "what the writing critic has learned from the versions you picked", "Export",
+                   [this] { juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon, "Your taste", processor.tasteReport()); } });
     a.push_back ({ "Song patterns...", "", "Song", [this] { songButton.triggerClick(); } });
     a.push_back ({ "Which role each clip gets", "the track role a dragged clip becomes (name the FL track after it and every plugin picks it up)", "Song", []
     {

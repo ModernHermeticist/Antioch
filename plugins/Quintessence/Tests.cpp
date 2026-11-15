@@ -1999,14 +1999,17 @@ int main (int argc, char** argv)
         AP::reset(); suite::LabelReadyBus::reset(); suite::FixBus::reset(); suite::MixFixBus::reset();
     }
 
-    section ("Track roles: 36, in nine families");
+    section ("Track roles: 37, in nine families");
     {
         namespace R = suite::roles;
         std::array<int, R::numFamilies> perFamily {};
         for (int r = 0; r < R::numRoles; ++r) ++perFamily[(size_t) R::info (r).family];
-        check (R::numRoles == 36 && perFamily == std::array<int, R::numFamilies> { 3, 4, 4, 4, 7, 4, 4, 4, 2 },
-               "kick 3, bass 4, drums 4, chords 4, keys & orchestral 7, leads 4, vocals 4, FX 4, buses 2");
+        check (R::numRoles == 37 && perFamily == std::array<int, R::numFamilies> { 3, 4, 4, 4, 7, 4, 4, 4, 3 },
+               "kick 3, bass 4, drums 4, chords 4, keys & orchestral 7, leads 4, vocals 4, FX 4, buses 3 (drums, music, effects)");
         auto named = [] (const char* n) { return R::fromTrackName (n).role; };
+        check (named ("FX Bus") == R::fxBus && named ("Reverb Return") == R::fxBus && named ("Sends") == R::fxBus && named ("Music Bus") == R::musicBus && named ("Bus") == R::musicBus
+                   && R::info (R::fxBus).lowCutHz >= 150.0f && R::info (R::fxBus).tone[0] < -6.0f,
+               "an effects bus (the reverb and delay returns): no low end, the top eased");
         check (named ("Sub Bass") == R::subBass && named ("Acid 303") == R::acidBass && named ("Reese") == R::acidBass && named ("Rolling Bass") == R::midBass
                && named ("Kick Top") == R::kickTop && named ("Kick") == R::kick && named ("Vox Chop") == R::chops && named ("Lead Vox") == R::leadVocal
                && named ("BVs") == R::backing && named ("Supersaw Chords") == R::supersaw && named ("Pluck 2") == R::plucks && named ("Strings") == R::strings

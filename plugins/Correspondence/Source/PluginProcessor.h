@@ -347,6 +347,11 @@ public:
         into Drafts/A-B (the pick stays; Undo goes back). */
     void writeCompare() { if (draftPick->busy.load()) return; draftPick->compare = true; startDraftPick(); finishDraftPick(); }
     juce::File lastCompare;
+    /** After a compare: which you preferred (it becomes your taste; A also brings A back). */
+    bool preferCompared (bool a);
+    bool compareOpen() const noexcept { return comparePending; }
+    const chords::critic::Pick& lastComparePickForTests() const noexcept { return lastComparePick; }
+    juce::String tasteReport() const { return chords::critic::taste::describe (chords::critic::taste::learn()); }
 
 private:
     void timerCallback() override
@@ -361,6 +366,8 @@ private:
     }
 
     struct DraftPick { std::atomic<bool> busy { false }, ready { false }; bool compare = false; chords::critic::Pick pick; };
+    chords::critic::Pick lastComparePick;
+    bool comparePending = false;
     std::shared_ptr<DraftPick> draftPick = std::make_shared<DraftPick>();
     void startDraftPick();
     void finishDraftPick();

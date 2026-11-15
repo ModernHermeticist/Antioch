@@ -274,7 +274,7 @@ private:
     bool budgetMove (const Measurement&, int role);
     void keyMove (int role);       // the autopilot: a pitched FX note out of the song's key is notched
     void returnsMove();            // ... and an effect return gets its cuts
-    bool returnsDone = false, monoCounted = false, drumBusCounted = false;
+    bool returnsDone = false, returnsByRole = false, monoCounted = false, drumBusCounted = false;
     float inPeakWin = 0.0f;
     double inPowWin = 0.0;
     int inWinCount = 0;

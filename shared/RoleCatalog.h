@@ -29,7 +29,7 @@ namespace suite::roles
         mainLead, arps, leadLayers, counter,
         leadVocal, backing, chops, spoken,
         risers, impacts, atmos, earCandy,
-        drumBus, musicBus,
+        drumBus, musicBus, fxBus,
         numRoles
     };
 
@@ -91,6 +91,9 @@ namespace suite::roles
             { "Ear candy",                  famFx,      7, 7, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },                     200.0f, 0.0f, 0.0f,   { k, k, k, k, k, k }, "candy,zap,blip,one shot,oneshot" },
             { "Drum bus",                   famBuses,   8, 9, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },                     0.0f, 0.0f, 0.0f,     { k, k, k, k, k, k }, "drum bus,drums bus,drum group,drum grp,drums" },
             { "Music bus",                  famBuses,   8, 9, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },                     0.0f, 0.0f, 0.0f,     { k, k, k, k, k, k }, "music bus,synth bus,music group,bus,group,grp" },
+            // the reverb and delay returns: no low end (it muddies the kick and bass), the top eased
+            // (no fizz), ducked a little to the kick so the space breathes with the groove
+            { "Effects bus (returns)",      famBuses,   8, 9, { -12, -8, -4, -1, 0, 0, 0, -1, -3, -5 },             180.0f, 0.0f, 0.5f,   { k, k, k, k, k, k }, "fx bus,effects bus,effect bus,fx return,fx group,return,reverb bus,delay bus,verb bus,sends,send bus,space bus" },
         }};
         return r;
     }

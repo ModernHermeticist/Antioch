@@ -17,6 +17,7 @@
 // every mood and style.
 
 #include "ChordEngine.h"
+#include "Alias.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -88,6 +89,22 @@ namespace chords::critic
             }
         };
 
+        /** A rule's name, for your taste. */
+        inline juce::String ruleName (const juce::String& rule)
+        {
+            static const std::map<juce::String, juce::String> names {
+                { "hook.range", "the hook's range" }, { "hook.steps", "a hook that moves by steps and thirds" }, { "hook.gapfill", "leaps answered by a step back" },
+                { "hook.climax", "a late climax" }, { "hook.ends", "phrases ending on the chord" }, { "hook.strong", "strong beats on chord tones" },
+                { "hook.motif", "a rhythm that repeats" }, { "hook.density", "a singable density" }, { "parts.rubs", "no rubs between parts" },
+                { "parts.crowd", "melodic parts apart" }, { "parts.mud", "a clear low end" }, { "parts.answer", "a counter that answers" },
+                { "journey.intro", "a light intro" }, { "journey.breakdown", "a breakdown that drops away" }, { "journey.build", "a rising build" },
+                { "journey.drops", "bigger later drops" }, { "journey.outro", "an outro that lets go" }, { "journey.edges", "audible section changes" },
+                { "journey.repeat", "later drops that develop" }, { "harmony.bass", "the bass on the chord" }, { "harmony.leading", "smooth voice leading" },
+                { "harmony.voicing", "open low voicings" }, { "harmony.lead", "the hook on its chords" }, { "harmony.motion", "a progression that moves" } };
+            const auto it = names.find (rule);
+            return it != names.end() ? it->second : rule;
+        }
+
         /** The words for a rule that scored low. */
         inline juce::String explain (const juce::String& rule)
         {
@@ -135,7 +152,10 @@ namespace chords::critic
         return parts;
     }
 
-    inline Report judge (const Settings& s, const suite::SectionMap& map, const std::map<SongPart, std::vector<Note>>& parts)
+    /** Your taste: a weight per rule (1 = as written), learned from the versions you picked. */
+    using Weights = std::map<juce::String, float>;
+
+    inline Report judge (const Settings& s, const suite::SectionMap& map, const std::map<SongPart, std::vector<Note>>& parts, const Weights* taste = nullptr)
     {
         using namespace detail;
         using ST = suite::SectionType;
@@ -460,6 +480,19 @@ namespace chords::critic
         Report out;
         out.hook = R.mean ("hook."); out.parts = R.mean ("parts."); out.journey = R.mean ("journey."); out.harmony = R.mean ("harmony.");
         out.total = 0.25f * (out.hook + out.parts + out.journey + out.harmony);
+        if (taste != nullptr && ! taste->empty())
+        {
+            // with your taste: every rule weighted by how much your picks cared about it
+            float sum = 0.0f, wsum = 0.0f;
+            for (const auto& [k, v] : R.r)
+            {
+                if (k.startsWith ("raw.")) continue;
+                const auto it = taste->find (k);
+                const auto w = it != taste->end() ? it->second : 1.0f;
+                sum += w * v; wsum += w;
+            }
+            if (wsum > 0.0f) out.total = sum / wsum;
+        }
         out.rules = R.r;
         std::vector<std::pair<float, juce::String>> low;
         for (const auto& [k, v] : R.r) if (v < 0.6f && ! k.startsWith ("raw.")) low.push_back ({ v, k });
@@ -468,19 +501,19 @@ namespace chords::critic
         return out;
     }
 
-    inline Report judge (const Settings& s, const suite::SectionMap& map, const SongPatterns& sp)
+    inline Report judge (const Settings& s, const suite::SectionMap& map, const SongPatterns& sp, const Weights* taste = nullptr)
     {
-        return judge (s, map, renderParts (s, map, sp));
+        return judge (s, map, renderParts (s, map, sp), taste);
     }
 
     /** The best of `tries` candidate songs (library seed and melody seed), by the critic's total.
         The first candidate is the current one, so the best is never worse than what's there. */
     struct Pick { uint32_t libSeed = 1; int melodySeed = 1; Report report; float before = 0.0f; uint32_t firstLibSeed = 1; int firstMelodySeed = 1; Report first; };
-    inline Pick bestOf (const Settings& s, const suite::SectionMap& map, SongPatterns sp, int tries, uint32_t seed)
+    inline Pick bestOf (const Settings& s, const suite::SectionMap& map, SongPatterns sp, int tries, uint32_t seed, const Weights* taste = nullptr)
     {
         Pick best;
         best.libSeed = sp.libSeed; best.melodySeed = sp.melody.seed;
-        best.report = judge (s, map, sp);
+        best.report = judge (s, map, sp, taste);
         best.before = best.report.total;
         best.first = best.report; best.firstLibSeed = sp.libSeed; best.firstMelodySeed = sp.melody.seed;
         auto h = seed * 2654435761u + 0x9e3779b9u;
@@ -489,9 +522,75 @@ namespace chords::critic
             h ^= h << 13; h ^= h >> 17; h ^= h << 5;
             sp.libSeed = 1u + h % 9999u;
             sp.melody.seed = 1 + (int) ((h >> 8) % 999u);
-            const auto r = judge (s, map, sp);
+            const auto r = judge (s, map, sp, taste);
             if (r.total > best.report.total + 1.0e-4f) { best.report = r; best.libSeed = sp.libSeed; best.melodySeed = sp.melody.seed; }
         }
         return best;
+    }
+
+    //==============================================================================
+    /** Your taste, from the versions you picked: "Critic taste.txt" in the suite folder, a line per
+        pick (both versions' rule scores and which you chose). A rule your picks keep agreeing with
+        weighs more, one they keep overruling weighs less; it counts from three picks on. */
+    namespace taste
+    {
+        inline juce::File& fileOverride() { static juce::File f; return f; }
+        inline juce::File file() { return fileOverride() != juce::File() ? fileOverride() : suite::Alias::file ("Critic taste.txt"); }
+
+        inline void record (const Report& a, const Report& b, bool choseA)
+        {
+            juce::StringArray parts { juce::String (juce::Time::getCurrentTime().toMilliseconds()), choseA ? "A" : "B" };
+            for (const auto& [k, v] : a.rules) if (! k.startsWith ("raw.")) parts.add ("a." + k + "=" + juce::String (v, 3));
+            for (const auto& [k, v] : b.rules) if (! k.startsWith ("raw.")) parts.add ("b." + k + "=" + juce::String (v, 3));
+            file().getParentDirectory().createDirectory();
+            file().appendText (parts.joinIntoString ("\t") + "\n");
+        }
+
+        struct Learned { Weights weights; int picks = 0; };
+        inline Learned learn()
+        {
+            Learned out;
+            const auto f = file();
+            if (! f.existsAsFile()) return out;
+            for (const auto& line : juce::StringArray::fromLines (f.loadFileAsString()))
+            {
+                const auto t = juce::StringArray::fromTokens (line, "\t", "");
+                if (t.size() < 3) continue;
+                const auto choseA = t[1] == "A";
+                std::map<juce::String, float> a, b;
+                for (int i = 2; i < t.size(); ++i)
+                {
+                    const auto key = t[i].upToFirstOccurrenceOf ("=", false, false), value = t[i].fromFirstOccurrenceOf ("=", false, false);
+                    if (key.startsWith ("a.")) a[key.substring (2)] = value.getFloatValue();
+                    else if (key.startsWith ("b.")) b[key.substring (2)] = value.getFloatValue();
+                }
+                ++out.picks;
+                for (const auto& [k, va] : a)
+                {
+                    const auto it = b.find (k);
+                    if (it == b.end()) continue;
+                    const auto winner = choseA ? va : it->second, loser = choseA ? it->second : va;
+                    auto& w = out.weights.try_emplace (k, 1.0f).first->second;
+                    if (winner > loser + 0.05f) w = juce::jmin (3.0f, w + 0.25f);         // you agreed with it
+                    else if (winner < loser - 0.05f) w = juce::jmax (0.25f, w - 0.25f);   // you overruled it
+                }
+            }
+            if (out.picks < 3) out.weights.clear();   // too few picks to go on
+            return out;
+        }
+
+        /** In words: the rules your picks weigh most and least. */
+        inline juce::String describe (const Learned& l)
+        {
+            if (l.picks < 3) return "Your taste: " + juce::String (l.picks) + " pick" + (l.picks == 1 ? "" : "s") + " so far (it counts from three).";
+            std::vector<std::pair<float, juce::String>> w;
+            for (const auto& [k, v] : l.weights) if (std::abs (v - 1.0f) > 0.01f) w.push_back ({ v, k });
+            std::sort (w.begin(), w.end());
+            juce::StringArray lines { "Your taste, from " + juce::String (l.picks) + " picks:" };
+            if (w.empty()) lines.add ("  the rules as written (your picks haven't leaned either way yet)");
+            for (auto it = w.rbegin(); it != w.rend() && it->first > 1.0f; ++it) lines.add ("  matters more to you: " + detail::ruleName (it->second) + " (x" + juce::String (it->first, 2) + ")");
+            for (const auto& [v, k] : w) if (v < 1.0f) lines.add ("  matters less to you: " + detail::ruleName (k) + " (x" + juce::String (v, 2) + ")");
+            return lines.joinIntoString ("\n");
+        }
     }
 }

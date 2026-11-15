@@ -2630,7 +2630,32 @@ int main (int argc, char** argv)
         const auto a = p->lastCompare.getChildFile ("A - as it was"), b = p->lastCompare.getChildFile ("B - the critic's pick");
         check (a.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10 && b.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10
                    && p->lastCompare.getChildFile ("Critic.txt").loadFileAsString().contains ("the critic's pick"),
-               "two versions to compare by ear, A as it was and B the critic's pick, with the scores beside them");
+               "two versions to compare by ear, A as it was and B the critic's pick, with the scores beside them ("
+                   + juce::String (a.findChildFiles (juce::File::findFiles, true, "*.mid").size()) + " + " + juce::String (b.findChildFiles (juce::File::findFiles, true, "*.mid").size())
+                   + " clips in " + p->lastCompare.getFullPathName() + ")");
+        // your taste: you prefer A, A comes back and the pick is noted
+        const auto tasteFile = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceTaste.txt");
+        tasteFile.deleteFile();
+        chords::critic::taste::fileOverride() = tasteFile;
+        const auto firstLib = p->lastComparePickForTests().firstLibSeed;
+        check (p->compareOpen() && p->preferCompared (true) && (uint32_t) p->apvts.getRawParameterValue (Params::libSeed)->load() == firstLib && ! p->preferCompared (true),
+               "you prefer A: A comes back, and the pick is noted (once)");
+        // three picks that care about the hook's range and not about rubs teach those two weights
+        chords::critic::Report ra, rb;
+        ra.rules = { { "hook.range", 0.9f }, { "parts.rubs", 0.5f }, { "hook.ends", 0.8f } };
+        rb.rules = { { "hook.range", 0.4f }, { "parts.rubs", 0.9f }, { "hook.ends", 0.8f } };
+        tasteFile.deleteFile();
+        for (int k = 0; k < 2; ++k) chords::critic::taste::record (ra, rb, true);
+        check (chords::critic::taste::learn().weights.empty(), "two picks aren't enough to go on");
+        chords::critic::taste::record (rb, ra, false);
+        const auto learned = chords::critic::taste::learn();
+        check (learned.picks == 3 && learned.weights.at ("hook.range") > 1.5f && learned.weights.at ("parts.rubs") < 0.5f && std::abs (learned.weights.at ("hook.ends") - 1.0f) < 0.01f,
+               "three picks: the hook's range matters more to you, rubs less, the rest as written");
+        check (chords::critic::taste::describe (learned).contains ("matters more to you: the hook's range"), "and the taste report says so");
+        const auto plain = chords::critic::judge (s, map, parts), mine = chords::critic::judge (s, map, parts, &learned.weights);
+        check (std::abs (plain.total - mine.total) > 1.0e-4f, "the critic's score follows your taste (" + juce::String (plain.total, 3) + " -> " + juce::String (mine.total, 3) + ")");
+        chords::critic::taste::fileOverride() = juce::File();
+        tasteFile.deleteFile();
         suite::SectionBus::withdraw();
         CorrespondenceProcessor::draftFolderOverride() = juce::File();
         dir.deleteRecursively();
