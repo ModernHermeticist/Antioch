@@ -1781,6 +1781,73 @@ chords::tools::Feel CorrespondenceProcessor::feel() const
 }
 
 //==============================================================================
+void CorrespondenceProcessor::startDraftPick()
+{
+    auto job = draftPick;
+    job->busy.store (true);
+    const auto s = currentSettings();
+    const auto sp = currentSongPatterns();
+    const auto map = songMapOrDefault();
+    const auto seed = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff);
+    suite::Worker::post ([job, s, sp, map, seed]
+    {
+        job->pick = chords::critic::bestOf (s, map, sp, 6, seed);
+        job->ready.store (true);
+        job->busy.store (false);
+    });
+}
+
+void CorrespondenceProcessor::finishDraftPick()
+{
+    auto job = draftPick;
+    if (! job->ready.exchange (false)) return;
+    const auto& pick = job->pick;
+    auto describe = [] (const chords::critic::Report& rep)
+    {
+        return juce::String (rep.total, 2) + " (hook " + juce::String (rep.hook, 2) + ", parts together " + juce::String (rep.parts, 2)
+               + ", the journey " + juce::String (rep.journey, 2) + ", harmony " + juce::String (rep.harmony, 2) + ")";
+    };
+    if (job->compare)
+    {
+        job->compare = false;
+        auto folder = draftFolder().getChildFile ("A-B " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M%S"));
+        folder.createDirectory();
+        setParameterPlain (apvts, Params::libSeed, (float) pick.firstLibSeed);
+        setParameterPlain (apvts, Params::melodySeed, (float) pick.firstMelodySeed);
+        exportEverything (folder.getChildFile ("A - as it was"));
+        setParameterPlain (apvts, Params::libSeed, (float) pick.libSeed);
+        setParameterPlain (apvts, Params::melodySeed, (float) pick.melodySeed);
+        exportEverything (folder.getChildFile ("B - the critic's pick"));
+        juce::StringArray lines { "Two versions of the song to compare by ear (drag the same parts from A and from B onto the same sounds).", "",
+                                  "A, as it was:          " + describe (pick.first),
+                                  "B, the critic's pick:  " + describe (pick.report), "" };
+        if (pick.libSeed == pick.firstLibSeed && pick.melodySeed == pick.firstMelodySeed) lines.add ("(A was already the strongest of six: they're the same.)");
+        if (! pick.first.notes.isEmpty()) { lines.add ("What it heard in A:"); for (const auto& n : pick.first.notes) lines.add ("  - " + n); }
+        lines.add ("");
+        lines.add ("Correspondence keeps B. If you prefer A, Undo (or set the library and melody seeds back to "
+                   + juce::String ((int) pick.firstLibSeed) + " and " + juce::String (pick.firstMelodySeed) + ").");
+        folder.getChildFile ("Critic.txt").replaceWithText (lines.joinIntoString ("\n") + "\n");
+        lastCompare = folder;
+        lastCriticReport = lines.joinIntoString ("\n");
+        suite::MoveLog::add (getName(), getTrackName(), "Two versions to compare in " + folder.getFullPathName() + " (critic " + juce::String (pick.first.total, 2) + " vs " + juce::String (pick.report.total, 2) + ")", suite::MoveLog::fix);
+        return;
+    }
+    setParameterPlain (apvts, Params::libSeed, (float) pick.libSeed);
+    setParameterPlain (apvts, Params::melodySeed, (float) pick.melodySeed);
+    draftFolder().createDirectory();
+    lastDraft = exportEverything (draftFolder());
+    const auto& r = pick.report;
+    juce::StringArray lines { "The writing critic heard six versions of this song and kept the strongest.", "",
+                              "Score " + juce::String (r.total, 2) + " (the first version: " + juce::String (pick.before, 2) + ")",
+                              "  hook " + juce::String (r.hook, 2) + ", parts together " + juce::String (r.parts, 2) + ", the journey " + juce::String (r.journey, 2)
+                                  + ", harmony " + juce::String (r.harmony, 2), "" };
+    if (r.notes.isEmpty()) lines.add ("Nothing it would change.");
+    else { lines.add ("What it would still look at:"); for (const auto& n : r.notes) lines.add ("  - " + n); }
+    lastCriticReport = lines.joinIntoString ("\n");
+    if (lastDraft.isDirectory()) lastDraft.getChildFile ("Critic.txt").replaceWithText (lastCriticReport + "\n");
+    suite::MoveLog::add (getName(), getTrackName(), "Song draft: the strongest of six versions (critic " + juce::String (pick.before, 2) + " -> " + juce::String (r.total, 2) + ")", suite::MoveLog::fix);
+}
+
 uint32_t CorrespondenceProcessor::roleLayersFrom (const std::vector<suite::SuiteEntry>& entries)
 {
     namespace R = suite::roles;

@@ -129,7 +129,14 @@ namespace chords::writing
                 {
                     if (variant == 1) n.start += 0.5;   // 26: displaced by an 8th
                 }
-                if (bar == 4 || bar == 5) n.pitch = scaleMove (s, n.pitch, 1);   // 1: the climb
+                if (bar == 4 || bar == 5)
+                {
+                    // 1: the climb: a step up, and the notes on the beat (and the long ones) onto the
+                    // chord under them, upward, so the climb still climbs but doesn't fight the chords
+                    n.pitch = scaleMove (s, n.pitch, 1);
+                    if (std::abs (local - std::round (local)) < 0.01 || n.length >= 0.9)
+                        n.pitch = nearestTone (chordPcs (s, slotAt (s, n.start)), n.pitch, true);
+                }
             }
             phrase.erase (std::remove_if (phrase.begin(), phrase.end(), [] (const Note& n) { return n.velocity < 0; }), phrase.end());
             // 29: the signature interval opens the climb (if the climb doesn't have one that wide)
@@ -154,23 +161,21 @@ namespace chords::writing
             }
             // 27: cadences: the half-phrase ends open, the phrase ends home
             auto lastIn = [&] (double from, double to) { Note* r = nullptr; for (auto& n : phrase) if (n.start >= from - 1.0e-6 && n.start < to - 1.0e-6) r = &n; return r; };
-            if (auto* half = lastIn (p + 8.0, p + 16.0); half != nullptr)
+            // (each onto the wanted note where the chord under it has it, else the chord's nearest tone:
+            // a cadence that fights its chord doesn't sound like one)
+            auto cadence = [&] (Note& n, std::vector<int> wanted)
             {
-                const auto rootPc = (s.root % 12 + 12) % 12;
-                const int open[] = { (rootPc + 7) % 12, (rootPc + 2) % 12 };
-                int best = half->pitch, dist = 99;
-                for (auto pc : open) for (int d = -6; d <= 6; ++d) if (((half->pitch + d) % 12 + 12) % 12 == pc && std::abs (d) < dist) { dist = std::abs (d); best = half->pitch + d; }
-                half->pitch = best;
-            }
-            if (auto* end = lastIn (p + 24.0, p + 32.0); end != nullptr && end->length >= 0.5)
-            {
-                const auto rootPc = (s.root % 12 + 12) % 12;
-                for (int d = 0; d <= 6; ++d)
-                {
-                    if (((end->pitch - d) % 12 + 12) % 12 == rootPc) { end->pitch -= d; break; }
-                    if (((end->pitch + d) % 12 + 12) % 12 == rootPc) { end->pitch += d; break; }
-                }
-            }
+                const auto pcs = chordPcs (s, slotAt (s, n.start));
+                std::vector<int> fitting;
+                for (auto pc : wanted) if (std::find (pcs.begin(), pcs.end(), pc) != pcs.end()) fitting.push_back (pc);
+                const auto& use = fitting.empty() ? pcs : fitting;
+                int best = n.pitch, dist = 99;
+                for (auto pc : use) for (int d = -6; d <= 6; ++d) if (((n.pitch + d) % 12 + 12) % 12 == pc && std::abs (d) < dist) { dist = std::abs (d); best = n.pitch + d; }
+                n.pitch = best;
+            };
+            const auto rootPc = (s.root % 12 + 12) % 12;
+            if (auto* half = lastIn (p + 8.0, p + 16.0); half != nullptr) cadence (*half, { (rootPc + 7) % 12, (rootPc + 2) % 12 });
+            if (auto* end = lastIn (p + 24.0, p + 32.0); end != nullptr && end->length >= 0.5) cadence (*end, { rootPc });
             for (auto& n : phrase) if (n.start < p + 32.0 - 1.0e-9) { n.length = std::min (n.length, p + 32.0 - n.start - 0.01); out.push_back (n); }
         }
         sortByStart (out);

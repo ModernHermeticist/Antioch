@@ -14,6 +14,7 @@
 #include "LabelReadyBus.h"
 #include "AutopilotBus.h"
 #include "TestUtils.h"
+#include "WritingCritic.h"
 #include "Worker.h"
 #include "SongBus.h"
 #include "SectionBus.h"
@@ -35,6 +36,124 @@ namespace
         auto p = std::make_unique<CorrespondenceProcessor>();
         prepare (*p);
         return p;
+    }
+
+    /** The writing critic over every mood x style (default settings, a full trance arrangement):
+        the averages, the weakest rules, and the share of songs it rates good. */
+    struct CriticSummary { float total = 0, hook = 0, parts = 0, journey = 0, harmony = 0, worst = 1; int songs = 0; std::map<juce::String, float> rules; };
+    inline suite::SectionMap criticMap()
+    {
+        suite::SectionMap map;
+        using T = suite::SectionType;
+        const std::pair<int, T> plan[] { { 1, T::Intro }, { 17, T::Groove }, { 33, T::Breakdown }, { 49, T::Build }, { 57, T::Drop },
+                                         { 73, T::Breakdown }, { 81, T::Build }, { 89, T::Drop }, { 105, T::Outro } };
+        map.count = 9; map.totalBars = 120;
+        for (int i = 0; i < 9; ++i) map.sections[(size_t) i] = { plan[i].first, plan[i].second };
+        return map;
+    }
+    inline CriticSummary criticSurvey (bool print, int tries = 1)
+    {
+        CriticSummary sum;
+        const auto map = criticMap();
+        for (int m = 0; m < 7; ++m)
+            for (int st = 0; st < 7; ++st)
+            {
+                auto p = make();
+                set (*p, Params::libOn, 1.0f);
+                set (*p, Params::libMood, (float) m);
+                set (*p, Params::libStyle, (float) st);
+                const auto s = p->currentSettings();
+                auto sp = p->currentSongPatterns();
+                chords::critic::Report r;
+                if (tries > 1) r = chords::critic::bestOf (s, map, sp, tries, (uint32_t) (m * 7 + st + 1)).report;
+                else r = chords::critic::judge (s, map, sp);
+                sum.total += r.total; sum.hook += r.hook; sum.parts += r.parts; sum.journey += r.journey; sum.harmony += r.harmony;
+                sum.worst = juce::jmin (sum.worst, r.total);
+                for (const auto& [k, v] : r.rules) sum.rules[k] += v;
+                ++sum.songs;
+                if (print && std::getenv ("CRITIC_BD") != nullptr && m == 0 && st == 4)
+                {
+                    const auto parts = chords::critic::renderParts (s, map, sp);
+                    std::cout << "  BD progression";
+                    for (int k = 0; k < s.count; ++k) std::cout << " " << s.slots[(size_t) k].degree;
+                    std::cout << std::endl;
+                    for (auto part : { chords::SongPart::Chords, chords::SongPart::Piano, chords::SongPart::Choir, chords::SongPart::Bass })
+                        if (parts.count (part))
+                        {
+                            std::cout << "  BD part " << (int) part << ":";
+                            for (const auto& n : parts.at (part)) if (n.start >= 128.0 && n.start < 144.0) std::cout << " " << (n.start - 128.0) << ":" << suite::music::noteNames()[n.pitch % 12] << n.pitch / 12 - 1 << "/" << n.length;
+                            std::cout << std::endl;
+                        }
+                }
+                if (print && std::getenv ("CRITIC_RUBS") != nullptr)
+                {
+                    // which parts rub (sustained semitones at 8ths) and which put notes under the bass's register
+                    static std::map<juce::String, int> rubPairs, mudParts;
+                    const auto parts = chords::critic::renderParts (s, map, sp);
+                    for (auto [from, to] : { std::pair { 224.0, 256.0 }, std::pair { 128.0, 160.0 } })
+                        for (double q = from; q < to; q += 0.5)
+                        {
+                            std::vector<std::pair<int, int>> on;
+                            int low = 0; juce::StringArray lowParts;
+                            for (const auto& [part, notes] : parts)
+                                for (const auto& n : notes)
+                                    if (n.start <= q + 1.0e-6 && n.start + n.length > q + 0.25 && n.length >= 0.5)
+                                    {
+                                        on.push_back ({ (int) part, n.pitch });
+                                        if (n.pitch < 52 && part != chords::SongPart::Bass && part != chords::SongPart::Timpani && part != chords::SongPart::Acid) { ++low; lowParts.addIfNotAlreadyThere (juce::String ((int) part)); }
+                                    }
+                            for (size_t a2 = 0; a2 < on.size(); ++a2)
+                                for (size_t b = a2 + 1; b < on.size(); ++b)
+                                {
+                                    if (on[a2].first == on[b].first) continue;
+                                    const auto d = std::abs (on[a2].second - on[b].second);
+                                    if ((d == 1 || d == 13) && juce::jmin (on[a2].second, on[b].second) > 52 && std::getenv ("CRITIC_RUBS_AT") != nullptr)
+                                        std::cout << "  RUBAT " << m << "/" << st << " " << q << " " << on[a2].first << ":" << suite::music::noteNames()[on[a2].second % 12] << on[a2].second / 12 - 1
+                                                  << " " << on[b].first << ":" << suite::music::noteNames()[on[b].second % 12] << on[b].second / 12 - 1 << std::endl;
+                                    if ((d == 1 || d == 13) && juce::jmin (on[a2].second, on[b].second) > 52)
+                                        ++rubPairs[juce::String (juce::jmin (on[a2].first, on[b].first)) + "-" + juce::String (juce::jmax (on[a2].first, on[b].first))];
+                                }
+                            if (low >= 2) ++mudParts[lowParts.joinIntoString ("+")];
+                        }
+                    if (m == 6 && st == 6)
+                    {
+                        for (const auto& [k, v] : rubPairs) std::cout << "  RUB " << k << " " << v << std::endl;
+                        for (const auto& [k, v] : mudParts) std::cout << "  MUD " << k << " " << v << std::endl;
+                    }
+                }
+                if (print && std::getenv ("CRITIC_DUMP") != nullptr && m == 0 && st == 0)
+                {
+                    const auto parts = chords::critic::renderParts (s, map, sp);
+                    const auto from = 4.0 * (57 - 1);
+                    std::cout << "  DUMP progression";
+                    for (int k = 0; k < s.count; ++k) std::cout << " " << s.slots[(size_t) k].degree;
+                    std::cout << " L=" << s.quartersPerChord << " root " << s.root << " scale " << s.scale << std::endl;
+                    for (const auto& n : parts.at (chords::SongPart::Lead))
+                        if (n.start >= from && n.start < from + 32.0)
+                        {
+                            juce::String chord;
+                            const auto c0 = std::floor (n.start / s.quartersPerChord) * s.quartersPerChord;
+                            for (const auto& c : parts.at (chords::SongPart::Chords)) if (c.start >= c0 && c.start < c0 + s.quartersPerChord) chord << suite::music::noteNames()[c.pitch % 12] << " ";
+                            std::cout << "  DUMP " << juce::String (n.start - from, 2) << " " << suite::music::noteNames()[n.pitch % 12] << n.pitch / 12 - 1 << " len " << juce::String (n.length, 2) << "  over: " << chord << std::endl;
+                        }
+                }
+                if (print) std::cout << "  critic " << patterns::moodNames()[m] << " / " << patterns::styleNames()[st] << ": " << juce::String (r.total, 2)
+                                     << " (hook " << juce::String (r.hook, 2) << ", parts " << juce::String (r.parts, 2) << ", journey " << juce::String (r.journey, 2)
+                                     << ", harmony " << juce::String (r.harmony, 2) << ") range " << juce::String (r.rules["raw.range"], 0) << " steps " << juce::String (r.rules["raw.steps"], 2) << (r.notes.isEmpty() ? juce::String() : "  " + r.notes[0]) << std::endl;
+            }
+        const auto n = (float) juce::jmax (1, sum.songs);
+        sum.total /= n; sum.hook /= n; sum.parts /= n; sum.journey /= n; sum.harmony /= n;
+        for (auto& [k, v] : sum.rules) v /= n;
+        if (print)
+        {
+            std::cout << "  critic average " << juce::String (sum.total, 3) << " (hook " << juce::String (sum.hook, 2) << ", parts " << juce::String (sum.parts, 2)
+                      << ", journey " << juce::String (sum.journey, 2) << ", harmony " << juce::String (sum.harmony, 2) << "), worst " << juce::String (sum.worst, 2) << std::endl;
+            std::vector<std::pair<float, juce::String>> rules;
+            for (const auto& [k, v] : sum.rules) rules.push_back ({ v, k });
+            std::sort (rules.begin(), rules.end());
+            for (const auto& [v, k] : rules) std::cout << "    " << k << " " << juce::String (v, 2) << std::endl;
+        }
+        return sum;
     }
 
     chords::Settings aMinor()
@@ -75,6 +194,7 @@ namespace
 int main (int argc, char** argv)
 {
     suite::Worker::detail::thread().inlineMode = true;   // background jobs run straight away in the tests
+    if (std::getenv ("CRITIC_ONLY") != nullptr) { criticSurvey (true, std::getenv ("CRITIC_TRIES") != nullptr ? std::atoi (std::getenv ("CRITIC_TRIES")) : 1); return 0; }
     if (std::getenv ("CPU_ONLY") != nullptr) { suite::test::cpuReport ("Correspondence", [] { auto p = std::make_unique<CorrespondenceProcessor>(); suite::test::prepare (*p); return p; }); return 0; }   // just the CPU line (profiling)
     juce::ScopedJuceInitialiser_GUI init;
     suite::WritingBus::clearSung();   // nothing left over from another plugin's tests
@@ -1122,6 +1242,8 @@ int main (int argc, char** argv)
         const auto mids = p->lastDraft.findChildFiles (juce::File::findFiles, false, "*.mid");
         check (p->lastDraft.isDirectory() && p->lastDraft.isAChildOf (dir) && mids.size() >= 10,
                "then the whole song's MIDI is written into Drafts (" + juce::String (mids.size()) + " files)");
+        check (p->lastDraft.getChildFile ("Critic.txt").existsAsFile() && p->lastCriticReport.contains ("Score"),
+               "the strongest of six versions, with the critic's scores beside it");
         suite::SectionBus::withdraw();
         CorrespondenceProcessor::draftFolderOverride() = juce::File();
         dir.deleteRecursively();
@@ -2475,6 +2597,43 @@ int main (int argc, char** argv)
         check (! suite::SongBus::read().hook.empty(), "and the song still reaches Ouroboros' checks");
         suite::SongBus::withdraw();
         suite::SectionBus::withdraw();
+    }
+
+    section ("The writing critic: every mood x style, scored on the hook, the parts together, the journey and the harmony");
+    {
+        auto sum = criticSurvey (false);
+        check (sum.total >= 0.94f && sum.worst >= 0.85f, "the songs it writes score " + juce::String (sum.total, 2) + " on average (the weakest " + juce::String (sum.worst, 2) + ")");
+        check (sum.hook >= 0.9f && sum.parts >= 0.9f && sum.journey >= 0.95f && sum.harmony >= 0.9f,
+               "hooks " + juce::String (sum.hook, 2) + ", parts together " + juce::String (sum.parts, 2) + ", the journey " + juce::String (sum.journey, 2) + ", harmony " + juce::String (sum.harmony, 2));
+        check (sum.rules["parts.rubs"] >= 0.85f && sum.rules["harmony.lead"] >= 0.9f && sum.rules["hook.ends"] >= 0.9f,
+               "the parts don't rub, the hook sits on its chords and its phrases end on them ("
+                   + juce::String (sum.rules["parts.rubs"], 2) + ", " + juce::String (sum.rules["harmony.lead"], 2) + ", " + juce::String (sum.rules["hook.ends"], 2) + ")");
+        // the critic hears what's wrong: a hook moved a semitone off its chords scores lower
+        auto p = make();
+        set (*p, Params::libOn, 1.0f);
+        const auto map = criticMap();
+        const auto s = p->currentSettings();
+        auto parts = chords::critic::renderParts (s, map, p->currentSongPatterns());
+        const auto good = chords::critic::judge (s, map, parts);
+        for (auto& n : parts[chords::SongPart::Lead]) n.pitch += 1;
+        const auto bad = chords::critic::judge (s, map, parts);
+        check (bad.harmony < good.harmony - 0.1f && bad.hook < good.hook && ! bad.notes.isEmpty(),
+               "and it hears a hook a semitone off its chords (harmony " + juce::String (good.harmony, 2) + " -> " + juce::String (bad.harmony, 2) + ": " + bad.notes[0] + ")");
+        const auto pick = chords::critic::bestOf (s, map, p->currentSongPatterns(), 6, 11u);
+        check (pick.report.total >= pick.before, "the best of six is never worse than the first (" + juce::String (pick.before, 2) + " -> " + juce::String (pick.report.total, 2) + ")");
+        // for your ears: A (as it was) and B (the pick), side by side
+        const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceAB");
+        dir.deleteRecursively();
+        CorrespondenceProcessor::draftFolderOverride() = dir;
+        suite::SectionBus::publish (map);
+        p->writeCompare();
+        const auto a = p->lastCompare.getChildFile ("A - as it was"), b = p->lastCompare.getChildFile ("B - the critic's pick");
+        check (a.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10 && b.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10
+                   && p->lastCompare.getChildFile ("Critic.txt").loadFileAsString().contains ("the critic's pick"),
+               "two versions to compare by ear, A as it was and B the critic's pick, with the scores beside them");
+        suite::SectionBus::withdraw();
+        CorrespondenceProcessor::draftFolderOverride() = juce::File();
+        dir.deleteRecursively();
     }
 
     section ("Parts for the new track roles (bells, organ, guitar) when a track asks for them");

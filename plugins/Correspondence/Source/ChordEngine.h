@@ -1578,6 +1578,15 @@ namespace chords
             const auto* family = useLib ? &songFamily (libLead ? SongPart::Lead : part, kind, patterns, (int) secType, dropOrdinal) : nullptr;
             lib::RenderOptions ropt;
             ropt.colourFit = W.harmony;
+            // One chord colour for the song: the chord layers (piano, strings, brass, choir, organ) take
+            // the chords part's 7ths and 9ths (or none), so two layers never voice the same chord
+            // differently (an added 9th a semitone from another layer's minor third)
+            if (W.harmony && patterns.library && part != SongPart::Chords && lib::chordal (lib::libraryPart (part)))
+                if (const auto chordKind = lib::kindFor (SongPart::Chords, patterns.chords[(size_t) secType], secType); chordKind >= 0)
+                {
+                    const auto& cf = songFamily (SongPart::Chords, chordKind, patterns, (int) secType, dropOrdinal);
+                    if (! cf.name.empty()) ropt.songColour = (cf.add7 ? 1 : 0) | (cf.add9 ? 2 : 0);
+                }
             ropt.flattenPush = overPushBudget (part, patterns);
             const auto* counterFamily = libLead && part == SongPart::Counter ? &patterns::pick (patterns::Part::Counter, 0, libMood, libStyle, patterns.libSeed) : nullptr;
             const auto cycleQ = libLead ? progressionQ * std::ceil (32.0 / progressionQ - 1.0e-9) : progressionQ;   // a lead hook: 8-bar phrases
@@ -1817,9 +1826,45 @@ namespace chords
                     const auto fastCycle = lib::render (*family, 2, false, fs, progressionQ, 5, 0, ropt);
                     writing::accelerate (section, tile (fastCycle, startQ, endQ, progressionQ), startQ, endQ);
                 }
+                // The hook follows the chords' own moves: where the chords run the turnaround twice as fast
+                // (a drop's 7th bar) and put the next chord's dominant in a fill's last two beats, the
+                // hook's notes on the beat (and its long ones) move to the nearest tone of the chord
+                // that's actually playing, so the lead never sits on a note the chords just left
+                if (W.harmony && patterns.library && (part == SongPart::Lead || part == SongPart::Harmony || part == SongPart::Counter))
+                {
+                    auto fast = sk; fast.quartersPerChord = sk.quartersPerChord / 2.0;
+                    for (auto& n : section)
+                    {
+                        const auto strongOrLong = std::abs (n.start - std::round (n.start)) < 0.01 || n.length >= 0.9;
+                        if (! strongOrLong) continue;
+                        const auto local = n.start - startQ;
+                        const auto bar = (int) std::floor (local / 4.0 + 1.0e-9);
+                        // a note held into the fill's passing dominant that isn't one of its tones stops
+                        // just before it (the lead breathes while the dominant leads back in)
+                        if (fillBar (n.start) && std::fmod (local, 4.0) < 2.0 - 1.0e-6)
+                        {
+                            const auto barStart = startQ + 4.0 * bar;
+                            const auto domRoot = (chordRootPitchClass (sk, writing::slotAt (sk, barStart + 4.0 - startQ)) + 7) % 12;
+                            if (n.start + n.length > barStart + 2.0 + 0.01 && ! writing::inChord ({ domRoot, (domRoot + 4) % 12, (domRoot + 7) % 12 }, n.pitch))
+                                n.length = std::max (0.25, barStart + 2.0 - n.start - 0.02);
+                        }
+                        if (secType == ST::Drop && bar % 8 == 6 && n.start < endQ - 8.0)
+                            n.pitch = writing::nearestTone (writing::chordPcs (fast, writing::slotAt (fast, std::fmod (local, progressionQ))), n.pitch);
+                        else if (fillBar (n.start) && std::fmod (local, 4.0) >= 2.0 - 1.0e-6)
+                        {
+                            const auto barStart = startQ + 4.0 * bar;
+                            const auto domRoot = (chordRootPitchClass (sk, writing::slotAt (sk, barStart + 4.0 - startQ)) + 7) % 12;
+                            n.pitch = writing::nearestTone ({ domRoot, (domRoot + 4) % 12, (domRoot + 7) % 12 }, n.pitch);
+                        }
+                    }
+                }
                 if (W.harmony && secType == ST::Build && hasNext && map.keyShiftOf (i + 1) > map.keyShiftOf (i) && part != SongPart::Timpani)
                     writing::prepareKeyChange (section, ((s.root + map.keyShiftOf (i + 1)) % 12 + 12) % 12, endQ - 4.0, part == SongPart::Bass);
                 if (W.harmony && chordal) writing::voiceByEnergy (section, isBreakdown, W.parts && ! hookHere.empty() ? &hookHere : nullptr);
+                // The low register belongs to the bass: while it plays, chord layers fold notes under E3 up
+                // an octave (an organ's drone excepted); with no bass, only the piano's left hand stays down there
+                if (W.harmony && chordal && part != SongPart::Organ && (patterns.bass[(size_t) secType] > 0 || part != SongPart::Piano))
+                    for (auto& n : section) while (n.pitch < 52) n.pitch += 12;
                 // J. Counterpoint (14, 43), answers in the hook's rests (17), doublings (44)
                 if (W.parts && part == SongPart::Counter && ! hookHere.empty()) section = writing::counterpoint (section, hookHere, sk, startQ);
                 if (W.parts && (part == SongPart::Counter || part == SongPart::Candy || part == SongPart::Chops || part == SongPart::Brass) && ! hookHere.empty())
@@ -1840,6 +1885,11 @@ namespace chords
                         const auto mid = startQ + std::floor ((endQ - startQ) / 2.0 / 8.0) * 8.0;
                         auto line = tile (writing::develop (hookCell, writing::devAugment, s, 32.0), mid, endQ, 32.0);
                         for (auto& n : line) { while (n.pitch > 84) n.pitch -= 12; while (n.pitch < 67) n.pitch += 12; n.velocity = std::max (1, n.velocity - 8); }
+                        // slowed down, the hook meets twice the chords: its notes on the beat (and its long
+                        // ones) move to the breakdown's chord under them
+                        for (auto& n : line)
+                            if (std::abs (n.start - std::round (n.start)) < 0.01 || n.length >= 0.9)
+                                n.pitch = writing::nearestTone (writing::chordPcs (s, writing::slotAt (s, n.start - startQ)), n.pitch);
                         section.insert (section.end(), line.begin(), line.end());
                     }
                 }

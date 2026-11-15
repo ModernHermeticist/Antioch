@@ -20,6 +20,7 @@
 #include "AutopilotBus.h"
 #include "WriteTools.h"
 #include "ContextPlayer.h"
+#include "WritingCritic.h"
 
 class CorrespondenceProcessor : public suite::SuiteProcessor, private juce::Timer
 {
@@ -329,14 +330,23 @@ public:
     static juce::File draftFolder() { return draftFolderOverride() != juce::File() ? draftFolderOverride() : suite::Alias::file ("Drafts"); }
     std::atomic<double> draftAt { 0.0 };
     juce::File lastDraft;
+    /** The song draft: when it's due, the writing critic (WritingCritic.h) hears six candidate songs
+        (the current one first) on the worker thread and the strongest is written; the scores go
+        into the draft's folder ("Critic.txt"). */
     void exportDraftIfDue (bool now = false)
     {
+        finishDraftPick();
         const auto at = draftAt.load();
-        if (at <= 0.0 || (! now && juce::Time::getMillisecondCounterHiRes() < at)) return;
+        if (at <= 0.0 || (! now && juce::Time::getMillisecondCounterHiRes() < at) || draftPick->busy.load()) return;
         draftAt.store (0.0);
-        draftFolder().createDirectory();
-        lastDraft = exportEverything (draftFolder());
+        startDraftPick();
+        finishDraftPick();   // (straight away when the worker runs inline: the tests)
     }
+    juce::String lastCriticReport;   // the draft's scores, in words (tests, UI)
+    /** For your ears: the song as it is (A) and the critic's pick of six (B), exported side by side
+        into Drafts/A-B (the pick stays; Undo goes back). */
+    void writeCompare() { if (draftPick->busy.load()) return; draftPick->compare = true; startDraftPick(); finishDraftPick(); }
+    juce::File lastCompare;
 
 private:
     void timerCallback() override
@@ -349,6 +359,11 @@ private:
             if ((double) humAudio.size() > hum.rate() * 30.0) finishHum();   // 30 seconds at most
         }
     }
+
+    struct DraftPick { std::atomic<bool> busy { false }, ready { false }; bool compare = false; chords::critic::Pick pick; };
+    std::shared_ptr<DraftPick> draftPick = std::make_shared<DraftPick>();
+    void startDraftPick();
+    void finishDraftPick();
 
     bool wasBroadcasting = false;
     int64_t hookRestsHash = 0;

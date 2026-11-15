@@ -289,12 +289,15 @@ namespace suite
                 float peak = 0.0f;
                 for (int c = 0; c < b.getNumChannels(); ++c) peak = std::max (peak, b.getMagnitude (c, 0, n));
                 watchOutput = true;
-                if (peak > silenceFloor || ! owner.outputQuiet) { owner.quietSamples = 0; owner.idleNow.store (false); return; }
+                if (peak > silenceFloor || ! owner.outputQuiet) { owner.quietSamples = 0; owner.idleBlocks = 0; owner.idleNow.store (false); return; }
                 owner.quietSamples += n;
                 if (owner.quietSamples < (int64_t) (0.5 * std::max (1.0, owner.getSampleRate()))) return;
+                owner.idleNow.store (true);
+                // one block in eight still runs in full, so scenes, automation and knob moves keep
+                // up with the song while the track waits for its next note
+                if (++owner.idleBlocks % 8 == 0) return;
                 b.clear();
                 idle = true;
-                owner.idleNow.store (true);
             }
             ~BlockGuard()
             {
@@ -324,6 +327,7 @@ namespace suite
         std::atomic<float> worstLoad { 0.0f }, worstBlockMs { 0.0f };
         std::atomic<bool> idleNow { false };
         int64_t quietSamples = 0;
+        uint32_t idleBlocks = 0;
         bool outputQuiet = true;
 
         /** Tests: what this plugin's timers cost FL's interface thread, in ms of work per second, over

@@ -14,6 +14,7 @@ namespace chords::lib
     {
         bool colourFit = false;     // 12: 7ths and 9ths only where they fit the chord
         bool flattenPush = false;   // 11: over the push budget: hits on the chord, not ahead of it
+        int songColour = -1;        // the song's chord colour for every chordal layer (bit 0 the 7th, bit 1 the 9th; -1: the family's own)
     };
 
     inline Part libraryPart (SongPart part)
@@ -136,7 +137,7 @@ namespace chords::lib
             case Part::Chops:   return 5;
             case Part::Counter: return 4;
             case Part::Candy:   return 6;
-            case Part::Bells:   return 5;
+            case Part::Bells:   return s.registerOctave;   // (its figures climb an octave or two from here)
             default:            return s.registerOctave;
         }
     }
@@ -277,7 +278,16 @@ namespace chords::lib
                     pitches = voiced.empty() ? std::vector<int> { base, base + toneOffset ('t'), base + toneOffset ('f') } : voiced[(size_t) chordIdx];
                     if (! voiced.empty()) for (auto& p : pitches) p += shift;
                     if (ch == 'C') pitches.push_back (*std::max_element (pitches.begin(), pitches.end()) + 12);
-                    if (ch == 'o') { const auto lo = *std::min_element (pitches.begin(), pitches.end()); pitches = { lo, lo + 7 }; }
+                    if (ch == 'o')
+                    {
+                        // root and fifth: the chord's own root nearest the voicing's bottom (a voicing led
+                        // smoothly is often inverted, and its lowest note isn't the root: C/E isn't E-B)
+                        const auto lo = *std::min_element (pitches.begin(), pitches.end());
+                        const auto rootPc = ((base % 12) + 12) % 12;
+                        auto r = lo + ((rootPc - lo) % 12 + 12) % 12;
+                        if (r - lo > 6) r -= 12;
+                        pitches = { r, r + 7 };
+                    }
                     velocity -= 8;
                     break;
                 }
@@ -292,10 +302,15 @@ namespace chords::lib
                     const auto pc = ((s.root + suite::music::scaleStep (s.scale, degree + stepsUp)) % 12 + 12) % 12;
                     auto p = *std::max_element (pitches.begin(), pitches.end());
                     while (((p % 12) + 12) % 12 != pc) --p;
+                    // in the octave where it isn't a semitone from a chord note (a B just under C is a
+                    // cluster; over the top it's the maj7), else left out
+                    auto rubs = [&] (int q) { for (auto x : pitches) if (std::abs (x - q) == 1 || std::abs (x - q) == 13) return true; return false; };
+                    if (rubs (p)) { if (! rubs (p + 12)) p += 12; else if (! rubs (p - 12)) p -= 12; else return; }
                     if (std::find (pitches.begin(), pitches.end(), p) == pitches.end()) pitches.push_back (p);
                 };
-                if (f.add7 && (! opt.colourFit || writing::colourFits (s, chordIdx, false))) addTone (6);
-                if (f.add9 && (! opt.colourFit || writing::colourFits (s, chordIdx, true))) addTone (1);
+                const auto add7 = opt.songColour >= 0 ? (opt.songColour & 1) != 0 : f.add7, add9 = opt.songColour >= 0 ? (opt.songColour & 2) != 0 : f.add9;
+                if (add7 && (! opt.colourFit || writing::colourFits (s, chordIdx, false))) addTone (6);
+                if (add9 && (! opt.colourFit || writing::colourFits (s, chordIdx, true))) addTone (1);
                 std::sort (pitches.begin(), pitches.end());
                 for (int inv = 0; inv < f.inversion && inv < (int) pitches.size() - 1; ++inv) pitches[(size_t) inv] += 12;
             }
