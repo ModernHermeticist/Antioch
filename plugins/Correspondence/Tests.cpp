@@ -2625,8 +2625,15 @@ int main (int argc, char** argv)
         const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("CorrespondenceAB");
         dir.deleteRecursively();
         CorrespondenceProcessor::draftFolderOverride() = dir;
-        suite::SectionBus::publish (map);
+        // (as in FL: the pick runs on the worker while Ouroboros keeps sharing the map, then the
+        // timer exports it)
+        auto& worker = suite::Worker::detail::thread();
+        worker.inlineMode = false;
         p->writeCompare();
+        suite::Worker::finish();
+        worker.inlineMode = true;
+        suite::SectionBus::publish (map);
+        p->exportDraftIfDue();
         const auto a = p->lastCompare.getChildFile ("A - as it was"), b = p->lastCompare.getChildFile ("B - the critic's pick");
         check (a.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10 && b.findChildFiles (juce::File::findFiles, true, "*.mid").size() >= 10
                    && p->lastCompare.getChildFile ("Critic.txt").loadFileAsString().contains ("the critic's pick"),

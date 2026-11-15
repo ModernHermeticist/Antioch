@@ -945,7 +945,7 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
     {
         // Full-song clip following the Ouroboros map.
         suite::SectionMap map;
-        if (! suite::SectionBus::read (map))
+        if (! readMap (map))
             return none();
         if (kind == "Song Lead Octave" || kind == "Song Lead Pluck")   // Spire layers over the lead
         {
@@ -1028,7 +1028,7 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
     }
     // The writing tools: one motif for the whole song, the shared rhythm, a reference's feel
     if (kind == "Song Lead" && option ("motifPlan"))
-        if (suite::SectionMap plan; suite::SectionBus::read (plan))
+        if (suite::SectionMap plan; readMap (plan))
             if (const auto hook = currentHook(); hook.size() >= 3) notes = chords::tools::motifPlan (hook, s, plan);
     if (option ("rhythmCell") && (kind.endsWith ("Bass") || kind.endsWith ("Arp")))
         notes = chords::tools::lockToCell (notes, chords::tools::rhythmCell (currentHook()));
@@ -1041,13 +1041,13 @@ std::vector<chords::Note> CorrespondenceProcessor::clipNotes (const juce::String
         if (const auto plan = suite::DirectorBus::moments (&barQ, getInstanceId()); ! plan.empty())
         {
             suite::SectionMap map;
-            suite::SectionBus::read (map);
+            readMap (map);
             directedChanges.store (chords::directed::apply (notes, chords::directed::partOf (kind), plan, barQ, s.root, s.scale, map.finalLift));
         }
     }
     // Autopilot (arrangement): song parts don't ring on into a chord they clash with
     if (kind.startsWith ("Song ") && kind != "Song Chords" && kind != "Song Fills" && kind != "Song Drums" && suite::Autopilot::on (suite::Autopilot::hangoverTrimF))
-        if (suite::SectionMap map; suite::SectionBus::read (map))
+        if (suite::SectionMap map; readMap (map))
             if (const auto t = chords::trimChordHangovers (notes, s, map); t > 0) suite::Autopilot::count (suite::Autopilot::hangoversTrimmed, (uint32_t) t);
     // Autopilot (stability): bass notes under D1 move up an octave
     if (kind.endsWith ("Bass") && suite::Autopilot::on (suite::Autopilot::lowBassFoldF))
@@ -1094,7 +1094,7 @@ juce::Array<juce::File> CorrespondenceProcessor::sendToPianoRoll() const
 std::vector<clash::Clash> CorrespondenceProcessor::clashes() const
 {
     suite::SectionMap map;
-    if (! suite::SectionBus::read (map) || map.count == 0) return {};
+    if (! readMap (map) || map.count == 0) return {};
     return clash::find (currentSettings(), map, currentSongPatterns(), (int) apvts.getRawParameterValue (Params::melodyOctave)->load(),
                         (int) apvts.getRawParameterValue (Params::arpOctaves)->load(), Params::melodyOctave, Params::arpOctaves);
 }
@@ -1145,7 +1145,7 @@ juce::File CorrespondenceProcessor::exportClip (const juce::String& kind, const 
     }
     // Spire macro rides in the song clips (not the drums).
     if (kind.startsWith ("Song ") && kind != "Song Fills")
-        if (suite::SectionMap map; suite::SectionBus::read (map))
+        if (suite::SectionMap map; readMap (map))
             midi = spire::withMacroRides (midi, map, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()),
                                           (int) apvts.getRawParameterValue (Params::macroPlan)->load());
     if (auto stream = file.createOutputStream())
@@ -1196,7 +1196,7 @@ juce::File CorrespondenceProcessor::exportSongPack (const juce::File& parent) co
     folder.createDirectory();
 
     suite::SectionMap map;
-    const auto haveMap = suite::SectionBus::read (map) && map.count > 0;
+    const auto haveMap = readMap (map) && map.count > 0;
     static const char* const songKinds[] { "Song Chords", "Song Bass", "Song Lead" };
     static const char* const loopKinds[] { "Chords", "Bass", "Melody" };
     for (auto* kind : haveMap ? songKinds : loopKinds)
@@ -1246,6 +1246,7 @@ juce::File CorrespondenceProcessor::exportSongPack (const juce::File& parent) co
 
 juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) const
 {
+    const HoldMap hold (*this);   // one map for the whole export
     const auto s = currentSettings();
     const auto key = suite::music::noteNames()[s.root] + (s.scale == 1 ? "" : "m");
     const auto bpm = currentBpm.load();
@@ -1281,7 +1282,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         lastRelearnMask.store (changed);
     }
     // The Spire macro plan on its own (four CC lanes for the whole song)
-    if (suite::SectionMap macroMap; suite::SectionBus::read (macroMap) && macroMap.count > 0)
+    if (suite::SectionMap macroMap; readMap (macroMap) && macroMap.count > 0)
         if (auto stream = folder.getChildFile ("Spire macros.mid").createOutputStream())
             spire::macroFile (macroMap, spire::macroBaseCC ((int) apvts.getRawParameterValue (Params::songMacros)->load()),
                               (int) apvts.getRawParameterValue (Params::macroPlan)->load(), bpm).writeTo (*stream);
@@ -1297,7 +1298,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
         for (int i = 0; i < s.count; ++i) progression.add (chords::chordName (s, s.slots[(size_t) i]));
         sheet.add ("Chords: " + progression.joinIntoString (" - "));
         suite::SectionMap shared;
-        if (suite::SectionBus::read (shared) && shared.count > 0)
+        if (readMap (shared) && shared.count > 0)
         {
             sheet.add ("Length: " + juce::String (shared.totalBars) + " bars (" + suite::TempoBus::clock (suite::TempoBus::secondsTo (shared.totalBars + 1, (float) bpm)) + ")");
             if (const auto tempos = suite::TempoBus::changes (shared.totalBars, (float) bpm); tempos.size() > 1)
@@ -1332,7 +1333,7 @@ juce::File CorrespondenceProcessor::exportEverything (const juce::File& parent) 
     }
 
     suite::SectionMap map;
-    if (suite::SectionBus::read (map) && map.count > 0)
+    if (readMap (map) && map.count > 0)
     {
         const auto patterns = currentSongPatterns();
         std::vector<std::pair<juce::String, std::vector<chords::Note>>> parts;
@@ -1529,7 +1530,7 @@ std::vector<chords::Note> CorrespondenceProcessor::currentHook() const
 {
     if (const auto m = getMotif(); m.size() >= 3) return chords::tools::window (chords::tools::rebased (m), 0.0, 8.0);
     const auto s = currentSettings();
-    if (suite::SectionMap map; suite::SectionBus::read (map) && map.count > 0)
+    if (suite::SectionMap map; readMap (map) && map.count > 0)
     {
         const auto lead = chords::songClip (s, map, currentSongPatterns(), chords::SongPart::Lead);
         for (int i = 0; i < map.count; ++i)
@@ -1575,7 +1576,7 @@ juce::String CorrespondenceProcessor::regenerate (const juce::String& kind, bool
     if (taste.ready())
     {
         const auto s = currentSettings();
-        suite::SectionMap map; const auto haveMap = suite::SectionBus::read (map);
+        suite::SectionMap map; const auto haveMap = readMap (map);
         float best = 1.0e9f;
         for (int k = 0; k < 8; ++k)
         {
@@ -1811,6 +1812,7 @@ void CorrespondenceProcessor::finishDraftPick()
     if (job->compare)
     {
         job->compare = false;
+        const HoldMap hold (*this);   // A and B from the same map
         auto folder = draftFolder().getChildFile ("A-B " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H%M%S"));
         folder.createDirectory();
         setParameterPlain (apvts, Params::libSeed, (float) pick.firstLibSeed);
@@ -1891,7 +1893,7 @@ void CorrespondenceProcessor::startLabelJob()
     namespace AP = suite::Autopilot;
     // what it depends on: every setting, the map, what Ouroboros' checks need, the switches
     suite::SectionMap busMap;
-    const auto haveMap = suite::SectionBus::read (busMap) && busMap.count > 0;
+    const auto haveMap = readMap (busMap) && busMap.count > 0;
     int64_t h = 17;
     for (auto* p : getParameters()) h = h * 31 + (int64_t) std::lround (p->getValue() * 100000.0f);
     h = h * 31 + (int64_t) apvts.state.toXmlString().hashCode64();

@@ -57,19 +57,15 @@ Fast modes in the test runners:
   print diagnostics (which parts rub, a hook against its chords, a breakdown's parts).
 
 ## Where things stand
-Recent commits, newest first. The top three were pushed **before their full test run finished**:
+Recent commits, newest first:
 - `480ac59` Effects bus role for Quintessence; taste from A/B picks; idle gate wakes on transport changes.
 - `f26a9d0` The writing critic plus the fixes it found; kits for the new roles; best-of-six song draft; the A/B compare export.
 - `1126788` CPU diet (idle on silence, CPU lines, heavy-block logging) and bells/organ/guitar layers.
 
-**First job: run the full suite and fix what fails.** Known from the last complete run (76):
-1. Correspondence "two versions to compare by ear…" failed. The test now prints the clip counts
-   and the folder (Tests.cpp, the writing-critic section). Look at `finishDraftPick` (the compare
-   branch) and `exportEverything` in `PluginProcessor.cpp`.
-2. Vibration "stopping finishes it…" failed because of the idle gate. Fixed since (a full block
-   whenever the transport starts or stops); it passed when run alone.
-
-Everything else passed in run 76, including the critic survey checks.
+**All 13 test suites pass** (run 77, plus Correspondence rerun after the last fix). The last fix:
+an export holds the Ouroboros map it started with (`HoldMap` / `readMap` in Correspondence), because
+a long export holds FL's interface thread and the shared map could go stale before the last clip
+was written. Start by building and running the suite once to confirm your checkout.
 
 ### What was built this session (for orientation)
 - **Freeze and CPU:**
@@ -99,7 +95,7 @@ Everything else passed in run 76, including the critic survey checks.
   (recorded to `Critic taste.txt`; from three picks on, the rule weights follow them), and "Your taste".
 
 ## What's next (the owner's choices)
-1. Verify and fix the full run (above). Commit and push.
+1. Build and run the suite once to confirm a clean start.
 2. The owner asked for a 100-item list of writing + mixing improvements: **`docs/next-100.md`**.
    They were given a condensed "top 20 + rest" version and **haven't chosen yet**. Ask which to build
    (all, the top 20, or a selection), and ask clarifying questions before starting.

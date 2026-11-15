@@ -347,6 +347,22 @@ public:
         into Drafts/A-B (the pick stays; Undo goes back). */
     void writeCompare() { if (draftPick->busy.load()) return; draftPick->compare = true; startDraftPick(); finishDraftPick(); }
     juce::File lastCompare;
+    /** The Ouroboros map. During an export, the one it started with: an export holds FL's
+        interface thread, and the shared map can go stale before its last clip is written. */
+    bool readMap (suite::SectionMap& m) const { if (heldMapSet) { m = heldMap; return true; } return suite::SectionBus::read (m); }
+    struct HoldMap
+    {
+        explicit HoldMap (const CorrespondenceProcessor& q) : p (q), was (q.heldMapSet)
+        {
+            if (was) return;
+            if (suite::SectionMap m; suite::SectionBus::read (m)) { p.heldMap = m; p.heldMapSet = true; }
+        }
+        ~HoldMap() { if (! was) p.heldMapSet = false; }
+        const CorrespondenceProcessor& p;
+        const bool was;
+    };
+    mutable suite::SectionMap heldMap;
+    mutable bool heldMapSet = false;
     /** After a compare: which you preferred (it becomes your taste; A also brings A back). */
     bool preferCompared (bool a);
     bool compareOpen() const noexcept { return comparePending; }
